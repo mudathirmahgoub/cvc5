@@ -1888,6 +1888,33 @@ enum CVC4_PUBLIC Kind : int32_t
    */
   IDEN,
 
+  /**
+   * Bag multiplicity term.
+   * Parameters: 2
+   *   -[1]..[2]: Terms of set sort, [1] is an element of the type of bag [2]
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  COUNT,
+  /**
+   * Bag disjoint union.
+   * Parameters: 2
+   * -[1]..[2]: Terms of bag sort
+   * Create with:
+   *  mkTerm(Kind kind, Term child1, Term child2)
+   *  mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  DISJOINTUNION,
+  /**
+   * Bag setof.
+   * Parameters: 1
+   *   -[1]: bag to convert into a set
+   * Create with:
+   *   mkTerm(Kind kind, Term child)
+   */
+  SETOF,
+
   /* Strings --------------------------------------------------------------- */
 
   /**

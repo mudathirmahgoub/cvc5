@@ -2490,12 +2490,19 @@ sortSymbol[CVC4::Type& t, CVC4::parser::DeclarationCheck check]
             PARSER_STATE->parseError("Illegal array type.");
           }
           t = EXPR_MANAGER->mkArrayType( args[0], args[1] );
-        } else if(name == "Set" &&
+        } else if((name == "Set" || name == "Bag") &&
                   PARSER_STATE->isTheoryEnabled(Smt2::THEORY_SETS) ) {
           if(args.size() != 1) {
             PARSER_STATE->parseError("Illegal set type.");
           }
-          t = EXPR_MANAGER->mkSetType( args[0] );
+          if (name == "Bag")
+          {
+            t = EXPR_MANAGER->mkBagType(args[0]);
+          }
+          else
+          {
+            t = EXPR_MANAGER->mkSetType(args[0]);
+          }
         } else if(name == "Tuple") {
           t = EXPR_MANAGER->mkTupleType(args);
         } else if(check == CHECK_DECLARED ||

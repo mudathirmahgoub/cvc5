@@ -876,7 +876,7 @@ public:
   inline TypeNode mkArrayType(TypeNode indexType, TypeNode constituentType);
 
   /** Make the type of arrays with the given parameterization */
-  inline TypeNode mkSetType(TypeNode elementType);
+  inline TypeNode mkSetType(TypeNode elementType, bool isBag = false);
 
   /** Make a type representing a constructor with the given parameterization */
   TypeNode mkConstructorType(const DatatypeConstructor& constructor, TypeNode range);
@@ -1171,15 +1171,23 @@ inline TypeNode NodeManager::mkArrayType(TypeNode indexType,
   return mkTypeNode(kind::ARRAY_TYPE, indexType, constituentType);
 }
 
-inline TypeNode NodeManager::mkSetType(TypeNode elementType) {
+inline TypeNode NodeManager::mkSetType(TypeNode elementType, bool isBag) {
   CheckArgument(!elementType.isNull(), elementType,
                 "unexpected NULL element type");
   CheckArgument(elementType.isFirstClass(),
                 elementType,
                 "cannot store types that are not first-class in sets. Try "
                 "option --uf-ho.");
-  Debug("sets") << "making sets type " << elementType << std::endl;
-  return mkTypeNode(kind::SET_TYPE, elementType);
+  if (isBag)
+  {
+    Debug("bags") << "making bags type " << elementType << std::endl;
+    return mkTypeNode(kind::BAG_TYPE, elementType);
+  }
+  else
+  {
+    Debug("sets") << "making sets type " << elementType << std::endl;
+    return mkTypeNode(kind::SET_TYPE, elementType);
+  }
 }
 
 inline TypeNode NodeManager::mkSelectorType(TypeNode domain, TypeNode range) {

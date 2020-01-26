@@ -103,4 +103,29 @@ construle TCLOSURE 	    ::CVC4::theory::sets::RelTransClosureTypeRule
 construle JOIN_IMAGE 	::CVC4::theory::sets::JoinImageTypeRule
 construle IDEN 			::CVC4::theory::sets::RelIdenTypeRule
 
+operator BAG_TYPE 1 "bag type, takes as parameter the type of the elements"
+# ToDo: review cardinality well-founded and enumerator for bags
+cardinality BAG_TYPE \
+    "::CVC4::theory::sets::BagsProperties::computeCardinality(%TYPE%)" \
+    "theory/sets/theory_sets_type_rules.h"
+well-founded BAG_TYPE \
+    "::CVC4::theory::sets::BagsProperties::isWellFounded(%TYPE%)" \
+    "::CVC4::theory::sets::BagsProperties::mkGroundTerm(%TYPE%)" \
+    "theory/sets/theory_sets_type_rules.h"
+enumerator BAG_TYPE \
+    "::CVC4::theory::sets::SetEnumerator" \
+    "theory/sets/theory_sets_type_enumerator.h"
+
+operator COUNT         2  "bag multiplicity operator"
+operator DISJOINTUNION 2  "bag disjoint union"
+operator SETOF         1  "bag setof operator"
+
+typerule COUNT          ::CVC4::theory::sets::CountTypeRule
+typerule DISJOINTUNION  ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
+typerule SETOF          ::CVC4::theory::sets::SetOfTypeRule
+
+construle COUNT         ::CVC4::theory::sets::CountTypeRule
+construle DISJOINTUNION ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
+construle SETOF         ::CVC4::theory::sets::SetOfTypeRule
+
 endtheory

@@ -91,6 +91,63 @@ class NormalForm {
     }
   }
 
+  static bool checkBagNormalConstant(TNode n)
+  {
+    Debug("sets-checkBagNormalConstant")
+        << "[sets-checkBagNormalConstant] checkNormal " << n << " :"
+        << std::endl;
+    if (n.getKind() == kind::EMPTYSET)
+    {
+      return true;
+    }
+    else if (n.getKind() == kind::SINGLETON)
+    {
+      return n[0].isConst();
+    }
+    else if (n.getKind() == kind::DISJOINTUNION)
+    {
+      // assuming (disjointunion ... (disjointunion {SmallestNodeID}
+      // {BiggerNodeId}) ... {BiggestNodeId})
+
+      // store BiggestNodeId in prvs
+      if (n[1].getKind() != kind::SINGLETON) return false;
+      if (!n[1][0].isConst()) return false;
+      Debug("sets-checkBagNormalConstant")
+          << "[sets-checkBagNormalConstant]              frst element = "
+          << n[1][0] << " " << n[1][0].getId() << std::endl;
+      TNode prvs = n[1][0];
+      n = n[0];
+
+      // check intermediate nodes
+      while (n.getKind() == kind::DISJOINTUNION)
+      {
+        if (n[1].getKind() != kind::SINGLETON) return false;
+        if (!n[1].isConst()) return false;
+        Debug("sets-checkBagNormalConstant")
+            << "[sets-checkBagNormalConstant]              element = "
+            << n[1][0] << " " << n[1][0].getId() << std::endl;
+        if (n[1][0] >= prvs) return false;
+        TNode prvs = n[1][0];
+        n = n[0];
+      }
+
+      // check SmallestNodeID is smallest
+      if (n.getKind() != kind::SINGLETON) return false;
+      if (!n[0].isConst()) return false;
+      Debug("sets-checkBagNormalConstant")
+          << "[sets-checkBagNormalConstant]              lst element = " << n[0]
+          << " " << n[0].getId() << std::endl;
+      if (n[0] >= prvs) return false;
+
+      // we made it
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
   static std::set<Node> getElementsFromNormalConstant(TNode n) {
     Assert(n.isConst());
     std::set<Node> ret;

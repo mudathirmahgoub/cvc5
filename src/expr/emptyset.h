@@ -38,12 +38,13 @@ class CVC4_PUBLIC EmptySet {
    * Constructs an emptyset of the specified type. Note that the argument
    * is the type of the set itself, NOT the type of the elements.
    */
-  EmptySet(const SetType& setType);
+  EmptySet(const SetType& setType, bool isBag = false);
   ~EmptySet();
   EmptySet(const EmptySet& other);
   EmptySet& operator=(const EmptySet& other);
 
   const SetType& getType() const;
+  bool isBag() const;
   bool operator==(const EmptySet& es) const;
   bool operator!=(const EmptySet& es) const;
   bool operator<(const EmptySet& es) const;
@@ -54,6 +55,7 @@ class CVC4_PUBLIC EmptySet {
  private:
   /** Pointer to the SetType node. This is never NULL. */
   SetType* d_type;
+  bool d_isBag;
 
   EmptySet();
 

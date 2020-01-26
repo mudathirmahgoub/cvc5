@@ -31,9 +31,11 @@ struct SetsBinaryOperatorTypeRule {
     Assert(n.getKind() == kind::UNION || n.getKind() == kind::INTERSECTION
            || n.getKind() == kind::SETMINUS);
     TypeNode setType = n[0].getType(check);
-    if( check ) {
-      if(!setType.isSet()) {
-        throw TypeCheckingExceptionPrivate(n, "operator expects a set, first argument is not");
+    if( check )
+    {
+      if(!setType.isSet() && !setType.isBag())
+      {
+        throw TypeCheckingExceptionPrivate(n, "operator expects a set or a bag, first argument is not");
       }
       TypeNode secondSetType = n[1].getType(check);
       if(secondSetType != setType) {
@@ -54,13 +56,16 @@ struct SetsBinaryOperatorTypeRule {
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n) {
     Assert(n.getKind() == kind::UNION || n.getKind() == kind::INTERSECTION
            || n.getKind() == kind::SETMINUS);
+
+    TypeNode type = n.getType();
+
     if(n.getKind() == kind::UNION) {
       return NormalForm::checkNormalConstant(n);
     } else {
       return false;
     }
   }
-};/* struct SetUnionTypeRule */
+};/* struct SetsBinaryOperatorTypeRule */
 
 struct SubsetTypeRule {
   inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
@@ -404,6 +409,115 @@ struct RelIdenTypeRule {
     }
 };/* struct RelIdenTypeRule */
 
+struct CountTypeRule
+{
+  inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
+  {
+    Assert(n.getKind() == kind::COUNT);
+
+    TypeNode bagType = n[1].getType(check);
+
+    if( check )
+    {
+      if(!bagType.isBag())
+      {
+        throw TypeCheckingExceptionPrivate(n, "checking for count in a non-bag");
+      }
+
+      TypeNode elementType = n[0].getType(check);
+
+      if(!elementType.isComparableTo(bagType.getSetElementType()))
+      {
+        //if(!elementType.isSubtypeOf(bagType.getSetElementType())) {     //FIXME:typing
+        std::stringstream ss;
+        ss << "member operating on bags of different types:\n"
+           << "child type:  " << elementType << "\n"
+           << "not subtype: " << bagType.getSetElementType() << "\n"
+           << "in term : " << n;
+        throw TypeCheckingExceptionPrivate(n, ss.str());
+      }
+    }
+    return nodeManager->integerType();
+  }
+
+  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
+  {
+    Assert(n.getKind() == kind::COUNT);
+    return false;
+  }
+
+};/* struct CountTypeRule */
+
+struct SetOfTypeRule
+{
+  inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
+  {
+    Assert(n.getKind() == kind::SETOF);
+
+    TypeNode bagType = n[0].getType(check);
+
+    if( check )
+    {
+      if(!bagType.isBag())
+      {
+        throw TypeCheckingExceptionPrivate(n, "setof operates on a bag, non-bag object found");
+      }
+    }
+    return bagType;
+  }
+
+  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
+  {
+    Assert(n.getKind() == kind::SETOF);
+    return false;
+  }
+};/* struct SetOfTypeRule */
+
+struct BagsBinaryOperatorTypeRule
+{
+  inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
+  {
+    Assert(n.getKind() == kind::DISJOINTUNION);
+
+    TypeNode bagType = n[0].getType(check);
+
+    if( check )
+    {
+      if(!bagType.isBag())
+      {
+        throw TypeCheckingExceptionPrivate(n, "operator expects a a bag, first argument is not");
+      }
+
+      TypeNode secondSetType = n[1].getType(check);
+
+      if(secondSetType != bagType)
+      {
+        bagType = TypeNode::leastCommonTypeNode( secondSetType, bagType );
+
+        if( bagType.isNull() )
+        {
+          throw TypeCheckingExceptionPrivate(n, "operator expects two bags of comparable types");
+        }
+      }
+    }
+    return bagType;
+  }
+
+  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
+  {
+    Assert(n.getKind() == kind::DISJOINTUNION);
+
+    if(n.getKind() == kind::DISJOINTUNION)
+    {
+      return NormalForm::checkBagNormalConstant(n);
+    }
+    else
+    {
+      return false;
+    }
+  }
+};/* struct BagsBinaryOperatorTypeRule */
+
 struct SetsProperties {
   inline static Cardinality computeCardinality(TypeNode type) {
     Assert(type.getKind() == kind::SET_TYPE);
@@ -421,6 +535,27 @@ struct SetsProperties {
     return NodeManager::currentNM()->mkConst(EmptySet(type.toType()));
   }
 };/* struct SetsProperties */
+
+struct BagsProperties
+{
+  inline static Cardinality computeCardinality(TypeNode type)
+  {
+    Assert(type.getKind() == kind::BAG_TYPE);
+    return Cardinality::UNKNOWN_CARD;
+  }
+
+  inline static bool isWellFounded(TypeNode type)
+  {
+    return type[0].isWellFounded();
+  }
+
+  inline static Node mkGroundTerm(TypeNode type)
+  {
+    Assert(type.isBag());
+
+    return NodeManager::currentNM()->mkConst(EmptySet(type.toType(), true));
+  }
+};/* struct BagsProperties */
 
 }/* CVC4::theory::sets namespace */
 }/* CVC4::theory namespace */

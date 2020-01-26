@@ -645,9 +645,18 @@ ArrayType ExprManager::mkArrayType(Type indexType, Type constituentType) const {
   return ArrayType(Type(d_nodeManager, new TypeNode(d_nodeManager->mkArrayType(*indexType.d_typeNode, *constituentType.d_typeNode))));
 }
 
-SetType ExprManager::mkSetType(Type elementType) const {
+SetType ExprManager::mkSetType(Type elementType) const
+{
   NodeManagerScope nms(d_nodeManager);
-  return SetType(Type(d_nodeManager, new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode))));
+  TypeNode * typeNode = new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode));
+  return SetType(Type(d_nodeManager, typeNode));
+}
+
+BagType ExprManager::mkBagType(Type elementType) const
+{
+  NodeManagerScope nms(d_nodeManager);
+  TypeNode * typeNode = new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode));
+  return BagType(Type(d_nodeManager, typeNode));
 }
 
 DatatypeType ExprManager::mkDatatypeType(Datatype& datatype, uint32_t flags)

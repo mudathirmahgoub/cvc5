@@ -36,12 +36,13 @@ size_t EmptySetHashFunction::operator()(const EmptySet& es) const {
  * Constructs an emptyset of the specified type. Note that the argument
  * is the type of the set itself, NOT the type of the elements.
  */
-EmptySet::EmptySet(const SetType& setType)
-    : d_type(new SetType(setType))
-{ }
+EmptySet::EmptySet(const SetType& setType, bool isBag)
+    : d_type(new SetType(setType)), d_isBag(isBag)
+{
+}
 
 EmptySet::EmptySet(const EmptySet& es)
-    : d_type(new SetType(es.getType()))
+    : d_type(new SetType(es.getType())), d_isBag(es.isBag())
 { }
 
 EmptySet& EmptySet::operator=(const EmptySet& es) {
@@ -53,6 +54,12 @@ EmptySet::~EmptySet() { delete d_type; }
 const SetType& EmptySet::getType() const {
   return *d_type;
 }
+
+bool EmptySet::isBag() const
+{
+  return d_isBag;
+}
+
 bool EmptySet::operator==(const EmptySet& es) const
 {
   return getType() == es.getType();

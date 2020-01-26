@@ -1147,8 +1147,11 @@ static string smtKindString(Kind k, Variant v)
   case kind::JOIN: return "join";
   case kind::PRODUCT: return "product";
   case kind::TRANSPOSE: return "transpose";
-  case kind::TCLOSURE:
-    return "tclosure";
+  case kind::TCLOSURE: return "tclosure";
+  case kind::BAG_TYPE: return "Bag";
+  case kind::COUNT: return "count";
+  case kind::DISJOINTUNION: return "disjointunion";
+  case kind::SETOF: return "setof";
 
     // fp theory
   case kind::FLOATINGPOINT_FP: return "fp";

@@ -350,6 +350,9 @@ void Smt2::addTheory(Theory theory) {
     addOperator(kind::PRODUCT, "product");
     addOperator(kind::TRANSPOSE, "transpose");
     addOperator(kind::TCLOSURE, "tclosure");
+    addOperator(kind::COUNT, "count");
+    addOperator(kind::DISJOINTUNION, "disjointunion");
+    addOperator(kind::SETOF, "setof");
     break;
 
   case THEORY_DATATYPES:

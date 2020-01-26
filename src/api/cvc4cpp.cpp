@@ -249,6 +249,9 @@ const static std::unordered_map<Kind, CVC4::Kind, KindHashFunction> s_kinds{
     {TCLOSURE, CVC4::Kind::TCLOSURE},
     {JOIN_IMAGE, CVC4::Kind::JOIN_IMAGE},
     {IDEN, CVC4::Kind::IDEN},
+    {COUNT, CVC4::Kind::COUNT},
+    {DISJOINTUNION, CVC4::Kind::DISJOINTUNION},
+    {SETOF, CVC4::Kind::SETOF},
     /* Strings ------------------------------------------------------------- */
     {STRING_CONCAT, CVC4::Kind::STRING_CONCAT},
     {STRING_IN_REGEXP, CVC4::Kind::STRING_IN_REGEXP},
@@ -495,6 +498,9 @@ const static std::unordered_map<CVC4::Kind, Kind, CVC4::kind::KindHashFunction>
         {CVC4::Kind::TCLOSURE, TCLOSURE},
         {CVC4::Kind::JOIN_IMAGE, JOIN_IMAGE},
         {CVC4::Kind::IDEN, IDEN},
+        {CVC4::Kind::COUNT, COUNT},
+        {CVC4::Kind::DISJOINTUNION, DISJOINTUNION},
+        {CVC4::Kind::SETOF, SETOF},
         /* Strings --------------------------------------------------------- */
         {CVC4::Kind::STRING_CONCAT, STRING_CONCAT},
         {CVC4::Kind::STRING_IN_REGEXP, STRING_IN_REGEXP},

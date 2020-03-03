@@ -13,6 +13,7 @@ set(CVC4_EXAMPLES_API
   helloworld-new
   linear_arith
   linear_arith-new
+  relations
   sets
   sets-new
   strings

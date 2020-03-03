@@ -173,8 +173,6 @@ class Relations
     Expr xxTuple = manager.mkExpr(Kind.APPLY_CONSTRUCTOR, constructor, x, x);
     Expr member = manager.mkExpr(Kind.MEMBER, xxTuple, ancestor);
     Expr notMember = manager.mkExpr(Kind.NOT, member);
-    vectorExpr vectorExpr = new vectorExpr();
-    vectorExpr.add(x);
     Expr quantifiedVariables = manager.mkExpr(Kind.BOUND_VAR_LIST, x);
     Expr noSelfAncestor = manager.mkExpr(Kind.FORALL, quantifiedVariables, notMember);
 

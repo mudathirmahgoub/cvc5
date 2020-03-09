@@ -59,8 +59,14 @@
     ((/_Real x y) (/_Real (reify_real_term x) (reify_real_term y)))
   ))
 
-; Predicates of the form (term Integer) >= (term Real) or negations thereof
-(declare >=_IntReal (! x (term Int) (! y (term Real) formula)))
+; Predicates of the form (term Integer) (comparison) (term Real)
+(define arithpred_IntReal (! x (term Int)
+                          (! y (term Real)
+                          formula)))
+(declare >_IntReal arithpred_IntReal)
+(declare >=_IntReal arithpred_IntReal)
+(declare <_IntReal  arithpred_IntReal)
+(declare <=_IntReal arithpred_IntReal)
 
 ; From an arith predicate, compute the equivalent real predicate
 ; All arith predicates are (possibly negated) >='s with a real on the right.
@@ -132,40 +138,6 @@
     ((*_Int x y) (negate_linear_monomial_int_term t))
     (default (fail (term Int)))
   ))
-
-; Statement that z is the negation of greatest integer less than q.
-(declare holds_neg_of_greatest_integer_below
-  (! z mpz
-  (! q mpq
-    type)))
-
-; For proving statements of the above form.
-(declare check_neg_of_greatest_integer_below
-  (! z mpz
-  (! q mpq
-    (! sc_check (^ (is_greatest_integer_below (mp_neg z) q) tt)
-       (holds_neg_of_greatest_integer_below z q)))))
-
-; Axiom for tightening [Int] < q into -[Int] >= -greatest_int_below(q).
-; Note that [Int] < q is actually not([Int] >= q)
-(declare tighten_not_>=_IntReal
-  (! t       (term Int)  ; Omit
-  (! neg_t   (term Int)  ; Omit
-  (! real_bound mpq    ; Omit
-  (! neg_int_bound mpz ; Omit
-    (! pf_step (holds_neg_of_greatest_integer_below neg_int_bound real_bound)
-    (! pf_real_bound (th_holds (not (>=_IntReal t (a_real real_bound))))
-      (! sc_neg (^ (negate_linear_int_term t) neg_t)
-        (th_holds (>=_IntReal neg_t (term_int_to_real (a_int neg_int_bound))))))))))))
-
-; Axiom for tightening [Int] >= q into [Int] >= ceil(q)
-(declare tighten_>=_IntReal
-  (! t       (term Int)   ; Omit
-  (! real_bound mpq     ; Omit
-    (! int_bound mpz
-    (! pf_real_bound (th_holds (>=_IntReal t (a_real real_bound)))
-      (! sc_floor (^ (is_ceil real_bound int_bound) tt)
-        (th_holds (>=_IntReal t (term_int_to_real (a_int int_bound))))))))))
 
 ; Statement that z is the greatest integer less than z'.
 (declare holds_neg_of_greatest_integer_below_int
@@ -386,7 +358,7 @@
     (tt (bounded_aff (aff_mul_c a1 c) b))
     (ff (fail formula))))
 
-; Does an affine function actuall satisfy a bound, for all inputs?
+; Does an affine function actuall satisfy a bound, for some input?
 (program bound_respected ((b bound) (a aff)) bool
   (match a
     ((aff_cons c combo)
@@ -396,3 +368,62 @@
             (bound_pos (mpq_ispos c))
             (bound_non_neg (mp_ifneg c ff tt))))
         (default tt)))))
+
+;; =================================== ;;
+;; Axioms for bounded affine functions ;;
+;; =================================== ;;
+
+; Always true (used as a initial value when summing many bounds together)
+(declare bounded_aff_ax_0_>=_0
+  (th_holds (bounded_aff (aff_cons 0/1 lc_null) bound_non_neg)))
+
+; Contradiction axiom: an affine function that does not respect its bounds
+(declare bounded_aff_contra
+  (! a aff      ; Omit
+  (! b bound    ; Omit
+    (! pf (th_holds (bounded_aff a b))
+      (! sc (^ (bound_respected b a) ff)
+         (th_holds false))))))
+
+; Rule for summing two affine bounds to get a third
+(declare bounded_aff_add
+  (! a1 aff             ; Omit
+  (! a2 aff             ; Omit
+  (! b bound            ; Omit
+  (! b2 bound           ; Omit
+  (! ba_sum formula     ; Omit
+    (! pf_a1 (th_holds (bounded_aff a1 b))
+    (! pf_a2 (th_holds (bounded_aff a2 b2))
+       (! sc (^ (bounded_aff_add a1 b a2 b2) ba_sum)
+         (th_holds ba_sum))))))))))
+
+; Rule for scaling an affine bound
+(declare bounded_aff_mul_c
+  (! a aff          ; Omit
+  (! b bound        ; Omit
+  (! ba formula     ; Omit
+    (! c mpq
+    (! pf_a (th_holds (bounded_aff a b))
+       (! sc (^ (bounded_aff_mul_c a b c) ba)
+         (th_holds ba))))))))
+
+
+; [y >= x] implies that the aff. function y - x is >= 0
+(declare aff_>=_from_term
+  (! y (term Real)  ; Omit
+  (! x (term Real)  ; Omit
+  (! p aff          ; Omit
+    (! pf_affine (is_aff (-_Real y x) p)
+    (! pf_term_bound (th_holds (>=_Real y x))
+      (th_holds (bounded_aff p bound_non_neg))))))))
+
+; not [y >= x] implies that the aff. function -(y - x) is > 0
+(declare aff_>_from_term
+  (! y (term Real)  ; Omit
+  (! x (term Real)  ; Omit
+  (! p aff          ; Omit
+  (! p_n aff        ; Omit
+    (! pf_affine (is_aff (-_Real y x) p)
+    (! pf_term_bound (th_holds (not (>=_Real y x)))
+      (! sc_neg (^ (aff_neg p) p_n)
+        (th_holds (bounded_aff p_n bound_pos))))))))))

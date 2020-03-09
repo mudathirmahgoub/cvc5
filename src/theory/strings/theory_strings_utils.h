@@ -28,6 +28,9 @@ namespace theory {
 namespace strings {
 namespace utils {
 
+/** get the cardinality of the alphabet used, based on the options */
+uint32_t getAlphabetCardinality();
+
 /**
  * Make the conjunction of nodes in a. Removes duplicate conjuncts, returns
  * true if a is empty, and a single literal if a has size 1.
@@ -130,6 +133,11 @@ bool isSimpleRegExp(Node r);
  * @param result The resulting components
  */
 void getRegexpComponents(Node r, std::vector<Node>& result);
+
+/** Print the vector n as a concatentation term on output stream out */
+void printConcat(std::ostream& out, std::vector<Node>& n);
+/** Print the vector n as a concatentation term on trace given by c */
+void printConcatTrace(std::vector<Node>& n, const char* c);
 
 }  // namespace utils
 }  // namespace strings

@@ -93,6 +93,7 @@ std::ostream& operator<<(std::ostream& o, const ArithProofType apt){
   case FarkasAP:  o << "FarkasAP"; break;
   case TrichotomyAP:  o << "TrichotomyAP"; break;
   case EqualityEngineAP:  o << "EqualityEngineAP"; break;
+  case IntTightenAP: o << "IntTightenAP"; break;
   case IntHoleAP: o << "IntHoleAP"; break;
   default: break;
   }
@@ -518,12 +519,60 @@ bool Constraint::hasSimpleFarkasProof() const
   return true;
 }
 
+bool Constraint::hasIntTightenProof() const {
+  return getProofType() == IntTightenAP;
+}
+
 bool Constraint::hasIntHoleProof() const {
   return getProofType() == IntHoleAP;
 }
 
 bool Constraint::hasTrichotomyProof() const {
   return getProofType() == TrichotomyAP;
+}
+
+void Constraint::printProofTree(std::ostream& out, size_t depth) const
+{
+#if IS_PROOFS_BUILD
+  const ConstraintRule& rule = getConstraintRule();
+  out << std::string(2 * depth, ' ') << "* " << getVariable() << " [";
+  if (hasLiteral())
+  {
+    out << getLiteral();
+  }
+  else
+  {
+    out << "NOLIT";
+  };
+  out << "]" << ' ' << getType() << ' ' << getValue() << " (" << getProofType()
+      << ")";
+  if (getProofType() == FarkasAP)
+  {
+    out << " [";
+    bool first = true;
+    for (const auto& coeff : *rule.d_farkasCoefficients)
+    {
+      if (not first)
+      {
+        out << ", ";
+      }
+      first = false;
+      out << coeff;
+    }
+    out << "]";
+  }
+  out << endl;
+
+  for (AntecedentId i = rule.d_antecedentEnd; i != AntecedentIdSentinel; --i) {
+    ConstraintCP antecdent = d_database->getAntecedent(i);
+    if (antecdent == NullConstraint) {
+      break;
+    }
+    antecdent->printProofTree(out, depth + 1);
+  }
+#else  /* IS_PROOFS_BUILD */
+  out << "Cannot print proof. This is not a proof build." << endl;
+#endif /* IS_PROOFS_BUILD */
 }
 
 bool Constraint::sanityChecking(Node n) const {
@@ -1203,6 +1252,25 @@ bool Constraint::allHaveProof(const ConstraintCPVec& b){
   return true;
 }
 
+void Constraint::impliedByIntTighten(ConstraintCP a, bool nowInConflict){
+  Debug("constraints::pf") << "impliedByIntTighten(" << this << ", " << *a << ")" << std::endl;
+  Assert(!hasProof());
+  Assert(negationHasProof() == nowInConflict);
+  Assert(a->hasProof());
+  Debug("pf::arith") << "impliedByIntTighten(" << this << ", " << a << ")"
+                     << std::endl;
+
+  d_database->d_antecedents.push_back(NullConstraint);
+  d_database->d_antecedents.push_back(a);
+  AntecedentId antecedentEnd = d_database->d_antecedents.size() - 1;
+  d_database->pushConstraintRule(ConstraintRule(this, IntTightenAP, antecedentEnd));
+
+  Assert(inConflict() == nowInConflict);
+  if(inConflict()){
+    Debug("constraint::conflictCommit") << "inConflict impliedByIntTighten" << this << std::endl;
+  }
+}
+
 void Constraint::impliedByIntHole(ConstraintCP a, bool nowInConflict){
   Debug("constraints::pf") << "impliedByIntHole(" << this << ", " << *a << ")" << std::endl;
   Assert(!hasProof());
@@ -1361,7 +1429,7 @@ Node Constraint::externalExplainByAssertions(const ConstraintCPVec& b){
 }
 
 Node Constraint::externalExplainConflict() const{
-  Debug("pf::arith") << this << std::endl;
+  Debug("pf::arith::explain") << this << std::endl;
   Assert(inConflict());
   NodeBuilder<> nb(kind::AND);
   externalExplainByAssertions(nb);
@@ -1395,7 +1463,7 @@ void Constraint::assertionFringe(ConstraintCPVec& v){
           writePos++;
         }else{
           Assert(vi->hasTrichotomyProof() || vi->hasFarkasProof()
-                 || vi->hasIntHoleProof());
+                 || vi->hasIntHoleProof() || vi->hasIntTightenProof());
           AntecedentId p = vi->getEndAntecedent();
 
           ConstraintCP antecedent = antecedents[p];
@@ -1431,11 +1499,11 @@ void Constraint::externalExplain(NodeBuilder<>& nb, AssertionOrder order) const{
   Assert(!isAssumption() || assertedToTheTheory());
   Assert(!isInternalAssumption());
 
-  if (Debug.isOn("pf::arith"))
+  if (Debug.isOn("pf::arith::explain"))
   {
-    Debug("pf::arith") << "Explaining: " << this << " with rule ";
-    getConstraintRule().print(Debug("pf::arith"));
-    Debug("pf::arith") << std::endl;
+    Debug("pf::arith::explain") << "Explaining: " << this << " with rule ";
+    getConstraintRule().print(Debug("pf::arith::explain"));
+    Debug("pf::arith::explain") << std::endl;
   }
 
   if(assertedBefore(order)){
@@ -1448,7 +1516,7 @@ void Constraint::externalExplain(NodeBuilder<>& nb, AssertionOrder order) const{
     ConstraintCP antecedent = d_database->d_antecedents[p];
 
     while(antecedent != NullConstraint){
-      Debug("pf::arith") << "Explain " << antecedent << std::endl;
+      Debug("pf::arith::explain") << "Explain " << antecedent << std::endl;
       antecedent->externalExplain(nb, order);
       --p;
       antecedent = d_database->d_antecedents[p];
@@ -1465,7 +1533,7 @@ Node Constraint::externalExplain(AssertionOrder order) const{
   }else if(hasEqualityEngineProof()){
     return d_database->eeExplain(this);
   }else{
-    Assert(hasFarkasProof() || hasIntHoleProof() || hasTrichotomyProof());
+    Assert(hasFarkasProof() || hasIntHoleProof() || hasIntTightenProof() || hasTrichotomyProof());
     Assert(!antecentListIsEmpty());
     //Force the selection of the layer above if the node is
     // assertedToTheTheory()!

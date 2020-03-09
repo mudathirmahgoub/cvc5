@@ -16,6 +16,7 @@
 
 #include "theory/strings/theory_strings_utils.h"
 
+#include "options/strings_options.h"
 #include "theory/rewriter.h"
 
 using namespace CVC4::kind;
@@ -24,6 +25,17 @@ namespace CVC4 {
 namespace theory {
 namespace strings {
 namespace utils {
+
+uint32_t getAlphabetCardinality()
+{
+  if (options::stdPrintASCII())
+  {
+    Assert(128 <= String::num_codes());
+    return 128;
+  }
+  Assert(256 <= String::num_codes());
+  return 256;
+}
 
 Node mkAnd(const std::vector<Node>& a)
 {
@@ -223,6 +235,25 @@ void getRegexpComponents(Node r, std::vector<Node>& result)
   {
     result.push_back(r);
   }
+}
+
+void printConcat(std::ostream& out, std::vector<Node>& n)
+{
+  for (unsigned i = 0, nsize = n.size(); i < nsize; i++)
+  {
+    if (i > 0)
+    {
+      out << " ++ ";
+    }
+    out << n[i];
+  }
+}
+
+void printConcatTrace(std::vector<Node>& n, const char* c)
+{
+  std::stringstream ss;
+  printConcat(ss, n);
+  Trace(c) << ss.str();
 }
 
 }  // namespace utils

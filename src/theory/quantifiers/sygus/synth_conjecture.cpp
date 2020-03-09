@@ -20,8 +20,6 @@
 #include "options/quantifiers_options.h"
 #include "printer/printer.h"
 #include "prop/prop_engine.h"
-#include "smt/smt_engine.h"
-#include "smt/smt_engine_scope.h"
 #include "smt/smt_statistics_registry.h"
 #include "theory/datatypes/theory_datatypes_utils.h"
 #include "theory/quantifiers/first_order_model.h"
@@ -34,6 +32,7 @@
 #include "theory/quantifiers/sygus/term_database_sygus.h"
 #include "theory/quantifiers/term_util.h"
 #include "theory/quantifiers_engine.h"
+#include "theory/smt_engine_subsolver.h"
 #include "theory/theory_engine.h"
 
 using namespace CVC4::kind;
@@ -43,19 +42,23 @@ namespace CVC4 {
 namespace theory {
 namespace quantifiers {
 
-SynthConjecture::SynthConjecture(QuantifiersEngine* qe, SynthEngine* p)
+SynthConjecture::SynthConjecture(QuantifiersEngine* qe,
+                                 SynthEngine* p,
+                                 SygusStatistics& s)
     : d_qe(qe),
       d_parent(p),
+      d_stats(s),
       d_tds(qe->getTermDatabaseSygus()),
       d_hasSolution(false),
       d_ceg_si(new CegSingleInv(qe, this)),
       d_ceg_proc(new SynthConjectureProcess(qe)),
       d_ceg_gc(new CegGrammarConstructor(qe, this)),
       d_sygus_rconst(new SygusRepairConst(qe)),
-      d_sygus_ccore(new CegisCoreConnective(qe, this)),
+      d_exampleInfer(new ExampleInfer(d_tds)),
       d_ceg_pbe(new SygusPbe(qe, this)),
       d_ceg_cegis(new Cegis(qe, this)),
       d_ceg_cegisUnif(new CegisUnif(qe, this)),
+      d_sygus_ccore(new CegisCoreConnective(qe, this)),
       d_master(nullptr),
       d_set_ce_sk_vars(false),
       d_repair_index(0),
@@ -187,6 +190,15 @@ void SynthConjecture::assign(Node q)
         throw LogicException(ss.str());
       }
     }
+  }
+  // initialize the example inference utility
+  if (!d_exampleInfer->initialize(d_base_inst, d_candidates))
+  {
+    // there is a contradictory example pair, the conjecture is infeasible.
+    Node infLem = d_feasible_guard.negate();
+    d_qe->getOutputChannel().lemma(infLem);
+    // we don't need to continue initialization in this case
+    return;
   }
 
   // register this term with sygus database and other utilities that impact
@@ -439,6 +451,16 @@ bool SynthConjecture::doCheck(std::vector<Node>& lems)
     Assert(candidate_values.empty());
     constructed_cand = d_master->constructCandidates(
         terms, enum_values, d_candidates, candidate_values, lems);
+    // now clear the evaluation caches
+    for (std::pair<const Node, std::unique_ptr<ExampleEvalCache> >& ecp :
+         d_exampleEvalCache)
+    {
+      ExampleEvalCache* eec = ecp.second.get();
+      if (eec != nullptr)
+      {
+        eec->clearEvaluationAll();
+      }
+    }
   }
 
   NodeManager* nm = NodeManager::currentNM();
@@ -569,24 +591,22 @@ bool SynthConjecture::doCheck(std::vector<Node>& lems)
     if (options::sygusVerifySubcall())
     {
       Trace("cegqi-engine") << "  *** Verify with subcall..." << std::endl;
-      SmtEngine verifySmt(nm->toExprManager());
-      verifySmt.setIsInternalSubsolver();
-      verifySmt.setLogic(smt::currentSmtEngine()->getLogicInfo());
-      verifySmt.assertFormula(query.toExpr());
-      Result r = verifySmt.checkSat();
+
+      Result r =
+          checkWithSubsolver(query.toExpr(), d_ce_sk_vars, d_ce_sk_var_mvs);
       Trace("cegqi-engine") << "  ...got " << r << std::endl;
       if (r.asSatisfiabilityResult().isSat() == Result::SAT)
       {
-        Trace("cegqi-engine") << "  * Verification lemma failed for:\n   ";
-        // do not send out
-        for (unsigned i = 0, size = d_ce_sk_vars.size(); i < size; i++)
+        if (Trace.isOn("cegqi-engine"))
         {
-          Node v = d_ce_sk_vars[i];
-          Node mv = Node::fromExpr(verifySmt.getValue(v.toExpr()));
-          Trace("cegqi-engine") << vars[i] << " -> " << mv << " ";
-          d_ce_sk_var_mvs.push_back(mv);
+          Trace("cegqi-engine") << "  * Verification lemma failed for:\n   ";
+          for (unsigned i = 0, size = d_ce_sk_vars.size(); i < size; i++)
+          {
+            Trace("cegqi-engine")
+                << d_ce_sk_vars[i] << " -> " << d_ce_sk_var_mvs[i] << " ";
+          }
+          Trace("cegqi-engine") << std::endl;
         }
-        Trace("cegqi-engine") << std::endl;
 #ifdef CVC4_ASSERTIONS
         // the values for the query should be a complete model
         Node squery = query.substitute(d_ce_sk_vars.begin(),
@@ -638,15 +658,9 @@ bool SynthConjecture::checkSideCondition(const std::vector<Node>& cvals) const
   {
     Node sc = d_embedSideCondition.substitute(
         d_candidates.begin(), d_candidates.end(), cvals.begin(), cvals.end());
-    sc = Rewriter::rewrite(sc);
     Trace("cegqi-engine") << "Check side condition..." << std::endl;
     Trace("cegqi-debug") << "Check side condition : " << sc << std::endl;
-    NodeManager* nm = NodeManager::currentNM();
-    SmtEngine scSmt(nm->toExprManager());
-    scSmt.setIsInternalSubsolver();
-    scSmt.setLogic(smt::currentSmtEngine()->getLogicInfo());
-    scSmt.assertFormula(sc.toExpr());
-    Result r = scSmt.checkSat();
+    Result r = checkWithSubsolver(sc);
     Trace("cegqi-debug") << "...got side condition : " << r << std::endl;
     if (r == Result::UNSAT)
     {
@@ -810,7 +824,7 @@ Node SynthConjecture::getEnumeratedValue(Node e, bool& activeIncomplete)
                    == options::SygusActiveGenMode::ENUM
                || options::sygusActiveGenMode()
                       == options::SygusActiveGenMode::AUTO);
-        d_evg[e].reset(new SygusEnumerator(d_tds, this));
+        d_evg[e].reset(new SygusEnumerator(d_tds, this, d_stats));
       }
     }
     Trace("sygus-active-gen")
@@ -1058,7 +1072,7 @@ void SynthConjecture::printSynthSolution(std::ostream& out)
       ss << prog;
       std::string f(ss.str());
       f.erase(f.begin());
-      ++(d_parent->d_statistics.d_solutions);
+      ++(d_stats.d_solutions);
 
       bool is_unique_term = true;
 
@@ -1102,11 +1116,11 @@ void SynthConjecture::printSynthSolution(std::ostream& out)
         is_unique_term = d_exprm[prog].addTerm(sol, out, rew_print);
         if (rew_print)
         {
-          ++(d_parent->d_statistics.d_candidate_rewrites_print);
+          ++(d_stats.d_candidate_rewrites_print);
         }
         if (!is_unique_term)
         {
-          ++(d_parent->d_statistics.d_filtered_solutions);
+          ++(d_stats.d_filtered_solutions);
         }
       }
       if (is_unique_term)
@@ -1315,6 +1329,25 @@ Node SynthConjecture::getSymmetryBreakingPredicate(
   {
     return Node::null();
   }
+}
+
+ExampleEvalCache* SynthConjecture::getExampleEvalCache(Node e)
+{
+  std::map<Node, std::unique_ptr<ExampleEvalCache> >::iterator it =
+      d_exampleEvalCache.find(e);
+  if (it != d_exampleEvalCache.end())
+  {
+    return it->second.get();
+  }
+  Node f = d_tds->getSynthFunForEnumerator(e);
+  // if f does not have examples, we don't construct the utility
+  if (!d_exampleInfer->hasExamples(f) || d_exampleInfer->getNumExamples(f) == 0)
+  {
+    d_exampleEvalCache[e].reset(nullptr);
+    return nullptr;
+  }
+  d_exampleEvalCache[e].reset(new ExampleEvalCache(d_tds, this, f, e));
+  return d_exampleEvalCache[e].get();
 }
 
 }  // namespace quantifiers

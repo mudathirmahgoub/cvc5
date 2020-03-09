@@ -96,28 +96,19 @@ public:
   /* enables decision stragies based on options */
   void init();
 
-  /* clears all of the strategies */
-  void clearStrategies();
-
-
   /**
    * This is called by SmtEngine, at shutdown time, just before
    * destruction.  It is important because there are destruction
    * ordering issues between some parts of the system.
    */
-  void shutdown() {
-    Assert(d_engineState == 1);
-    d_engineState = 2;
-
-    Trace("decision") << "Shutting down decision engine" << std::endl;
-    clearStrategies();
-  }
+  void shutdown();
 
   // Interface for External World to use our services
 
   /** Gets the next decision based on strategies that are enabled */
   SatLiteral getNext(bool &stopSearch) {
-    NodeManager::currentResourceManager()->spendResource(options::decisionStep());
+    NodeManager::currentResourceManager()->spendResource(
+        ResourceManager::Resource::DecisionStep);
     Assert(d_cnfStream != NULL)
         << "Forgot to set cnfStream for decision engine?";
     Assert(d_satSolver != NULL)
@@ -169,11 +160,6 @@ public:
 
   // External World helping us help the Strategies
 
-  /** If one of the enabled strategies needs them  */
-  /* bool needIteSkolemMap() { */
-  /*   return d_needIteSkolemMap.size() > 0; */
-  /* } */
-
   /**
    * Add a list of assertions from an AssertionPipeline.
    */
@@ -207,14 +193,6 @@ public:
   Node getNode(SatLiteral l) {
     return d_cnfStream->getNode(l);
   }
-
-private:
-  /**
-   * Enable a particular decision strategy, also updating
-   * corresponding vector<DecisionStrategy*>-s is the engine
-   */
-  void enableStrategy(DecisionStrategy* ds);
-
 };/* DecisionEngine class */
 
 }/* CVC4 namespace */

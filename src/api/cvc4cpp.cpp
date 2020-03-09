@@ -245,6 +245,10 @@ const static std::unordered_map<Kind, CVC4::Kind, KindHashFunction> s_kinds{
     {JOIN_IMAGE, CVC4::Kind::JOIN_IMAGE},
     {IDEN, CVC4::Kind::IDEN},
     {COMPREHENSION, CVC4::Kind::COMPREHENSION},
+    {COUNT, CVC4::Kind::COUNT},
+    {DISJOINTUNION, CVC4::Kind::DISJOINTUNION},
+    {SETOF, CVC4::Kind::SETOF},
+
     /* Strings ------------------------------------------------------------- */
     {STRING_CONCAT, CVC4::Kind::STRING_CONCAT},
     {STRING_IN_REGEXP, CVC4::Kind::STRING_IN_REGEXP},
@@ -512,6 +516,9 @@ const static std::unordered_map<CVC4::Kind, Kind, CVC4::kind::KindHashFunction>
         {CVC4::Kind::JOIN_IMAGE, JOIN_IMAGE},
         {CVC4::Kind::IDEN, IDEN},
         {CVC4::Kind::COMPREHENSION, COMPREHENSION},
+        {CVC4::Kind::COUNT, COUNT},
+        {CVC4::Kind::DISJOINTUNION, DISJOINTUNION},
+        {CVC4::Kind::SETOF, SETOF},
         /* Strings --------------------------------------------------------- */
         {CVC4::Kind::STRING_CONCAT, STRING_CONCAT},
         {CVC4::Kind::STRING_IN_REGEXP, STRING_IN_REGEXP},
@@ -2701,6 +2708,17 @@ Sort Solver::mkSetSort(Sort elemSort) const
       << "non-null element sort";
 
   return d_exprMgr->mkSetType(*elemSort.d_type);
+
+  CVC4_API_SOLVER_TRY_CATCH_END;
+}
+
+Sort Solver::mkBagSort(Sort elemSort) const
+{
+  CVC4_API_SOLVER_TRY_CATCH_BEGIN;
+    CVC4_API_ARG_CHECK_EXPECTED(!elemSort.isNull(), elemSort)
+    << "non-null element sort";
+
+    return d_exprMgr->mkBagType(*elemSort.d_type);
 
   CVC4_API_SOLVER_TRY_CATCH_END;
 }

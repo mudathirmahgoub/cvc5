@@ -1966,6 +1966,13 @@ class CVC4_PUBLIC Solver
   Sort mkSetSort(Sort elemSort) const;
 
   /**
+   * Create a bag sort.
+   * @param elemSort the sort of the bag elements
+   * @return the bag sort
+   */
+  Sort mkBagSort(Sort elemSort) const;
+
+  /**
    * Create an uninterpreted sort.
    * @param symbol the name of the sort
    * @return the uninterpreted sort

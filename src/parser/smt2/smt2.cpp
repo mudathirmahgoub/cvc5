@@ -348,6 +348,9 @@ void Smt2::addTheory(Theory theory) {
     addOperator(api::PRODUCT, "product");
     addOperator(api::TRANSPOSE, "transpose");
     addOperator(api::TCLOSURE, "tclosure");
+    addOperator(api::COUNT, "count");
+    addOperator(api::DISJOINTUNION, "disjointunion");
+    addOperator(api::SETOF, "setof");
     break;
 
   case THEORY_DATATYPES:

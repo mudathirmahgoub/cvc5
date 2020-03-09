@@ -2422,12 +2422,19 @@ sortSymbol[CVC4::api::Sort& t, CVC4::parser::DeclarationCheck check]
             PARSER_STATE->parseError("Illegal array type.");
           }
           t = SOLVER->mkArraySort( args[0], args[1] );
-        } else if(name == "Set" &&
+        } else if((name == "Set" || name == "Bag") &&
                   PARSER_STATE->isTheoryEnabled(Smt2::THEORY_SETS) ) {
           if(args.size() != 1) {
             PARSER_STATE->parseError("Illegal set type.");
           }
-          t = SOLVER->mkSetSort( args[0] );
+          if (name == "Bag")
+          {
+            t = SOLVER->mkBagSort(args[0]);
+          }
+          else
+          {
+            t = SOLVER->mkSetSort(args[0]);
+          }
         } else if(name == "Tuple") {
           t = SOLVER->mkTupleSort(args);
         } else if(check == CHECK_DECLARED ||

@@ -36,10 +36,10 @@ class CVC4_PUBLIC EmptyBag
 {
  public:
   /**
-   * Constructs an emptyset of the specified type. Note that the argument
-   * is the type of the set itself, NOT the type of the elements.
+   * Constructs an emptybag of the specified type. Note that the argument
+   * is the type of the bag itself, NOT the type of the elements.
    */
-  EmptyBag(const BagType& setType);
+  EmptyBag(const BagType& bagType);
   ~EmptyBag();
   EmptyBag(const EmptyBag& other);
   EmptyBag& operator=(const EmptyBag& other);

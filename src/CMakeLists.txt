@@ -902,6 +902,7 @@ install(FILES
           expr/array_store_all.h
           expr/ascription_type.h
           expr/datatype.h
+          expr/emptybag.h
           expr/emptyset.h
           expr/expr_iomanip.h
           expr/expr_stream.h

@@ -1,5 +1,5 @@
 /*********************                                                        */
-/*! \file emptyset.cpp
+/*! \file emptybag.cpp
  ** \verbatim
  ** Top contributors (to current version):
  **   Tim King, Kshitij Bansal
@@ -25,7 +25,7 @@
 namespace CVC4 {
 
 std::ostream& operator<<(std::ostream& out, const EmptyBag& asa) {
-  return out << "emptyset(" << asa.getType() << ')';
+  return out << "emptybag(" << asa.getType() << ')';
 }
 
 size_t EmptyBagHashFunction::operator()(const EmptyBag& es) const {
@@ -33,11 +33,11 @@ size_t EmptyBagHashFunction::operator()(const EmptyBag& es) const {
 }
 
 /**
- * Constructs an emptyset of the specified type. Note that the argument
- * is the type of the set itself, NOT the type of the elements.
+ * Constructs an emptybag of the specified type. Note that the argument
+ * is the type of the bag itself, NOT the type of the elements.
  */
-EmptyBag::EmptyBag(const BagType& setType)
-    : d_type(new BagType(setType))
+EmptyBag::EmptyBag(const BagType& bagType)
+    : d_type(new BagType(bagType))
 {
 }
 

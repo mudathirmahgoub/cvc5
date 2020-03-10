@@ -119,8 +119,8 @@ well-founded BAG_TYPE \
     "::CVC4::theory::sets::BagsProperties::mkGroundTerm(%TYPE%)" \
     "theory/sets/theory_sets_type_rules.h"
 enumerator BAG_TYPE \
-    "::CVC4::theory::sets::SetEnumerator" \
-    "theory/sets/theory_sets_type_enumerator.h"
+    "::CVC4::theory::sets::BagEnumerator" \
+    "theory/sets/theory_bags_type_enumerator.h"
 
 operator COUNT         2  "bag multiplicity operator"
 operator DISJOINTUNION 2  "bag disjoint union"

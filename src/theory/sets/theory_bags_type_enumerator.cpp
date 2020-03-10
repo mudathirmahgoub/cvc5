@@ -15,7 +15,9 @@
  **/
 
 #include "theory/sets/theory_bags_type_enumerator.h"
+
 #include "expr/emptybag.h"
+#include "theory_sets_type_enumerator.h"
 namespace CVC4 {
 namespace theory {
 namespace sets {
@@ -23,20 +25,27 @@ namespace sets {
 BagEnumerator::BagEnumerator(TypeNode type, TypeEnumeratorProperties* tep)
     : TypeEnumeratorBase<BagEnumerator>(type),
       d_nodeManager(NodeManager::currentNM()),
-      d_elementEnumerator(type.getBagElementType(), tep),
-      d_isFinished(false),
-      d_currentBagIndex(0),
-      d_currentBag()
+      d_pairsEnumerator(getPairsEnumerator(type, tep))
 {
   d_currentBag = d_nodeManager->mkConst(EmptyBag(type.toType()));
+}
+
+SetEnumerator BagEnumerator::getPairsEnumerator(
+    const TypeNode& type, TypeEnumeratorProperties* tep) const
+{
+  std::vector<TypeNode> pair;
+  pair.push_back(type.getBagElementType());
+  pair.push_back(d_nodeManager->integerType());
+  TypeNode pairType = d_nodeManager->mkTupleType(pair);
+  TypeNode setType = d_nodeManager->mkSetType(pairType);
+  SetEnumerator setEnumerator(setType, tep);
+  return setEnumerator;
 }
 
 BagEnumerator::BagEnumerator(const BagEnumerator& enumerator)
     : TypeEnumeratorBase<BagEnumerator>(enumerator.getType()),
       d_nodeManager(enumerator.d_nodeManager),
-      d_elementEnumerator(enumerator.d_elementEnumerator),
-      d_isFinished(enumerator.d_isFinished),
-      d_currentBagIndex(enumerator.d_currentBagIndex),
+      d_pairsEnumerator(enumerator.d_pairsEnumerator),
       d_currentBag(enumerator.d_currentBag)
 {
 }
@@ -45,11 +54,6 @@ BagEnumerator::~BagEnumerator() {}
 
 Node BagEnumerator::operator*()
 {
-  if (d_isFinished)
-  {
-    throw NoMoreValuesException(getType());
-  }
-
   Trace("bag-type-enum") << "BagEnumerator::operator* d_currentBag = "
                          << d_currentBag << std::endl;
 
@@ -58,66 +62,25 @@ Node BagEnumerator::operator*()
 
 BagEnumerator& BagEnumerator::operator++()
 {
-  if (d_isFinished)
-  {
-    Trace("bag-type-enum") << "BagEnumerator::operator++ finished!"
-                           << std::endl;
-    Trace("bag-type-enum") << "BagEnumerator::operator++ d_currentBag = "
-                           << d_currentBag << std::endl;
-    return *this;
-  }
+  // get a new element from the set enumerator
+  ++d_pairsEnumerator;
+  d_currentBag = *d_pairsEnumerator;
 
-  d_currentBagIndex++;
-
-  // if the index is a power of 2, get a new element from d_elementEnumerator
-  if (d_currentBagIndex == static_cast<unsigned>(1 << d_elementsSoFar.size()))
-  {
-    // if there are no more values from d_elementEnumerator, set d_isFinished
-    // to true
-    if (d_elementEnumerator.isFinished())
-    {
-      d_isFinished = true;
-
-      Trace("bag-type-enum")
-          << "BagEnumerator::operator++ finished!" << std::endl;
-      Trace("bag-type-enum")
-          << "BagEnumerator::operator++ d_currentBag = " << d_currentBag
-          << std::endl;
-      return *this;
-    }
-
-    // get a new element and return it as a singleton set
-    Node element = *d_elementEnumerator;
-    d_elementsSoFar.push_back(element);
-    d_currentBag = d_nodeManager->mkNode(kind::SINGLETON, element);
-    d_elementEnumerator++;
-  }
-  else
-  {
-    // determine which elements are included in the set
-    BitVector indices = BitVector(d_elementsSoFar.size(), d_currentBagIndex);
-    std::vector<Node> elements;
-    for (unsigned i = 0; i < d_elementsSoFar.size(); i++)
-    {
-      // add the element to the set if its corresponding bit is set
-      if (indices.isBitSet(i))
-      {
-        elements.push_back(d_elementsSoFar[i]);
-      }
-    }
-    d_currentBag = NormalForm::elementsToSet(
-        std::set<TNode>(elements.begin(), elements.end()), getType());
-  }
+  convertIntToNat(&d_currentBag);
 
   Assert(d_currentBag.isConst());
   Assert(d_currentBag == Rewriter::rewrite(d_currentBag));
 
-  Trace("bag-type-enum") << "BagEnumerator::operator++ d_elementsSoFar = "
-                         << d_elementsSoFar << std::endl;
   Trace("bag-type-enum") << "BagEnumerator::operator++ d_currentBag = "
                          << d_currentBag << std::endl;
-
   return *this;
+}
+
+void BagEnumerator::convertIntToNat(Node * node)
+{
+  // 0 -> 1
+  // n -> 2n
+  // -n -> -2n + 1
 }
 
 bool BagEnumerator::isFinished()

@@ -42,7 +42,7 @@ class SetEnumerator : public TypeEnumeratorBase<SetEnumerator>
   /**
    * This operator iterates over the power set of the element type
    * following the order of a bitvector counter.
-   * Example: iterating over a set of bitvecotors of length 2 will return the
+   * Example: iterating over sets of bitvectors of length 2 will return the
    * following sequence consisting of 16 sets:
    * {}, {00}, {01}, {00, 01}, {10}, {00, 10}, {01, 10}, {00, 01, 10}, ...,
    * {00, 01, 10, 11}

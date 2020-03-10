@@ -24,6 +24,7 @@
 #include "theory/rewriter.h"
 #include "theory/sets/normal_form.h"
 #include "theory/type_enumerator.h"
+#include "theory_sets_type_enumerator.h"
 
 namespace CVC4 {
 namespace theory {
@@ -39,28 +40,45 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
   Node operator*() override;
 
   /**
-   * This operator iterates over the power set of the element type
-   * following the order of a bitvector counter.
-   * Example: iterating over a set of bitvecotors of length 2 will return the
-   * following sequence consisting of 16 sets:
-   * {}, {00}, {01}, {00, 01}, {10}, {00, 10}, {01, 10}, {00, 01, 10}, ...,
-   * {00, 01, 10, 11}
+   * This operator iterates over the infinite bags constructed from the element
+   * type . The enumeration depends on the finiteness of the element type
+   * Example iterating over bags of {"1", "2", "3", ...} will return the
+   * following infinite sequence of bags:
+   * {},                        sum = 0, index = 0
+   * {("1",1)},                 sum = 2, index = 1
+   * {("2",1)},                 sum = 3, index = 2
+   * {("1",2)},                 sum = 3, index = 2
+   * {("3", 1)},                sum = 4, index = 3
+   * {("2", 2)},                sum = 4, index = 3
+   * {("1", 3)},                sum = 4, index = 3
+   * {("4", 1)},                sum = 5, index = 4
+   * {("3", 2)},                sum = 5, index = 4
+   * {("2", 3)},                sum = 5, index = 4
+   * {("1", 4)},                sum = 5, index = 4
+   * {("1", 1),("2", 1)},       sum = 5, index = 4
+   * {("5", 1)},                sum = 6, index = 5
+   * {("4", 2)},                sum = 6, index = 5
+   * {("3", 3)},                sum = 6, index = 5
+   * {("2", 4)},                sum = 6, index = 5
+   * {("1", 5)},                sum = 6, index = 5
+   * {("1", 1), ("2",2)},       sum = 6, index = 5
+   * {("1", 2), ("2",1)},       sum = 6, index = 5
+   * {("1", 2), ("2",1)},       sum = 6, index = 5
    */
   BagEnumerator& operator++() override;
 
   bool isFinished() override;
 
  private:
+  SetEnumerator getPairsEnumerator(const TypeNode& type,
+                              TypeEnumeratorProperties* tep) const;
+
+  void convertIntToNat(Node * node);
+
   /** a pointer to the node manager */
   NodeManager* d_nodeManager;
-  /** an enumerator for the elements' type */
-  TypeEnumerator d_elementEnumerator;
-  /** a boolean to indicate whether the set enumerator is finished */
-  bool d_isFinished;
-  /** a list of the elements encountered so far */
-  std::vector<Node> d_elementsSoFar;
-  /** stores the index of the current set in the power set */
-  unsigned d_currentBagIndex;
+  /** an enumerator for the set of pairs of element type x integer type */
+  SetEnumerator d_pairsEnumerator;
   /** the current set returned by the set enumerator */
   Node d_currentBag;
 }; /* class BagEnumerator */

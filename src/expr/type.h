@@ -522,14 +522,15 @@ class CVC4_PUBLIC ArrayType : public Type {
 };/* class ArrayType */
 
 /** Class encapsulating an set type. */
-class CVC4_PUBLIC SetType : public Type {
+class CVC4_PUBLIC SetType : public Type
+{
  public:
   /** Construct from the base type */
   SetType(const Type& type = Type());
 
   /** Get the index type */
   Type getElementType() const;
-};/* class SetType */
+}; /* class SetType */
 
 /** Class encapsulating a bag type. */
 class CVC4_PUBLIC BagType : public Type
@@ -540,7 +541,7 @@ class CVC4_PUBLIC BagType : public Type
 
   /** Get the index type */
   Type getElementType() const;
-};/* class BagType */
+}; /* class BagType */
 
 /** Class encapsulating a user-defined sort. */
 class CVC4_PUBLIC SortType : public Type {

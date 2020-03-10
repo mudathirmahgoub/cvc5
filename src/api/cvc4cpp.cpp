@@ -245,6 +245,7 @@ const static std::unordered_map<Kind, CVC4::Kind, KindHashFunction> s_kinds{
     {JOIN_IMAGE, CVC4::Kind::JOIN_IMAGE},
     {IDEN, CVC4::Kind::IDEN},
     {COMPREHENSION, CVC4::Kind::COMPREHENSION},
+    {EMPTYBAG, CVC4::Kind::EMPTYBAG},
     {COUNT, CVC4::Kind::COUNT},
     {DISJOINTUNION, CVC4::Kind::DISJOINTUNION},
     {SETOF, CVC4::Kind::SETOF},
@@ -516,6 +517,7 @@ const static std::unordered_map<CVC4::Kind, Kind, CVC4::kind::KindHashFunction>
         {CVC4::Kind::JOIN_IMAGE, JOIN_IMAGE},
         {CVC4::Kind::IDEN, IDEN},
         {CVC4::Kind::COMPREHENSION, COMPREHENSION},
+        {CVC4::Kind::EMPTYBAG, EMPTYBAG},
         {CVC4::Kind::COUNT, COUNT},
         {CVC4::Kind::DISJOINTUNION, DISJOINTUNION},
         {CVC4::Kind::SETOF, SETOF},
@@ -891,6 +893,8 @@ bool Sort::isRecord() const { return d_type->isRecord(); }
 bool Sort::isArray() const { return d_type->isArray(); }
 
 bool Sort::isSet() const { return d_type->isSet(); }
+
+bool Sort::isBag() const { return d_type->isBag(); }
 
 bool Sort::isUninterpretedSort() const { return d_type->isSort(); }
 
@@ -2900,6 +2904,17 @@ Term Solver::mkEmptySet(Sort s) const
       << "null sort or set sort";
 
   return mkValHelper<CVC4::EmptySet>(CVC4::EmptySet(*s.d_type));
+
+  CVC4_API_SOLVER_TRY_CATCH_END;
+}
+
+Term Solver::mkEmptyBag(Sort s) const
+{
+  CVC4_API_SOLVER_TRY_CATCH_BEGIN;
+  CVC4_API_ARG_CHECK_EXPECTED(s.isNull() || s.isBag(), s)
+      << "null sort or bag sort";
+
+  return mkValHelper<CVC4::EmptyBag>(CVC4::EmptyBag(*s.d_type));
 
   CVC4_API_SOLVER_TRY_CATCH_END;
 }

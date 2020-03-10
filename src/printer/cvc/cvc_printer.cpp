@@ -214,6 +214,10 @@ void CvcPrinter::toStream(
       out << "{} :: " << n.getConst<EmptySet>().getType();
       break;
 
+    case kind::EMPTYBAG:
+      out << "{} :: " << n.getConst<EmptyBag>().getType();
+      break;
+
     case kind::STORE_ALL: {
       const ArrayStoreAll& asa = n.getConst<ArrayStoreAll>();
       out << "ARRAY(" << asa.getType().getIndexType() << " OF "
@@ -820,6 +824,13 @@ void CvcPrinter::toStream(
       toStream(out, n[0], depth, types, false);
       return;
       break;
+
+    case kind::BAG_TYPE:
+      out << "BAG OF ";
+      toStream(out, n[0], depth, types, false);
+      return;
+      break;
+
     case kind::UNION:
       op << '|';
       opType = INFIX;

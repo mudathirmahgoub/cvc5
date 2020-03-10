@@ -15,7 +15,7 @@
  ** \todo document this file
  **/
 
-#include "expr/emptyset.h"
+#include "expr/emptybag.h"
 
 #include <iosfwd>
 
@@ -24,11 +24,11 @@
 
 namespace CVC4 {
 
-std::ostream& operator<<(std::ostream& out, const EmptySet& asa) {
+std::ostream& operator<<(std::ostream& out, const EmptyBag& asa) {
   return out << "emptyset(" << asa.getType() << ')';
 }
 
-size_t EmptySetHashFunction::operator()(const EmptySet& es) const {
+size_t EmptyBagHashFunction::operator()(const EmptyBag& es) const {
   return TypeHashFunction()(es.getType());
 }
 
@@ -36,41 +36,41 @@ size_t EmptySetHashFunction::operator()(const EmptySet& es) const {
  * Constructs an emptyset of the specified type. Note that the argument
  * is the type of the set itself, NOT the type of the elements.
  */
-EmptySet::EmptySet(const SetType& setType)
-    : d_type(new SetType(setType))
+EmptyBag::EmptyBag(const BagType& setType)
+    : d_type(new BagType(setType))
 {
 }
 
-EmptySet::EmptySet(const EmptySet& es)
-    : d_type(new SetType(es.getType()))
+EmptyBag::EmptyBag(const EmptyBag& es)
+    : d_type(new BagType(es.getType()))
 { }
 
-EmptySet& EmptySet::operator=(const EmptySet& es) {
+EmptyBag& EmptyBag::operator=(const EmptyBag& es) {
   (*d_type) = es.getType();
   return *this;
 }
 
-EmptySet::~EmptySet() { delete d_type; }
-const SetType& EmptySet::getType() const {
+EmptyBag::~EmptyBag() { delete d_type; }
+const BagType& EmptyBag::getType() const {
   return *d_type;
 }
 
-bool EmptySet::operator==(const EmptySet& es) const
+bool EmptyBag::operator==(const EmptyBag& es) const
 {
   return getType() == es.getType();
 }
 
-bool EmptySet::operator!=(const EmptySet& es) const { return !(*this == es); }
-bool EmptySet::operator<(const EmptySet& es) const
+bool EmptyBag::operator!=(const EmptyBag& es) const { return !(*this == es); }
+bool EmptyBag::operator<(const EmptyBag& es) const
 {
   return getType() < es.getType();
 }
 
-bool EmptySet::operator<=(const EmptySet& es) const
+bool EmptyBag::operator<=(const EmptyBag& es) const
 {
   return getType() <= es.getType();
 }
 
-bool EmptySet::operator>(const EmptySet& es) const { return !(*this <= es); }
-bool EmptySet::operator>=(const EmptySet& es) const { return !(*this < es); }
+bool EmptyBag::operator>(const EmptyBag& es) const { return !(*this <= es); }
+bool EmptyBag::operator>=(const EmptyBag& es) const { return !(*this < es); }
 }/* CVC4 namespace */

@@ -539,6 +539,9 @@ public:
   /** Get the element type (for set types) */
   TypeNode getSetElementType() const;
 
+  /** Get the element type (for bagtypes) */
+  TypeNode getBagElementType() const;
+
   /**
    * Is this a function type?  Function-like things (e.g. datatype
    * selectors) that aren't actually functions are NOT considered
@@ -970,6 +973,11 @@ inline bool TypeNode::isBag() const {
 
 inline TypeNode TypeNode::getSetElementType() const {
   Assert(isSet());
+  return (*this)[0];
+}
+
+inline TypeNode TypeNode::getBagElementType() const {
+  Assert(isBag());
   return (*this)[0];
 }
 

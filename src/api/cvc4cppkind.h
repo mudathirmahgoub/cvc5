@@ -1854,6 +1854,15 @@ enum CVC4_PUBLIC Kind : int32_t
   COMPREHENSION,
 
   /**
+   * Empty bag constant.
+   * Parameters: 1
+   *   -[1]: Sort of the bag elements
+   * Create with:
+   *   mkEmptyBag(Sort sort)
+   */
+  EMPTYBAG,
+
+  /**
    * Bag multiplicity term.
    * Parameters: 2
    *   -[1]..[2]: Terms of set sort, [1] is an element of the type of bag [2]

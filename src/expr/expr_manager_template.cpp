@@ -659,14 +659,16 @@ ArrayType ExprManager::mkArrayType(Type indexType, Type constituentType) const {
 SetType ExprManager::mkSetType(Type elementType) const
 {
   NodeManagerScope nms(d_nodeManager);
-  TypeNode * typeNode = new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode));
+  TypeNode* typeNode =
+      new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode));
   return SetType(Type(d_nodeManager, typeNode));
 }
 
 BagType ExprManager::mkBagType(Type elementType) const
 {
   NodeManagerScope nms(d_nodeManager);
-  TypeNode * typeNode = new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode));
+  TypeNode* typeNode =
+      new TypeNode(d_nodeManager->mkBagType(*elementType.d_typeNode));
   return BagType(Type(d_nodeManager, typeNode));
 }
 

@@ -21,6 +21,12 @@ constant EMPTYSET \
     "expr/emptyset.h" \
     "the empty set constant; payload is an instance of the CVC4::EmptySet class"
 
+constant EMPTYBAG \
+    ::CVC4::EmptyBag \
+    ::CVC4::EmptyBagHashFunction \
+    "expr/emptybag.h" \
+    "the empty bag constant; payload is an instance of the CVC4::EmptyBag class"
+
 # the type
 operator SET_TYPE 1 "set type, takes as parameter the type of the elements"
 cardinality SET_TYPE \
@@ -120,6 +126,7 @@ operator COUNT         2  "bag multiplicity operator"
 operator DISJOINTUNION 2  "bag disjoint union"
 operator SETOF         1  "bag setof operator"
 
+typerule EMPTYBAG       ::CVC4::theory::sets::EmptyBagTypeRule
 typerule COUNT          ::CVC4::theory::sets::CountTypeRule
 typerule DISJOINTUNION  ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
 typerule SETOF          ::CVC4::theory::sets::SetOfTypeRule

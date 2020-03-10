@@ -409,6 +409,19 @@ struct RelIdenTypeRule {
     }
 };/* struct RelIdenTypeRule */
 
+struct EmptyBagTypeRule
+{
+  inline static TypeNode computeType(NodeManager* nodeManager,
+                                     TNode n,
+                                     bool check)
+  {
+    Assert(n.getKind() == kind::EMPTYBAG);
+    EmptyBag emptyBag = n.getConst<EmptyBag>();
+    Type bagType = emptyBag.getType();
+    return TypeNode::fromType(bagType);
+  }
+}; /* struct EmptyBagTypeRule */
+
 struct CountTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
@@ -553,7 +566,7 @@ struct BagsProperties
   {
     Assert(type.isBag());
 
-    return NodeManager::currentNM()->mkConst(EmptySet(type.toType(), true));
+    return NodeManager::currentNM()->mkConst(EmptyBag(type.toType()));
   }
 };/* struct BagsProperties */
 

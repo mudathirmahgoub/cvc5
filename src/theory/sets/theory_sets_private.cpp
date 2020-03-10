@@ -19,6 +19,7 @@
 #include <algorithm>
 
 #include "expr/emptyset.h"
+#include "expr/emptybag.h"
 #include "expr/node_algorithm.h"
 #include "options/sets_options.h"
 #include "smt/smt_statistics_registry.h"

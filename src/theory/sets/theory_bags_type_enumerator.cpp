@@ -16,8 +16,13 @@
 
 #include "theory/sets/theory_bags_type_enumerator.h"
 
+#include "expr/datatype.h"
 #include "expr/emptybag.h"
 #include "theory_sets_type_enumerator.h"
+//ToDo: refine this include
+#include "theory/sets/theory_sets_private.h"
+
+
 namespace CVC4 {
 namespace theory {
 namespace sets {
@@ -64,9 +69,8 @@ BagEnumerator& BagEnumerator::operator++()
 {
   // get a new element from the set enumerator
   ++d_pairsEnumerator;
-  d_currentBag = *d_pairsEnumerator;
-
-  convertIntToNat(&d_currentBag);
+  Node node = *d_pairsEnumerator;
+  d_currentBag = convertIntToNat(node);
 
   Assert(d_currentBag.isConst());
   Assert(d_currentBag == Rewriter::rewrite(d_currentBag));
@@ -76,11 +80,48 @@ BagEnumerator& BagEnumerator::operator++()
   return *this;
 }
 
-void BagEnumerator::convertIntToNat(Node * node)
+Node BagEnumerator::convertIntToNat(Node& node)
 {
-  // 0 -> 1
-  // n -> 2n
-  // -n -> -2n + 1
+  if (node.getKind() == kind::UNION)
+  {
+    Node a = node[0];
+    Node b = node[1];
+    a = convertIntToNat(a);
+    b = convertIntToNat(b);
+    return d_nodeManager->mkNode(kind::UNION, a, b);
+  }
+
+  if (node.getKind() == kind::SINGLETON)
+  {
+    Node element = node[0][0];
+    Node count = node[0][1];
+
+    Rational rational = count.getConst<Rational>();
+
+    if (rational == 0)
+    {
+      rational = rational + 1;
+    }
+    else
+    {
+      if (rational > 0)
+      {
+        rational = Rational(2) * rational;
+      }
+      else
+      {
+        rational = Rational(-2) * rational + Rational(1);
+      }
+    }
+    count = d_nodeManager->mkConst(rational);
+
+    const DType& dataType = d_pairsEnumerator.getType().getSetElementType().getDType();
+    node = d_nodeManager->mkNode(
+        kind::APPLY_CONSTRUCTOR, dataType[0].getConstructor(), element, count);
+    node = d_nodeManager->mkNode(kind::SINGLETON, node);
+    return node;
+  }
+  return node;
 }
 
 bool BagEnumerator::isFinished()

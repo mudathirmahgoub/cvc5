@@ -73,7 +73,7 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
   SetEnumerator getPairsEnumerator(const TypeNode& type,
                               TypeEnumeratorProperties* tep) const;
 
-  void convertIntToNat(Node * node);
+  Node convertIntToNat(Node & node);
 
   /** a pointer to the node manager */
   NodeManager* d_nodeManager;

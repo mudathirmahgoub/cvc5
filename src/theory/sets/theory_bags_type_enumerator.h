@@ -71,9 +71,9 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
 
  private:
   SetEnumerator getPairsEnumerator(const TypeNode& type,
-                              TypeEnumeratorProperties* tep) const;
+                                   TypeEnumeratorProperties* tep) const;
 
-  Node convertIntToNat(Node & node);
+  bool convertIntToNat(Node& node, std::map<Node, Rational>& elementsMap);
 
   /** a pointer to the node manager */
   NodeManager* d_nodeManager;

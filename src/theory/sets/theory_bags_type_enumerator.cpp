@@ -19,9 +19,8 @@
 #include "expr/datatype.h"
 #include "expr/emptybag.h"
 #include "theory_sets_type_enumerator.h"
-//ToDo: refine this include
+// ToDo: refine this include
 #include "theory/sets/theory_sets_private.h"
-
 
 namespace CVC4 {
 namespace theory {
@@ -70,8 +69,32 @@ BagEnumerator& BagEnumerator::operator++()
   // get a new element from the set enumerator
   ++d_pairsEnumerator;
   Node node = *d_pairsEnumerator;
-  d_currentBag = convertIntToNat(node);
 
+  std::map<Node, Rational> elementsMap;
+  // skip if duplicates found
+  while(!convertIntToNat(node, elementsMap))
+  {
+    ++d_pairsEnumerator;
+    node = *d_pairsEnumerator;
+    std::cout << node << std::endl;
+  }
+
+  const DType& dataType =
+      d_pairsEnumerator.getType().getSetElementType().getDType();
+  std::vector<Node> elements;
+  for (std::pair<Node, Rational> pair : elementsMap)
+  {
+    Node count = d_nodeManager->mkConst(pair.second);
+    Node n = d_nodeManager->mkNode(kind::APPLY_CONSTRUCTOR,
+                                   dataType[0].getConstructor(),
+                                   pair.first,
+                                   count);
+    elements.push_back(n);
+  }
+
+  d_currentBag = NormalForm::elementsToSet(
+      std::set<TNode>(elements.begin(), elements.end()),
+      d_pairsEnumerator.getType());
   Assert(d_currentBag.isConst());
   Assert(d_currentBag == Rewriter::rewrite(d_currentBag));
 
@@ -80,18 +103,16 @@ BagEnumerator& BagEnumerator::operator++()
   return *this;
 }
 
-Node BagEnumerator::convertIntToNat(Node& node)
+bool BagEnumerator::convertIntToNat(Node& node,
+                                    std::map<Node, Rational>& elementsMap)
 {
   if (node.getKind() == kind::UNION)
   {
     Node a = node[0];
     Node b = node[1];
-    a = convertIntToNat(a);
-    b = convertIntToNat(b);
-    return d_nodeManager->mkNode(kind::UNION, a, b);
+    return convertIntToNat(a, elementsMap) && convertIntToNat(b, elementsMap);
   }
-
-  if (node.getKind() == kind::SINGLETON)
+  else if (node.getKind() == kind::SINGLETON)
   {
     Node element = node[0][0];
     Node count = node[0][1];
@@ -113,15 +134,20 @@ Node BagEnumerator::convertIntToNat(Node& node)
         rational = Rational(-2) * rational + Rational(1);
       }
     }
-    count = d_nodeManager->mkConst(rational);
 
-    const DType& dataType = d_pairsEnumerator.getType().getSetElementType().getDType();
-    node = d_nodeManager->mkNode(
-        kind::APPLY_CONSTRUCTOR, dataType[0].getConstructor(), element, count);
-    node = d_nodeManager->mkNode(kind::SINGLETON, node);
-    return node;
+    std::map<Node, Rational>::iterator it = elementsMap.find(element);
+    if (it == elementsMap.end())
+    {
+      elementsMap[element] = rational;
+      return true;
+    }
+    else
+    {
+      elementsMap[element] = elementsMap[element] + rational;
+      return true;
+    }
   }
-  return node;
+  Assert(false) << "Expected Union or Singleton. Found " << node << std::endl;
 }
 
 bool BagEnumerator::isFinished()

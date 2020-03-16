@@ -57,6 +57,17 @@ class BagEnumeratorWhite : public CxxTest::TestSuite
     }
   }
 
+  void testBagOfIntegers()
+  {
+    TypeNode integerType = d_nm->integerType();
+    BagEnumerator bagEnumerator(d_nm->mkBagType(integerType));
+
+    for(unsigned i = 0; i < 500; i++)
+    {
+      cout << *++bagEnumerator << endl;
+    }
+  }
+
   void testBagOfUF()
   {
     TypeNode typeNode = d_nm->mkSort("Atom");

@@ -1626,6 +1626,7 @@ set(regress_1_tests
   regress1/sets/comp-pos-member.smt2
   regress1/sets/copy_check_heap_access_33_4.smt2
   regress1/sets/deepmeas0.hs.fqout.cvc4.41.smt2
+  regress1/sets/bags/bags1.smt2
   regress1/sets/finite-type/bug3663.smt2
   regress1/sets/finite-type/sets-card-arrcolor.smt2
   regress1/sets/finite-type/sets-card-arrunit.smt2

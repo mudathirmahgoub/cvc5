@@ -561,6 +561,10 @@ api::Term Parser::applyTypeAscription(api::Term t, api::Sort s)
   {
     t = d_solver->mkEmptySet(s);
   }
+  if (k == api::EMPTYBAG)
+  {
+    t = d_solver->mkEmptyBag(s);
+  }
   else if (k == api::UNIVERSE_SET)
   {
     t = d_solver->mkUniverseSet(s);

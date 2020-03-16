@@ -331,6 +331,8 @@ void Smt2::addTheory(Theory theory) {
 
   case THEORY_SETS:
     defineVar("emptyset", d_solver->mkEmptySet(d_solver->getNullSort()));
+    //ToDo: review this line, and why emptybag is handled by the lexer
+    defineVar("emptybag", d_solver->mkEmptyBag(d_solver->getNullSort()));
     // the Boolean sort is a placeholder here since we don't have type info
     // without type annotation
     defineVar("univset", d_solver->mkUniverseSet(d_solver->getBooleanSort()));

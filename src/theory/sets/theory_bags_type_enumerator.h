@@ -42,28 +42,33 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
   /**
    * This operator iterates over the infinite bags constructed from the element
    * type . The enumeration depends on the finiteness of the element type
-   * Example iterating over bags of {"1", "2", "3", ...} will return the
+   * Example iterating over bags of {1, 2, 3, ...} will return the
    * following infinite sequence of bags:
-   * {},                        sum = 0, index = 0
-   * {("1",1)},                 sum = 2, index = 1
-   * {("2",1)},                 sum = 3, index = 2
-   * {("1",2)},                 sum = 3, index = 2
-   * {("3", 1)},                sum = 4, index = 3
-   * {("2", 2)},                sum = 4, index = 3
-   * {("1", 3)},                sum = 4, index = 3
-   * {("4", 1)},                sum = 5, index = 4
-   * {("3", 2)},                sum = 5, index = 4
-   * {("2", 3)},                sum = 5, index = 4
-   * {("1", 4)},                sum = 5, index = 4
-   * {("1", 1),("2", 1)},       sum = 5, index = 4
-   * {("5", 1)},                sum = 6, index = 5
-   * {("4", 2)},                sum = 6, index = 5
-   * {("3", 3)},                sum = 6, index = 5
-   * {("2", 4)},                sum = 6, index = 5
-   * {("1", 5)},                sum = 6, index = 5
-   * {("1", 1), ("2",2)},       sum = 6, index = 5
-   * {("1", 2), ("2",1)},       sum = 6, index = 5
-   * {("1", 2), ("2",1)},       sum = 6, index = 5
+   * {},                    sum = 0, #elements = 0, cardinality = 0
+   *
+   * {(1,1)},               sum = 2, #elements = 1, cardinality = 1
+   *
+   * {(2,1)},               um = 3, #elements = 2, cardinality = 1
+   * {(1,2)},               sum = 3, #elements = 2, cardinality = 2
+   *
+   * {(3, 1)},              sum = 4, #elements = 3, cardinality = 1
+   * {(2, 2)},              sum = 4, #elements = 3, cardinality = 2
+   * {(1, 3)},              sum = 4, #elements = 3, cardinality = 3
+   *
+   * {(4, 1)},              sum = 5, #elements = 4, cardinality = 1
+   * {(3, 2)},              sum = 5, #elements = 4, cardinality = 2
+   * {(1, 1),(2, 1)},       sum = 5, #elements = 4, cardinality = 2
+   * {(2, 3)},              sum = 5, #elements = 4, cardinality = 3
+   * {(1, 4)},              sum = 5, #elements = 4, cardinality = 4
+   *
+   * {(5, 1)},              sum = 6, #elements = 5, cardinality = 1
+   * {(4, 2)},              sum = 6, #elements = 5, cardinality = 2
+   * {(1, 1), (3,1)},       sum = 6, #elements = 5, cardinality = 2
+   * {(3, 3)},              sum = 6, #elements = 5, cardinality = 3
+   * {(1, 1), (2,2)},       sum = 6, #elements = 5, cardinality = 3
+   * {(1, 2), (2,1)},       sum = 6, #elements = 5, cardinality = 3
+   * {(2, 4)},              sum = 6, #elements = 5, cardinality = 4
+   * {(1, 5)},              sum = 6, #elements = 5, cardinality = 5
    */
   BagEnumerator& operator++() override;
 

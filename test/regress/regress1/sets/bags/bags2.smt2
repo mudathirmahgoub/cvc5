@@ -4,5 +4,6 @@
 (declare-fun A () (Bag Bool))
 (assert (= (count false A) 3))
 (assert (= (count true A) 2))
+(assert (not (= (disjointunion A A) A)))
 (check-sat)
 (get-model)

@@ -41,14 +41,14 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
 
   /**
    * This operator iterates over the infinite bags constructed from the element
-   * type . The enumeration depends on the finiteness of the element type
-   * Example iterating over bags of {1, 2, 3, ...} will return the
-   * following infinite sequence of bags:
+   * type . Ideally iterating over bags of {1, 2, 3, ...} will return the
+   * following infinite sequence of bags, where n in the pair (m, n) means the
+   * multiplicity of the element m in the bag
    * {},                    sum = 0, #elements = 0, cardinality = 0
    *
    * {(1,1)},               sum = 2, #elements = 1, cardinality = 1
    *
-   * {(2,1)},               um = 3, #elements = 2, cardinality = 1
+   * {(2,1)},               um = 3,  #elements = 2,  cardinality = 1
    * {(1,2)},               sum = 3, #elements = 2, cardinality = 2
    *
    * {(3, 1)},              sum = 4, #elements = 3, cardinality = 1
@@ -69,6 +69,12 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
    * {(1, 2), (2,1)},       sum = 6, #elements = 5, cardinality = 3
    * {(2, 4)},              sum = 6, #elements = 5, cardinality = 4
    * {(1, 5)},              sum = 6, #elements = 5, cardinality = 5
+   *
+   * This would requires solving linear arithmetic equations and blocking
+   * previously generated bags which is too expensive.
+   * For now we are implementing an obvious solution
+   * {(1,1)}, {(1,2)}, {(1,3)}, ... which works for both fininte and infinite
+   * types
    */
   BagEnumerator& operator++() override;
 

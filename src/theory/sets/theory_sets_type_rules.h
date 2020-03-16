@@ -439,13 +439,13 @@ struct CountTypeRule
 
       TypeNode elementType = n[0].getType(check);
 
-      if(!elementType.isComparableTo(bagType.getSetElementType()))
+      if(!elementType.isComparableTo(bagType.getBagElementType()))
       {
         //if(!elementType.isSubtypeOf(bagType.getSetElementType())) {     //FIXME:typing
         std::stringstream ss;
         ss << "member operating on bags of different types:\n"
            << "child type:  " << elementType << "\n"
-           << "not subtype: " << bagType.getSetElementType() << "\n"
+           << "not subtype: " << bagType.getBagElementType() << "\n"
            << "in term : " << n;
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }

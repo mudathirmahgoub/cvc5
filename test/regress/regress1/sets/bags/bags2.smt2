@@ -1,0 +1,8 @@
+(set-logic ALL_SUPPORTED)
+(set-info :status sat)
+(set-option :produce-models true)
+(declare-fun A () (Bag Bool))
+(assert (= (count false A) 3)
+(assert (= (count true A) 2))
+(check-sat)
+(get-model)

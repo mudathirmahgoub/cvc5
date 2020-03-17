@@ -19,6 +19,7 @@
 #include "expr/attribute.h"
 #include "options/sets_options.h"
 #include "theory/sets/normal_form.h"
+#include "theory/sets/bags_normal_form.h"
 #include "theory/sets/rels_utils.h"
 
 using namespace CVC4::kind;
@@ -213,6 +214,49 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
     }
     break;
   }//kind::UNION
+
+  case kind::DISJOINTUNION:
+  {
+    // NOTE: case where it is CONST is taken care of at the top
+    if (node[0].getKind() == kind::EMPTYBAG)
+    {
+      return RewriteResponse(REWRITE_AGAIN, node[1]);
+    }
+    else if (node[1].getKind() == kind::EMPTYBAG)
+    {
+      return RewriteResponse(REWRITE_AGAIN, node[0]);
+    }
+    else if (node[0].isConst() && node[1].isConst())
+    {
+      std::vector<Node> left = BagsNormalForm::getElementsFromNormalConstant(node[0]);
+      std::vector<Node> right = BagsNormalForm::getElementsFromNormalConstant(node[1]);
+      std::vector<Node> newBag;
+      newBag.insert(newBag.begin(), left.begin(), left.end());
+      newBag.insert(newBag.end(), right.begin(), right.end());
+
+      Node newNode = BagsNormalForm::elementsToBag(newBag, node.getType());
+      Assert(newNode.isConst());
+      Trace("bags-postrewrite")
+          << "Bags::postRewrite returning " << newNode << std::endl;
+      return RewriteResponse(REWRITE_DONE, newNode);
+    }
+    else
+    {
+      std::vector<Node> elements;
+      NormalForm::getElementsFromBop(kind::UNION, node, elements);
+      std::sort(elements.begin(), elements.end());
+      Node rew = NormalForm::mkBop(kind::UNION, elements, node.getType());
+      if (rew != node)
+      {
+        Trace("bags-rewrite")
+            << "Sets::rewrite " << node << " -> " << rew << std::endl;
+      }
+      Trace("sets-rewrite") << "...no rewrite." << std::endl;
+      return RewriteResponse(REWRITE_DONE, rew);
+    }
+    break;
+  }  // kind::DISJOINTUNION
+
   case kind::COMPLEMENT: {
     Node univ = NodeManager::currentNM()->mkNullaryOperator( node[0].getType(), kind::UNIVERSE_SET );
     return RewriteResponse( REWRITE_AGAIN, NodeManager::currentNM()->mkNode( kind::SETMINUS, univ, node[0] ) );

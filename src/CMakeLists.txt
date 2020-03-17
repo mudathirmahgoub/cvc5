@@ -633,6 +633,7 @@ libcvc4_add_sources(
   theory/sep/theory_sep_rewriter.cpp
   theory/sep/theory_sep_rewriter.h
   theory/sep/theory_sep_type_rules.h
+  theory/sets/bags_normal_form.h
   theory/sets/theory_bags_type_enumerator.cpp
   theory/sets/theory_bags_type_enumerator.h
   theory/sets/cardinality_extension.cpp

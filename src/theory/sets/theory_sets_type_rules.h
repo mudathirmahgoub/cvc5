@@ -20,6 +20,7 @@
 #define CVC4__THEORY__SETS__THEORY_SETS_TYPE_RULES_H
 
 #include "theory/sets/normal_form.h"
+#include "theory/sets/bags_normal_form.h"
 
 namespace CVC4 {
 namespace theory {
@@ -522,7 +523,7 @@ struct BagsBinaryOperatorTypeRule
 
     if(n.getKind() == kind::DISJOINTUNION)
     {
-      return NormalForm::checkBagNormalConstant(n);
+      return BagsNormalForm::checkBagNormalConstant(n);
     }
     else
     {

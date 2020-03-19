@@ -81,17 +81,14 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
   bool isFinished() override;
 
  private:
-  SetEnumerator getPairsEnumerator(const TypeNode& type,
-                                   TypeEnumeratorProperties* tep) const;
-
-  bool convertIntToNat(Node& node, std::map<Node, Rational>& elementsMap);
-
   /** a pointer to the node manager */
   NodeManager* d_nodeManager;
   /** an enumerator for the set of pairs of element type x integer type */
-  SetEnumerator d_pairsEnumerator;
+  TypeEnumerator d_elementTypeEnumerator;
   /** the current set returned by the set enumerator */
   Node d_currentBag;
+  /** the first value returned by the element type enumerator*/
+  Node d_element;
 }; /* class BagEnumerator */
 
 }  // namespace sets

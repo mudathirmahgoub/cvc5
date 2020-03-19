@@ -225,29 +225,66 @@ struct ComprehensionTypeRule
 }; /* struct ComprehensionTypeRule */
 
 struct InsertTypeRule {
-  inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
+  inline static TypeNode computeType(NodeManager* nodeManager,
+                                     TNode n,
+                                     bool check)
   {
     Assert(n.getKind() == kind::INSERT);
     size_t numChildren = n.getNumChildren();
     Assert(numChildren >= 2);
-    TypeNode setType = n[numChildren-1].getType(check);
-    if( check ) {
-      if(!setType.isSet()) {
-        throw TypeCheckingExceptionPrivate(n, "inserting into a non-set");
+    TypeNode setOrBagType = n[numChildren - 1].getType(check);
+    if (check)
+    {
+      if (!(setOrBagType.isSet() || setOrBagType.isBag()))
+      {
+        throw TypeCheckingExceptionPrivate(
+            n, "inserting into a non-set or a non-bag");
       }
-      for(size_t i = 0; i < numChildren-1; ++i) {
-        TypeNode elementType = n[i].getType(check);
-        if(elementType != setType.getSetElementType()) {
-          throw TypeCheckingExceptionPrivate
-            (n, "type of element should be same as element type of set being inserted into");
+      TypeNode elementType;
+      if (setOrBagType.isSet())
+      {
+        elementType = setOrBagType.getSetElementType();
+      }
+      else
+      {
+        elementType = setOrBagType.getBagElementType();
+      }
+      for (size_t i = 0; i < numChildren - 1; ++i)
+      {
+        TypeNode insertedElementType = n[i].getType(check);
+
+        if (insertedElementType != elementType)
+        {
+          std::stringstream message;
+          message << "The inserted element has type " << insertedElementType
+                  << " which is different than the expected type"
+                  << elementType;
+          throw TypeCheckingExceptionPrivate(n, message.str());
         }
       }
     }
-    return setType;
+    return setOrBagType;
   }
 
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n) {
+  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
+  {
     Assert(n.getKind() == kind::INSERT);
+    Assert(n.getKind() == kind::INSERT);
+    size_t numChildren = n.getNumChildren();
+    Assert(numChildren >= 2);
+    TypeNode setOrBagType = n[numChildren - 1].getType();
+    Assert(setOrBagType.isSet() || setOrBagType.isBag());
+
+    if(setOrBagType.isSet())
+    {
+      //ToDo: refactor set normal form to use insert operator instead of union
+      // and to evaluate constants just like bags
+      return false;
+    }
+    else
+    {
+      return BagsNormalForm::checkNormalConstant(n);
+    }
     return false;
   }
 };/* struct InsertTypeRule */
@@ -523,7 +560,7 @@ struct BagsBinaryOperatorTypeRule
 
     if(n.getKind() == kind::DISJOINTUNION)
     {
-      return BagsNormalForm::checkBagNormalConstant(n);
+      return BagsNormalForm::checkNormalConstant(n);
     }
     else
     {

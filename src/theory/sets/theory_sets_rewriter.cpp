@@ -215,19 +215,47 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
     break;
   }//kind::UNION
 
+  case kind::DISJOINT_UNION:
+  {
+    if (node[0].getKind() == kind::EMPTYBAG)
+    {
+      return RewriteResponse(REWRITE_AGAIN, node[1]);
+    }
+    else if (node[1].getKind() == kind::EMPTYBAG)
+    {
+      return RewriteResponse(REWRITE_AGAIN, node[0]);
+    }
+    else if (node[0].isConst() && node[1].isConst())
+    {
+      std::vector<Node> left = BagsNormalForm::getInsertedElements(node[0]);
+      std::vector<Node> right = BagsNormalForm::getInsertedElements(node[1]);
+      std::vector<Node> newBag;
+      newBag.insert(newBag.begin(), left.begin(), left.end());
+      newBag.insert(newBag.end(), right.begin(), right.end());
+
+      Node newNode = BagsNormalForm::makeBag(newBag, node.getType());
+      Assert(newNode.isConst());
+      Trace("bags-postrewrite")
+          << "Bags::postRewrite returning " << newNode << std::endl;
+      return RewriteResponse(REWRITE_DONE, newNode);
+    }
+    else
+    {
+      //ToDo: review the right approach here
+      return RewriteResponse(REWRITE_DONE, node);
+    }
+    break;
+  }  // kind::UNION
+
   case kind::INSERT:
   {
-    std::vector<Node> elements;
-    NormalForm::getElementsFromBop(kind::UNION, node, elements);
-    std::sort(elements.begin(), elements.end());
-    Node rew = NormalForm::mkBop(kind::UNION, elements, node.getType());
-    if (rew != node)
+    std::vector<Node> elements = BagsNormalForm::getInsertedElements(node);
+    Node rewrittenNode = BagsNormalForm::makeBag(elements, node.getType());
+    if (rewrittenNode != node)
     {
-      Trace("bags-rewrite")
-          << "Sets::rewrite " << node << " -> " << rew << std::endl;
+      Trace("bags-rewrite") << node << " -> " << rewrittenNode << std::endl;
     }
-    Trace("sets-rewrite") << "...no rewrite." << std::endl;
-    return RewriteResponse(REWRITE_DONE, rew);
+    return RewriteResponse(REWRITE_DONE, rewrittenNode);
   }  // kind::INSERT
 
   case kind::COMPLEMENT: {

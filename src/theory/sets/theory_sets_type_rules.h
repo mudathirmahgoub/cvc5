@@ -269,7 +269,6 @@ struct InsertTypeRule {
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
     Assert(n.getKind() == kind::INSERT);
-    Assert(n.getKind() == kind::INSERT);
     size_t numChildren = n.getNumChildren();
     Assert(numChildren >= 2);
     TypeNode setOrBagType = n[numChildren - 1].getType();
@@ -528,7 +527,7 @@ struct BagsBinaryOperatorTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
   {
-    Assert(n.getKind() == kind::DISJOINTUNION);
+    Assert(n.getKind() == kind::DISJOINT_UNION);
 
     TypeNode bagType = n[0].getType(check);
 
@@ -556,9 +555,9 @@ struct BagsBinaryOperatorTypeRule
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::DISJOINTUNION);
+    Assert(n.getKind() == kind::DISJOINT_UNION);
 
-    if(n.getKind() == kind::DISJOINTUNION)
+    if(n.getKind() == kind::DISJOINT_UNION)
     {
       return BagsNormalForm::checkNormalConstant(n);
     }

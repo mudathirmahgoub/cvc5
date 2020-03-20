@@ -123,16 +123,16 @@ enumerator BAG_TYPE \
     "theory/sets/theory_bags_type_enumerator.h"
 
 operator COUNT         2  "bag multiplicity operator"
-operator DISJOINTUNION 2  "bag disjoint union"
+operator DISJOINT_UNION 2  "bag disjoint union"
 operator SETOF         1  "bag setof operator"
 
 typerule EMPTYBAG       ::CVC4::theory::sets::EmptyBagTypeRule
 typerule COUNT          ::CVC4::theory::sets::CountTypeRule
-typerule DISJOINTUNION  ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
+typerule DISJOINT_UNION  ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
 typerule SETOF          ::CVC4::theory::sets::SetOfTypeRule
 
 construle COUNT         ::CVC4::theory::sets::CountTypeRule
-construle DISJOINTUNION ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
+construle DISJOINT_UNION ::CVC4::theory::sets::BagsBinaryOperatorTypeRule
 construle SETOF         ::CVC4::theory::sets::SetOfTypeRule
 
 endtheory

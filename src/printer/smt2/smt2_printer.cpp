@@ -1147,7 +1147,7 @@ static string smtKindString(Kind k, Variant v)
   case kind::TCLOSURE: return "tclosure";
   case kind::BAG_TYPE: return "Bag";
   case kind::COUNT: return "count";
-  case kind::DISJOINTUNION: return "disjointunion";
+  case kind::DISJOINT_UNION: return "disjointunion";
   case kind::SETOF: return "setof";
 
     // fp theory

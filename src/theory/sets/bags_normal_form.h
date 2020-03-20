@@ -26,29 +26,6 @@ namespace sets {
 class BagsNormalForm
 {
  public:
-  template <bool ref_count>
-  static Node elementsToBag(const std::vector<NodeTemplate<ref_count> >& elements,
-                            TypeNode bagType)
-  {
-    typedef typename std::vector<NodeTemplate<ref_count> >::const_iterator
-        ElementsIterator;
-    NodeManager* nm = NodeManager::currentNM();
-    if (elements.size() == 0)
-    {
-      return nm->mkConst(EmptyBag(nm->toType(bagType)));
-    }
-    else
-    {
-      ElementsIterator it = elements.begin();
-      Node current = nm->mkConst(EmptyBag(nm->toType(bagType)));
-      while (++it != elements.end())
-      {
-        current = nm->mkNode(kind::INSERT, current, *it);
-      }
-      return current;
-    }
-  }
-
   static bool checkNormalConstant(TNode n)
   {
     Debug("bags-checknormal")
@@ -63,12 +40,12 @@ class BagsNormalForm
       size_t size = n.getNumChildren();
       // check NodeN >= ... >= Node1
 
-      for(size_t i = 1; i < size - 1; i++)
+      for (size_t i = 1; i < size - 1; i++)
       {
-        if(n[i] > n[i-1])
+        if (n[i] > n[i - 1])
         {
-          Debug("bags-checknormal") << "n[i-1] = " << n[i-1] << ", n[i] = "
-              << n[i] << std::endl;
+          Debug("bags-checknormal")
+              << "n[i-1] = " << n[i - 1] << ", n[i] = " << n[i] << std::endl;
           return false;
         }
       }
@@ -81,7 +58,7 @@ class BagsNormalForm
     }
   }
 
-  static std::vector<Node> getBagInsertedElements(TNode n)
+  static std::vector<Node> getInsertedElements(TNode n)
   {
     std::vector<Node> elements;
     if (n.getKind() == kind::EMPTYBAG)
@@ -91,7 +68,7 @@ class BagsNormalForm
 
     size_t size = n.getNumChildren();
 
-    for(size_t i = size - 2; i >= 0; i--)
+    for (size_t i = size - 2; i >= 0; i--)
     {
       elements.push_back(n[i]);
     }
@@ -118,24 +95,16 @@ class BagsNormalForm
       }
     }
   }
-  static Node mkBop(Kind k,
-                    std::vector<Node>& els,
-                    TypeNode tn,
-                    unsigned index = 0)
+  static Node makeBag(std::vector<Node>& elements, TypeNode type)
   {
-    if (index >= els.size())
+    std::sort(elements.begin(), elements.end());
+    NodeManager* nm = NodeManager::currentNM();
+    Node node = nm->mkConst(EmptyBag(type.toType()));
+    for (size_t i = 0; i < elements.size(); i++)
     {
-      return NodeManager::currentNM()->mkConst(EmptySet(tn.toType()));
+      node = nm->mkNode(kind::INSERT, elements[i], node);
     }
-    else if (index == els.size() - 1)
-    {
-      return els[index];
-    }
-    else
-    {
-      return NodeManager::currentNM()->mkNode(
-          k, els[index], mkBop(k, els, tn, index + 1));
-    }
+    return node;
   }
 };
 }  // namespace sets

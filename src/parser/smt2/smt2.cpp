@@ -351,7 +351,7 @@ void Smt2::addTheory(Theory theory) {
     addOperator(api::TRANSPOSE, "transpose");
     addOperator(api::TCLOSURE, "tclosure");
     addOperator(api::COUNT, "count");
-    addOperator(api::DISJOINTUNION, "disjointunion");
+    addOperator(api::DISJOINT_UNION, "disjointunion");
     addOperator(api::SETOF, "setof");
     break;
 

@@ -247,7 +247,7 @@ const static std::unordered_map<Kind, CVC4::Kind, KindHashFunction> s_kinds{
     {COMPREHENSION, CVC4::Kind::COMPREHENSION},
     {EMPTYBAG, CVC4::Kind::EMPTYBAG},
     {COUNT, CVC4::Kind::COUNT},
-    {DISJOINTUNION, CVC4::Kind::DISJOINTUNION},
+    {DISJOINT_UNION, CVC4::Kind::DISJOINT_UNION},
     {SETOF, CVC4::Kind::SETOF},
 
     /* Strings ------------------------------------------------------------- */
@@ -519,7 +519,7 @@ const static std::unordered_map<CVC4::Kind, Kind, CVC4::kind::KindHashFunction>
         {CVC4::Kind::COMPREHENSION, COMPREHENSION},
         {CVC4::Kind::EMPTYBAG, EMPTYBAG},
         {CVC4::Kind::COUNT, COUNT},
-        {CVC4::Kind::DISJOINTUNION, DISJOINTUNION},
+        {CVC4::Kind::DISJOINT_UNION, DISJOINT_UNION},
         {CVC4::Kind::SETOF, SETOF},
         /* Strings --------------------------------------------------------- */
         {CVC4::Kind::STRING_CONCAT, STRING_CONCAT},

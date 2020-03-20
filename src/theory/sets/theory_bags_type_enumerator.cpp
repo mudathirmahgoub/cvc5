@@ -29,10 +29,10 @@ namespace sets {
 BagEnumerator::BagEnumerator(TypeNode type, TypeEnumeratorProperties* tep)
     : TypeEnumeratorBase<BagEnumerator>(type),
       d_nodeManager(NodeManager::currentNM()),
-      d_elementTypeEnumerator(type.getBagElementType(), tep),
-      d_element()
+      d_elementTypeEnumerator(type.getBagElementType(), tep)
 {
   d_currentBag = d_nodeManager->mkConst(EmptyBag(type.toType()));
+  d_element = * d_elementTypeEnumerator;
 }
 
 BagEnumerator::BagEnumerator(const BagEnumerator& enumerator)
@@ -56,13 +56,6 @@ Node BagEnumerator::operator*()
 
 BagEnumerator& BagEnumerator::operator++()
 {
-  if (d_element.isNull())
-  {
-    // get a new element from the set enumerator
-    ++d_elementTypeEnumerator;
-    d_element = *d_elementTypeEnumerator;
-  }
-
   d_currentBag = d_nodeManager->mkNode(kind::INSERT, d_element, d_currentBag);
 
   Assert(d_currentBag.isConst());

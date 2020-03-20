@@ -215,47 +215,20 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
     break;
   }//kind::UNION
 
-  case kind::DISJOINTUNION:
+  case kind::INSERT:
   {
-    // NOTE: case where it is CONST is taken care of at the top
-    if (node[0].getKind() == kind::EMPTYBAG)
+    std::vector<Node> elements;
+    NormalForm::getElementsFromBop(kind::UNION, node, elements);
+    std::sort(elements.begin(), elements.end());
+    Node rew = NormalForm::mkBop(kind::UNION, elements, node.getType());
+    if (rew != node)
     {
-      return RewriteResponse(REWRITE_AGAIN, node[1]);
+      Trace("bags-rewrite")
+          << "Sets::rewrite " << node << " -> " << rew << std::endl;
     }
-    else if (node[1].getKind() == kind::EMPTYBAG)
-    {
-      return RewriteResponse(REWRITE_AGAIN, node[0]);
-    }
-    else if (node[0].isConst() && node[1].isConst())
-    {
-      std::vector<Node> left = BagsNormalForm::getElementsFromNormalConstant(node[0]);
-      std::vector<Node> right = BagsNormalForm::getElementsFromNormalConstant(node[1]);
-      std::vector<Node> newBag;
-      newBag.insert(newBag.begin(), left.begin(), left.end());
-      newBag.insert(newBag.end(), right.begin(), right.end());
-
-      Node newNode = BagsNormalForm::elementsToBag(newBag, node.getType());
-      Assert(newNode.isConst());
-      Trace("bags-postrewrite")
-          << "Bags::postRewrite returning " << newNode << std::endl;
-      return RewriteResponse(REWRITE_DONE, newNode);
-    }
-    else
-    {
-      std::vector<Node> elements;
-      NormalForm::getElementsFromBop(kind::UNION, node, elements);
-      std::sort(elements.begin(), elements.end());
-      Node rew = NormalForm::mkBop(kind::UNION, elements, node.getType());
-      if (rew != node)
-      {
-        Trace("bags-rewrite")
-            << "Sets::rewrite " << node << " -> " << rew << std::endl;
-      }
-      Trace("sets-rewrite") << "...no rewrite." << std::endl;
-      return RewriteResponse(REWRITE_DONE, rew);
-    }
-    break;
-  }  // kind::DISJOINTUNION
+    Trace("sets-rewrite") << "...no rewrite." << std::endl;
+    return RewriteResponse(REWRITE_DONE, rew);
+  }  // kind::INSERT
 
   case kind::COMPLEMENT: {
     Node univ = NodeManager::currentNM()->mkNullaryOperator( node[0].getType(), kind::UNIVERSE_SET );
@@ -511,22 +484,30 @@ RewriteResponse TheorySetsRewriter::preRewrite(TNode node) {
       return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
     }
 
-  }//kind::EQUAL
-  else if(node.getKind() == kind::INSERT) {
-
-    Node insertedElements = nm->mkNode(kind::SINGLETON, node[0]);
-    size_t setNodeIndex =  node.getNumChildren()-1;
-    for(size_t i = 1; i < setNodeIndex; ++i) {
-      insertedElements = nm->mkNode(kind::UNION, 
-                                    insertedElements,
-                                    nm->mkNode(kind::SINGLETON, node[i]));
-    }
-    return RewriteResponse(REWRITE_AGAIN, 
-                           nm->mkNode(kind::UNION,
+  }
+  //kind::EQUAL
+  else if (node.getKind() == kind::INSERT)
+  {
+    Assert(node.getType().isSet() || node.getType().isBag());
+    if(node.getType().isSet())
+    {
+      //ToDo: review replacing union with insert as a normal form and therefore
+      // no need to rewrite insert, but we need to rewrite untion
+      Node insertedElements = nm->mkNode(kind::SINGLETON, node[0]);
+      size_t setNodeIndex = node.getNumChildren() - 1;
+      for (size_t i = 1; i < setNodeIndex; ++i)
+      {
+        insertedElements = nm->mkNode(kind::UNION,
                                       insertedElements,
-                                      node[setNodeIndex]));
+                                      nm->mkNode(kind::SINGLETON, node[i]));
+      }
+      return RewriteResponse(
+          REWRITE_AGAIN,
+          nm->mkNode(kind::UNION, insertedElements, node[setNodeIndex]));
+    }
+    // not sure if we need preRewriting for bags here
 
-  }//kind::INSERT
+  }  // kind::INSERT
   else if(node.getKind() == kind::SUBSET) {
 
     // rewrite (A subset-or-equal B) as (A union B = B)

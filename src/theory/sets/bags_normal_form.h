@@ -63,7 +63,7 @@ class BagsNormalForm
       size_t size = n.getNumChildren();
       // check NodeN >= ... >= Node1
 
-      for(size_t i = 1; i < size; i++)
+      for(size_t i = 1; i < size - 1; i++)
       {
         if(n[i] > n[i-1])
         {
@@ -81,22 +81,22 @@ class BagsNormalForm
     }
   }
 
-  static std::vector<Node> getElementsFromNormalConstant(TNode n)
+  static std::vector<Node> getBagInsertedElements(TNode n)
   {
-    Assert(n.isConst());
-    std::vector<Node> ret;
-    if (n.getKind() == kind::EMPTYSET)
+    std::vector<Node> elements;
+    if (n.getKind() == kind::EMPTYBAG)
     {
-      return ret;
+      return elements;
     }
-    while (n.getKind() == kind::INSERT)
+
+    size_t size = n.getNumChildren();
+
+    for(size_t i = size - 2; i >= 0; i--)
     {
-      // (insert element bag)
-      ret.insert(ret.begin(), n[0]);
-      n = n[1];
+      elements.push_back(n[i]);
     }
-    Assert(n.getKind() == kind::EMPTYBAG);
-    return ret;
+
+    return elements;
   }
 
   // AJR

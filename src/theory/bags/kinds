@@ -1,0 +1,65 @@
+# kinds                                                               -*- sh -*-
+#
+# For documentation on this file format, please refer to
+# src/theory/builtin/kinds.
+#
+
+theory THEORY_BAGS \
+    ::CVC4::theory::bags::TheoryBags \
+    "theory/bags/theory_bags.h"
+typechecker "theory/bags/theory_bags_type_rules.h"
+rewriter ::CVC4::theory::bags::TheoryBagsRewriter \
+    "theory/bags/theory_bags_rewriter.h"
+
+properties parametric
+properties check propagate presolve
+
+# constants
+constant EMPTYBAG \
+    ::CVC4::EmptyBag \
+    ::CVC4::EmptyBagHashFunction \
+    "expr/emptybag.h" \
+    "the empty bag constant; payload is an instance of the CVC4::EmptyBag class"
+
+# the type
+operator BAG_TYPE 1 "bag type, takes as parameter the type of the elements"
+cardinality BAG_TYPE \
+    "::CVC4::theory::bags::BagsProperties::computeCardinality(%TYPE%)" \
+    "theory/bags/theory_bags_type_rules.h"
+well-founded BAG_TYPE \
+    "::CVC4::theory::bags::BagsProperties::isWellFounded(%TYPE%)" \
+    "::CVC4::theory::bags::BagsProperties::mkGroundTerm(%TYPE%)" \
+    "theory/bags/theory_bags_type_rules.h"
+enumerator BAG_TYPE \
+    "::CVC4::theory::bags::BagEnumerator" \
+    "theory/bags/theory_bags_type_enumerator.h"
+
+# operators
+operator BUNION         2  "bag set union (max)"
+operator DISJOINT_UNION 2  "bag disjoint union (sum)"
+operator BINTERSECTION  2  "bag intersection (min)"
+operator BAGMINUS       2  "bag subtraction"
+operator SUBBAG         2  "subbag predicate; first parameter a subbag of second"
+operator COUNT          2  "bag membership predicate; first parameter a member of second"
+operator BSINGLETON     1  "the bag of the single element given as a parameter"
+operator BINSERT        2: "bag obtained by inserting elements (first N-1 parameters) into a bag (the last parameter)"
+operator BCARD          1  "bag cardinality operator"
+
+typerule BUNION          ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BINTERSECTION   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAGMINUS        ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule SUBBAG          ::CVC4::theory::bags::SubbagTypeRule
+typerule COUNT           ::CVC4::theory::bags::CountTypeRule
+typerule BSINGLETON      ::CVC4::theory::bags::SingletonTypeRule
+typerule EMPTYBAG        ::CVC4::theory::bags::EmptyBagTypeRule
+typerule BINSERT         ::CVC4::theory::bags::InsertTypeRule
+typerule BCARD           ::CVC4::theory::bags::CardTypeRule
+
+construle BUNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BINTERSECTION  ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAGMINUS       ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BSINGLETON     ::CVC4::theory::bags::SingletonTypeRule
+construle BINSERT        ::CVC4::theory::bags::InsertTypeRule
+construle BCARD          ::CVC4::theory::bags::CardTypeRule
+
+endtheory

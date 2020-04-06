@@ -35,31 +35,40 @@ enumerator BAG_TYPE \
     "theory/bags/theory_bags_type_enumerator.h"
 
 # operators
-operator BUNION         2  "bag set union (max)"
-operator DISJOINT_UNION 2  "bag disjoint union (sum)"
-operator BINTERSECTION  2  "bag intersection (min)"
-operator BAGMINUS       2  "bag subtraction"
-operator SUBBAG         2  "subbag predicate; first parameter a subbag of second"
-operator COUNT          2  "bag membership predicate; first parameter a member of second"
-operator BSINGLETON     1  "the bag of the single element given as a parameter"
-operator BINSERT        2: "bag obtained by inserting elements (first N-1 parameters) into a bag (the last parameter)"
-operator BCARD          1  "bag cardinality operator"
+operator BAG_UNION         2  "set union for bags (max)"
+operator DISJOINT_UNION    2  "disjoint union for bags (sum)"
+operator BAG_INTERSECTION  2  "bag intersection (min)"
 
-typerule BUNION          ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-typerule BINTERSECTION   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-typerule BAGMINUS        ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-typerule SUBBAG          ::CVC4::theory::bags::SubbagTypeRule
-typerule COUNT           ::CVC4::theory::bags::CountTypeRule
-typerule BSINGLETON      ::CVC4::theory::bags::SingletonTypeRule
-typerule EMPTYBAG        ::CVC4::theory::bags::EmptyBagTypeRule
-typerule BINSERT         ::CVC4::theory::bags::InsertTypeRule
-typerule BCARD           ::CVC4::theory::bags::CardTypeRule
+# {("a", 2), ("b", 3)} \ {("a", 1)} = {("a", 1), ("b", 3)}
+operator BAG_DIFFERENCE1    2  "bag difference1 (subtracts multiplicities)"
 
-construle BUNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BINTERSECTION  ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BAGMINUS       ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BSINGLETON     ::CVC4::theory::bags::SingletonTypeRule
-construle BINSERT        ::CVC4::theory::bags::InsertTypeRule
-construle BCARD          ::CVC4::theory::bags::CardTypeRule
+# {("a", 2), ("b", 3)} \\ {("a", 1)} = {("b", 3)}
+operator BAG_DIFFERENCE2    2  "bag difference2 (removes shared elements)"
+
+operator BAG_SUBSET        2  "subset predicate for bags (less than or equal multiplicities)"
+operator COUNT             2  "multiplicity of an element in a bag"
+operator BAG_SINGLETON     2  "the bag of a single element given as a parameter along with its multiplicity"
+operator BAG_INSERT        2: "bag obtained by inserting elements (first N-1 parameters) into a bag (the last parameter)"
+operator BAG_CARD          1  "bag cardinality operator"
+
+typerule BAG_UNION          ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule DISJOINT_UNION     ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_INTERSECTION   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_DIFFERNCE1     ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_DIFFERNCE2     ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_SUBSET         ::CVC4::theory::bags::BagsSubsetTypeRule
+typerule COUNT              ::CVC4::theory::bags::BagsCountTypeRule
+typerule BAG_SINGLETON      ::CVC4::theory::bags::BagsSingletonTypeRule
+typerule EMPTYBAG           ::CVC4::theory::bags::EmptyBagTypeRule
+typerule BAG_INSER          ::CVC4::theory::bags::BagsInsertTypeRule
+typerule BAG_CARD           ::CVC4::theory::bags::BAGsCardTypeRule
+
+construle BAG_UNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle DISJOINT_UNION    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_INTERSECTION  ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_DIFFERENCE1   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_SINGLETON     ::CVC4::theory::bags::BagsSingletonTypeRule
+construle BAG_INSERT        ::CVC4::theory::bags::BagsInsertTypeRule
+construle BAG_CARD          ::CVC4::theory::bags::BagsCardTypeRule
 
 endtheory

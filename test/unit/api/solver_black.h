@@ -69,6 +69,7 @@ class SolverBlack : public CxxTest::TestSuite
   void testMkRoundingMode();
   void testMkSepNil();
   void testMkString();
+  void testMkChar();
   void testMkTerm();
   void testMkTermFromOp();
   void testMkTrue();
@@ -95,16 +96,24 @@ class SolverBlack : public CxxTest::TestSuite
   void testPop3();
 
   void testSimplify();
-  void testCheckValid1();
-  void testCheckValid2();
-  void testCheckValidAssuming1();
-  void testCheckValidAssuming2();
+  void testCheckEntailed();
+  void testCheckEntailed1();
+  void testCheckEntailed2();
 
   void testSetInfo();
   void testSetLogic();
   void testSetOption();
 
   void testResetAssertions();
+
+  void testMkSygusVar();
+  void testMkSygusGrammar();
+  void testSynthFun();
+  void testSynthInv();
+  void testAddSygusConstraint();
+  void testAddSygusInvConstraint();
+  void testGetSynthSolution();
+  void testGetSynthSolutions();
 
  private:
   std::unique_ptr<Solver> d_solver;
@@ -556,9 +565,20 @@ void SolverBlack::testMkString()
   TS_ASSERT_THROWS_NOTHING(d_solver->mkString(""));
   TS_ASSERT_THROWS_NOTHING(d_solver->mkString("asdfasdf"));
   TS_ASSERT_EQUALS(d_solver->mkString("asdf\\nasdf").toString(),
-                   "\"asdf\\\\nasdf\"");
-  TS_ASSERT_EQUALS(d_solver->mkString("asdf\\nasdf", true).toString(),
-                   "\"asdf\\nasdf\"");
+                   "\"asdf\\u{5c}nasdf\"");
+  TS_ASSERT_EQUALS(d_solver->mkString("asdf\\u{005c}nasdf", true).toString(),
+                   "\"asdf\\u{5c}nasdf\"");
+}
+
+void SolverBlack::testMkChar()
+{
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkChar(std::string("0123")));
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkChar("aA"));
+  TS_ASSERT_THROWS(d_solver->mkChar(nullptr), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkChar(""), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkChar("0g0"), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkChar("100000"), CVC4ApiException&);
+  TS_ASSERT_EQUALS(d_solver->mkChar("abc"), d_solver->mkChar("ABC"));
 }
 
 void SolverBlack::testMkTerm()
@@ -1104,51 +1124,28 @@ void SolverBlack::testSimplify()
   TS_ASSERT_THROWS_NOTHING(d_solver->simplify(f2));
 }
 
-void SolverBlack::testCheckValid1()
+void SolverBlack::testCheckEntailed()
 {
   d_solver->setOption("incremental", "false");
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValid());
-  TS_ASSERT_THROWS(d_solver->checkValid(), CVC4ApiException&);
-}
-
-void SolverBlack::testCheckValid2()
-{
-  d_solver->setOption("incremental", "true");
-
-  Sort realSort = d_solver->getRealSort();
-  Sort intSort = d_solver->getIntegerSort();
-
-  // Constants
-  Term x = d_solver->mkConst(intSort, "x");
-  Term y = d_solver->mkConst(realSort, "y");
-  // Values
-  Term three = d_solver->mkReal(3);
-  Term neg2 = d_solver->mkReal(-2);
-  Term two_thirds = d_solver->mkReal(2, 3);
-  // Terms
-  Term three_y = d_solver->mkTerm(MULT, three, y);
-  Term diff = d_solver->mkTerm(MINUS, y, x);
-  // Formulas
-  Term x_geq_3y = d_solver->mkTerm(GEQ, x, three_y);
-  Term x_leq_y = d_solver->mkTerm(LEQ, x, y);
-  Term neg2_lt_x = d_solver->mkTerm(LT, neg2, x);
-  // Assertions
-  Term assertions = d_solver->mkTerm(AND, x_geq_3y, x_leq_y, neg2_lt_x);
-
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValid());
-  d_solver->assertFormula(assertions);
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValid());
-}
-
-void SolverBlack::testCheckValidAssuming1()
-{
-  d_solver->setOption("incremental", "false");
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValidAssuming(d_solver->mkTrue()));
-  TS_ASSERT_THROWS(d_solver->checkValidAssuming(d_solver->mkTrue()),
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(d_solver->mkTrue()));
+  TS_ASSERT_THROWS(d_solver->checkEntailed(d_solver->mkTrue()),
                    CVC4ApiException&);
 }
 
-void SolverBlack::testCheckValidAssuming2()
+void SolverBlack::testCheckEntailed1()
+{
+  Sort boolSort = d_solver->getBooleanSort();
+  Term x = d_solver->mkConst(boolSort, "x");
+  Term y = d_solver->mkConst(boolSort, "y");
+  Term z = d_solver->mkTerm(AND, x, y);
+  d_solver->setOption("incremental", "true");
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(d_solver->mkTrue()));
+  TS_ASSERT_THROWS(d_solver->checkEntailed(Term()), CVC4ApiException&);
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(d_solver->mkTrue()));
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(z));
+}
+
+void SolverBlack::testCheckEntailed2()
 {
   d_solver->setOption("incremental", "true");
 
@@ -1185,15 +1182,15 @@ void SolverBlack::testCheckValidAssuming2()
                            p_f_y                             // p(f(y))
                        });
 
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValidAssuming(d_solver->mkTrue()));
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(d_solver->mkTrue()));
   d_solver->assertFormula(assertions);
   TS_ASSERT_THROWS_NOTHING(
-      d_solver->checkValidAssuming(d_solver->mkTerm(DISTINCT, x, y)));
-  TS_ASSERT_THROWS_NOTHING(d_solver->checkValidAssuming(
+      d_solver->checkEntailed(d_solver->mkTerm(DISTINCT, x, y)));
+  TS_ASSERT_THROWS_NOTHING(d_solver->checkEntailed(
       {d_solver->mkFalse(), d_solver->mkTerm(DISTINCT, x, y)}));
-  TS_ASSERT_THROWS(d_solver->checkValidAssuming(n), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->checkEntailed(n), CVC4ApiException&);
   TS_ASSERT_THROWS(
-      d_solver->checkValidAssuming({n, d_solver->mkTerm(DISTINCT, x, y)}),
+      d_solver->checkEntailed({n, d_solver->mkTerm(DISTINCT, x, y)}),
       CVC4ApiException&);
 }
 
@@ -1228,4 +1225,197 @@ void SolverBlack::testResetAssertions()
   Term slt = d_solver->mkTerm(BITVECTOR_SLT, srem, one);
   d_solver->resetAssertions();
   d_solver->checkSatAssuming({slt, ule});
+}
+
+void SolverBlack::testMkSygusVar()
+{
+  Sort boolSort = d_solver->getBooleanSort();
+  Sort intSort = d_solver->getIntegerSort();
+  Sort funSort = d_solver->mkFunctionSort(intSort, boolSort);
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusVar(boolSort));
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusVar(funSort));
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusVar(boolSort, std::string("b")));
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusVar(funSort, ""));
+  TS_ASSERT_THROWS(d_solver->mkSygusVar(Sort()), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkSygusVar(d_solver->getNullSort(), "a"),
+                   CVC4ApiException&);
+}
+
+void SolverBlack::testMkSygusGrammar()
+{
+  Term nullTerm;
+  Term boolTerm = d_solver->mkBoolean(true);
+  Term intTerm = d_solver->mkReal(1);
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusGrammar({}, {intTerm}));
+  TS_ASSERT_THROWS_NOTHING(d_solver->mkSygusGrammar({boolTerm}, {intTerm}));
+  TS_ASSERT_THROWS(d_solver->mkSygusGrammar({}, {}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkSygusGrammar({}, {nullTerm}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->mkSygusGrammar({nullTerm}, {intTerm}),
+                   CVC4ApiException&);
+}
+
+void SolverBlack::testSynthFun()
+{
+  Sort null = d_solver->getNullSort();
+  Sort boolean = d_solver->getBooleanSort();
+  Sort integer = d_solver->getIntegerSort();
+  Sort boolToBool = d_solver->mkFunctionSort({boolean}, boolean);
+
+  Term nullTerm;
+  Term x = d_solver->mkVar(boolean);
+
+  Term start1 = d_solver->mkVar(boolean);
+  Term start2 = d_solver->mkVar(integer);
+
+  Grammar g1 = d_solver->mkSygusGrammar({x}, {start1});
+  g1.addRule(start1, d_solver->mkBoolean(false));
+
+  Grammar g2 = d_solver->mkSygusGrammar({x}, {start2});
+  g2.addRule(start2, d_solver->mkReal(0));
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthFun("", {}, boolean));
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthFun("f1", {x}, boolean));
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthFun("f2", {x}, boolean, g1));
+
+  TS_ASSERT_THROWS(d_solver->synthFun("f3", {nullTerm}, boolean),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->synthFun("f4", {}, null), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->synthFun("f5", {}, boolToBool), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->synthFun("f6", {x}, boolean, g2),
+                   CVC4ApiException&);
+}
+
+void SolverBlack::testSynthInv()
+{
+  Sort boolean = d_solver->getBooleanSort();
+  Sort integer = d_solver->getIntegerSort();
+
+  Term nullTerm;
+  Term x = d_solver->mkVar(boolean);
+
+  Term start1 = d_solver->mkVar(boolean);
+  Term start2 = d_solver->mkVar(integer);
+
+  Grammar g1 = d_solver->mkSygusGrammar({x}, {start1});
+  g1.addRule(start1, d_solver->mkBoolean(false));
+
+  Grammar g2 = d_solver->mkSygusGrammar({x}, {start2});
+  g2.addRule(start2, d_solver->mkReal(0));
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthInv("", {}));
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthInv("i1", {x}));
+  TS_ASSERT_THROWS_NOTHING(d_solver->synthInv("i2", {x}, g1));
+
+  TS_ASSERT_THROWS(d_solver->synthInv("i3", {nullTerm}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->synthInv("i4", {x}, g2), CVC4ApiException&);
+}
+
+void SolverBlack::testAddSygusConstraint()
+{
+  Term nullTerm;
+  Term boolTerm = d_solver->mkBoolean(true);
+  Term intTerm = d_solver->mkReal(1);
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->addSygusConstraint(boolTerm));
+  TS_ASSERT_THROWS(d_solver->addSygusConstraint(nullTerm), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusConstraint(intTerm), CVC4ApiException&);
+}
+
+void SolverBlack::testAddSygusInvConstraint()
+{
+  Sort boolean = d_solver->getBooleanSort();
+  Sort real = d_solver->getRealSort();
+
+  Term nullTerm;
+  Term intTerm = d_solver->mkReal(1);
+
+  Term inv = d_solver->declareFun("inv", {real}, boolean);
+  Term pre = d_solver->declareFun("pre", {real}, boolean);
+  Term trans = d_solver->declareFun("trans", {real, real}, boolean);
+  Term post = d_solver->declareFun("post", {real}, boolean);
+
+  Term inv1 = d_solver->declareFun("inv1", {real}, real);
+
+  Term trans1 = d_solver->declareFun("trans1", {boolean, real}, boolean);
+  Term trans2 = d_solver->declareFun("trans2", {real, boolean}, boolean);
+  Term trans3 = d_solver->declareFun("trans3", {real, real}, real);
+
+  TS_ASSERT_THROWS_NOTHING(
+      d_solver->addSygusInvConstraint(inv, pre, trans, post));
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(nullTerm, pre, trans, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, nullTerm, trans, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, nullTerm, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, trans, nullTerm),
+                   CVC4ApiException&);
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(intTerm, pre, trans, post),
+                   CVC4ApiException&);
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv1, pre, trans, post),
+                   CVC4ApiException&);
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, trans, trans, post),
+                   CVC4ApiException&);
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, intTerm, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, pre, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, trans1, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, trans2, post),
+                   CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, trans3, post),
+                   CVC4ApiException&);
+
+  TS_ASSERT_THROWS(d_solver->addSygusInvConstraint(inv, pre, trans, trans),
+                   CVC4ApiException&);
+}
+
+void SolverBlack::testGetSynthSolution()
+{
+  d_solver->setOption("lang", "sygus2");
+  d_solver->setOption("incremental", "false");
+
+  Term nullTerm;
+  Term x = d_solver->mkBoolean(false);
+  Term f = d_solver->synthFun("f", {}, d_solver->getBooleanSort());
+
+  TS_ASSERT_THROWS(d_solver->getSynthSolution(f), CVC4ApiException&);
+
+  d_solver->checkSynth();
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->getSynthSolution(f));
+  TS_ASSERT_THROWS_NOTHING(d_solver->getSynthSolution(f));
+
+  TS_ASSERT_THROWS(d_solver->getSynthSolution(nullTerm), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->getSynthSolution(x), CVC4ApiException&);
+}
+
+void SolverBlack::testGetSynthSolutions()
+{
+  d_solver->setOption("lang", "sygus2");
+  d_solver->setOption("incremental", "false");
+
+  Term nullTerm;
+  Term x = d_solver->mkBoolean(false);
+  Term f = d_solver->synthFun("f", {}, d_solver->getBooleanSort());
+
+  TS_ASSERT_THROWS(d_solver->getSynthSolutions({}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->getSynthSolutions({f}), CVC4ApiException&);
+
+  d_solver->checkSynth();
+
+  TS_ASSERT_THROWS_NOTHING(d_solver->getSynthSolutions({f}));
+  TS_ASSERT_THROWS_NOTHING(d_solver->getSynthSolutions({f, f}));
+
+  TS_ASSERT_THROWS(d_solver->getSynthSolutions({}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->getSynthSolutions({nullTerm}), CVC4ApiException&);
+  TS_ASSERT_THROWS(d_solver->getSynthSolutions({x}), CVC4ApiException&);
 }

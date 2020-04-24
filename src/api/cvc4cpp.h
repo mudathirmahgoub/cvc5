@@ -114,22 +114,21 @@ class CVC4_PUBLIC Result
   bool isSatUnknown() const;
 
   /**
-   * Return true if corresponding query was a valid checkValid() or
-   * checkValidAssuming() query.
+   * Return true if corresponding query was an entailed checkEntailed() query.
    */
-  bool isValid() const;
+  bool isEntailed() const;
 
   /**
-   * Return true if corresponding query was an invalid checkValid() or
-   * checkValidAssuming() query.
+   * Return true if corresponding query was a checkEntailed() query that is
+   * not entailed.
    */
-  bool isInvalid() const;
+  bool isNotEntailed() const;
 
   /**
-   * Return true if query was a checkValid() or checkValidAssuming() query
-   * and CVC4 was not able to determine (in)validity.
+   * Return true if query was a checkEntailed() () query and CVC4 was not able
+   * to determine if it is entailed.
    */
-  bool isValidUnknown() const;
+  bool isEntailmentUnknown() const;
 
   /**
    * Operator overloading for equality of two results.
@@ -191,6 +190,7 @@ class CVC4_PUBLIC Sort
   friend class DatatypeDecl;
   friend class Op;
   friend class Solver;
+  friend class Grammar;
   friend struct SortHashFunction;
   friend class Term;
 
@@ -680,11 +680,6 @@ class CVC4_PUBLIC Op
   Kind getKind() const;
 
   /**
-   * @return the sort of this operator
-   */
-  Sort getSort() const;
-
-  /**
    * @return true if this operator is a null term
    */
   bool isNull() const;
@@ -755,6 +750,7 @@ class CVC4_PUBLIC Term
   friend class Datatype;
   friend class DatatypeConstructor;
   friend class Solver;
+  friend class Grammar;
   friend struct TermHashFunction;
 
  public:
@@ -1190,6 +1186,8 @@ class CVC4_PUBLIC DatatypeDecl
 {
   friend class DatatypeConstructorArg;
   friend class Solver;
+  friend class Grammar;
+
  public:
   /**
    * Nullary constructor for Cython
@@ -1754,6 +1752,130 @@ std::ostream& operator<<(std::ostream& out,
                          const DatatypeSelector& stor) CVC4_PUBLIC;
 
 /* -------------------------------------------------------------------------- */
+/* Grammar                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A Sygus Grammar.
+ */
+class CVC4_PUBLIC Grammar
+{
+  friend class Solver;
+
+ public:
+  /**
+   * Add <rule> to the set of rules corresponding to <ntSymbol>.
+   * @param ntSymbol the non-terminal to which the rule is added
+   * @param rule the rule to add
+   */
+  void addRule(Term ntSymbol, Term rule);
+
+  /**
+   * Allow <ntSymbol> to be an arbitrary constant.
+   * @param ntSymbol the non-terminal allowed to be any constant
+   */
+  void addAnyConstant(Term ntSymbol);
+
+  /**
+   * Allow <ntSymbol> to be any input variable to corresponding
+   * synth-fun/synth-inv with the same sort as <ntSymbol>.
+   * @param ntSymbol the non-terminal allowed to be any input constant
+   */
+  void addAnyVariable(Term ntSymbol);
+
+  /**
+   * Add <rules> to the set of rules corresponding to <ntSymbol>.
+   * @param ntSymbol the non-terminal to which the rules are added
+   * @param rule the rules to add
+   */
+  void addRules(Term ntSymbol, std::vector<Term> rules);
+
+ private:
+  /**
+   * Constructor.
+   * @param s the solver that created this grammar
+   * @param sygusVars the input variables to synth-fun/synth-var
+   * @param ntSymbols the non-terminals of this grammar
+   */
+  Grammar(const Solver* s,
+          const std::vector<Term>& sygusVars,
+          const std::vector<Term>& ntSymbols);
+
+  /**
+   * Returns the resolved datatype of the Start symbol of the grammar.
+   * @return the resolved datatype of the Start symbol of the grammar
+   */
+  Sort resolve();
+
+  /**
+   * Adds a constructor to sygus datatype <dt> whose sygus operator is <term>.
+   *
+   * <d_ntsToUnres> contains a mapping from non-terminal symbols to the
+   * unresolved sorts they correspond to. This map indicates how the argument
+   * <term> should be interpreted (instances of symbols from the domain of
+   * <d_ntsToUnres> correspond to constructor arguments).
+   *
+   * The sygus operator that is actually added to <dt> corresponds to replacing
+   * each occurrence of non-terminal symbols from the domain of <d_ntsToUnres>
+   * with bound variables via purifySygusGTerm, and binding these variables
+   * via a lambda.
+   *
+   * @param dt the non-terminal's datatype to which a constructor is added
+   * @param term the sygus operator of the constructor
+   */
+  void addSygusConstructorTerm(DatatypeDecl& dt, Term term) const;
+
+  /** Purify sygus grammar term
+   *
+   * This returns a term where all occurrences of non-terminal symbols (those
+   * in the domain of <d_ntsToUnres>) are replaced by fresh variables. For
+   * each variable replaced in this way, we add the fresh variable it is
+   * replaced with to <args>, and the unresolved sorts corresponding to the
+   * non-terminal symbol to <cargs> (constructor args). In other words, <args>
+   * contains the free variables in the term returned by this method (which
+   * should be bound by a lambda), and <cargs> contains the sorts of the
+   * arguments of the sygus constructor.
+   *
+   * @param term the term to purify
+   * @param args the free variables in the term returned by this method
+   * @param cargs the sorts of the arguments of the sygus constructor
+   * @return the purfied term
+   */
+  Term purifySygusGTerm(Term term,
+                        std::vector<Term>& args,
+                        std::vector<Sort>& cargs) const;
+
+  /**
+   * This adds constructors to <dt> for sygus variables in <d_sygusVars> whose
+   * sort is argument <sort>. This method should be called when the sygus
+   * grammar term (Variable sort) is encountered.
+   *
+   * @param dt the non-terminal's datatype to which the constructors are added
+   * @param sort the sort of the sygus variables to add
+   */
+  void addSygusConstructorVariables(DatatypeDecl& dt, Sort sort) const;
+
+  /** The solver that created this grammar. */
+  const Solver* d_s;
+  /** Input variables to the corresponding function/invariant to synthesize.*/
+  std::vector<Term> d_sygusVars;
+  /** The non-terminal symbols of this grammar. */
+  std::vector<Term> d_ntSyms;
+  /**
+   * The mapping from non-terminal symbols to the unresolved sorts they
+   * correspond to.
+   */
+  std::unordered_map<Term, Sort, TermHashFunction> d_ntsToUnres;
+  /**
+   * The mapping from non-terminal symbols to the datatype declarations they
+   * correspond to.
+   */
+  std::unordered_map<Term, DatatypeDecl, TermHashFunction> d_dtDecls;
+  /** The set of non-terminals that can be arbitrary constants. */
+  std::unordered_set<Term, TermHashFunction> d_allowConst;
+};
+
+/* -------------------------------------------------------------------------- */
 /* Rounding Mode for Floating Points                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -2304,6 +2426,20 @@ class CVC4_PUBLIC Solver
   Term mkString(const std::vector<unsigned>& s) const;
 
   /**
+   * Create a character constant from a given string.
+   * @param s the string denoting the code point of the character (in base 16)
+   * @return the character constant
+   */
+  Term mkChar(const std::string& s) const;
+
+  /**
+   * Create a character constant from a given string.
+   * @param s the string denoting the code point of the character (in base 16)
+   * @return the character constant
+   */
+  Term mkChar(const char* s) const;
+
+  /**
    * Create a universe set of the given sort.
    * @param sort the sort of the set elements
    * @return the universe set constant
@@ -2555,24 +2691,19 @@ class CVC4_PUBLIC Solver
   Result checkSatAssuming(const std::vector<Term>& assumptions) const;
 
   /**
-   * Check validity.
-   * @return the result of the validity check.
+   * Check entailment of the given formula w.r.t. the current set of assertions.
+   * @param term the formula to check entailment for
+   * @return the result of the entailment check.
    */
-  Result checkValid() const;
+  Result checkEntailed(Term term) const;
 
   /**
-   * Check validity assuming the given formula.
-   * @param assumption the formula to assume
-   * @return the result of the validity check.
+   * Check entailment of the given set of given formulas w.r.t. the current
+   * set of assertions.
+   * @param terms the terms to check entailment for
+   * @return the result of the entailmentcheck.
    */
-  Result checkValidAssuming(Term assumption) const;
-
-  /**
-   * Check validity assuming the given formulas.
-   * @param assumptions the formulas to assume
-   * @return the result of the validity check.
-   */
-  Result checkValidAssuming(const std::vector<Term>& assumptions) const;
+  Result checkEntailed(const std::vector<Term>& terms) const;
 
   /**
    * Create datatype sort.
@@ -2799,6 +2930,123 @@ class CVC4_PUBLIC Solver
    */
   Term ensureTermSort(const Term& t, const Sort& s) const;
 
+  /**
+   * Append <symbol> to the current list of universal variables.
+   * SyGuS v2: ( declare-var <symbol> <sort> )
+   * @param sort the sort of the universal variable
+   * @param symbol the name of the universal variable
+   * @return the universal variable
+   */
+  Term mkSygusVar(Sort sort, const std::string& symbol = std::string()) const;
+
+  /**
+   * Create a Sygus grammar.
+   * @param boundVars the parameters to corresponding synth-fun/synth-inv
+   * @param ntSymbols the pre-declaration of the non-terminal symbols
+   * @return the grammar
+   */
+  Grammar mkSygusGrammar(const std::vector<Term>& boundVars,
+                         const std::vector<Term>& ntSymbols) const;
+
+  /**
+   * Synthesize n-ary function.
+   * SyGuS v2: ( synth-fun <symbol> ( <boundVars>* ) <sort> )
+   * @param symbol the name of the function
+   * @param boundVars the parameters to this function
+   * @param sort the sort of the return value of this function
+   * @return the function
+   */
+  Term synthFun(const std::string& symbol,
+                const std::vector<Term>& boundVars,
+                Sort sort) const;
+
+  /**
+   * Synthesize n-ary function following specified syntactic constraints.
+   * SyGuS v2: ( synth-fun <symbol> ( <boundVars>* ) <sort> <g> )
+   * @param symbol the name of the function
+   * @param boundVars the parameters to this function
+   * @param sort the sort of the return value of this function
+   * @param g the syntactic constraints
+   * @return the function
+   */
+  Term synthFun(const std::string& symbol,
+                const std::vector<Term>& boundVars,
+                Sort sort,
+                Grammar g) const;
+
+  /**
+   * Synthesize invariant.
+   * SyGuS v2: ( synth-inv <symbol> ( <boundVars>* ) )
+   * @param symbol the name of the invariant
+   * @param boundVars the parameters to this invariant
+   * @param sort the sort of the return value of this invariant
+   * @return the invariant
+   */
+  Term synthInv(const std::string& symbol,
+                const std::vector<Term>& boundVars) const;
+
+  /**
+   * Synthesize invariant following specified syntactic constraints.
+   * SyGuS v2: ( synth-inv <symbol> ( <boundVars>* ) <g> )
+   * @param symbol the name of the invariant
+   * @param boundVars the parameters to this invariant
+   * @param sort the sort of the return value of this invariant
+   * @param g the syntactic constraints
+   * @return the invariant
+   */
+  Term synthInv(const std::string& symbol,
+                const std::vector<Term>& boundVars,
+                Grammar g) const;
+
+  /**
+   * Add a forumla to the set of Sygus constraints.
+   * SyGuS v2: ( constraint <term> )
+   * @param term the formula to add as a constraint
+   */
+  void addSygusConstraint(Term term) const;
+
+  /**
+   * Add a set of Sygus constraints to the current state that correspond to an
+   * invariant synthesis problem.
+   * SyGuS v2: ( inv-constraint <inv> <pre> <trans> <post> )
+   * @param inv the function-to-synthesize
+   * @param pre the pre-condition
+   * @param trans the transition relation
+   * @param post the post-condition
+   */
+  void addSygusInvConstraint(Term inv, Term pre, Term trans, Term post) const;
+
+  /**
+   * Try to find a solution for the synthesis conjecture corresponding to the
+   * current list of functions-to-synthesize, universal variables and
+   * constraints.
+   * SyGuS v2: ( check-synth )
+   * @return the result of the synthesis conjecture.
+   */
+  Result checkSynth() const;
+
+  /**
+   * Get the synthesis solution of the given term. This method should be called
+   * immediately after the solver answers unsat for sygus input.
+   * @param term the term for which the synthesis solution is queried
+   * @return the synthesis solution of the given term
+   */
+  Term getSynthSolution(Term term) const;
+
+  /**
+   * Get the synthesis solutions of the given terms. This method should be
+   * called immediately after the solver answers unsat for sygus input.
+   * @param terms the terms for which the synthesis solutions is queried
+   * @return the synthesis solutions of the given terms
+   */
+  std::vector<Term> getSynthSolutions(const std::vector<Term>& terms) const;
+
+  /**
+   * Print solution for synthesis conjecture to the given output stream.
+   * @param out the output stream
+   */
+  void printSynthSolution(std::ostream& out) const;
+
   // !!! This is only temporarily available until the parser is fully migrated
   // to the new API. !!!
   ExprManager* getExprManager(void) const;
@@ -2818,18 +3066,22 @@ class CVC4_PUBLIC Solver
   template <typename T>
   Term mkValHelper(T t) const;
   /* Helper for mkReal functions that take a string as argument. */
-  Term mkRealFromStrHelper(std::string s) const;
+  Term mkRealFromStrHelper(const std::string& s) const;
   /* Helper for mkBitVector functions that take a string as argument. */
-  Term mkBVFromStrHelper(std::string s, uint32_t base) const;
+  Term mkBVFromStrHelper(const std::string& s, uint32_t base) const;
   /* Helper for mkBitVector functions that take a string and a size as
    * arguments. */
-  Term mkBVFromStrHelper(uint32_t size, std::string s, uint32_t base) const;
+  Term mkBVFromStrHelper(uint32_t size,
+                         const std::string& s,
+                         uint32_t base) const;
   /* Helper for mkBitVector functions that take an integer as argument. */
   Term mkBVFromIntHelper(uint32_t size, uint64_t val) const;
   /* Helper for setLogic. */
   void setLogicHelper(const std::string& logic) const;
   /* Helper for mkTerm functions that create Term from a Kind */
   Term mkTermFromKind(Kind kind) const;
+  /* Helper for mkChar functions that take a string as argument. */
+  Term mkCharFromStrHelper(const std::string& s) const;
 
   /**
    * Helper function that ensures that a given term is of sort real (as opposed
@@ -2847,7 +3099,7 @@ class CVC4_PUBLIC Solver
    * @param children the children of the term
    * @return the Term
    */
-  Term mkTermInternal(Kind kind, const std::vector<Term>& children) const;
+  Term mkTermHelper(Kind kind, const std::vector<Term>& children) const;
 
   /**
    * Create a vector of datatype sorts, using unresolved sorts.
@@ -2858,6 +3110,22 @@ class CVC4_PUBLIC Solver
   std::vector<Sort> mkDatatypeSortsInternal(
       std::vector<DatatypeDecl>& dtypedecls,
       std::set<Sort>& unresolvedSorts) const;
+
+  /**
+   * Synthesize n-ary function following specified syntactic constraints.
+   * SMT-LIB: ( synth-fun <symbol> ( <boundVars>* ) <sort> <g>? )
+   * @param symbol the name of the function
+   * @param boundVars the parameters to this function
+   * @param sort the sort of the return value of this function
+   * @param isInv determines whether this is synth-fun or synth-inv
+   * @param g the syntactic constraints
+   * @return the function
+   */
+  Term synthFunHelper(const std::string& symbol,
+                      const std::vector<Term>& boundVars,
+                      const Sort& sort,
+                      bool isInv = false,
+                      Grammar* g = nullptr) const;
 
   /* The expression manager of this solver. */
   std::unique_ptr<ExprManager> d_exprMgr;

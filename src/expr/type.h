@@ -525,6 +525,16 @@ class CVC4_PUBLIC SetType : public Type {
   Type getElementType() const;
 };/* class SetType */
 
+/** Class encapsulating an bag type. */
+class CVC4_PUBLIC BagType : public Type {
+ public:
+  /** Construct from the base type */
+  BagType(const Type& type = Type());
+
+  /** Get the index type */
+  Type getElementType() const;
+};/* class BagType */
+
 /** Class encapsulating a user-defined sort. */
 class CVC4_PUBLIC SortType : public Type {
  public:

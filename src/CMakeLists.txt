@@ -351,12 +351,16 @@ libcvc4_add_sources(
   theory/assertion.h
   theory/atom_requests.cpp
   theory/atom_requests.h
+  theory/bags/normal_form.h
   theory/bags/theory_bags.cpp
   theory/bags/theory_bags.h
   theory/bags/theory_bags_private.cpp
   theory/bags/theory_bags_private.h
   theory/bags/theory_bags_rewriter.cpp
   theory/bags/theory_bags_rewriter.h
+  theory/bags/theory_bags_type_enumerator.cpp
+  theory/bags/theory_bags_type_enumerator.h
+  theory/bags/theory_bags_type_rules.h
   theory/booleans/circuit_propagator.cpp
   theory/booleans/circuit_propagator.h
   theory/booleans/theory_bool.cpp
@@ -787,6 +791,7 @@ set(KINDS_FILES
   ${PROJECT_SOURCE_DIR}/src/theory/datatypes/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/sep/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/sets/kinds
+  ${PROJECT_SOURCE_DIR}/src/theory/bags/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/strings/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/quantifiers/kinds)
 
@@ -922,6 +927,7 @@ install(FILES
           expr/ascription_type.h
           expr/datatype.h
           expr/emptyset.h
+          expr/emptybag.h
           expr/expr_iomanip.h
           expr/record.h
           expr/symbol_table.h

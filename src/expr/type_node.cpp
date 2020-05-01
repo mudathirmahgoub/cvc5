@@ -577,6 +577,20 @@ TypeNode TypeNode::commonTypeNode(TypeNode t0, TypeNode t1, bool isLeast) {
         return TypeNode();
       }
     }
+    case kind::BAG_TYPE:
+    {
+      // take the least common subtype of element types
+      TypeNode elementType;
+      if (t1.isBag()
+          && !(elementType = commonTypeNode(t0[0], t1[0], isLeast)).isNull())
+      {
+        return NodeManager::currentNM()->mkBagType(elementType);
+      }
+      else
+      {
+        return TypeNode();
+      }
+    }
   case kind::SEXPR_TYPE:
     Unimplemented()
         << "haven't implemented leastCommonType for symbolic expressions yet";

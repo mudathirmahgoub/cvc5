@@ -59,6 +59,7 @@ set(gen_java_files
   ${CMAKE_CURRENT_BINARY_DIR}/DatatypeUnresolvedType.java
   ${CMAKE_CURRENT_BINARY_DIR}/EmptySet.java
   ${CMAKE_CURRENT_BINARY_DIR}/EmptySetHashFunction.java
+  ${CMAKE_CURRENT_BINARY_DIR}/EmptyBagHashFunction.java
   ${CMAKE_CURRENT_BINARY_DIR}/Exception.java
   ${CMAKE_CURRENT_BINARY_DIR}/ExportUnsupportedException.java
   ${CMAKE_CURRENT_BINARY_DIR}/Expr.java

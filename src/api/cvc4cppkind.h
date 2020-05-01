@@ -2354,6 +2354,8 @@ enum CVC4_PUBLIC Kind : int32_t
   SELECTOR_TYPE,
   /* set type, takes as parameter the type of the elements */
   SET_TYPE,
+  /* bag type, takes as parameter the type of the elements */
+  BAG_TYPE,
   /* sort tag */
   SORT_TAG,
   /* specifies types of user-declared 'uninterpreted' sorts */

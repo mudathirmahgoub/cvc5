@@ -1127,6 +1127,7 @@ static string smtKindString(Kind k, Variant v)
   case kind::SUBSET: return "subset";
   case kind::MEMBER: return "member";
   case kind::SET_TYPE: return "Set";
+  case kind::BAG_TYPE: return "Bag";
   case kind::SINGLETON: return "singleton";
   case kind::INSERT: return "insert";
   case kind::COMPLEMENT: return "complement";

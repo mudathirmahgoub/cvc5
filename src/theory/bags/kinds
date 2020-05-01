@@ -23,8 +23,7 @@ constant EMPTYBAG \
 
 # the type
 operator BAG_TYPE 1 "bag type, takes as parameter the type of the elements"
-cardinality BAG_TYPE \
-    "::CVC4::theory::bags::BagsProperties::computeCardinality(%TYPE%)" \
+
     "theory/bags/theory_bags_type_rules.h"
 well-founded BAG_TYPE \
     "::CVC4::theory::bags::BagsProperties::isWellFounded(%TYPE%)" \

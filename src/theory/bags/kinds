@@ -51,6 +51,12 @@ operator BAG_SINGLETON     2  "the bag of a single element given as a parameter 
 operator BAG_INSERT        2: "bag obtained by inserting elements (first N-1 parameters) into a bag (the last parameter)"
 operator BAG_CARD          1  "bag cardinality operator"
 
+# The operator choose returns an element from a given bag.
+# If bag A = {("a", 1)}, then the term (choose A) is equivalent to the term a.
+# If the bag is empty, then (choose A) is an arbitrary value.
+# If the bag has cardinality > 1, then (choose A) will deterministically return an element in A.
+operator BAG_CHOOSE        1  "return an element in the bag given as a parameter"
+
 typerule BAG_UNION          ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 typerule DISJOINT_UNION     ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 typerule BAG_INTERSECTION   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
@@ -60,8 +66,9 @@ typerule BAG_SUBSET         ::CVC4::theory::bags::BagsSubsetTypeRule
 typerule COUNT              ::CVC4::theory::bags::BagsCountTypeRule
 typerule BAG_SINGLETON      ::CVC4::theory::bags::BagsSingletonTypeRule
 typerule EMPTYBAG           ::CVC4::theory::bags::EmptyBagTypeRule
-typerule BAG_INSER          ::CVC4::theory::bags::BagsInsertTypeRule
-typerule BAG_CARD           ::CVC4::theory::bags::BAGsCardTypeRule
+typerule BAG_INSERT         ::CVC4::theory::bags::BagsInsertTypeRule
+typerule BAG_CARD           ::CVC4::theory::bags::BagsCardTypeRule
+typerule BAG_CHOOSE         ::CVC4::theory::sets::BagsChooseTypeRule
 
 construle BAG_UNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 construle DISJOINT_UNION    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
@@ -70,5 +77,6 @@ construle BAG_DIFFERENCE1   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 construle BAG_SINGLETON     ::CVC4::theory::bags::BagsSingletonTypeRule
 construle BAG_INSERT        ::CVC4::theory::bags::BagsInsertTypeRule
 construle BAG_CARD          ::CVC4::theory::bags::BagsCardTypeRule
+construle BAG_CHOOSE        ::CVC4::theory::sets::BagsChooseTypeRule
 
 endtheory

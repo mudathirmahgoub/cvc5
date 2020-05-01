@@ -351,6 +351,12 @@ libcvc4_add_sources(
   theory/assertion.h
   theory/atom_requests.cpp
   theory/atom_requests.h
+  theory/bags/theory_bags.cpp
+  theory/bags/theory_bags.h
+  theory/bags/theory_bags_private.cpp
+  theory/bags/theory_bags_private.h
+  theory/bags/theory_bags_rewriter.cpp
+  theory/bags/theory_bags_rewriter.h
   theory/booleans/circuit_propagator.cpp
   theory/booleans/circuit_propagator.h
   theory/booleans/theory_bool.cpp

@@ -1706,6 +1706,7 @@ set(regress_1_tests
   regress1/sets/insert_invariant_37_2.smt2
   regress1/sets/issue2568.smt2
   regress1/sets/issue2904.smt2
+  regress1/sets/issue4391-card-lasso.smt2
   regress1/sets/lemmabug-ListElts317minimized.smt2
   regress1/sets/remove_check_free_31_6.smt2
   regress1/sets/sets-disequal.smt2
@@ -1774,6 +1775,7 @@ set(regress_1_tests
   regress1/strings/nterm-re-inter-sigma.smt2
   regress1/strings/pierre150331.smt2
   regress1/strings/policy_variable.smt2
+  regress1/strings/pre_ctn_no_skolem_share.smt2
   regress1/strings/query4674.smt2
   regress1/strings/query8485.smt2
   regress1/strings/re-all-char-hard.smt2
@@ -2049,6 +2051,7 @@ set(regress_2_tests
   regress2/quantifiers/sygus-inst-ufbv-sdlx-fixpoint-5.smt2
   regress2/quantifiers/syn874-1.smt2
   regress2/simplify.javafe.ast.ArrayInit.35_without_quantification2.smt2
+  regress2/strings/cmi-split-cm-fail.smt2
   regress2/strings/cmu-dis-0707-3.smt2
   regress2/strings/cmu-disagree-0707-dd.smt2
   regress2/strings/cmu-prereg-fmf.smt2
@@ -2112,6 +2115,7 @@ set(regress_3_tests
   regress3/sixfuncs.sy
   regress3/strings-any-term.sy
   regress3/strings/extf_d_perf.smt2
+  regress3/strings/unsat-circ-reduce.smt2
 )
 
 #-----------------------------------------------------------------------------#

@@ -34,7 +34,7 @@ TheoryBagsPrivate::TheoryBagsPrivate(TheoryBags& external,
 void TheoryBagsPrivate::setMasterEqualityEngine(eq::EqualityEngine* eq) {}
 void TheoryBagsPrivate::addSharedTerm(TNode) {}
 void TheoryBagsPrivate::check(Theory::Effort) {}
-bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m) { return false; }
+bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m) { return true; }
 Node TheoryBagsPrivate::explain(TNode) { return CVC4::Node(); }
 EqualityStatus TheoryBagsPrivate::getEqualityStatus(TNode a, TNode b)
 {

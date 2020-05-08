@@ -1865,6 +1865,35 @@ enum CVC4_PUBLIC Kind : int32_t
    */
   CHOOSE,
 
+  /* Bags ------------------------------------------------------------------ */
+
+  /**
+   * Empty bag constant.
+   * Parameters: 1
+   *   -[1]: Sort of the bag elements
+   * Create with:
+   *   mkEmptyBag(Sort sort)
+   */
+  EMPTYBAG,
+  /**
+   * Bag union (max).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of set sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_UNION,
+  /**
+   * Bag disjoint union (sum).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of set sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  DISJOINT_UNION,
+
   /* Strings --------------------------------------------------------------- */
 
   /**

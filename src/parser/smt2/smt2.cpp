@@ -677,6 +677,15 @@ Command* Smt2::setLogic(std::string name, bool fromCommand)
     addOperator(api::TCLOSURE, "tclosure");
   }
 
+  if (d_logic.isTheoryEnabled(theory::THEORY_BAGS))
+  {
+    defineVar("emptybag", d_solver->mkEmptyBag(d_solver->getNullSort()));
+    // the Boolean sort is a placeholder here since we don't have type info
+
+    addOperator(api::BAG_UNION, "union");
+    addOperator(api::DISJOINT_UNION, "disjoint-union");
+  }
+
   if(d_logic.isTheoryEnabled(theory::THEORY_STRINGS)) {
     defineType("String", d_solver->getStringSort());
     defineType("RegLan", d_solver->getRegExpSort());

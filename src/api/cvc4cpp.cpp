@@ -891,6 +891,8 @@ bool Sort::isArray() const { return d_type->isArray(); }
 
 bool Sort::isSet() const { return d_type->isSet(); }
 
+bool Sort::isBag() const { return d_type->isBag(); }
+
 bool Sort::isUninterpretedSort() const { return d_type->isSort(); }
 
 bool Sort::isSortConstructor() const { return d_type->isSortConstructor(); }
@@ -3138,6 +3140,17 @@ Term Solver::mkEmptySet(Sort s) const
       << "null sort or set sort";
 
   return mkValHelper<CVC4::EmptySet>(CVC4::EmptySet(*s.d_type));
+
+  CVC4_API_SOLVER_TRY_CATCH_END;
+}
+
+Term Solver::mkEmptyBag(Sort s) const
+{
+  CVC4_API_SOLVER_TRY_CATCH_BEGIN;
+    CVC4_API_ARG_CHECK_EXPECTED(s.isNull() || s.isBag(), s)
+    << "null sort or bag sort";
+
+    return mkValHelper<CVC4::EmptyBag>(CVC4::EmptyBag(*s.d_type));
 
   CVC4_API_SOLVER_TRY_CATCH_END;
 }

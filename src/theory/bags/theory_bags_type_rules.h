@@ -31,42 +31,46 @@ struct BagsBinaryOperatorTypeRule
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::UNION || n.getKind() == kind::INTERSECTION
-           || n.getKind() == kind::SETMINUS);
-    TypeNode setType = n[0].getType(check);
+    Assert(n.getKind() == kind::BAG_UNION || n.getKind() == kind::DISJOINT_UNION
+           || n.getKind() == kind::BAG_INTERSECTION
+           || n.getKind() == kind::BAG_DIFFERENCE1
+           || n.getKind() == kind::BAG_DIFFERENCE2);
+    TypeNode bagType = n[0].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(
-            n, "operator expects a set, first argument is not");
+            n, "operator expects a bag, first argument is not");
       }
-      TypeNode secondSetType = n[1].getType(check);
-      if (secondSetType != setType)
+      TypeNode secondBagType = n[1].getType(check);
+      if (secondBagType != bagType)
       {
         if (n.getKind() == kind::INTERSECTION)
         {
-          setType = TypeNode::mostCommonTypeNode(secondSetType, setType);
+          bagType = TypeNode::mostCommonTypeNode(secondBagType, bagType);
         }
         else
         {
-          setType = TypeNode::leastCommonTypeNode(secondSetType, setType);
+          bagType = TypeNode::leastCommonTypeNode(secondBagType, bagType);
         }
-        if (setType.isNull())
+        if (bagType.isNull())
         {
           throw TypeCheckingExceptionPrivate(
               n, "operator expects two bags of comparable types");
         }
       }
     }
-    return setType;
+    return bagType;
   }
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::UNION || n.getKind() == kind::INTERSECTION
-           || n.getKind() == kind::SETMINUS);
-    if (n.getKind() == kind::UNION)
+    Assert(n.getKind() == kind::BAG_UNION || n.getKind() == kind::DISJOINT_UNION
+           || n.getKind() == kind::BAG_INTERSECTION
+           || n.getKind() == kind::BAG_DIFFERENCE1
+           || n.getKind() == kind::BAG_DIFFERENCE2);
+    if (n.getKind() == kind::DISJOINT_UNION)
     {
       return NormalForm::checkNormalConstant(n);
     }
@@ -75,129 +79,127 @@ struct BagsBinaryOperatorTypeRule
       return false;
     }
   }
-}; /* struct SetUnionTypeRule */
+}; /* struct BagsBinaryOperatorTypeRule */
 
-struct SubsetTypeRule
+struct BagsSubsetTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::SUBSET);
-    TypeNode setType = n[0].getType(check);
+    Assert(n.getKind() == kind::BAG_SUBSET);
+    TypeNode bagType= n[0].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(n,
-                                           "set subset operating on non-set");
+                                           "bag subset operating on non-bag");
       }
-      TypeNode secondSetType = n[1].getType(check);
-      if (secondSetType != setType)
+      TypeNode secondBagType = n[1].getType(check);
+      if (secondBagType != bagType)
       {
-        if (!setType.isComparableTo(secondSetType))
+        if (!bagType.isComparableTo(secondBagType))
         {
           throw TypeCheckingExceptionPrivate(
-              n, "set subset operating on bags of different types");
+              n, "bag subset operating on bags of different types");
         }
       }
     }
     return nodeManager->booleanType();
   }
-}; /* struct SetSubsetTypeRule */
+}; /* struct BagsSubsetTypeRule */
 
-struct MemberTypeRule
+struct BagsCountTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::MEMBER);
-    TypeNode setType = n[1].getType(check);
+    Assert(n.getKind() == kind::COUNT);
+    TypeNode bagType = n[1].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(
-            n, "checking for membership in a non-set");
+            n, "checking for membership in a non-bag");
       }
       TypeNode elementType = n[0].getType(check);
       // TODO : still need to be flexible here due to situations like:
       //
-      // T : (Set Int)
-      // S : (Set Real)
-      // (= (as T (Set Real)) S)
-      // (member 0.5 S)
-      // ...where (member 0.5 T) is inferred
+      // T : (Bag Int)
+      // B : (Bag Real)
+      // (= (as T (Bag Real)) B)
+      // (= (count 0.5 B) 1)
+      // ...where (count 0.5 T) is inferred
       //
       // or
       //
-      // S : (Set Real)
-      // (not (member 0.5 s))
-      // (member 0.0 s)
-      // ...find model M where M( s ) = { 0 }, check model will generate (not
-      // (member 0.5 (singleton 0)))
+      // B : (Bag Real)
+      // (not (count 0.5 B))
+      // ( = (count 0.0 B) 1)
+      // ...find model M where M( B ) = { (0.0, 1) }, check model will generate
+      // (not (= (count 0.5 (singleton (0.0, 1) 1)))
       //
-      if (!elementType.isComparableTo(setType.getSetElementType()))
+      if (!elementType.isComparableTo(bagType.getBagElementType()))
       {
-        // if(!elementType.isSubtypeOf(setType.getSetElementType())) {
-        // //FIXME:typing
         std::stringstream ss;
         ss << "member operating on bags of different types:\n"
            << "child type:  " << elementType << "\n"
-           << "not subtype: " << setType.getSetElementType() << "\n"
+           << "not subtype: " << bagType.getBagElementType() << "\n"
            << "in term : " << n;
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }
     }
     return nodeManager->booleanType();
   }
-}; /* struct MemberTypeRule */
+}; /* struct BagsCountTypeRule */
 
-struct SingletonTypeRule
+struct BagsSingletonTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::SINGLETON);
+    Assert(n.getKind() == kind::BAG_SINGLETON);
     return nodeManager->mkSetType(n[0].getType(check));
   }
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::SINGLETON);
+    Assert(n.getKind() == kind::BAG_SINGLETON);
     return n[0].isConst();
   }
-}; /* struct SingletonTypeRule */
+}; /* struct BagsSingletonTypeRule */
 
-struct EmptySetTypeRule
+struct EmptyBagTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::EMPTYSET);
-    EmptySet emptySet = n.getConst<EmptySet>();
-    Type setType = emptySet.getType();
-    return TypeNode::fromType(setType);
+    Assert(n.getKind() == kind::EMPTYBAG);
+    EmptyBag emptyBag = n.getConst<EmptyBag>();
+    Type bagType = emptyBag.getType();
+    return TypeNode::fromType(bagType);
   }
-}; /* struct EmptySetTypeRule */
+}; /* struct EmptyBagTypeRule */
 
-struct CardTypeRule
+struct BagsCardTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::CARD);
-    TypeNode setType = n[0].getType(check);
+    Assert(n.getKind() == kind::BAG_CARD);
+    TypeNode bagType= n[0].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(
-            n, "cardinality operates on a set, non-set object found");
+            n, "cardinality operates on a bag, non-bag object found");
       }
     }
     return nodeManager->integerType();
@@ -205,374 +207,81 @@ struct CardTypeRule
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::CARD);
+    Assert(n.getKind() == kind::BAG_CARD);
     return false;
   }
-}; /* struct CardTypeRule */
+}; /* struct BagsCardTypeRule */
 
-struct ComplementTypeRule
+struct BagsChooseTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::COMPLEMENT);
-    TypeNode setType = n[0].getType(check);
+    Assert(n.getKind() == kind::BAG_CHOOSE);
+    TypeNode bagType= n[0].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(
-            n, "COMPLEMENT operates on a set, non-set object found");
+            n, "CHOOSE operator expects a bag, a non-bag is found");
       }
     }
-    return setType;
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    Assert(n.getKind() == kind::COMPLEMENT);
-    return false;
-  }
-}; /* struct ComplementTypeRule */
-
-struct UniverseSetTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::UNIVERSE_SET);
-    // for nullary operators, we only computeType for check=true, since they are
-    // given TypeAttr() on creation
-    Assert(check);
-    TypeNode setType = n.getType();
-    if (!setType.isSet())
-    {
-      throw TypeCheckingExceptionPrivate(n,
-                                         "Non-set type found for universe set");
-    }
-    return setType;
-  }
-}; /* struct ComplementTypeRule */
-
-struct ComprehensionTypeRule
-{
-  static TypeNode computeType(NodeManager* nodeManager, TNode n, bool check)
-  {
-    Assert(n.getKind() == kind::COMPREHENSION);
-    if (check)
-    {
-      if (n[0].getType(check) != nodeManager->boundVarListType())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, "first argument of set comprehension is not bound var list");
-      }
-      if (n[1].getType(check) != nodeManager->booleanType())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, "body of set comprehension is not boolean");
-      }
-    }
-    return nodeManager->mkSetType(n[2].getType(check));
-  }
-}; /* struct ComprehensionTypeRule */
-
-struct ChooseTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::CHOOSE);
-    TypeNode setType = n[0].getType(check);
-    if (check)
-    {
-      if (!setType.isSet())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, "CHOOSE operator expects a set, a non-set is found");
-      }
-    }
-    return setType.getSetElementType();
+    return bagType.getBagElementType();
   }
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::CHOOSE);
+    Assert(n.getKind() == kind::BAG_CHOOSE);
     // choose nodes should be expanded
     return false;
   }
-}; /* struct ChooseTypeRule */
+}; /* struct BagsChooseTypeRule */
 
-struct InsertTypeRule
+struct BagsInsertTypeRule
 {
   inline static TypeNode computeType(NodeManager* nodeManager,
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::INSERT);
+    Assert(n.getKind() == kind::BAG_INSERT);
     size_t numChildren = n.getNumChildren();
     Assert(numChildren >= 2);
-    TypeNode setType = n[numChildren - 1].getType(check);
+    TypeNode bagType= n[numChildren - 1].getType(check);
     if (check)
     {
-      if (!setType.isSet())
+      if (!bagType.isBag())
       {
-        throw TypeCheckingExceptionPrivate(n, "inserting into a non-set");
+        throw TypeCheckingExceptionPrivate(n, "inserting into a non-bag");
       }
       for (size_t i = 0; i < numChildren - 1; ++i)
       {
         TypeNode elementType = n[i].getType(check);
-        if (elementType != setType.getSetElementType())
+        if (elementType != bagType.getBagElementType())
         {
           throw TypeCheckingExceptionPrivate(
               n,
-              "type of element should be same as element type of set being "
+              "type of element should be same as element type of bag being "
               "inserted into");
         }
       }
     }
-    return setType;
+    return bagType;
   }
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::INSERT);
+    Assert(n.getKind() == kind::BAG_INSERT);
     return false;
   }
-}; /* struct InsertTypeRule */
+}; /* struct BagsInsertTypeRule */
 
-struct RelBinaryOperatorTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::PRODUCT || n.getKind() == kind::JOIN);
-
-    TypeNode firstRelType = n[0].getType(check);
-    TypeNode secondRelType = n[1].getType(check);
-    TypeNode resultType = firstRelType;
-
-    if (!firstRelType.isSet() || !secondRelType.isSet())
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " Relational operator operates on non-bags");
-    }
-    if (!firstRelType[0].isTuple() || !secondRelType[0].isTuple())
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " Relational operator operates on non-relations (bags of tuples)");
-    }
-
-    std::vector<TypeNode> newTupleTypes;
-    std::vector<TypeNode> firstTupleTypes = firstRelType[0].getTupleTypes();
-    std::vector<TypeNode> secondTupleTypes = secondRelType[0].getTupleTypes();
-
-    // JOIN is not allowed to apply on two unary bags
-    if (n.getKind() == kind::JOIN)
-    {
-      if ((firstTupleTypes.size() == 1) && (secondTupleTypes.size() == 1))
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " Join operates on two unary relations");
-      }
-      else if (firstTupleTypes.back() != secondTupleTypes.front())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " Join operates on two non-joinable relations");
-      }
-      newTupleTypes.insert(newTupleTypes.end(),
-                           firstTupleTypes.begin(),
-                           firstTupleTypes.end() - 1);
-      newTupleTypes.insert(newTupleTypes.end(),
-                           secondTupleTypes.begin() + 1,
-                           secondTupleTypes.end());
-    }
-    else if (n.getKind() == kind::PRODUCT)
-    {
-      newTupleTypes.insert(
-          newTupleTypes.end(), firstTupleTypes.begin(), firstTupleTypes.end());
-      newTupleTypes.insert(newTupleTypes.end(),
-                           secondTupleTypes.begin(),
-                           secondTupleTypes.end());
-    }
-    resultType =
-        nodeManager->mkSetType(nodeManager->mkTupleType(newTupleTypes));
-
-    return resultType;
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    Assert(n.getKind() == kind::JOIN || n.getKind() == kind::PRODUCT);
-    return false;
-  }
-}; /* struct RelBinaryOperatorTypeRule */
-
-struct RelTransposeTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::TRANSPOSE);
-    TypeNode setType = n[0].getType(check);
-    if (check && (!setType.isSet() || !setType.getSetElementType().isTuple()))
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, "relation transpose operates on non-relation");
-    }
-    std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
-    std::reverse(tupleTypes.begin(), tupleTypes.end());
-    return nodeManager->mkSetType(nodeManager->mkTupleType(tupleTypes));
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    return false;
-  }
-}; /* struct RelTransposeTypeRule */
-
-struct RelTransClosureTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::TCLOSURE);
-    TypeNode setType = n[0].getType(check);
-    if (check)
-    {
-      if (!setType.isSet() || !setType.getSetElementType().isTuple())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " transitive closure operates on non-relation");
-      }
-      std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
-      if (tupleTypes.size() != 2)
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " transitive closure operates on non-binary relations");
-      }
-      if (tupleTypes[0] != tupleTypes[1])
-      {
-        throw TypeCheckingExceptionPrivate(
-            n,
-            " transitive closure operates on non-homogeneous binary relations");
-      }
-    }
-    return setType;
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    Assert(n.getKind() == kind::TCLOSURE);
-    return false;
-  }
-}; /* struct RelTransClosureTypeRule */
-
-struct JoinImageTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::JOIN_IMAGE);
-
-    TypeNode firstRelType = n[0].getType(check);
-
-    if (!firstRelType.isSet())
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage operator operates on non-relations");
-    }
-    if (!firstRelType[0].isTuple())
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage operator operates on non-relations (bags of tuples)");
-    }
-
-    std::vector<TypeNode> tupleTypes = firstRelType[0].getTupleTypes();
-    if (tupleTypes.size() != 2)
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage operates on a non-binary relation");
-    }
-    TypeNode valType = n[1].getType(check);
-    if (valType != nodeManager->integerType())
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage cardinality constraint must be integer");
-    }
-    if (n[1].getKind() != kind::CONST_RATIONAL)
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage cardinality constraint must be a constant");
-    }
-    CVC4::Rational r(INT_MAX);
-    if (n[1].getConst<Rational>() > r)
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage Exceeded INT_MAX in cardinality constraint");
-    }
-    if (n[1].getConst<Rational>().getNumerator().getSignedInt() < 0)
-    {
-      throw TypeCheckingExceptionPrivate(
-          n, " JoinImage cardinality constraint must be non-negative");
-    }
-    std::vector<TypeNode> newTupleTypes;
-    newTupleTypes.push_back(tupleTypes[0]);
-    return nodeManager->mkSetType(nodeManager->mkTupleType(newTupleTypes));
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    Assert(n.getKind() == kind::JOIN_IMAGE);
-    return false;
-  }
-}; /* struct JoinImageTypeRule */
-
-struct RelIdenTypeRule
-{
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
-  {
-    Assert(n.getKind() == kind::IDEN);
-    TypeNode setType = n[0].getType(check);
-    if (check)
-    {
-      if (!setType.isSet() && !setType.getSetElementType().isTuple())
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " Identity operates on non-relation");
-      }
-      if (setType[0].getTupleTypes().size() != 1)
-      {
-        throw TypeCheckingExceptionPrivate(
-            n, " Identity operates on non-unary relations");
-      }
-    }
-    std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
-    tupleTypes.push_back(tupleTypes[0]);
-    return nodeManager->mkSetType(nodeManager->mkTupleType(tupleTypes));
-  }
-
-  inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
-  {
-    return false;
-  }
-}; /* struct RelIdenTypeRule */
-
-struct SetsProperties
+struct BagsProperties
 {
   inline static Cardinality computeCardinality(TypeNode type)
   {
-    Assert(type.getKind() == kind::SET_TYPE);
-    Cardinality elementCard = 2;
-    elementCard ^= type[0].getCardinality();
-    return elementCard;
+    //ToDo: review this
+    return Cardinality::UNKNOWN_CARD;
   }
 
   inline static bool isWellFounded(TypeNode type)
@@ -582,10 +291,10 @@ struct SetsProperties
 
   inline static Node mkGroundTerm(TypeNode type)
   {
-    Assert(type.isSet());
+    Assert(type.isBag());
     return NodeManager::currentNM()->mkConst(EmptySet(type.toType()));
   }
-}; /* struct SetsProperties */
+}; /* struct BagsProperties */
 
 }  // namespace bags
 }  // namespace theory

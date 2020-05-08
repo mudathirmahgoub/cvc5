@@ -373,7 +373,13 @@ protected:
    */
   bool isSet() const;
 
- /**
+  /**
+   * Is this a Bag type?
+   * @return true if the type is a Bag type
+   */
+  bool isBag() const;
+
+  /**
    * Is this a datatype type?
    * @return true if the type is a datatype type
    */
@@ -525,15 +531,16 @@ class CVC4_PUBLIC SetType : public Type {
   Type getElementType() const;
 };/* class SetType */
 
-/** Class encapsulating an bag type. */
-class CVC4_PUBLIC BagType : public Type {
+/** Class encapsulating a bag type. */
+class CVC4_PUBLIC BagType : public Type
+{
  public:
   /** Construct from the base type */
   BagType(const Type& type = Type());
 
   /** Get the index type */
   Type getElementType() const;
-};/* class BagType */
+}; /* class BagType */
 
 /** Class encapsulating a user-defined sort. */
 class CVC4_PUBLIC SortType : public Type {

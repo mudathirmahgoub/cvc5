@@ -661,6 +661,14 @@ SetType ExprManager::mkSetType(Type elementType) const {
   return SetType(Type(d_nodeManager, new TypeNode(d_nodeManager->mkSetType(*elementType.d_typeNode))));
 }
 
+BagType ExprManager::mkBagType(Type elementType) const
+{
+  NodeManagerScope nms(d_nodeManager);
+  return BagType(
+      Type(d_nodeManager,
+           new TypeNode(d_nodeManager->mkBagType(*elementType.d_typeNode))));
+}
+
 DatatypeType ExprManager::mkDatatypeType(Datatype& datatype, uint32_t flags)
 {
   // Not worth a special implementation; this doesn't need to be fast

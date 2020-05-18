@@ -15,6 +15,7 @@
  **/
 
 #include "theory/bags/theory_bags_private.h"
+
 #include "theory/bags/theory_bags.h"
 
 using namespace std;
@@ -38,7 +39,56 @@ void TheoryBagsPrivate::setMasterEqualityEngine(eq::EqualityEngine* eq)
   d_equalityEngine.setMasterEqualityEngine(eq);
 }
 void TheoryBagsPrivate::addSharedTerm(TNode) {}
-void TheoryBagsPrivate::check(Theory::Effort) {}
+
+void TheoryBagsPrivate::check(Theory::Effort level)
+{
+  Trace("bags-check") << "Bags check effort " << level << std::endl;
+  if (level == Theory::EFFORT_LAST_CALL)
+  {
+    return;
+  }
+  while (!d_external.done() && !d_state.isInConflict())
+  {
+    // Get all the assertions
+    Assertion assertion = d_external.get();
+    TNode fact = assertion.d_assertion;
+    Trace("bags-assert") << "Assert from input " << fact << std::endl;
+    // assert the fact
+    assertFact(fact, fact);
+  }
+  Trace("bags-check") << "Bags finished assertions effort " << level
+                      << std::endl;
+  // invoke full effort check, relations check
+  if (!d_state.isInConflict())
+  {
+  }
+  Trace("bags-check") << "Bags finish Check effort " << level << std::endl;
+}
+
+bool TheoryBagsPrivate::assertFact(Node fact, Node exp)
+{
+  Trace("bags-assert") << "TheoryBags::assertFact : " << fact
+                       << ", exp = " << exp << std::endl;
+  bool polarity = fact.getKind() != kind::NOT;
+  TNode atom = polarity ? fact : fact[0];
+  if (!d_state.isEntailed(atom, polarity))
+  {
+    if (atom.getKind() == kind::EQUAL)
+    {
+      d_equalityEngine.assertEquality(atom, polarity, exp);
+    }
+    else
+    {
+      d_equalityEngine.assertPredicate(atom, polarity, exp);
+    }
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
 bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m) { return true; }
 Node TheoryBagsPrivate::explain(TNode) { return CVC4::Node(); }
 EqualityStatus TheoryBagsPrivate::getEqualityStatus(TNode a, TNode b)
@@ -56,7 +106,6 @@ void TheoryBagsPrivate::presolve() {}
 void TheoryBagsPrivate::propagate(Theory::Effort) {}
 OutputChannel* TheoryBagsPrivate::getOutputChannel() { return nullptr; }
 Valuation& TheoryBagsPrivate::getValuation() { return d_external.d_valuation; }
-
 
 bool TheoryBagsPrivate::propagate(TNode literal)
 {
@@ -80,20 +129,13 @@ bool TheoryBagsPrivate::propagate(TNode literal)
   return ok;
 }
 
-
-void TheoryBagsPrivate::eqNotifyNewClass(TNode t)
-{
-}
+void TheoryBagsPrivate::eqNotifyNewClass(TNode t) {}
 
 void TheoryBagsPrivate::eqNotifyPreMerge(TNode t1, TNode t2) {}
 
-void TheoryBagsPrivate::eqNotifyPostMerge(TNode t1, TNode t2)
-{  
-}
+void TheoryBagsPrivate::eqNotifyPostMerge(TNode t1, TNode t2) {}
 
-void TheoryBagsPrivate::eqNotifyDisequal(TNode t1, TNode t2, TNode reason)
-{
-}
+void TheoryBagsPrivate::eqNotifyDisequal(TNode t1, TNode t2, TNode reason) {}
 
 /**************************** eq::NotifyClass *****************************/
 /**************************** eq::NotifyClass *****************************/

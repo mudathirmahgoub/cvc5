@@ -41,7 +41,7 @@ EqualityStatus TheoryBagsPrivate::getEqualityStatus(TNode a, TNode b)
   return EQUALITY_FALSE_IN_MODEL;
 }
 void TheoryBagsPrivate::preRegisterTerm(TNode node) {}
-Node TheoryBagsPrivate::expandDefinition(Node n) { return CVC4::Node(); }
+Node TheoryBagsPrivate::expandDefinition(Node n) { return n; }
 Theory::PPAssertStatus TheoryBagsPrivate::ppAssert(
     TNode in, SubstitutionMap& outSubstitutions)
 {

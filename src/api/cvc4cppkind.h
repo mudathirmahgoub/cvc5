@@ -1864,7 +1864,6 @@ enum CVC4_PUBLIC Kind : int32_t
    *   mkTerm(Kind kind, Term child)
    */
   CHOOSE,
-
   /* Bags ------------------------------------------------------------------ */
 
   /**
@@ -1878,7 +1877,7 @@ enum CVC4_PUBLIC Kind : int32_t
   /**
    * Bag union (max).
    * Parameters: 2
-   *   -[1]..[2]: Terms of set sort
+   *   -[1]..[2]: Terms of bag sort
    * Create with:
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
@@ -1887,13 +1886,99 @@ enum CVC4_PUBLIC Kind : int32_t
   /**
    * Bag disjoint union (sum).
    * Parameters: 2
-   *   -[1]..[2]: Terms of set sort
+   *   -[1]..[2]: Terms of bag sort
    * Create with:
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
    */
   DISJOINT_UNION,
-
+  /**
+   * Bag intersection (min).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of bag sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_INTERSECTION,
+  /**
+   * Bag difference 1 (subtracts multiplicities of the second from the first).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of bag sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_DIFFERENCE1,
+  /**
+   * Bag disjoint union (removes shared elements in the two bags).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of bag sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_DIFFERENCE2,
+  /**
+   * Bag disjoint subset (first multiplicities <= second multiplicities).
+   * Parameters: 2
+   *   -[1]..[2]: Terms of set sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_SUBSET,
+  /**
+   * Element multiplicity in a bag
+   * Parameters: 2
+   *   -[1]..[2]: Terms of bag sort (Bag E), [1] an element of sort E
+   * Create with:
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  COUNT,
+  /**
+   * The bag of the single element given as a parameter.
+   * Parameters: 1
+   *   -[1]: Single element
+   * Create with:
+   *   mkTerm(Kind kind, Term child)
+   */
+  BAG_SINGLETON,
+  /**
+   * The bag obtained by inserting elements and their multiplicities.
+   * TODO: check the synatax of pairs like ("a", 3)
+   * Parameters: n > 0
+   *   -[1]..[n-1]: Elements inserted into bag [n]
+   *   -[n]: Bag Term
+   * Create with:
+   *   mkTerm(Kind kind, Term child)
+   *   mkTerm(Kind kind, Term child1, Term child2)
+   *   mkTerm(Kind kind, Term child1, Term child2, Term child3)
+   *   mkTerm(Kind kind, const std::vector<Term>& children)
+   */
+  BAG_INSERT,
+  /**
+   * Bag cardinality.
+   * Parameters: 1
+   *   -[1]: Bag to determine the cardinality of
+   * Create with:
+   *   mkTerm(Kind kind, Term child)
+   */
+  BAG_CARD,
+  /**
+   * Returns an element from a given bag.
+   * If a bag A = {(x,n)} where n is the multiplicity, then the term (choose A)
+   * is equivalent to the term x.
+   * If the bag is empty, then (choose A) is an arbitrary value.
+   * If the bag contains distinct elements, then (choose A) will
+   * deterministically return an element in A.
+   * Parameters: 1
+   *   -[1]: Term of bag sort
+   * Create with:
+   *   mkTerm(Kind kind, Term child)
+   */
+  BAG_CHOOSE,
   /* Strings --------------------------------------------------------------- */
 
   /**

@@ -676,6 +676,7 @@ public:
    * syntax like (as t T) in smt2 and t::T in the CVC language. This includes:
    * - (as emptyset (Set T))
    * - (as univset (Set T))
+   * - (as emptybag (Bag T))
    * - (as sep.nil T)
    * - (cons T)
    * - ((as cons T) t1 ... tn) where cons is a parametric datatype constructor.

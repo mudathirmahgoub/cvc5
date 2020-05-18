@@ -247,7 +247,7 @@ class TheorySetsPrivate {
   /** Equality engine */
   eq::EqualityEngine d_equalityEngine;
 
-  /** Proagate out to output channel */
+  /** Propagate out to output channel */
   bool propagate(TNode);
 
   /** generate and send out conflict node */

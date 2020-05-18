@@ -352,6 +352,8 @@ libcvc4_add_sources(
   theory/atom_requests.cpp
   theory/atom_requests.h
   theory/bags/normal_form.h
+  theory/bags/solver_state.cpp
+  theory/bags/solver_state.h
   theory/bags/theory_bags.cpp
   theory/bags/theory_bags.h
   theory/bags/theory_bags_private.cpp

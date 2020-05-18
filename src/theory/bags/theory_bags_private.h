@@ -19,6 +19,7 @@
 #ifndef CVC4__THEORY__BAGS__THEORY_BAGS_PRIVATE_H
 #define CVC4__THEORY__BAGS__THEORY_BAGS_PRIVATE_H
 
+#include "theory/bags/solver_state.h"
 #include "theory/bags/theory_bags_rewriter.h"
 #include "theory/uf/equality_engine.h"
 
@@ -59,14 +60,49 @@ class TheoryBagsPrivate
 
   void propagate(Theory::Effort);
 
+  /** Propagate out to output channel */
+  bool propagate(TNode);
+
   /** get default output channel */
   OutputChannel* getOutputChannel();
   /** get the valuation */
   Valuation& getValuation();
 
+  void eqNotifyNewClass(TNode t);
+  void eqNotifyPreMerge(TNode t1, TNode t2);
+  void eqNotifyPostMerge(TNode t1, TNode t2);
+  void eqNotifyDisequal(TNode t1, TNode t2, TNode reason);
+
  private:
+  /** generate and send out conflict node */
+  void conflict(TNode, TNode);
+
   TheoryBags& d_external;
 
+  /** Functions to handle callbacks from equality engine */
+  class NotifyClass : public eq::EqualityEngineNotify
+  {
+    TheoryBagsPrivate& d_theory;
+
+   public:
+    NotifyClass(TheoryBagsPrivate& theory) : d_theory(theory) {}
+    bool eqNotifyTriggerEquality(TNode equality, bool value) override;
+    bool eqNotifyTriggerPredicate(TNode predicate, bool value) override;
+    bool eqNotifyTriggerTermEquality(TheoryId tag,
+                                     TNode t1,
+                                     TNode t2,
+                                     bool value) override;
+    void eqNotifyConstantTermMerge(TNode t1, TNode t2) override;
+    void eqNotifyNewClass(TNode t) override;
+    void eqNotifyPreMerge(TNode t1, TNode t2) override;
+    void eqNotifyPostMerge(TNode t1, TNode t2) override;
+    void eqNotifyDisequal(TNode t1, TNode t2, TNode reason) override;
+  } d_notify;
+
+  /** The state of the bags solver at full effort */
+  SolverState d_state;
+  /** Equality engine */
+  eq::EqualityEngine d_equalityEngine;
   /** The theory rewriter for this theory. */
   TheoryBagsRewriter d_rewriter;
 }; /* class TheoryBagsPrivate */

@@ -88,7 +88,6 @@ void TheoryBags::preRegisterTerm(TNode node)
 
 Node TheoryBags::expandDefinition(Node n)
 {
-  Kind nk = n.getKind();
   return d_internal->expandDefinition(n);
 }
 
@@ -102,7 +101,10 @@ void TheoryBags::presolve() { d_internal->presolve(); }
 
 void TheoryBags::propagate(Effort e) { d_internal->propagate(e); }
 
-void TheoryBags::setMasterEqualityEngine(eq::EqualityEngine* eq) {}
+void TheoryBags::setMasterEqualityEngine(eq::EqualityEngine* eq)
+{
+  d_internal->setMasterEqualityEngine(eq);
+}
 
 }  // namespace bags
 }  // namespace theory

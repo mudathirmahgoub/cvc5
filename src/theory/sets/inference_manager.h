@@ -38,7 +38,7 @@ class InferenceManager
   typedef context::CDHashSet<Node, NodeHashFunction> NodeSet;
 
  public:
-  InferenceManager(TheorySetsPrivate& p,
+  InferenceManager(OutputChannel& out,
                    SolverState& s,
                    eq::EqualityEngine& e,
                    context::Context* c,
@@ -114,8 +114,8 @@ class InferenceManager
   /** constants */
   Node d_true;
   Node d_false;
-  /** the theory of sets which owns this */
-  TheorySetsPrivate& d_parent;
+  /** A reference to the output channel of the current theory*/
+  OutputChannel& d_out;
   /** Reference to the state object for the theory of sets */
   SolverState& d_state;
   /** Reference to the equality engine of theory of sets */

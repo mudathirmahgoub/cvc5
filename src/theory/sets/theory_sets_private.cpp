@@ -46,7 +46,7 @@ TheorySetsPrivate::TheorySetsPrivate(TheorySets& external,
       d_notify(*this),
       d_equalityEngine(d_notify, c, "theory::sets::ee", true),
       d_state(*this, d_equalityEngine, c, u),
-      d_im(*this, d_state, d_equalityEngine, c, u),
+      d_im(*external.d_out, d_state, d_equalityEngine, c, u),
       d_rels(new TheorySetsRels(d_state, d_im, d_equalityEngine, u)),
       d_cardSolver(
           new CardinalityExtension(d_state, d_im, d_equalityEngine, c, u)),

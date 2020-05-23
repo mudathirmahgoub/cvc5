@@ -25,12 +25,12 @@ namespace CVC4 {
 namespace theory {
 namespace sets {
 
-InferenceManager::InferenceManager(TheorySetsPrivate& p,
+InferenceManager::InferenceManager(OutputChannel& out,
                                    SolverState& s,
                                    eq::EqualityEngine& e,
                                    context::Context* c,
                                    context::UserContext* u)
-    : d_parent(p),
+    : d_out(out),
       d_state(s),
       d_ee(e),
       d_sentLemma(false),
@@ -103,7 +103,7 @@ bool InferenceManager::assertFactRec(Node fact, Node exp, int inferType)
       || (atom.getKind() == EQUAL && atom[0].getType().isSet()))
   {
     // send to equality engine
-    if (d_parent.assertFact(fact, exp))
+//    if (d_parent.assertFact(fact, exp))
     {
       d_addedFact = true;
       return true;
@@ -184,7 +184,7 @@ void InferenceManager::split(Node n, int reqPol)
   {
     Trace("sets-lemma") << "Sets::Require phase " << n << " " << (reqPol > 0)
                         << std::endl;
-    d_parent.getOutputChannel()->requirePhase(n, reqPol > 0);
+    d_out.requirePhase(n, reqPol > 0);
   }
 }
 void InferenceManager::flushLemmas(std::vector<Node>& lemmas, bool preprocess)
@@ -212,7 +212,7 @@ void InferenceManager::flushLemma(Node lem, bool preprocess)
   }
   Trace("sets-lemma-debug") << "Send lemma : " << lem << std::endl;
   d_lemmas_produced.insert(lem);
-  d_parent.getOutputChannel()->lemma(lem, false, preprocess);
+  d_out.lemma(lem, false, preprocess);
   d_sentLemma = true;
 }
 

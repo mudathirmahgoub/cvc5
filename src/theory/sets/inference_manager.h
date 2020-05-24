@@ -39,6 +39,7 @@ class InferenceManager
 
  public:
   InferenceManager(OutputChannel& out,
+                   std::function<void(bool polarity, TNode&)> f,
                    SolverState& s,
                    eq::EqualityEngine& e,
                    context::Context* c,
@@ -150,6 +151,8 @@ class InferenceManager
    * as a fact or as a lemma (see assertInference above).
    */
   bool assertFactRec(Node fact, Node exp, int inferType = 0);
+
+  std::function<void(bool polarity, TNode&)> d_assertFactPrivate;
 };
 
 }  // namespace sets

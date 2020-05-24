@@ -26,12 +26,14 @@ namespace theory {
 namespace sets {
 
 InferenceManager::InferenceManager(OutputChannel& out,
+                                   std::function<void(bool polarity, TNode&)> f,
                                    SolverState& s,
                                    eq::EqualityEngine& e,
                                    context::Context* c,
                                    context::UserContext* u)
     : d_out(out),
       d_state(s),
+      d_assertFactPrivate(f),
       d_ee(e),
       d_sentLemma(false),
       d_addedFact(false),
@@ -103,8 +105,23 @@ bool InferenceManager::assertFactRec(Node fact, Node exp, int inferType)
       || (atom.getKind() == EQUAL && atom[0].getType().isSet()))
   {
     // send to equality engine
-//    if (d_parent.assertFact(fact, exp))
+    Trace("sets-assert") << "TheorySets::assertFact : " << fact
+                         << ", exp = " << exp << std::endl;
+
+    if (!d_state.isEntailed(atom, polarity))
     {
+      if (atom.getKind() == kind::EQUAL)
+      {
+        d_ee.assertEquality(atom, polarity, exp);
+      }
+      else
+      {
+        d_ee.assertPredicate(atom, polarity, exp);
+      }
+      if (!d_state.isInConflict())
+      {
+        d_assertFactPrivate(polarity, atom);
+      }
       d_addedFact = true;
       return true;
     }

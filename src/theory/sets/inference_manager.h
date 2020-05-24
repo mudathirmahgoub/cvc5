@@ -149,8 +149,8 @@ class InferenceManager
    * as a fact or as a lemma (see assertInference above).
    */
   bool assertFactRec(Node fact, Node exp, int inferType = 0);
-
-  std::function<void(bool polarity, TNode&)> d_assertFactPrivate;
+  /** Lambda expression to assert theory specific atomic facts */
+  std::function<void(bool polarity, TNode& atom)> d_assertFactPrivate;
 };
 
 }  // namespace sets

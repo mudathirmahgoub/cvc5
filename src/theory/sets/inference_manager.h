@@ -24,8 +24,6 @@ namespace CVC4 {
 namespace theory {
 namespace sets {
 
-class TheorySetsPrivate;
-
 /** Inference manager
  *
  * This class manages inferences produced by the theory of sets. It manages

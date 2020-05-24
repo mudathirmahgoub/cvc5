@@ -15,8 +15,6 @@
 #include "theory/sets/inference_manager.h"
 
 #include "options/sets_options.h"
-#include "theory/sets/theory_sets.h"
-#include "theory/sets/theory_sets_private.h"
 
 using namespace std;
 using namespace CVC4::kind;

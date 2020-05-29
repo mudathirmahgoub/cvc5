@@ -9,14 +9,12 @@
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
  **
- ** \brief Implementation of the inference manager for the theory of sets
+ ** \brief Implementation of the inference manager for the theory of bags
  **/
 
-#include "theory/sets/inference_manager.h"
-
-#include "options/sets_options.h"
-#include "theory/sets/theory_sets.h"
-#include "theory/sets/theory_sets_private.h"
+#include "theory/bags/inference_manager.h"
+#include "theory/bags/theory_bags.h"
+#include "theory/bags/theory_bags_private.h"
 
 using namespace std;
 using namespace CVC4::kind;
@@ -51,21 +49,6 @@ void InferenceManager::reset()
 
 bool InferenceManager::assertFactRec(Node fact, Node exp, int inferType)
 {
-  // should we send this fact out as a lemma?
-  if ((options::setsInferAsLemmas() && inferType != -1) || inferType == 1)
-  {
-    if (d_state.isEntailed(fact, true))
-    {
-      return false;
-    }
-    Node lem = fact;
-    if (exp != d_true)
-    {
-      lem = NodeManager::currentNM()->mkNode(IMPLIES, exp, fact);
-    }
-    d_pendingLemmas.push_back(lem);
-    return true;
-  }
   Trace("bags-fact") << "Assert fact rec : " << fact << ", exp = " << exp
                      << std::endl;
   if (fact.isConst())

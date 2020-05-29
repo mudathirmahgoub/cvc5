@@ -21,17 +21,24 @@
 
 #include "theory/bags/solver_state.h"
 #include "theory/bags/theory_bags_rewriter.h"
+#include "theory/bags/inference_manager.h"
 #include "theory/uf/equality_engine.h"
 
 namespace CVC4 {
 namespace theory {
 namespace bags {
 
+/** Bag element type. First is the element, and second is its
+ * multiplicity*/
+typedef std::pair<Node, Node> BagElement;
+
 /** Internal classes, forward declared here */
 class TheoryBags;
 
 class TheoryBagsPrivate
 {
+  typedef context::CDHashMap<Node, bool, NodeHashFunction> NodeBoolMap;
+
  public:
   TheoryBagsPrivate(TheoryBags& external,
                     context::Context* c,
@@ -74,13 +81,18 @@ class TheoryBagsPrivate
   void eqNotifyDisequal(TNode t1, TNode t2, TNode reason);
 
   /** Assert fact holds in the current context with explanation exp.
-  *
-  * exp should be explainable by the equality engine of this class, and fact
-  * should be a literal.
-  */
+   *
+   * exp should be explainable by the equality engine of this class, and fact
+   * should be a literal.
+   */
   bool assertFact(Node fact, Node exp);
 
+  void checkDisequalities();
+
  private:
+
+  Node d_true;
+  Node d_false;
   /** generate and send out conflict node */
   void conflict(TNode, TNode);
 
@@ -106,12 +118,23 @@ class TheoryBagsPrivate
     void eqNotifyDisequal(TNode t1, TNode t2, TNode reason) override;
   } d_notify;
 
+  /** The inference manager of the bags solver */
+  InferenceManager d_im;
   /** The state of the bags solver at full effort */
   SolverState d_state;
   /** Equality engine */
   eq::EqualityEngine d_equalityEngine;
   /** The theory rewriter for this theory. */
   TheoryBagsRewriter d_rewriter;
+  /** a map that stores elements in each bag */
+  std::map<Node, BagElement> d_elements;
+  /** A map to store disequalities between bags*/
+  NodeBoolMap d_deq;
+  /** The set of terms that we have reduced via a lemma in the current user
+   * context */
+  NodeSet d_termProcessed;
+  /** the skolem cache */
+  SkolemCache d_skCache;
 }; /* class TheoryBagsPrivate */
 
 }  // namespace bags

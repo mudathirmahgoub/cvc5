@@ -170,6 +170,10 @@ bool TypeNode::isFiniteInternal(bool usortFinite)
     {
       ret = getSetElementType().isFiniteInternal(usortFinite);
     }
+    else if (isBag())
+    {
+      ret = false;
+    }
     else if (isFunction())
     {
       ret = true;

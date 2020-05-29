@@ -152,7 +152,7 @@ struct BagsCountTypeRule
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }
     }
-    return nodeManager->booleanType();
+    return nodeManager->integerType();
   }
 }; /* struct BagsCountTypeRule */
 

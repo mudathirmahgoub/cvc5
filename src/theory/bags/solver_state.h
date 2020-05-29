@@ -98,11 +98,16 @@ class SolverState
    */
   Node getEmptyBagEqClass(TypeNode tn) const;
   /**
-  * Get a variable bag in the equivalence class with representative r, or null
-  * if none exist.
-  */
+   * Get a variable bag in the equivalence class with representative r, or null
+   * if none exist.
+   */
   Node getVariableBag(Node r) const;
 
+  /**
+   * Get the skolem cache of this theory, which manages a database of introduced
+   * skolem variables used for various inferences.
+   */
+  SkolemCache& getSkolemCache() { return d_skCache; }
 
  private:
   /** constants */
@@ -124,6 +129,8 @@ class SolverState
   std::map<TypeNode, Node> d_emptybag;
   /** Map from equivalence classes to a variable sets in it */
   std::map<Node, Node> d_var_bag;
+  /** the skolem cache */
+  SkolemCache d_skCache;
 
   // --------------------------------------- end commonly used terms
 

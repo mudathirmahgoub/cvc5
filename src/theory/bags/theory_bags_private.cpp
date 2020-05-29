@@ -31,8 +31,12 @@ TheoryBagsPrivate::TheoryBagsPrivate(TheoryBags& external,
     : d_external(external),
       d_notify(*this),
       d_equalityEngine(d_notify, c, "theory::bags::ee", true),
-      d_state(*this, d_equalityEngine, c, u)
+      d_state(*this, d_equalityEngine, c, u),
+      d_deq(c),
+      d_im(*this, d_state, d_equalityEngine, c, u)
 {
+  d_true = NodeManager::currentNM()->mkConst(true);
+  d_false = NodeManager::currentNM()->mkConst(false);
 }
 void TheoryBagsPrivate::setMasterEqualityEngine(eq::EqualityEngine* eq)
 {
@@ -56,6 +60,10 @@ void TheoryBagsPrivate::check(Theory::Effort level)
     // assert the fact
     assertFact(fact, fact);
   }
+
+  // check bags disequalities
+  checkDisequalities();
+
   Trace("bags-check") << "Bags finished assertions effort " << level
                       << std::endl;
   // invoke full effort check, relations check
@@ -63,6 +71,60 @@ void TheoryBagsPrivate::check(Theory::Effort level)
   {
   }
   Trace("bags-check") << "Bags finish Check effort " << level << std::endl;
+}
+
+void TheoryBagsPrivate::checkDisequalities()
+{
+  // disequalities
+  Trace("bags") << "TheorySetsPrivate: check disequalities..." << std::endl;
+  NodeManager* nm = NodeManager::currentNM();
+  for (NodeBoolMap::const_iterator it = d_deq.begin(); it != d_deq.end(); ++it)
+  {
+    if (!(*it).second)
+    {
+      // not active
+      continue;
+    }
+    Node deq = (*it).first;
+    // check if it is already satisfied
+    Assert(d_equalityEngine.hasTerm(deq[0])
+           && d_equalityEngine.hasTerm(deq[1]));
+    Node r1 = d_equalityEngine.getRepresentative(deq[0]);
+    Node r2 = d_equalityEngine.getRepresentative(deq[1]);
+    bool is_sat = d_state.isBagDisequalityEntailed(r1, r2);
+    Trace("bags-debug") << "Check disequality " << deq
+                        << ", is_sat = " << is_sat << std::endl;
+    // will process regardless of sat/processed/unprocessed
+    d_deq[deq] = false;
+
+    if (is_sat)
+    {
+      // already satisfied
+      continue;
+    }
+    if (d_termProcessed.find(deq) != d_termProcessed.end())
+    {
+      // already added lemma
+      continue;
+    }
+    d_termProcessed.insert(deq);
+    d_termProcessed.insert(deq[1].eqNode(deq[0]));
+    Trace("bags") << "Process Disequality : " << deq.negate() << std::endl;
+    TypeNode elementType = deq[0].getType().getBagElementType();
+    Node x = d_state.getSkolemCache().mkTypedSkolemCached(
+        elementType, deq[0], deq[1], SkolemCache::SK_DISEQUAL, "sde");
+    Node count1 = nm->mkNode(COUNT, x, deq[0]);
+    Node count2 = nm->mkNode(COUNT, x, deq[1]);
+    Node lem = nm->mkNode(EQUAL, count1, count2).negate();
+    lem = Rewriter::rewrite(lem);
+
+    d_im.assertInference(lem, d_true, "diseq", 1);
+    d_im.flushPendingLemmas();
+    if (d_im.hasProcessed())
+    {
+      return;
+    }
+  }
 }
 
 bool TheoryBagsPrivate::assertFact(Node fact, Node exp)
@@ -104,7 +166,11 @@ Theory::PPAssertStatus TheoryBagsPrivate::ppAssert(
 }
 void TheoryBagsPrivate::presolve() {}
 void TheoryBagsPrivate::propagate(Theory::Effort) {}
-OutputChannel* TheoryBagsPrivate::getOutputChannel() { return nullptr; }
+OutputChannel* TheoryBagsPrivate::getOutputChannel()
+{
+  return d_external.d_out;
+}
+
 Valuation& TheoryBagsPrivate::getValuation() { return d_external.d_valuation; }
 
 bool TheoryBagsPrivate::propagate(TNode literal)
@@ -135,7 +201,17 @@ void TheoryBagsPrivate::eqNotifyPreMerge(TNode t1, TNode t2) {}
 
 void TheoryBagsPrivate::eqNotifyPostMerge(TNode t1, TNode t2) {}
 
-void TheoryBagsPrivate::eqNotifyDisequal(TNode t1, TNode t2, TNode reason) {}
+void TheoryBagsPrivate::eqNotifyDisequal(TNode t1, TNode t2, TNode reason)
+{
+  if (t1.getType().isBag())
+  {
+    Node eq = t1.eqNode(t2);
+    if (d_deq.find(eq) == d_deq.end())
+    {
+      d_deq[eq] = true;
+    }
+  }
+}
 
 /**************************** eq::NotifyClass *****************************/
 /**************************** eq::NotifyClass *****************************/

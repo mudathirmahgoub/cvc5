@@ -145,6 +145,7 @@ bool SolverState::isBagDisequalityEntailedInternal(Node a,
                                                    Node b,
                                                    Node re) const
 {
+  return false;
 }
 
 Node SolverState::getEmptyBag(TypeNode tn)

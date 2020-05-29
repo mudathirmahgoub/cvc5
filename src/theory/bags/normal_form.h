@@ -68,7 +68,7 @@ class NormalForm
       // {BiggerNodeId}) ... {BiggestNodeId})
 
       // store BiggestNodeId in prvs
-      if (n[1].getKind() != kind::SINGLETON)
+      if (n[1].getKind() != kind::BAG_SINGLETON)
       {
         return false;
       }
@@ -85,7 +85,7 @@ class NormalForm
       // check intermediate nodes
       while (n.getKind() == kind::DISJOINT_UNION)
       {
-        if (n[1].getKind() != kind::SINGLETON)
+        if (n[1].getKind() != kind::BAG_SINGLETON)
         {
           return false;
         }
@@ -169,9 +169,9 @@ class NormalForm
     }
   }
   static Node mkBinaryOp(Kind k,
-                    std::vector<Node>& els,
-                    TypeNode tn,
-                    unsigned index = 0)
+                         std::vector<Node>& els,
+                         TypeNode tn,
+                         unsigned index = 0)
   {
     if (index >= els.size())
     {

@@ -56,7 +56,11 @@ Node BagEnumerator::operator*()
 
 BagEnumerator& BagEnumerator::operator++()
 {
-  d_currentBag = d_nodeManager->mkNode(kind::INSERT, d_element, d_currentBag);
+  // increase the multiplicity by one
+  Node one = d_nodeManager->mkConst(Rational(1));
+  Node singleton = d_nodeManager->mkNode(kind::BAG_SINGLETON, d_element, one);
+  d_currentBag =
+      d_nodeManager->mkNode(kind::DISJOINT_UNION, singleton, d_currentBag);
 
   Assert(d_currentBag.isConst());
   Assert(d_currentBag == Rewriter::rewrite(d_currentBag));

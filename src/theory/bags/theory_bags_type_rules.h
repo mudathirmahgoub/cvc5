@@ -88,7 +88,7 @@ struct BagsSubsetTypeRule
                                      bool check)
   {
     Assert(n.getKind() == kind::BAG_SUBSET);
-    TypeNode bagType= n[0].getType(check);
+    TypeNode bagType = n[0].getType(check);
     if (check)
     {
       if (!bagType.isBag())
@@ -158,12 +158,39 @@ struct BagsCountTypeRule
 
 struct BagsSingletonTypeRule
 {
-  inline static TypeNode computeType(NodeManager* nodeManager,
-                                     TNode n,
-                                     bool check)
+  inline static TypeNode computeType(NodeManager* nm, TNode n, bool check)
   {
     Assert(n.getKind() == kind::BAG_SINGLETON);
-    return nodeManager->mkSetType(n[0].getType(check));
+    if (check)
+    {
+      if (n.getNumChildren() != 2)
+      {
+        std::stringstream ss;
+        ss << "operands in term " << n << " are " << n.getNumChildren()
+           << ", but bag-singleton expects 2 operands.";
+        throw TypeCheckingExceptionPrivate(n, ss.str());
+      }
+      TypeNode type1 = n[1].getType(check);
+      if (!type1.isInteger())
+      {
+        std::stringstream ss;
+        ss << "bag-singleton expects an integer for " << n[1] << ". Found"
+           << type1;
+        throw TypeCheckingExceptionPrivate(n, ss.str());
+      }
+      if (n[1].isConst())
+      {
+        Rational count = n[1].getConst<Rational>();
+        if (count <= Rational::fromDecimal("0"))
+        {
+          std::stringstream ss;
+          ss << "bag-singleton expects a positive integer. Found " << n[1];
+          throw TypeCheckingExceptionPrivate(n, ss.str());
+        }
+      }
+    }
+
+    return nm->mkBagType(n[0].getType(check));
   }
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
@@ -193,7 +220,7 @@ struct BagsCardTypeRule
                                      bool check)
   {
     Assert(n.getKind() == kind::BAG_CARD);
-    TypeNode bagType= n[0].getType(check);
+    TypeNode bagType = n[0].getType(check);
     if (check)
     {
       if (!bagType.isBag())
@@ -219,7 +246,7 @@ struct BagsChooseTypeRule
                                      bool check)
   {
     Assert(n.getKind() == kind::BAG_CHOOSE);
-    TypeNode bagType= n[0].getType(check);
+    TypeNode bagType = n[0].getType(check);
     if (check)
     {
       if (!bagType.isBag())
@@ -247,7 +274,7 @@ struct BagsInsertTypeRule
     Assert(n.getKind() == kind::BAG_INSERT);
     size_t numChildren = n.getNumChildren();
     Assert(numChildren >= 2);
-    TypeNode bagType= n[numChildren - 1].getType(check);
+    TypeNode bagType = n[numChildren - 1].getType(check);
     if (check)
     {
       if (!bagType.isBag())
@@ -280,7 +307,7 @@ struct BagsProperties
 {
   inline static Cardinality computeCardinality(TypeNode type)
   {
-    //ToDo: review this
+    // ToDo: review this
     return Cardinality::UNKNOWN_CARD;
   }
 

@@ -21,8 +21,8 @@
 
 #include "expr/kind.h"
 #include "expr/type_node.h"
-#include "theory/rewriter.h"
 #include "theory/bags/normal_form.h"
+#include "theory/rewriter.h"
 #include "theory/type_enumerator.h"
 #include "theory_bags_type_enumerator.h"
 

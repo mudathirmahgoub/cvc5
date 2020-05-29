@@ -92,7 +92,6 @@ class TheoryBagsPrivate
   void checkDisequalities();
 
  private:
-
   Node d_true;
   Node d_false;
   /** generate and send out conflict node */

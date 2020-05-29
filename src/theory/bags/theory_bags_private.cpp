@@ -171,7 +171,7 @@ bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m)
   set<Node> termSet;
   // Compute terms appearing in assertions and shared terms
   d_external.computeRelevantTerms(termSet);
-  
+
   // Assert equalities and disequalities to the model
   if (!m->assertEqualityEngine(&d_equalityEngine, &termSet))
   {

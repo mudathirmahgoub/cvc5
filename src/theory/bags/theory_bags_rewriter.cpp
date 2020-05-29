@@ -93,7 +93,6 @@ RewriteResponse TheoryBagsRewriter::postRewrite(TNode node)
         message << "This case is not implemented yet";
         throw LogicException(message.str());
       }
-
     }
   }
   return RewriteResponse(REWRITE_DONE, node);

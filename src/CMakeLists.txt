@@ -190,6 +190,8 @@ libcvc4_add_sources(
   prop/cnf_stream.h
   prop/cryptominisat.cpp
   prop/cryptominisat.h
+  prop/kissat.cpp
+  prop/kissat.h
   prop/minisat/core/Dimacs.h
   prop/minisat/core/Solver.cc
   prop/minisat/core/Solver.h
@@ -858,6 +860,10 @@ if(USE_CRYPTOMINISAT)
   target_link_libraries(cvc4 ${CryptoMiniSat_LIBRARIES})
   target_include_directories(cvc4 PRIVATE ${CryptoMiniSat_INCLUDE_DIR})
 endif()
+if(USE_KISSAT)
+  target_link_libraries(cvc4 ${Kissat_LIBRARIES})
+  target_include_directories(cvc4 PRIVATE ${Kissat_INCLUDE_DIR})
+endif()
 if(USE_DRAT2ER)
   target_link_libraries(cvc4 ${Drat2Er_LIBRARIES})
   target_include_directories(cvc4 PRIVATE ${Drat2Er_INCLUDE_DIR})
@@ -935,6 +941,7 @@ install(FILES
           expr/emptyset.h
           expr/emptybag.h
           expr/expr_iomanip.h
+          expr/expr_sequence.h
           expr/record.h
           expr/symbol_table.h
           expr/type.h

@@ -388,6 +388,7 @@ void CheckSatCommand::invoke(SmtEngine* smtEngine)
   }
   catch (exception& e)
   {
+    std::cerr << e.what()<<std::endl;
     d_commandStatus = new CommandFailure(e.what());
   }
 }

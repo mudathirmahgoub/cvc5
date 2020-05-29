@@ -69,8 +69,9 @@ BagEnumerator& BagEnumerator::operator++()
         d_nodeManager->mkNode(kind::DISJOINT_UNION, singleton, d_currentBag);
   }
 
+  d_currentBag = Rewriter::rewrite(d_currentBag);
+
   Assert(d_currentBag.isConst());
-  Assert(d_currentBag == Rewriter::rewrite(d_currentBag));
 
   Trace("bag-type-enum") << "BagEnumerator::operator++ d_currentBag = "
                          << d_currentBag << std::endl;

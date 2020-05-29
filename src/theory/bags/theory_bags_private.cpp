@@ -17,6 +17,7 @@
 #include "theory/bags/theory_bags_private.h"
 
 #include "theory/bags/theory_bags.h"
+#include "theory/theory_model.h"
 
 using namespace std;
 using namespace CVC4::kind;
@@ -164,7 +165,21 @@ bool TheoryBagsPrivate::assertFact(Node fact, Node exp)
 }
 void TheoryBagsPrivate::assertFactPrivate(bool polarity, TNode& atom) {}
 
-bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m) { return true; }
+bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m)
+{
+  Trace("bags-model") << "Bag collect model info" << std::endl;
+  set<Node> termSet;
+  // Compute terms appearing in assertions and shared terms
+  d_external.computeRelevantTerms(termSet);
+  
+  // Assert equalities and disequalities to the model
+  if (!m->assertEqualityEngine(&d_equalityEngine, &termSet))
+  {
+    return false;
+  }
+
+  return true;
+}
 Node TheoryBagsPrivate::explain(TNode) { return CVC4::Node(); }
 EqualityStatus TheoryBagsPrivate::getEqualityStatus(TNode a, TNode b)
 {

@@ -257,7 +257,8 @@ class TheorySetsPrivate {
   bool isEntailed(Node n, bool pol) { return d_state.isEntailed(n, pol); }
   /** Is x entailed to be a member of set s in the current context? */
   bool isMember(Node x, Node s);
-
+  /** theory specific facts  */
+  void assertFactPrivate(bool polarity, TNode& atom);
  private:
   /** get choose function
    *

@@ -46,7 +46,15 @@ TheorySetsPrivate::TheorySetsPrivate(TheorySets& external,
       d_notify(*this),
       d_equalityEngine(d_notify, c, "theory::sets::ee", true),
       d_state(*this, d_equalityEngine, c, u),
-      d_im(*this, d_state, d_equalityEngine, c, u),
+      d_im(
+          *external.d_out,
+          [=](bool polarity, TNode& atom) {
+            this->assertFactPrivate(polarity, atom);
+          },
+          d_state,
+          d_equalityEngine,
+          c,
+          u),
       d_rels(new TheorySetsRels(d_state, d_im, d_equalityEngine, u)),
       d_cardSolver(
           new CardinalityExtension(d_state, d_im, d_equalityEngine, c, u)),
@@ -294,61 +302,65 @@ bool TheorySetsPrivate::assertFact(Node fact, Node exp)
     }
     if (!d_state.isInConflict())
     {
-      if (atom.getKind() == kind::MEMBER && polarity)
-      {
-        // check if set has a value, if so, we can propagate
-        Node r = d_equalityEngine.getRepresentative(atom[1]);
-        EqcInfo* e = getOrMakeEqcInfo(r, true);
-        if (e)
-        {
-          Node s = e->d_singleton;
-          if (!s.isNull())
-          {
-            Node pexp = NodeManager::currentNM()->mkNode(
-                kind::AND, atom, atom[1].eqNode(s));
-            d_keep.insert(pexp);
-            if (s.getKind() == kind::SINGLETON)
-            {
-              if (s[0] != atom[0])
-              {
-                Trace("sets-prop")
-                    << "Propagate mem-eq : " << pexp << std::endl;
-                Node eq = s[0].eqNode(atom[0]);
-                d_keep.insert(eq);
-                assertFact(eq, pexp);
-              }
-            }
-            else
-            {
-              Trace("sets-prop")
-                  << "Propagate mem-eq conflict : " << pexp << std::endl;
-              d_state.setConflict(pexp);
-            }
-          }
-        }
-        // add to membership list
-        NodeIntMap::iterator mem_i = d_members.find(r);
-        int n_members = 0;
-        if (mem_i != d_members.end())
-        {
-          n_members = (*mem_i).second;
-        }
-        d_members[r] = n_members + 1;
-        if (n_members < (int)d_members_data[r].size())
-        {
-          d_members_data[r][n_members] = atom;
-        }
-        else
-        {
-          d_members_data[r].push_back(atom);
-        }
-      }
+      assertFactPrivate(polarity, atom);
     }
     return true;
   }
   else
   {
     return false;
+  }
+}
+void TheorySetsPrivate::assertFactPrivate(bool polarity, TNode& atom)
+{
+  if (atom.getKind() == MEMBER && polarity)
+  {
+    // check if set has a value, if so, we can propagate
+    Node r = d_equalityEngine.getRepresentative(atom[1]);
+    EqcInfo* e = getOrMakeEqcInfo(r, true);
+    if (e)
+    {
+      Node s = e->d_singleton;
+      if (!s.isNull())
+      {
+        Node pexp = NodeManager::currentNM()->mkNode(
+            AND, atom, atom[1].eqNode(s));
+        d_keep.insert(pexp);
+        if (s.getKind() == SINGLETON)
+        {
+          if (s[0] != atom[0])
+          {
+            Trace("sets-prop")
+                << "Propagate mem-eq : " << pexp << endl;
+            Node eq = s[0].eqNode(atom[0]);
+            d_keep.insert(eq);
+            assertFact(eq, pexp);
+          }
+        }
+        else
+        {
+          Trace("sets-prop")
+              << "Propagate mem-eq conflict : " << pexp << endl;
+          d_state.setConflict(pexp);
+        }
+      }
+    }
+    // add to membership list
+    NodeIntMap::iterator mem_i = d_members.find(r);
+    int n_members = 0;
+    if (mem_i != d_members.end())
+    {
+      n_members = (*mem_i).second;
+    }
+    d_members[r] = n_members + 1;
+    if (n_members < (int)d_members_data[r].size())
+    {
+      d_members_data[r][n_members] = atom;
+    }
+    else
+    {
+      d_members_data[r].push_back(atom);
+    }
   }
 }
 

@@ -24,8 +24,6 @@ namespace CVC4 {
 namespace theory {
 namespace sets {
 
-class TheorySetsPrivate;
-
 /** Inference manager
  *
  * This class manages inferences produced by the theory of sets. It manages
@@ -38,7 +36,8 @@ class InferenceManager
   typedef context::CDHashSet<Node, NodeHashFunction> NodeSet;
 
  public:
-  InferenceManager(TheorySetsPrivate& p,
+  InferenceManager(OutputChannel& out,
+                   std::function<void(bool polarity, TNode&)> f,
                    SolverState& s,
                    eq::EqualityEngine& e,
                    context::Context* c,
@@ -114,8 +113,8 @@ class InferenceManager
   /** constants */
   Node d_true;
   Node d_false;
-  /** the theory of sets which owns this */
-  TheorySetsPrivate& d_parent;
+  /** A reference to the output channel of the current theory*/
+  OutputChannel& d_out;
   /** Reference to the state object for the theory of sets */
   SolverState& d_state;
   /** Reference to the equality engine of theory of sets */
@@ -150,6 +149,8 @@ class InferenceManager
    * as a fact or as a lemma (see assertInference above).
    */
   bool assertFactRec(Node fact, Node exp, int inferType = 0);
+  /** Lambda expression to assert theory specific atomic facts */
+  std::function<void(bool polarity, TNode& atom)> d_assertFactPrivate;
 };
 
 }  // namespace sets

@@ -17,11 +17,31 @@
 #ifndef CVC4__THEORY__SETS__INFERENCE_MANAGER_H
 #define CVC4__THEORY__SETS__INFERENCE_MANAGER_H
 
-#include "theory/sets/solver_state.h"
 #include "theory/uf/equality_engine.h"
 
 namespace CVC4 {
 namespace theory {
+
+class State
+{
+ public:
+  /** Are we currently in conflict? */
+  virtual bool isInConflict() const = 0;
+  /**
+   * Indicate that we are in conflict, without a conflict clause. This is
+   * called, for instance, when we have propagated a conflicting literal.
+   */
+  virtual void setConflict() = 0;
+  /** Set conf is a conflict node to be sent on the output channel.  */
+  virtual void setConflict(Node conf) = 0;
+  /** Is a=b according to equality reasoning in the current context? */
+  virtual bool areEqual(Node a, Node b) const = 0;
+  /** Is a!=b according to equality reasoning in the current context? */
+  virtual bool areDisequal(Node a, Node b) const = 0;
+  /** Is formula n entailed to have polarity pol in the current context? */
+  virtual bool isEntailed(Node n, bool pol) const = 0;
+};
+
 namespace sets {
 
 /** Inference manager
@@ -38,7 +58,7 @@ class InferenceManager
  public:
   InferenceManager(OutputChannel& out,
                    std::function<void(bool polarity, TNode&)> f,
-                   SolverState& s,
+                   State& s,
                    eq::EqualityEngine& e,
                    context::Context* c,
                    context::UserContext* u);
@@ -116,7 +136,7 @@ class InferenceManager
   /** A reference to the output channel of the current theory*/
   OutputChannel& d_out;
   /** Reference to the state object for the theory of sets */
-  SolverState& d_state;
+  State& d_state;
   /** Reference to the equality engine of theory of sets */
   eq::EqualityEngine& d_ee;
   /** pending lemmas */

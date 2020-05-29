@@ -33,7 +33,15 @@ TheoryBagsPrivate::TheoryBagsPrivate(TheoryBags& external,
       d_equalityEngine(d_notify, c, "theory::bags::ee", true),
       d_state(*this, d_equalityEngine, c, u),
       d_deq(c),
-      d_im(*this, d_state, d_equalityEngine, c, u)
+      d_im(
+          *external.d_out,
+          [=](bool polarity, TNode& atom) {
+            this->assertFactPrivate(polarity, atom);
+          },
+          d_state,
+          d_equalityEngine,
+          c,
+          u)
 {
   d_true = NodeManager::currentNM()->mkConst(true);
   d_false = NodeManager::currentNM()->mkConst(false);
@@ -143,6 +151,10 @@ bool TheoryBagsPrivate::assertFact(Node fact, Node exp)
     {
       d_equalityEngine.assertPredicate(atom, polarity, exp);
     }
+    if (!d_state.isInConflict())
+    {
+      assertFactPrivate(polarity, atom);
+    }
     return true;
   }
   else
@@ -150,6 +162,7 @@ bool TheoryBagsPrivate::assertFact(Node fact, Node exp)
     return false;
   }
 }
+void TheoryBagsPrivate::assertFactPrivate(bool polarity, TNode& atom) {}
 
 bool TheoryBagsPrivate::collectModelInfo(TheoryModel* m) { return true; }
 Node TheoryBagsPrivate::explain(TNode) { return CVC4::Node(); }

@@ -353,8 +353,6 @@ libcvc4_add_sources(
   theory/assertion.h
   theory/atom_requests.cpp
   theory/atom_requests.h
-  theory/bags/inference_manager.cpp
-  theory/bags/inference_manager.h
   theory/bags/normal_form.h
   theory/bags/skolem_cache.cpp
   theory/bags/skolem_cache.h

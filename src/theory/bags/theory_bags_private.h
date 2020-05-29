@@ -21,7 +21,7 @@
 
 #include "theory/bags/solver_state.h"
 #include "theory/bags/theory_bags_rewriter.h"
-#include "theory/bags/inference_manager.h"
+#include "theory/sets/inference_manager.h"
 #include "theory/uf/equality_engine.h"
 
 namespace CVC4 {
@@ -86,6 +86,8 @@ class TheoryBagsPrivate
    * should be a literal.
    */
   bool assertFact(Node fact, Node exp);
+  /** theory specific facts  */
+  void assertFactPrivate(bool polarity, TNode& atom);
 
   void checkDisequalities();
 
@@ -119,7 +121,7 @@ class TheoryBagsPrivate
   } d_notify;
 
   /** The inference manager of the bags solver */
-  InferenceManager d_im;
+  sets::InferenceManager d_im;
   /** The state of the bags solver at full effort */
   SolverState d_state;
   /** Equality engine */

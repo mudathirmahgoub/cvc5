@@ -25,7 +25,7 @@ namespace sets {
 
 InferenceManager::InferenceManager(OutputChannel& out,
                                    std::function<void(bool polarity, TNode&)> f,
-                                   SolverState& s,
+                                   State& s,
                                    eq::EqualityEngine& e,
                                    context::Context* c,
                                    context::UserContext* u)

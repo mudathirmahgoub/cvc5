@@ -22,6 +22,7 @@
 
 #include "context/cdhashset.h"
 #include "theory/sets/skolem_cache.h"
+#include "theory/sets/inference_manager.h"
 #include "theory/uf/equality_engine.h"
 
 namespace CVC4 {
@@ -42,7 +43,7 @@ class TheorySetsPrivate;
  * to initialize the information in this class regarding full effort checks.
  * Other query calls are then valid for the remainder of the full effort check.
  */
-class SolverState
+class SolverState : public State
 {
   typedef context::CDHashMap<Node, Node, NodeHashFunction> NodeMap;
 

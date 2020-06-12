@@ -29,7 +29,7 @@ RewriteResponse TheoryBagsRewriter::postRewrite(TNode node)
 {
   NodeManager* nm = NodeManager::currentNM();
   Kind kind = node.getKind();
-  Trace("sets-postrewrite") << "Process: " << node << std::endl;
+  Trace("bags-postrewrite") << "Process: " << node << std::endl;
 
   if (node.isConst())
   {

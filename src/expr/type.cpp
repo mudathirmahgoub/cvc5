@@ -360,6 +360,12 @@ bool Type::isBag() const
   return d_typeNode->isBag();
 }
 
+bool Type::isSequence() const
+{
+  NodeManagerScope nms(d_nodeManager);
+  return d_typeNode->isSequence();
+}
+
 /** Is this a sort kind */
 bool Type::isSort() const {
   NodeManagerScope nms(d_nodeManager);
@@ -528,6 +534,11 @@ BagType::BagType(const Type& t) : Type(t)
   PrettyCheckArgument(isNull() || isBag(), this);
 }
 
+SequenceType::SequenceType(const Type& t) : Type(t)
+{
+  PrettyCheckArgument(isNull() || isSequence(), this);
+}
+
 SortType::SortType(const Type& t) : Type(t)
 {
   PrettyCheckArgument(isNull() || isSort(), this);
@@ -565,6 +576,11 @@ Type SetType::getElementType() const {
 Type BagType::getElementType() const
 {
   return makeType(d_typeNode->getBagElementType());
+}
+
+Type SequenceType::getElementType() const
+{
+  return makeType(d_typeNode->getSequenceElementType());
 }
 
 DatatypeType ConstructorType::getRangeType() const {

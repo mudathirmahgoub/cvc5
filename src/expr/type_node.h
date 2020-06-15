@@ -452,7 +452,7 @@ public:
   /**
    * Is this a first-class type?
    * First-class types are types for which:
-   * (1) we handle equalities between terms of that type, and
+   * (1) we handle equalities between terms of that type, and 
    * (2) they are allowed to be parameters of parametric types (e.g. index or element types of arrays).
    *
    * Examples of types that are not first-class include constructor types,
@@ -521,6 +521,9 @@ public:
   /** Is this a Bag type? */
   bool isBag() const;
 
+  /** Is this a Sequence type? */
+  bool isSequence() const;
+
   /** Get the index type (for array types) */
   TypeNode getArrayIndexType() const;
 
@@ -542,6 +545,8 @@ public:
   /** Get the element type (for bag types) */
   TypeNode getBagElementType() const;
 
+  /** Get the element type (for sequence types) */
+  TypeNode getSequenceElementType() const;
   /**
    * Is this a function type?  Function-like things (e.g. datatype
    * selectors) that aren't actually functions are NOT considered
@@ -707,7 +712,7 @@ public:
   static TypeNode leastCommonTypeNode(TypeNode t0, TypeNode t1);
   static TypeNode mostCommonTypeNode(TypeNode t0, TypeNode t1);
 
-  /** get ensure type condition
+  /** get ensure type condition 
    *  Return value is a condition that implies that n has type tn.
   */
   static Node getEnsureTypeCondition( Node n, TypeNode tn );
@@ -973,6 +978,11 @@ inline bool TypeNode::isSet() const {
 inline bool TypeNode::isBag() const
 {
   return getKind() == kind::BAG_TYPE;
+}
+
+inline bool TypeNode::isSequence() const
+{
+  return getKind() == kind::SEQUENCE_TYPE;
 }
 
 inline TypeNode TypeNode::getSetElementType() const {

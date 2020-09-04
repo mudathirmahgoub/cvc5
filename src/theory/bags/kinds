@@ -1,0 +1,82 @@
+# kinds                                                               -*- sh -*-
+#
+# For documentation on this file format, please refer to
+# src/theory/builtin/kinds.
+#
+
+theory THEORY_BAGS \
+    ::CVC4::theory::bags::TheoryBags \
+    "theory/bags/theory_bags.h"
+typechecker "theory/bags/theory_bags_type_rules.h"
+rewriter ::CVC4::theory::bags::TheoryBagsRewriter \
+    "theory/bags/theory_bags_rewriter.h"
+
+properties parametric
+properties check propagate presolve
+
+# constants
+constant EMPTYBAG \
+    ::CVC4::EmptyBag \
+    ::CVC4::EmptyBagHashFunction \
+    "expr/emptybag.h" \
+    "the empty bag constant; payload is an instance of the CVC4::EmptyBag class"
+
+# the type
+operator BAG_TYPE 1 "bag type, takes as parameter the type of the elements"
+
+    "theory/bags/theory_bags_type_rules.h"
+well-founded BAG_TYPE \
+    "::CVC4::theory::bags::BagsProperties::isWellFounded(%TYPE%)" \
+    "::CVC4::theory::bags::BagsProperties::mkGroundTerm(%TYPE%)" \
+    "theory/bags/theory_bags_type_rules.h"
+enumerator BAG_TYPE \
+    "::CVC4::theory::bags::BagEnumerator" \
+    "theory/bags/theory_bags_type_enumerator.h"
+
+# operators
+operator BAG_UNION         2  "set union for bags (max)"
+operator DISJOINT_UNION    2  "disjoint union for bags (sum)"
+operator BAG_INTERSECTION  2  "bag intersection (min)"
+
+# {("a", 2), ("b", 3)} \ {("a", 1)} = {("a", 1), ("b", 3)}
+operator BAG_DIFFERENCE1    2  "bag difference1 (subtracts multiplicities)"
+
+# {("a", 2), ("b", 3)} \\ {("a", 1)} = {("b", 3)}
+operator BAG_DIFFERENCE2    2  "bag difference2 (removes shared elements)"
+
+operator BAG_SUBSET        2  "subset predicate for bags (less than or equal multiplicities)"
+operator COUNT             2  "multiplicity of an element in a bag"
+operator BAG_SINGLETON     2  "the bag of a single element given as a parameter along with its multiplicity"
+operator BAG_INSERT        2: "bag obtained by inserting elements (first N-1 parameters) into a bag (the last parameter)"
+operator BAG_CARD          1  "bag cardinality operator"
+
+# The operator choose returns an element from a given bag.
+# If bag A = {("a", 1)}, then the term (choose A) is equivalent to the term a.
+# If the bag is empty, then (choose A) is an arbitrary value.
+# If the bag has cardinality > 1, then (choose A) will deterministically return an element in A.
+operator BAG_CHOOSE        1  "return an element in the bag given as a parameter"
+
+typerule BAG_UNION          ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule DISJOINT_UNION     ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_INTERSECTION   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_DIFFERENCE1    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_DIFFERENCE2    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+typerule BAG_SUBSET         ::CVC4::theory::bags::BagsSubsetTypeRule
+typerule COUNT              ::CVC4::theory::bags::BagsCountTypeRule
+typerule BAG_SINGLETON      ::CVC4::theory::bags::BagsSingletonTypeRule
+typerule EMPTYBAG           ::CVC4::theory::bags::EmptyBagTypeRule
+typerule BAG_INSERT         ::CVC4::theory::bags::BagsInsertTypeRule
+typerule BAG_CARD           ::CVC4::theory::bags::BagsCardTypeRule
+typerule BAG_CHOOSE         ::CVC4::theory::bags::BagsChooseTypeRule
+
+construle BAG_UNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle DISJOINT_UNION    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_INTERSECTION  ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_DIFFERENCE1   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_DIFFERENCE2   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
+construle BAG_SINGLETON     ::CVC4::theory::bags::BagsSingletonTypeRule
+construle BAG_INSERT        ::CVC4::theory::bags::BagsInsertTypeRule
+construle BAG_CARD          ::CVC4::theory::bags::BagsCardTypeRule
+construle BAG_CHOOSE        ::CVC4::theory::bags::BagsChooseTypeRule
+
+endtheory

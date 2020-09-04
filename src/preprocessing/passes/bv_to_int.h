@@ -18,10 +18,18 @@
  ** Tr(x) = fresh_x for every bit-vector variable x, where fresh_x is a fresh
  **         integer variable.
  ** Tr(c) = the integer value of c, for any bit-vector constant c.
- ** Tr((bvadd s t)) = Tr(s) + Tr(t) mod 2^k, where k is the bit width of 
+ ** Tr((bvadd s t)) = Tr(s) + Tr(t) mod 2^k, where k is the bit width of
  **         s and t.
  ** Similar transformations are done for bvmul, bvsub, bvudiv, bvurem, bvneg,
  **         bvnot, bvconcat, bvextract
+ ** Tr((_ zero_extend m) x) = Tr(x)
+ ** Tr((_ sign_extend m) x) = ite(msb(x)=0, x, 2^k*(2^m-1) + x))
+ ** explanation: if the msb is 0, this is the same as zero_extend,
+ ** which does not change the integer value.
+ ** If the msb is 1, then the result should correspond to
+ ** concat(1...1, x), with m 1's.
+ ** m 1's is 2^m-1, and multiplying it by x's width (k) moves it
+ ** to the front.
  **
  ** Tr((bvand s t)) depends on the granularity, which is provided by the user
  ** when enabling this preprocessing pass.
@@ -62,6 +70,9 @@
 #ifndef __CVC4__PREPROCESSING__PASSES__BV_TO_INT_H
 #define __CVC4__PREPROCESSING__PASSES__BV_TO_INT_H
 
+#include "context/cdhashmap.h"
+#include "context/cdo.h"
+#include "context/context.h"
 #include "preprocessing/preprocessing_pass.h"
 #include "preprocessing/preprocessing_pass_context.h"
 
@@ -69,7 +80,7 @@ namespace CVC4 {
 namespace preprocessing {
 namespace passes {
 
-using NodeMap = std::unordered_map<Node, Node, NodeHashFunction>;
+using CDNodeMap = context::CDHashMap<Node, Node, NodeHashFunction>;
 
 class BVToInt : public PreprocessingPass
 {
@@ -245,10 +256,10 @@ class BVToInt : public PreprocessingPass
   /**
    * Caches for the different functions
    */
-  NodeMap d_binarizeCache;
-  NodeMap d_eliminationCache;
-  NodeMap d_rebuildCache;
-  NodeMap d_bvToIntCache;
+  CDNodeMap d_binarizeCache;
+  CDNodeMap d_eliminationCache;
+  CDNodeMap d_rebuildCache;
+  CDNodeMap d_bvToIntCache;
 
   /**
    * Node manager that is used throughout the pass
@@ -259,7 +270,7 @@ class BVToInt : public PreprocessingPass
    * A set of constraints of the form 0 <= x < 2^k
    * These are added for every new integer variable that we introduce.
    */
-  unordered_set<Node, NodeHashFunction> d_rangeAssertions;
+  context::CDHashSet<Node, NodeHashFunction> d_rangeAssertions;
 
   /**
    * Useful constants

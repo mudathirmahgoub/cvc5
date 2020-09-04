@@ -41,9 +41,13 @@ TheoryArith::TheoryArith(context::Context* c,
       d_internal(
           new TheoryArithPrivate(*this, c, u, out, valuation, logicInfo, pnm)),
       d_ppRewriteTimer("theory::arith::ppRewriteTimer"),
-      d_proofRecorder(nullptr)
+      d_astate(*d_internal, c, u, valuation),
+      d_inferenceManager(*this, d_astate, pnm)
 {
   smtStatisticsRegistry()->registerStat(&d_ppRewriteTimer);
+
+  // indicate we are using the theory state object
+  d_theoryState = &d_astate;
 }
 
 TheoryArith::~TheoryArith(){
@@ -83,9 +87,7 @@ TrustNode TheoryArith::expandDefinition(Node node)
   return d_internal->expandDefinition(node);
 }
 
-void TheoryArith::addSharedTerm(TNode n){
-  d_internal->addSharedTerm(n);
-}
+void TheoryArith::notifySharedTerm(TNode n) { d_internal->addSharedTerm(n); }
 
 TrustNode TheoryArith::ppRewrite(TNode atom)
 {
@@ -114,14 +116,6 @@ TrustNode TheoryArith::explain(TNode n)
 {
   Node exp = d_internal->explain(n);
   return TrustNode::mkTrustPropExp(n, exp, nullptr);
-}
-
-bool TheoryArith::getCurrentSubstitution( int effort, std::vector< Node >& vars, std::vector< Node >& subs, std::map< Node, std::vector< Node > >& exp ) {
-  return d_internal->getCurrentSubstitution( effort, vars, subs, exp );
-}
-
-bool TheoryArith::isExtfReduced( int effort, Node n, Node on, std::vector< Node >& exp ) {
-  return d_internal->isExtfReduced( effort, n, on, exp );
 }
 
 void TheoryArith::propagate(Effort e) {

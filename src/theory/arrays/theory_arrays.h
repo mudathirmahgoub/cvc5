@@ -26,7 +26,6 @@
 #include "context/cdhashset.h"
 #include "context/cdqueue.h"
 #include "theory/arrays/array_info.h"
-#include "theory/arrays/array_proof_reconstruction.h"
 #include "theory/arrays/theory_arrays_rewriter.h"
 #include "theory/theory.h"
 #include "theory/uf/equality_engine.h"
@@ -129,15 +128,6 @@ class TheoryArrays : public Theory {
   /** conflicts in setModelVal */
   IntStat d_numSetModelValConflicts;
 
-  // Merge reason types
-
-  /** Merge tag for ROW applications */
-  unsigned d_reasonRow;
-  /** Merge tag for ROW1 applications */
-  unsigned d_reasonRow1;
-  /** Merge tag for EXT applications */
-  unsigned d_reasonExt;
-
  public:
   TheoryArrays(context::Context* c,
                context::UserContext* u,
@@ -194,6 +184,8 @@ class TheoryArrays : public Theory {
 
   /** The theory rewriter for this theory. */
   TheoryArraysRewriter d_rewriter;
+  /** A (default) theory state object */
+  TheoryState d_state;
 
  public:
   PPAssertStatus ppAssert(TNode in, SubstitutionMap& outSubstitutions) override;
@@ -211,11 +203,10 @@ class TheoryArrays : public Theory {
   context::CDO<unsigned> d_literalsToPropagateIndex;
 
   /** Should be called to propagate the literal.  */
-  bool propagate(TNode literal);
+  bool propagateLit(TNode literal);
 
-  /** Explain why this literal is true by adding assumptions */
-  void explain(TNode literal, std::vector<TNode>& assumptions,
-               eq::EqProof* proof);
+  /** Explain why this literal is true by building an explanation */
+  void explain(TNode literal, Node& exp);
 
   /** For debugging only- checks invariants about when things are preregistered*/
   context::CDHashSet<Node, NodeHashFunction > d_isPreRegistered;
@@ -225,8 +216,6 @@ class TheoryArrays : public Theory {
 
  public:
   void preRegisterTerm(TNode n) override;
-  void propagate(Effort e) override;
-  Node explain(TNode n, eq::EqProof* proof);
   TrustNode explain(TNode n) override;
 
   /////////////////////////////////////////////////////////////////////////////
@@ -250,8 +239,7 @@ class TheoryArrays : public Theory {
   void checkPair(TNode r1, TNode r2);
 
  public:
-  void addSharedTerm(TNode t) override;
-  EqualityStatus getEqualityStatus(TNode a, TNode b) override;
+  void notifySharedTerm(TNode t) override;
   void computeCareGraph() override;
   bool isShared(TNode t)
   {
@@ -263,7 +251,9 @@ class TheoryArrays : public Theory {
   /////////////////////////////////////////////////////////////////////////////
 
  public:
-  bool collectModelInfo(TheoryModel* m) override;
+  /** Collect model values in m based on the relevant terms given by termSet */
+  bool collectModelValues(TheoryModel* m,
+                          const std::set<Node>& termSet) override;
 
   /////////////////////////////////////////////////////////////////////////////
   // NOTIFICATIONS
@@ -277,8 +267,18 @@ class TheoryArrays : public Theory {
   // MAIN SOLVER
   /////////////////////////////////////////////////////////////////////////////
 
- public:
-  void check(Effort e) override;
+  //--------------------------------- standard check
+  /** Post-check, called after the fact queue of the theory is processed. */
+  void postCheck(Effort level) override;
+  /** Pre-notify fact, return true if processed. */
+  bool preNotifyFact(TNode atom,
+                     bool pol,
+                     TNode fact,
+                     bool isPrereg,
+                     bool isInternal) override;
+  /** Notify fact */
+  void notifyFact(TNode atom, bool pol, TNode fact, bool isInternal) override;
+  //--------------------------------- end standard check
 
  private:
   TNode weakEquivGetRep(TNode node);
@@ -304,9 +304,9 @@ class TheoryArrays : public Theory {
           << (value ? "true" : "false") << ")" << std::endl;
       // Just forward to arrays
       if (value) {
-        return d_arrays.propagate(predicate);
+        return d_arrays.propagateLit(predicate);
       }
-      return d_arrays.propagate(predicate.notNode());
+      return d_arrays.propagateLit(predicate.notNode());
     }
 
     bool eqNotifyTriggerTermEquality(TheoryId tag,
@@ -316,22 +316,10 @@ class TheoryArrays : public Theory {
     {
       Debug("arrays::propagate") << spaces(d_arrays.getSatContext()->getLevel()) << "NotifyClass::eqNotifyTriggerTermEquality(" << t1 << ", " << t2 << ", " << (value ? "true" : "false") << ")" << std::endl;
       if (value) {
-        if (t1.getType().isArray()) {
-          if (!d_arrays.isShared(t1) || !d_arrays.isShared(t2)) {
-            return true;
-          }
-        }
         // Propagate equality between shared terms
-        return d_arrays.propagate(t1.eqNode(t2));
-      } else {
-        if (t1.getType().isArray()) {
-          if (!d_arrays.isShared(t1) || !d_arrays.isShared(t2)) {
-            return true;
-          }
-        }
-        return d_arrays.propagate(t1.eqNode(t2).notNode());
+        return d_arrays.propagateLit(t1.eqNode(t2));
       }
-      return true;
+      return d_arrays.propagateLit(t1.eqNode(t2).notNode());
     }
 
     void eqNotifyConstantTermMerge(TNode t1, TNode t2) override
@@ -352,9 +340,6 @@ class TheoryArrays : public Theory {
 
   /** The notify class for d_equalityEngine */
   NotifyClass d_notify;
-
-  /** Are we in conflict? */
-  context::CDO<bool> d_conflict;
 
   /** Conflict when merging constants */
   void conflict(TNode a, TNode b);
@@ -456,9 +441,6 @@ class TheoryArrays : public Theory {
   bool d_inCheckModel;
   int d_topLevel;
 
-  /** An equality-engine callback for proof reconstruction */
-  std::unique_ptr<ArrayProofReconstruction> d_proofReconstruction;
-
   /**
    * The decision strategy for the theory of arrays, which calls the
    * getNextDecisionEngineRequest function below.
@@ -489,13 +471,11 @@ class TheoryArrays : public Theory {
    * for the comparison between the indexes that appears in the lemma.
    */
   Node getNextDecisionRequest();
-
   /**
-   * Compute relevant terms. This includes additional select nodes for the
+   * Compute relevant terms. This includes select nodes for the
    * RIntro1 and RIntro2 rules.
    */
-  void computeRelevantTerms(std::set<Node>& termSet,
-                            bool includeShared = true) override;
+  void computeRelevantTerms(std::set<Node>& termSet) override;
 };/* class TheoryArrays */
 
 }/* CVC4::theory::arrays namespace */

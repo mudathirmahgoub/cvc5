@@ -49,6 +49,10 @@ bool isLemmaPropertySendAtoms(LemmaProperty p)
 {
   return (p & LemmaProperty::SEND_ATOMS) != LemmaProperty::NONE;
 }
+bool isLemmaPropertyNeedsJustify(LemmaProperty p)
+{
+  return (p & LemmaProperty::NEEDS_JUSTIFY) != LemmaProperty::NONE;
+}
 
 std::ostream& operator<<(std::ostream& out, LemmaProperty p)
 {
@@ -71,6 +75,10 @@ std::ostream& operator<<(std::ostream& out, LemmaProperty p)
     {
       out << " SEND_ATOMS";
     }
+    if (isLemmaPropertyNeedsJustify(p))
+    {
+      out << " NEEDS_JUSTIFY";
+    }
     out << " }";
   }
   return out;
@@ -84,11 +92,6 @@ LemmaStatus::LemmaStatus(TNode rewrittenLemma, unsigned level)
 TNode LemmaStatus::getRewrittenLemma() const { return d_rewrittenLemma; }
 
 unsigned LemmaStatus::getLevel() const { return d_level; }
-
-LemmaStatus OutputChannel::lemma(TNode n, LemmaProperty p)
-{
-  return lemma(n, RULE_INVALID, p);
-}
 
 LemmaStatus OutputChannel::split(TNode n)
 {

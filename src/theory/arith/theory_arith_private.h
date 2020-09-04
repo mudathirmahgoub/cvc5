@@ -324,15 +324,18 @@ public:
   /** This is a conflict that is magically known to hold. */
   void raiseBlackBoxConflict(Node bb);
 
-private:
-
-  inline bool conflictQueueEmpty() const {
-    return d_conflicts.empty();
+  /**
+   * Returns true iff a conflict has been raised. This method is public since
+   * it is needed by the ArithState class to know whether we are in conflict.
+   */
+  bool anyConflict() const
+  {
+    return !conflictQueueEmpty() || !d_blackBoxConflict.get().isNull();
   }
 
-  /** Returns true iff a conflict has been raised. */
-  inline bool anyConflict() const {
-    return !conflictQueueEmpty() || !d_blackBoxConflict.get().isNull();
+ private:
+  inline bool conflictQueueEmpty() const {
+    return d_conflicts.empty();
   }
 
   /**
@@ -449,8 +452,6 @@ private:
   bool needsCheckLastEffort();
   void propagate(Theory::Effort e);
   Node explain(TNode n);
-  bool getCurrentSubstitution( int effort, std::vector< Node >& vars, std::vector< Node >& subs, std::map< Node, std::vector< Node > >& exp );
-  bool isExtfReduced( int effort, Node n, Node on, std::vector< Node >& exp );
 
   Rational deltaValueForTotalOrder() const;
 

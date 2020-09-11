@@ -71,12 +71,6 @@ typerule BAG_CHOOSE         ::CVC4::theory::bags::BagsChooseTypeRule
 
 construle BAG_UNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 construle DISJOINT_UNION    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BAG_INTERSECTION  ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BAG_DIFFERENCE1   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
-construle BAG_DIFFERENCE2   ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 construle BAG_SINGLETON     ::CVC4::theory::bags::BagsSingletonTypeRule
-construle BAG_INSERT        ::CVC4::theory::bags::BagsInsertTypeRule
-construle BAG_CARD          ::CVC4::theory::bags::BagsCardTypeRule
-construle BAG_CHOOSE        ::CVC4::theory::bags::BagsChooseTypeRule
 
 endtheory

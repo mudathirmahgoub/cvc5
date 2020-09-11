@@ -9,6 +9,8 @@ libcvc4_add_sources(
   attribute_unique_id.h
   emptyset.cpp
   emptyset.h
+  emptybag.cpp
+  emptybag.h
   expr_iomanip.cpp
   expr_iomanip.h
   expr_manager_scope.h

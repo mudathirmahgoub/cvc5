@@ -68,6 +68,7 @@ typerule EMPTYBAG           ::CVC4::theory::bags::EmptyBagTypeRule
 typerule BAG_INSERT         ::CVC4::theory::bags::BagsInsertTypeRule
 typerule BAG_CARD           ::CVC4::theory::bags::BagsCardTypeRule
 typerule BAG_CHOOSE         ::CVC4::theory::bags::BagsChooseTypeRule
+typerule BAG_IS_SINGLETON   ::CVC4::theory::bags::BagsIsSingletonChooseTypeRule
 
 construle BAG_UNION         ::CVC4::theory::bags::BagsBinaryOperatorTypeRule
 construle DISJOINT_UNION    ::CVC4::theory::bags::BagsBinaryOperatorTypeRule

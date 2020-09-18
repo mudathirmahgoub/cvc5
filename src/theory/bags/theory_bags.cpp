@@ -37,8 +37,8 @@ TheoryBags::TheoryBags(context::Context* c,
       d_skCache(),
       d_state(c, u, valuation, d_skCache),
       d_im(*this, d_state, pnm),
-      d_internal(new TheoryBagsPrivate(*this, d_state, d_im, d_skCache)),
-      d_notify(*d_internal.get())
+      d_rewriter(),
+      d_notify(*this, d_im)
 {
   // use the official theory state and inference manager objects
   d_theoryState = &d_state;
@@ -49,7 +49,7 @@ TheoryBags::~TheoryBags() {}
 
 TheoryRewriter* TheoryBags::getTheoryRewriter()
 {
-  return d_internal->getTheoryRewriter();
+  return &d_rewriter;
 }
 
 bool TheoryBags::needsEqualityEngine(EeSetupInfo& esi)
@@ -79,82 +79,56 @@ void TheoryBags::finishInit()
   // we do congruence over cardinality
   d_equalityEngine->addFunctionKind(BAG_CARD);
 
-  // finish initialization internally
-  d_internal->finishInit();
 }
 
-void TheoryBags::postCheck(Effort level) { d_internal->postCheck(level); }
+void TheoryBags::postCheck(Effort level) {  }
 
 void TheoryBags::notifyFact(TNode atom,
                             bool polarity,
                             TNode fact,
                             bool isInternal)
 {
-  d_internal->notifyFact(atom, polarity, fact);
 }
 
 bool TheoryBags::collectModelValues(TheoryModel* m,
                                     const std::set<Node>& termBag)
 {
-  return d_internal->collectModelValues(m, termBag);
+  return true;
 }
 
 TrustNode TheoryBags::explain(TNode node)
 {
-  Node exp = d_internal->explain(node);
-  return TrustNode::mkTrustPropExp(node, exp, nullptr);
+  return d_im.explainLit(node);
 }
 
 Node TheoryBags::getModelValue(TNode node) { return Node::null(); }
 
 void TheoryBags::preRegisterTerm(TNode node)
 {
-  d_internal->preRegisterTerm(node);
 }
 
 TrustNode TheoryBags::expandDefinition(Node n)
 {
-  return d_internal->expandDefinition(n);
+  return TrustNode::null();
 }
 
-void TheoryBags::presolve() { d_internal->presolve(); }
-
-bool TheoryBags::isEntailed(Node n, bool pol)
-{
-  return d_internal->isEntailed(n, pol);
-}
+void TheoryBags::presolve() {}
 
 /**************************** eq::NotifyClass *****************************/
 
-bool TheoryBags::NotifyClass::eqNotifyTriggerPredicate(TNode predicate,
-                                                       bool value)
+void TheoryBags::eqNotifyNewClass(TNode t)
 {
-  Debug("bags-eq") << "[bags-eq] eqNotifyTriggerPredicate: predicate = "
-                   << predicate << " value = " << value << std::endl;
-  if (value)
-  {
-    return d_theory.propagate(predicate);
-  }
-  return d_theory.propagate(predicate.notNode());
+  Assert(false) << "Not implemented yet" << std::endl;
 }
 
-bool TheoryBags::NotifyClass::eqNotifyTriggerTermEquality(TheoryId tag,
-                                                          TNode t1,
-                                                          TNode t2,
-                                                          bool value)
+void TheoryBags::eqNotifyMerge(TNode t1, TNode t2)
 {
-  Debug("bags-eq") << "[bags-eq] eqNotifyTriggerTermEquality: tag = " << tag
-                   << " t1 = " << t1 << "  t2 = " << t2 << "  value = " << value
-                   << std::endl;
-  d_theory.propagate(value ? t1.eqNode(t2) : t1.eqNode(t2).negate());
-  return true;
+  Assert(false) << "Not implemented yet" << std::endl;
 }
 
-void TheoryBags::NotifyClass::eqNotifyConstantTermMerge(TNode t1, TNode t2)
+void TheoryBags::eqNotifyDisequal(TNode t1, TNode t2, TNode reason)
 {
-  Debug("bags-eq") << "[bags-eq] eqNotifyConstantTermMerge "
-                   << " t1 = " << t1 << " t2 = " << t2 << std::endl;
-  d_theory.conflict(t1, t2);
+  Assert(false) << "Not implemented yet" << std::endl;
 }
 
 void TheoryBags::NotifyClass::eqNotifyNewClass(TNode t)

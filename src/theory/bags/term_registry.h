@@ -38,18 +38,6 @@ class TermRegistry
 
  public:
   TermRegistry(SolverState& state, InferenceManager& im, SkolemCache& skc);
-  /** Get type constraint skolem
-   *
-   * The bags theory solver outputs equality lemmas of the form:
-   *   n = d_tc_skolem[n][tn]
-   * where the type of d_tc_skolem[n][tn] is tn, and the type
-   * of n is not a subtype of tn. This is required to handle benchmarks like
-   *   test/regress/regress0/bags/bags-of-bags-subtypes.smt2
-   * where for s : (Bag Int) and t : (Bag Real), we have that
-   *   ( s = t ^ y in t ) implies ( exists k : Int. y = k )
-   * The type constraint Skolem for (y, Int) is the skolemization of k above.
-   */
-  Node getTypeConstraintSkolem(Node n, TypeNode tn);
   /** get the proxy variable for bag n
    *
    * Proxy variables are used to communicate information that otherwise would
@@ -74,8 +62,6 @@ class TermRegistry
   NodeMap d_proxy;
   /** Backwards map of above */
   NodeMap d_proxy_to_term;
-  /** Cache of type constraint skolems (see getTypeConstraintSkolem) */
-  std::map<Node, std::map<TypeNode, Node> > d_tc_skolem;
   /** Map from types to empty bag of that type */
   std::map<TypeNode, Node> d_emptybag;
 }; /* class Term */

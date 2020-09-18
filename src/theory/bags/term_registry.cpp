@@ -35,17 +35,12 @@ TermRegistry::TermRegistry(SolverState& state,
 
 Node TermRegistry::getProxy(Node n)
 {
-  Assert(false)<<"Not implemented yet"<<std::endl;
+  Assert(false) << "Not implemented yet" << std::endl;
 }
 
 Node TermRegistry::getEmptyBag(TypeNode tn)
 {
-  Assert(false)<<"Not implemented yet"<<std::endl;
-}
-
-Node TermRegistry::getTypeConstraintSkolem(Node n, TypeNode tn)
-{
-  Assert(false)<<"Not implemented yet"<<std::endl;
+  Assert(false) << "Not implemented yet" << std::endl;
 }
 
 }  // namespace bags

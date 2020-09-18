@@ -24,6 +24,8 @@
 #include "theory/bags/inference_manager.h"
 #include "theory/bags/skolem_cache.h"
 #include "theory/bags/solver_state.h"
+#include "theory/bags/theory_bags_rewriter.h"
+#include "theory/theory_eq_notify.h"
 #include "theory/theory.h"
 #include "theory/uf/equality_engine.h"
 
@@ -31,13 +33,8 @@ namespace CVC4 {
 namespace theory {
 namespace bags {
 
-class TheoryBagsPrivate;
-class TheoryBagsScrutinize;
-
 class TheoryBags : public Theory
 {
-  friend class TheoryBagsPrivate;
-
  public:
   /** Constructs a new instance of TheoryBags w.r.t. the provided contexts. */
   TheoryBags(context::Context* c,
@@ -76,26 +73,21 @@ class TheoryBags : public Theory
   void preRegisterTerm(TNode node) override;
   TrustNode expandDefinition(Node n) override;
   void presolve() override;
-  bool isEntailed(Node n, bool pol);
 
  private:
   /** Functions to handle callbacks from equality engine */
-  class NotifyClass : public eq::EqualityEngineNotify
+  class NotifyClass : public TheoryEqNotifyClass
   {
    public:
-    NotifyClass(TheoryBagsPrivate& theory) : d_theory(theory) {}
-    bool eqNotifyTriggerPredicate(TNode predicate, bool value) override;
-    bool eqNotifyTriggerTermEquality(TheoryId tag,
-                                     TNode t1,
-                                     TNode t2,
-                                     bool value) override;
-    void eqNotifyConstantTermMerge(TNode t1, TNode t2) override;
+    NotifyClass(TheoryBags& theory, TheoryInferenceManager & inferenceManager)
+
+        : TheoryEqNotifyClass(inferenceManager), d_theory(theory) {}
     void eqNotifyNewClass(TNode t) override;
     void eqNotifyMerge(TNode t1, TNode t2) override;
     void eqNotifyDisequal(TNode t1, TNode t2, TNode reason) override;
 
    private:
-    TheoryBagsPrivate& d_theory;
+    TheoryBags& d_theory;
   };
 
   /** The skolem cache */
@@ -104,10 +96,14 @@ class TheoryBags : public Theory
   SolverState d_state;
   /** The inference manager */
   InferenceManager d_im;
-  /** The internal theory */
-  std::unique_ptr<TheoryBagsPrivate> d_internal;
   /** Instance of the above class */
   NotifyClass d_notify;
+  /** The theory rewriter for this theory. */
+  TheoryBagsRewriter d_rewriter;
+
+  void eqNotifyNewClass(TNode t);
+  void eqNotifyMerge(TNode t1, TNode t2);
+  void eqNotifyDisequal(TNode t1, TNode t2, TNode reason);
 }; /* class TheoryBags */
 
 }  // namespace bags

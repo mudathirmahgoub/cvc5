@@ -39,43 +39,6 @@ class InferenceManager : public InferenceManagerBuffered
 
  public:
   InferenceManager(Theory& t, SolverState& s, ProofNodeManager* pnm);
-  /**
-   * Add facts corresponding to ( exp => fact ) via calls to the assertFact
-   * method of TheoryBagsPrivate.
-   *
-   * The portions of fact that were unable to be processed as facts are added
-   * to the data member d_pendingLemmas.
-   *
-   * The argument inferType is used for overriding the policy on whether
-   * fact is processed as a lemma, where inferType=1 forces fact to be
-   * bag as a lemma, and inferType=-1 forces fact to be processed as a fact
-   * (if possible).
-   *
-   * The argument c is the name of the inference, which is used for debugging.
-   */
-  void assertInference(Node fact, Node exp, const char* c, int inferType = 0);
-  /** same as above, where exp is interpreted as a conjunction */
-  void assertInference(Node fact,
-                       std::vector<Node>& exp,
-                       const char* c,
-                       int inferType = 0);
-  /** same as above, where conc is interpreted as a conjunction */
-  void assertInference(std::vector<Node>& conc,
-                       Node exp,
-                       const char* c,
-                       int inferType = 0);
-  /** same as above, where both exp and conc are interpreted as conjunctions */
-  void assertInference(std::vector<Node>& conc,
-                       std::vector<Node>& exp,
-                       const char* c,
-                       int inferType = 0);
-
-  /** flush the splitting lemma ( n OR (NOT n) )
-   *
-   * If reqPol is not 0, then a phase requirement for n is requested with
-   * polarity ( reqPol>0 ).
-   */
-  void split(Node n, int reqPol = 0);
 
  private:
   /** constants */
@@ -87,14 +50,6 @@ class InferenceManager : public InferenceManagerBuffered
    * class.
    */
   SolverState& d_state;
-  /** Assert fact recursive
-   *
-   * This is a helper function for assertInference, which calls assertFact
-   * in theory of bags and adds to d_pendingLemmas based on fact.
-   * The argument inferType determines the policy on whether fact is processed
-   * as a fact or as a lemma (see assertInference above).
-   */
-  bool assertFactRec(Node fact, Node exp, int inferType = 0);
 };
 
 }  // namespace bags

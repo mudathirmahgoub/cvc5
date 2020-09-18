@@ -49,16 +49,6 @@ class SolverState : public TheoryState
               SkolemCache& skc);
 
   //-------------------------------- initialize per check
-  /** reset, clears the data structures maintained by this class. */
-  void reset();
-  /** register equivalence class whose type is tn */
-  void registerEqc(TypeNode tn, Node r);
-  /** register term n of type tnn in the equivalence class of r */
-  void registerTerm(Node r, TypeNode tnn, Node n);
-  //-------------------------------- end initialize per check
-
-  /** Is formula n entailed to have polarity pol in the current context? */
-  bool isEntailed(Node n, bool pol) const;
 
  private:
   /** constants */

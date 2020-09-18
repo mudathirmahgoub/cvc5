@@ -37,23 +37,6 @@ SolverState::SolverState(context::Context* c,
   d_false = NodeManager::currentNM()->mkConst(false);
 }
 
-bool SolverState::isEntailed(Node n, bool polarity) const
-{
-  Assert(false)<<"Not implemented yet"<<std::endl;
-}
-
-void SolverState::reset() { Assert(false)<<"Not implemented yet"<<std::endl; }
-
-void SolverState::registerEqc(TypeNode tn, Node r)
-{
-  Assert(false)<<"Not implemented yet"<<std::endl;
-}
-
-void SolverState::registerTerm(Node r, TypeNode tnn, Node n)
-{
-  Assert(false)<<"Not implemented yet"<<std::endl;
-}
-
 }  // namespace bags
 }  // namespace theory
 }  // namespace CVC4

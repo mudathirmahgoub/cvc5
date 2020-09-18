@@ -82,10 +82,11 @@ namespace theory {
   CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_DATATYPES) \
   CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_SEP)       \
   CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_SETS)      \
-  CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_BAGS)      \                                                               \
   CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_STRINGS)   \
   CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_QUANTIFIERS)
 
+  //ToDo: add this line after sets
+  // CVC4_FOR_EACH_THEORY_STATEMENT(CVC4::theory::THEORY_BAGS)
 }  // namespace theory
 
 /* -------------------------------------------------------------------------- */

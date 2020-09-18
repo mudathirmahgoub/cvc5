@@ -1,5 +1,5 @@
 /*********************                                                        */
-/*! \file theory_bags_type_enumerator.cpp
+/*! \file theory_bags_type_enumerator.h
  ** \verbatim
  ** Top contributors (to current version):
  **   Kshitij Bansal, Tim King, Andrew Reynolds, Mudathir Mahgoub
@@ -9,81 +9,90 @@
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
  **
- ** \brief bag enumerator implementation
+ ** \brief type enumerator for bags
  **
- ** bag enumerator implementation
+ ** A bag enumerator that iterates over bags
  **/
 
-#include "theory/bags/theory_bags_type_enumerator.h"
+#include "cvc4_private.h"
 
-#include "expr/datatype.h"
-#include "expr/emptybag.h"
+#ifndef CVC4__THEORY__BAGS__TYPE_ENUMERATOR_H
+#define CVC4__THEORY__BAGS__TYPE_ENUMERATOR_H
+
+#include "expr/kind.h"
+#include "expr/type_node.h"
+#include "theory/bags/normal_form.h"
+#include "theory/rewriter.h"
+#include "theory/type_enumerator.h"
 #include "theory_bags_type_enumerator.h"
-// ToDo: refine this include
-#include "theory/bags/theory_bags_private.h"
 
 namespace CVC4 {
 namespace theory {
 namespace bags {
 
-BagEnumerator::BagEnumerator(TypeNode type, TypeEnumeratorProperties* tep)
-    : TypeEnumeratorBase<BagEnumerator>(type),
-      d_nodeManager(NodeManager::currentNM()),
-      d_elementTypeEnumerator(type.getBagElementType(), tep)
+class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
 {
-  d_currentBag = d_nodeManager->mkConst(EmptyBag(type.toType()));
-  d_element = *d_elementTypeEnumerator;
-}
+ public:
+  BagEnumerator(TypeNode type, TypeEnumeratorProperties* tep = nullptr);
+  BagEnumerator(const BagEnumerator& enumerator);
+  ~BagEnumerator();
 
-BagEnumerator::BagEnumerator(const BagEnumerator& enumerator)
-    : TypeEnumeratorBase<BagEnumerator>(enumerator.getType()),
-      d_nodeManager(enumerator.d_nodeManager),
-      d_elementTypeEnumerator(enumerator.d_elementTypeEnumerator),
-      d_currentBag(enumerator.d_currentBag),
-      d_element(enumerator.d_element)
-{
-}
+  Node operator*() override;
 
-BagEnumerator::~BagEnumerator() {}
+  /**
+   * This operator iterates over the infinite bags constructed from the element
+   * type . Ideally iterating over bags of {1, 2, 3, ...} will return the
+   * following infinite sequence of bags, where n in the pair (m, n) means the
+   * multiplicity of the element m in the bag
+   * {},                    sum = 0, #elements = 0, cardinality = 0
+   *
+   * {(1,1)},               sum = 2, #elements = 1, cardinality = 1
+   *
+   * {(2,1)},               sum = 3, #elements = 2, cardinality = 1
+   * {(1,2)},               sum = 3, #elements = 2, cardinality = 2
+   *
+   * {(3, 1)},              sum = 4, #elements = 3, cardinality = 1
+   * {(2, 2)},              sum = 4, #elements = 3, cardinality = 2
+   * {(1, 3)},              sum = 4, #elements = 3, cardinality = 3
+   *
+   * {(4, 1)},              sum = 5, #elements = 4, cardinality = 1
+   * {(3, 2)},              sum = 5, #elements = 4, cardinality = 2
+   * {(1, 1),(2, 1)},       sum = 5, #elements = 4, cardinality = 2
+   * {(2, 3)},              sum = 5, #elements = 4, cardinality = 3
+   * {(1, 4)},              sum = 5, #elements = 4, cardinality = 4
+   *
+   * {(5, 1)},              sum = 6, #elements = 5, cardinality = 1
+   * {(4, 2)},              sum = 6, #elements = 5, cardinality = 2
+   * {(1, 1), (3,1)},       sum = 6, #elements = 5, cardinality = 2
+   * {(3, 3)},              sum = 6, #elements = 5, cardinality = 3
+   * {(1, 1), (2,2)},       sum = 6, #elements = 5, cardinality = 3
+   * {(1, 2), (2,1)},       sum = 6, #elements = 5, cardinality = 3
+   * {(2, 4)},              sum = 6, #elements = 5, cardinality = 4
+   * {(1, 5)},              sum = 6, #elements = 5, cardinality = 5
+   *
+   * This would requires solving linear arithmetic equations and blocking
+   * previously generated bags which is too expensive.
+   * For now we are implementing an obvious solution
+   * {(1,1)}, {(1,2)}, {(1,3)}, ... which works for both fininte and infinite
+   * types
+   */
+  BagEnumerator& operator++() override;
 
-Node BagEnumerator::operator*()
-{
-  Trace("bag-type-enum") << "BagEnumerator::operator* d_currentBag = "
-                         << d_currentBag << std::endl;
+  bool isFinished() override;
 
-  return d_currentBag;
-}
-
-BagEnumerator& BagEnumerator::operator++()
-{
-  // increase the multiplicity by one
-  Node one = d_nodeManager->mkConst(Rational(1));
-  Node singleton = d_nodeManager->mkNode(kind::BAG_SINGLETON, d_element, one);
-  if (d_currentBag.getKind() == kind::EMPTYBAG)
-  {
-    d_currentBag = singleton;
-  }
-  else
-  {
-    d_currentBag =
-        d_nodeManager->mkNode(kind::DISJOINT_UNION, singleton, d_currentBag);
-  }
-
-  d_currentBag = Rewriter::rewrite(d_currentBag);
-
-  Assert(d_currentBag.isConst());
-
-  Trace("bag-type-enum") << "BagEnumerator::operator++ d_currentBag = "
-                         << d_currentBag << std::endl;
-  return *this;
-}
-
-bool BagEnumerator::isFinished()
-{
-  // bags sequence is infinite and it never ends
-  return false;
-}
+ private:
+  /** a pointer to the node manager */
+  NodeManager* d_nodeManager;
+  /** an enumerator for the set of pairs of element type x integer type */
+  TypeEnumerator d_elementTypeEnumerator;
+  /** the current set returned by the set enumerator */
+  Node d_currentBag;
+  /** the first value returned by the element type enumerator*/
+  Node d_element;
+}; /* class BagEnumerator */
 
 }  // namespace bags
 }  // namespace theory
 }  // namespace CVC4
+
+#endif /* CVC4__THEORY__BAGS__TYPE_ENUMERATOR_H */

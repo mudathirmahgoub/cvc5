@@ -1,5 +1,5 @@
 /*********************                                                        */
-/*! \file solver_state.cpp
+/*! \file term_registry.cpp
  ** \verbatim
  ** Top contributors (to current version):
  **   Andrew Reynolds, Mudathir Mohamed
@@ -9,16 +9,12 @@
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
  **
- ** \brief Implementation of bags state object
+ ** \brief Implementation of bags term registry object
  **/
 
-#include "theory/bags/solver_state.h"
+#include "theory/bags/term_registry.h"
 
 #include "expr/emptybag.h"
-#include "options/sets_options.h"
-#include "smt/logic_exception.h"
-#include "theory/bags/skolem_cache.h"
-#include "theory/bags/theory_bags_private.h"
 
 using namespace std;
 using namespace CVC4::kind;
@@ -27,29 +23,27 @@ namespace CVC4 {
 namespace theory {
 namespace bags {
 
-SolverState::SolverState(context::Context* c,
-                         context::UserContext* u,
-                         Valuation val,
-                         SkolemCache& skc)
-    : TheoryState(c, u, val), d_skCache(skc)
+TermRegistry::TermRegistry(SolverState& state,
+                           InferenceManager& im,
+                           SkolemCache& skc)
+    : d_im(im),
+      d_skCache(skc),
+      d_proxy(state.getUserContext()),
+      d_proxy_to_term(state.getUserContext())
 {
-  d_true = NodeManager::currentNM()->mkConst(true);
-  d_false = NodeManager::currentNM()->mkConst(false);
 }
 
-bool SolverState::isEntailed(Node n, bool polarity) const
-{
-  Assert(false)<<"Not implemented yet"<<std::endl;
-}
-
-void SolverState::reset() { Assert(false)<<"Not implemented yet"<<std::endl; }
-
-void SolverState::registerEqc(TypeNode tn, Node r)
+Node TermRegistry::getProxy(Node n)
 {
   Assert(false)<<"Not implemented yet"<<std::endl;
 }
 
-void SolverState::registerTerm(Node r, TypeNode tnn, Node n)
+Node TermRegistry::getEmptyBag(TypeNode tn)
+{
+  Assert(false)<<"Not implemented yet"<<std::endl;
+}
+
+Node TermRegistry::getTypeConstraintSkolem(Node n, TypeNode tn)
 {
   Assert(false)<<"Not implemented yet"<<std::endl;
 }

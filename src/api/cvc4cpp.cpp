@@ -260,13 +260,14 @@ const static std::unordered_map<Kind, CVC4::Kind, KindHashFunction> s_kinds{
     {BAG_INTERSECTION, CVC4::Kind::BAG_INTERSECTION},
     {BAG_DIFFERENCE1, CVC4::Kind::BAG_DIFFERENCE1},
     {BAG_DIFFERENCE2, CVC4::Kind::BAG_DIFFERENCE2},
-    {BAG_SUBSET, CVC4::Kind::BAG_SUBSET},
-    {COUNT, CVC4::Kind::COUNT},
+    {BAG_IS_INCLUDED, CVC4::Kind::BAG_IS_INCLUDED},
+    {BAG_COUNT, CVC4::Kind::BAG_COUNT},
     {BAG_SINGLETON, CVC4::Kind::BAG_SINGLETON},
     {EMPTYBAG, CVC4::Kind::EMPTYBAG},
     {BAG_INSERT, CVC4::Kind::BAG_INSERT},
     {BAG_CARD, CVC4::Kind::BAG_CARD},
     {BAG_CHOOSE, CVC4::Kind::BAG_CHOOSE},
+    {BAG_IS_SINGLETON, CVC4::Kind::BAG_IS_SINGLETON},
     /* Strings ------------------------------------------------------------- */
     {STRING_CONCAT, CVC4::Kind::STRING_CONCAT},
     {STRING_IN_REGEXP, CVC4::Kind::STRING_IN_REGEXP},
@@ -563,13 +564,14 @@ const static std::unordered_map<CVC4::Kind, Kind, CVC4::kind::KindHashFunction>
         {CVC4::Kind::BAG_INTERSECTION, BAG_INTERSECTION},
         {CVC4::Kind::BAG_DIFFERENCE1, BAG_DIFFERENCE1},
         {CVC4::Kind::BAG_DIFFERENCE2, BAG_DIFFERENCE2},
-        {CVC4::Kind::BAG_SUBSET, BAG_SUBSET},
-        {CVC4::Kind::COUNT, COUNT},
+        {CVC4::Kind::BAG_IS_INCLUDED, BAG_IS_INCLUDED},
+        {CVC4::Kind::BAG_COUNT, BAG_COUNT},
         {CVC4::Kind::BAG_SINGLETON, BAG_SINGLETON},
         {CVC4::Kind::EMPTYBAG, EMPTYBAG},
         {CVC4::Kind::BAG_INSERT, BAG_INSERT},
         {CVC4::Kind::BAG_CARD, BAG_CARD},
         {CVC4::Kind::BAG_CHOOSE, BAG_CHOOSE},
+        {CVC4::Kind::BAG_IS_SINGLETON, BAG_IS_SINGLETON},
         /* Strings --------------------------------------------------------- */
         {CVC4::Kind::STRING_CONCAT, STRING_CONCAT},
         {CVC4::Kind::STRING_IN_REGEXP, STRING_IN_REGEXP},
@@ -3690,7 +3692,7 @@ Term Solver::mkEmptyBag(Sort s) const
   CVC4_API_ARG_CHECK_EXPECTED(s.isNull() || s.isBag(), s)
       << "null sort or bag sort";
 
-  return mkValHelper<CVC4::EmptySet>(
+  return mkValHelper<CVC4::EmptyBag>(
       CVC4::EmptyBag(TypeNode::fromType(*s.d_type)));
 
   CVC4_API_SOLVER_TRY_CATCH_END;

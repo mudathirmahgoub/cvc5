@@ -23,11 +23,13 @@
 
 namespace CVC4 {
 
-std::ostream& operator<<(std::ostream& out, const EmptyBag& asa) {
+std::ostream& operator<<(std::ostream& out, const EmptyBag& asa)
+{
   return out << "emptybag(" << asa.getType() << ')';
 }
 
-size_t EmptyBagHashFunction::operator()(const EmptyBag& es) const {
+size_t EmptyBagHashFunction::operator()(const EmptyBag& es) const
+{
   return TypeNodeHashFunction()(es.getType());
 }
 
@@ -39,7 +41,8 @@ EmptyBag::EmptyBag(const TypeNode& bagType) : d_type(new TypeNode(bagType)) {}
 
 EmptyBag::EmptyBag(const EmptyBag& es) : d_type(new TypeNode(es.getType())) {}
 
-EmptyBag& EmptyBag::operator=(const EmptyBag& es) {
+EmptyBag& EmptyBag::operator=(const EmptyBag& es)
+{
   (*d_type) = es.getType();
   return *this;
 }
@@ -64,4 +67,4 @@ bool EmptyBag::operator<=(const EmptyBag& es) const
 
 bool EmptyBag::operator>(const EmptyBag& es) const { return !(*this <= es); }
 bool EmptyBag::operator>=(const EmptyBag& es) const { return !(*this < es); }
-}/* CVC4 namespace */
+}  // namespace CVC4

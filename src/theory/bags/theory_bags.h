@@ -25,8 +25,8 @@
 #include "theory/bags/skolem_cache.h"
 #include "theory/bags/solver_state.h"
 #include "theory/bags/theory_bags_rewriter.h"
-#include "theory/theory_eq_notify.h"
 #include "theory/theory.h"
+#include "theory/theory_eq_notify.h"
 #include "theory/uf/equality_engine.h"
 
 namespace CVC4 {
@@ -79,9 +79,11 @@ class TheoryBags : public Theory
   class NotifyClass : public TheoryEqNotifyClass
   {
    public:
-    NotifyClass(TheoryBags& theory, TheoryInferenceManager & inferenceManager)
+    NotifyClass(TheoryBags& theory, TheoryInferenceManager& inferenceManager)
 
-        : TheoryEqNotifyClass(inferenceManager), d_theory(theory) {}
+        : TheoryEqNotifyClass(inferenceManager), d_theory(theory)
+    {
+    }
     void eqNotifyNewClass(TNode t) override;
     void eqNotifyMerge(TNode t1, TNode t2) override;
     void eqNotifyDisequal(TNode t1, TNode t2, TNode reason) override;

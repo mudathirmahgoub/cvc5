@@ -18,7 +18,6 @@
 #include "options/sets_options.h"
 #include "smt/logic_exception.h"
 #include "theory/bags/skolem_cache.h"
-#include "theory/bags/theory_bags_private.h"
 
 using namespace std;
 using namespace CVC4::kind;

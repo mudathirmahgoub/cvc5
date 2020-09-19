@@ -17,7 +17,6 @@
 #include "theory/bags/theory_bags.h"
 
 #include "options/sets_options.h"
-#include "theory/bags/theory_bags_private.h"
 #include "theory/bags/theory_bags_rewriter.h"
 #include "theory/theory_model.h"
 
@@ -47,10 +46,7 @@ TheoryBags::TheoryBags(context::Context* c,
 
 TheoryBags::~TheoryBags() {}
 
-TheoryRewriter* TheoryBags::getTheoryRewriter()
-{
-  return &d_rewriter;
-}
+TheoryRewriter* TheoryBags::getTheoryRewriter() { return &d_rewriter; }
 
 bool TheoryBags::needsEqualityEngine(EeSetupInfo& esi)
 {
@@ -78,10 +74,9 @@ void TheoryBags::finishInit()
 
   // we do congruence over cardinality
   d_equalityEngine->addFunctionKind(BAG_CARD);
-
 }
 
-void TheoryBags::postCheck(Effort level) {  }
+void TheoryBags::postCheck(Effort level) {}
 
 void TheoryBags::notifyFact(TNode atom,
                             bool polarity,
@@ -96,21 +91,13 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
   return true;
 }
 
-TrustNode TheoryBags::explain(TNode node)
-{
-  return d_im.explainLit(node);
-}
+TrustNode TheoryBags::explain(TNode node) { return d_im.explainLit(node); }
 
 Node TheoryBags::getModelValue(TNode node) { return Node::null(); }
 
-void TheoryBags::preRegisterTerm(TNode node)
-{
-}
+void TheoryBags::preRegisterTerm(TNode node) {}
 
-TrustNode TheoryBags::expandDefinition(Node n)
-{
-  return TrustNode::null();
-}
+TrustNode TheoryBags::expandDefinition(Node n) { return TrustNode::null(); }
 
 void TheoryBags::presolve() {}
 

@@ -389,8 +389,6 @@ libcvc4_add_sources(
   theory/bags/term_registry.h
   theory/bags/theory_bags.cpp
   theory/bags/theory_bags.h
-  theory/bags/theory_bags_private.cpp
-  theory/bags/theory_bags_private.h
   theory/bags/theory_bags_rewriter.cpp
   theory/bags/theory_bags_rewriter.h
   theory/bags/theory_bags_type_enumerator.cpp

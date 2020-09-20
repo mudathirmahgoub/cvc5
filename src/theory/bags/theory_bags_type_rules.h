@@ -33,8 +33,8 @@ struct BinaryOperatorTypeRule
   {
     Assert(n.getKind() == kind::MAX_UNION || n.getKind() == kind::DISJOINT_UNION
            || n.getKind() == kind::MIN_INTERSECTION
-           || n.getKind() == kind::BAG_DIFFERENCE1
-           || n.getKind() == kind::BAG_DIFFERENCE2);
+           || n.getKind() == kind::DIFFERENCE_SUBTRACT
+           || n.getKind() == kind::DIFFERENCE_REMOVE);
     TypeNode bagType = n[0].getType(check);
     if (check)
     {
@@ -85,8 +85,8 @@ struct IsIncludedTypeRule
     {
       if (!bagType.isBag())
       {
-        throw TypeCheckingExceptionPrivate(n,
-                                           "bag subset operating on non-bag");
+        throw TypeCheckingExceptionPrivate(
+            n, "BAG_IS_INCLUDED operating on non-bag");
       }
       TypeNode secondBagType = n[1].getType(check);
       if (secondBagType != bagType)
@@ -94,7 +94,7 @@ struct IsIncludedTypeRule
         if (!bagType.isComparableTo(secondBagType))
         {
           throw TypeCheckingExceptionPrivate(
-              n, "bag subset operating on bags of different types");
+              n, "BAG_IS_INCLUDED operating on bags of different types");
         }
       }
     }
@@ -125,15 +125,7 @@ struct CountTypeRule
       // (= (as T (Bag Real)) B)
       // (= (bag-count 0.5 B) 1)
       // ...where (bag-count 0.5 T) is inferred
-      //
-      // or
-      //
-      // B : (Bag Real)
-      // (not (bag-count 0.5 B))
-      // ( = (bag-count 0.0 B) 1)
-      // ...find model M where M( B ) = { (0.0, 1) }, check model will generate
-      // (not (= (bag-count 0.5 (singleton (0.0, 1) 1)))
-      //
+
       if (!elementType.isComparableTo(bagType.getBagElementType()))
       {
         std::stringstream ss;
@@ -274,11 +266,11 @@ struct InsertTypeRule
     Assert(n.getKind() == kind::BAG_INSERT);
     size_t numChildren = n.getNumChildren();
     Assert(numChildren >= 3);
-    TypeNode baseType = n[numChildren - 1].getType(check);
+    TypeNode bagType = n[numChildren - 1].getType(check);
     if (check)
     {
       // e.g. (BAG_INSERT "E" 2 "D" 4 "C" 6 "B" 8 (BAG_PAIR "A" 100))
-      if (!baseType.isBag())
+      if (!bagType.isBag())
       {
         throw TypeCheckingExceptionPrivate(n, "inserting into a non-bag");
       }
@@ -291,15 +283,15 @@ struct InsertTypeRule
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }
 
-      TypeNode elementType = baseType.getBagElementType();
+      TypeNode baseType = bagType.getBagElementType();
       for (size_t i = 0; i < numChildren - 1; i += 2)
       {
         TypeNode elementType = n[i].getType(check);
-        if (elementType != elementType)
+        if (!elementType.isComparableTo(baseType))
         {
           std::stringstream ss;
           ss << "node " << n << " inserts node " << n[i] << " of type "
-             << elementType << " into a bag of type " << baseType << std::endl;
+             << elementType << " into a bag of type " << bagType << std::endl;
           throw TypeCheckingExceptionPrivate(n, ss.str());
         }
         TypeNode countType = n[i + 1].getType(check);
@@ -322,7 +314,7 @@ struct InsertTypeRule
         }
       }
     }
-    return baseType;
+    return bagType;
   }
 }; /* struct InsertTypeRule */
 

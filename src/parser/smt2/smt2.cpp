@@ -697,8 +697,8 @@ Command* Smt2::setLogic(std::string name, bool fromCommand)
     addOperator(api::MAX_UNION, "max-union");
     addOperator(api::DISJOINT_UNION, "disjoint-union");
     addOperator(api::MIN_INTERSECTION, "min-intersection");
-    addOperator(api::BAG_DIFFERENCE1, "bag-difference1");
-    addOperator(api::BAG_DIFFERENCE2, "bag-difference2");
+    addOperator(api::DIFFERENCE_SUBTRACT, "difference-subtract");
+    addOperator(api::DIFFERENCE_REMOVE, "difference-remove");
     addOperator(api::BAG_IS_INCLUDED, "is-included");
     addOperator(api::BAG_COUNT, "bag-count");
     addOperator(api::BAG_PAIR, "bag-pair");

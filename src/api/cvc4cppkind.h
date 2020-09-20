@@ -1974,7 +1974,7 @@ enum CVC4_PUBLIC Kind : int32_t
    */
   EMPTYBAG,
   /**
-   * Bag union (max).
+   * Bag max union.
    * Parameters: 2
    *   -[1]..[2]: Terms of bag sort
    * Create with:
@@ -2001,25 +2001,26 @@ enum CVC4_PUBLIC Kind : int32_t
    */
   MIN_INTERSECTION,
   /**
-   * Bag difference 1 (subtracts multiplicities of the second from the first).
+   * Bag difference subtract (subtracts multiplicities of the second from the
+   * first).
    * Parameters: 2
    *   -[1]..[2]: Terms of bag sort
    * Create with:
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
    */
-  BAG_DIFFERENCE1,
+  DIFFERENCE_SUBTRACT,
   /**
-   * Bag disjoint union (removes shared elements in the two bags).
+   * Bag difference 2 (removes shared elements in the two bags).
    * Parameters: 2
    *   -[1]..[2]: Terms of bag sort
    * Create with:
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
    */
-  BAG_DIFFERENCE2,
+  DIFFERENCE_REMOVE,
   /**
-   * Bag disjoint subset (first multiplicities <= second multiplicities).
+   * Bag is included (first multiplicities <= second multiplicities).
    * Parameters: 2
    *   -[1]..[2]: Terms of set sort
    * Create with:

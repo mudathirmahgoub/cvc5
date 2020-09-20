@@ -67,8 +67,8 @@ void TheoryBags::finishInit()
   d_equalityEngine->addFunctionKind(MAX_UNION);
   d_equalityEngine->addFunctionKind(DISJOINT_UNION);
   d_equalityEngine->addFunctionKind(MIN_INTERSECTION);
-  d_equalityEngine->addFunctionKind(BAG_DIFFERENCE1);
-  d_equalityEngine->addFunctionKind(BAG_DIFFERENCE2);
+  d_equalityEngine->addFunctionKind(DIFFERENCE_SUBTRACT);
+  d_equalityEngine->addFunctionKind(DIFFERENCE_REMOVE);
   d_equalityEngine->addFunctionKind(BAG_COUNT);
   d_equalityEngine->addFunctionKind(BAG_IS_INCLUDED);
 

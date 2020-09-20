@@ -94,6 +94,18 @@ class SetEnumeratorWhite : public CxxTest::TestSuite
                      TypeCheckingExceptionPrivate&);
   }
 
+  void testCountOperator()
+  {
+    vector<Node> elements = getNStrings(1);
+    Node bag =
+        d_nm->mkNode(BAG_PAIR, elements[0], d_nm->mkConst(Rational(100)));
+
+    Node count = d_nm->mkNode(BAG_COUNT, elements[0], bag);
+    Node node = d_nm->mkConst(Rational(10));
+    TS_ASSERT_THROWS(d_nm->mkNode(BAG_COUNT, node, bag),
+                     TypeCheckingExceptionPrivate&);
+  }
+
  private:
   ExprManager* d_em;
   SmtEngine* d_smt;

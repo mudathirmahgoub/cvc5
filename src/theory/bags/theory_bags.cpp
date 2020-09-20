@@ -63,17 +63,20 @@ void TheoryBags::finishInit()
   d_valuation.setUnevaluatedKind(WITNESS);
 
   // functions we are doing congruence over
-  d_equalityEngine->addFunctionKind(BAG_PAIR);
   d_equalityEngine->addFunctionKind(MAX_UNION);
   d_equalityEngine->addFunctionKind(DISJOINT_UNION);
   d_equalityEngine->addFunctionKind(MIN_INTERSECTION);
   d_equalityEngine->addFunctionKind(DIFFERENCE_SUBTRACT);
   d_equalityEngine->addFunctionKind(DIFFERENCE_REMOVE);
-  d_equalityEngine->addFunctionKind(BAG_COUNT);
   d_equalityEngine->addFunctionKind(BAG_IS_INCLUDED);
-
-  // we do congruence over cardinality
+  d_equalityEngine->addFunctionKind(BAG_COUNT);
+  d_equalityEngine->addFunctionKind(BAG_PAIR);
+  d_equalityEngine->addFunctionKind(BAG_INSERT);
   d_equalityEngine->addFunctionKind(BAG_CARD);
+
+  //ToDo: review adding expanded operators
+  // d_equalityEngine->addFunctionKind(BAG_CHOOSE);
+  // d_equalityEngine->addFunctionKind(BAG_IS_SINGLETON);
 }
 
 void TheoryBags::postCheck(Effort level) {}

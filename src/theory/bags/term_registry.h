@@ -38,18 +38,7 @@ class TermRegistry
 
  public:
   TermRegistry(SolverState& state, InferenceManager& im, SkolemCache& skc);
-  /** get the proxy variable for bag n
-   *
-   * Proxy variables are used to communicate information that otherwise would
-   * not be possible due to rewriting. For example, the literal
-   *   card( singleton( 0 ) ) = 1
-   * is rewritten to true. Instead, to communicate this fact (e.g. to other
-   * theories), we require introducing a proxy variable x for singleton( 0 ).
-   * Then:
-   *   card( x ) = 1 ^ x = singleton( 0 )
-   * communicates the equivalent of the above literal.
-   */
-  Node getProxy(Node n);
+
   /** Get the empty bag of type tn */
   Node getEmptyBag(TypeNode tn);
 

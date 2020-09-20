@@ -70,8 +70,7 @@ class BagEnumerator : public TypeEnumeratorBase<BagEnumerator>
    * {(2, 4)},              sum = 6, #elements = 5, cardinality = 4
    * {(1, 5)},              sum = 6, #elements = 5, cardinality = 5
    *
-   * This would requires solving linear arithmetic equations and blocking
-   * previously generated bags which is too expensive.
+   * This seems too expensive to implement.
    * For now we are implementing an obvious solution
    * {(1,1)}, {(1,2)}, {(1,3)}, ... which works for both fininte and infinite
    * types

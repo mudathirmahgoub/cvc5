@@ -1981,7 +1981,7 @@ enum CVC4_PUBLIC Kind : int32_t
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
    */
-  BAG_UNION,
+  MAX_UNION,
   /**
    * Bag disjoint union (sum).
    * Parameters: 2
@@ -1999,7 +1999,7 @@ enum CVC4_PUBLIC Kind : int32_t
    *   mkTerm(Kind kind, Term child1, Term child2)
    *   mkTerm(Kind kind, const std::vector<Term>& children)
    */
-  BAG_INTERSECTION,
+  MIN_INTERSECTION,
   /**
    * Bag difference 1 (subtracts multiplicities of the second from the first).
    * Parameters: 2
@@ -2043,7 +2043,7 @@ enum CVC4_PUBLIC Kind : int32_t
    * Create with:
    *   mkTerm(Kind kind, Term child)
    */
-  BAG_SINGLETON,
+  BAG_PAIR,
   /**
    * The bag obtained by inserting elements and their multiplicities.
    * TODO: check the synatax of pairs like ("a", 3)

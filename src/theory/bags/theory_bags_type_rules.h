@@ -31,8 +31,8 @@ struct BinaryOperatorTypeRule
                                      TNode n,
                                      bool check)
   {
-    Assert(n.getKind() == kind::BAG_UNION || n.getKind() == kind::DISJOINT_UNION
-           || n.getKind() == kind::BAG_INTERSECTION
+    Assert(n.getKind() == kind::MAX_UNION || n.getKind() == kind::DISJOINT_UNION
+           || n.getKind() == kind::MIN_INTERSECTION
            || n.getKind() == kind::BAG_DIFFERENCE1
            || n.getKind() == kind::BAG_DIFFERENCE2);
     TypeNode bagType = n[0].getType(check);
@@ -46,7 +46,7 @@ struct BinaryOperatorTypeRule
       TypeNode secondBagType = n[1].getType(check);
       if (secondBagType != bagType)
       {
-        if (n.getKind() == kind::BAG_INTERSECTION)
+        if (n.getKind() == kind::MIN_INTERSECTION)
         {
           bagType = TypeNode::mostCommonTypeNode(secondBagType, bagType);
         }
@@ -148,11 +148,11 @@ struct CountTypeRule
   }
 }; /* struct CountTypeRule */
 
-struct SingletonTypeRule
+struct BagPairTypeRule
 {
   inline static TypeNode computeType(NodeManager* nm, TNode n, bool check)
   {
-    Assert(n.getKind() == kind::BAG_SINGLETON);
+    Assert(n.getKind() == kind::BAG_PAIR);
     if (check)
     {
       if (n.getNumChildren() != 2)
@@ -187,10 +187,12 @@ struct SingletonTypeRule
 
   inline static bool computeIsConst(NodeManager* nodeManager, TNode n)
   {
-    Assert(n.getKind() == kind::BAG_SINGLETON);
-    return n[0].isConst();
+    Assert(n.getKind() == kind::BAG_PAIR);
+    // for a bag to be a constant, both the element and its multiplicity should
+    // be constants.
+    return n[0].isConst() && n[1].isConst();
   }
-}; /* struct SingletonTypeRule */
+}; /* struct BagPairTypeRule */
 
 struct IsSingletonTypeRule
 {
@@ -210,7 +212,7 @@ struct IsSingletonTypeRule
     }
     return nodeManager->booleanType();
   }
-}; /* struct IsSingletonTypeRule */
+}; /* struct IsBagPairTypeRule */
 
 struct EmptyBagTypeRule
 {

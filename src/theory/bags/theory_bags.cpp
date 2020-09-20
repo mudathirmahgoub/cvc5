@@ -63,10 +63,10 @@ void TheoryBags::finishInit()
   d_valuation.setUnevaluatedKind(WITNESS);
 
   // functions we are doing congruence over
-  d_equalityEngine->addFunctionKind(BAG_SINGLETON);
-  d_equalityEngine->addFunctionKind(BAG_UNION);
+  d_equalityEngine->addFunctionKind(BAG_PAIR);
+  d_equalityEngine->addFunctionKind(MAX_UNION);
   d_equalityEngine->addFunctionKind(DISJOINT_UNION);
-  d_equalityEngine->addFunctionKind(BAG_INTERSECTION);
+  d_equalityEngine->addFunctionKind(MIN_INTERSECTION);
   d_equalityEngine->addFunctionKind(BAG_DIFFERENCE1);
   d_equalityEngine->addFunctionKind(BAG_DIFFERENCE2);
   d_equalityEngine->addFunctionKind(BAG_COUNT);

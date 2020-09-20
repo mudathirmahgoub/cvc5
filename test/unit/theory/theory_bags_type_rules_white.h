@@ -74,16 +74,19 @@ class SetEnumeratorWhite : public CxxTest::TestSuite
 
   void testInsertOperator()
   {
-    vector<Node> elements = getNStrings(3);
-
-    for(int i = 1; i <= 10; i++)
+    vector<Node> elements = getNStrings(5);
+    vector<Node> pairs;
+    Node node =
+        d_nm->mkNode(BAG_PAIR, elements[0], d_nm->mkConst(Rational(100)));
+    for (int i = 1; i < elements.size(); i++)
     {
-
+      pairs.push_back(elements[i]);
+      pairs.push_back(d_nm->mkConst(Rational(i * 2)));
     }
-    TS_ASSERT(true);
-    TS_ASSERT_THROWS(
-        d_nm->mkNode(BAG_PAIR, elements[0], d_nm->mkConst(Rational(-1))),
-        TypeCheckingExceptionPrivate&);
+    pairs.push_back(node);
+
+    // (BAG_INSERT "B" 2 "C" 4 "D" 6 "E" 8 (BAG_PAIR "A" 100))
+    Node insert = d_nm->mkNode(BAG_INSERT, pairs);
   }
 
  private:

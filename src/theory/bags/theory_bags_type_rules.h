@@ -159,15 +159,14 @@ struct BagPairTypeRule
       {
         std::stringstream ss;
         ss << "operands in term " << n << " are " << n.getNumChildren()
-           << ", but bag-singleton expects 2 operands.";
+           << ", but BAG_PAIR expects 2 operands.";
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }
       TypeNode type1 = n[1].getType(check);
       if (!type1.isInteger())
       {
         std::stringstream ss;
-        ss << "bag-singleton expects an integer for " << n[1] << ". Found"
-           << type1;
+        ss << "BAG_PAIR expects an integer for " << n[1] << ". Found" << type1;
         throw TypeCheckingExceptionPrivate(n, ss.str());
       }
       if (n[1].isConst())
@@ -176,7 +175,7 @@ struct BagPairTypeRule
         if (count <= Rational::fromDecimal("0"))
         {
           std::stringstream ss;
-          ss << "bag-singleton expects a positive integer. Found " << n[1];
+          ss << "BAG_PAIR expects a positive integer. Found " << n[1];
           throw TypeCheckingExceptionPrivate(n, ss.str());
         }
       }
@@ -274,27 +273,56 @@ struct InsertTypeRule
   {
     Assert(n.getKind() == kind::BAG_INSERT);
     size_t numChildren = n.getNumChildren();
-    Assert(numChildren >= 2);
-    TypeNode bagType = n[numChildren - 1].getType(check);
+    Assert(numChildren >= 3);
+    TypeNode baseType = n[numChildren - 1].getType(check);
     if (check)
     {
-      if (!bagType.isBag())
+      // e.g. (BAG_INSERT "E" 2 "D" 4 "C" 6 "B" 8 (BAG_PAIR "A" 100))
+      if (!baseType.isBag())
       {
         throw TypeCheckingExceptionPrivate(n, "inserting into a non-bag");
       }
-      for (size_t i = 0; i < numChildren - 1; ++i)
+
+      if (numChildren % 2 != 1)
+      {
+        std::stringstream ss;
+        ss << "BAG_INSERT needs an odd number of children. Node " << n
+           << " has " << numChildren << " children." << std::endl;
+        throw TypeCheckingExceptionPrivate(n, ss.str());
+      }
+
+      TypeNode elementType = baseType.getBagElementType();
+      for (size_t i = 0; i < numChildren - 1; i += 2)
       {
         TypeNode elementType = n[i].getType(check);
-        if (elementType != bagType.getBagElementType())
+        if (elementType != elementType)
         {
-          throw TypeCheckingExceptionPrivate(
-              n,
-              "type of element should be same as element type of bag being "
-              "inserted into");
+          std::stringstream ss;
+          ss << "node " << n << " inserts node " << n[i] << " of type "
+             << elementType << " into a bag of type " << baseType << std::endl;
+          throw TypeCheckingExceptionPrivate(n, ss.str());
+        }
+        TypeNode countType = n[i + 1].getType(check);
+        if (!countType.isInteger())
+        {
+          std::stringstream ss;
+          ss << "BAG_PAIR expects an integer for " << n[i + 1] << " in " << n
+             << ". Found " << countType << "." << std::endl;
+          throw TypeCheckingExceptionPrivate(n, ss.str());
+        }
+        if (n[i + 1].isConst())
+        {
+          Rational count = n[i + 1].getConst<Rational>();
+          if (count <= Rational::fromDecimal("0"))
+          {
+            std::stringstream ss;
+            ss << "BAG_INSERT expects a positive integer. Found " << n[i + 1];
+            throw TypeCheckingExceptionPrivate(n, ss.str());
+          }
         }
       }
     }
-    return bagType;
+    return baseType;
   }
 }; /* struct InsertTypeRule */
 

@@ -36,7 +36,11 @@ class NormalForm
    *   c1 > ... > cn.
    * Also handles the corner cases of empty bag and singleton bag.
    */
-  static bool checkNormalConstant(TNode n) { return false; }
+  static bool checkNormalConstant(TNode n)
+  {
+    // ToDo: complete this function
+    return false;
+  }
 };
 }  // namespace bags
 }  // namespace theory

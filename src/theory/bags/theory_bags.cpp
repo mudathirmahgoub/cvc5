@@ -97,7 +97,11 @@ Node TheoryBags::getModelValue(TNode node) { return Node::null(); }
 
 void TheoryBags::preRegisterTerm(TNode node) {}
 
-TrustNode TheoryBags::expandDefinition(Node n) { return TrustNode::null(); }
+TrustNode TheoryBags::expandDefinition(Node n)
+{
+  //ToDo: add choose and is_singleton here
+  return TrustNode::null();
+}
 
 void TheoryBags::presolve() {}
 

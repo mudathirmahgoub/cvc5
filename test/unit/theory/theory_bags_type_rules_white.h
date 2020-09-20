@@ -87,6 +87,11 @@ class SetEnumeratorWhite : public CxxTest::TestSuite
 
     // (BAG_INSERT "B" 2 "C" 4 "D" 6 "E" 8 (BAG_PAIR "A" 100))
     Node insert = d_nm->mkNode(BAG_INSERT, pairs);
+
+    // (BAG_INSERT "B" 2 "C" 4 "D" 6 "E" "E" (BAG_PAIR "A" 100))
+    pairs[pairs.size() - 2] = pairs[pairs.size() - 3];
+    TS_ASSERT_THROWS(d_nm->mkNode(BAG_INSERT, pairs),
+                     TypeCheckingExceptionPrivate&);
   }
 
  private:

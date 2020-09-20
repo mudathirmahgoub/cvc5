@@ -2080,7 +2080,7 @@ enum CVC4_PUBLIC Kind : int32_t
    */
   BAG_CHOOSE,
   /**
-   * Bag is_singleton predicate.
+   * Bag is_singleton predicate (single element with multiplicity exactly one).
    * Parameters: 1
    *   -[1]: Term of bag sort, is [1] a singleton bag?
    * Create with:

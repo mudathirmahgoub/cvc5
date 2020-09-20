@@ -61,21 +61,6 @@ class TheoryBagsRewriter : public TheoryRewriter
    * implementation here can do nothing.
    */
   RewriteResponse preRewrite(TNode node) override;
-
-  /**
-   * Rewrite an equality, in case special handling is required.
-   */
-  Node rewriteEquality(TNode equality)
-  {
-    // often this will suffice
-    return postRewrite(equality).d_node;
-  }
-
- private:
-  /**
-   * Returns true if elementTerm is in bagTerm, where both terms are constants.
-   */
-  bool checkConstantMembership(TNode elementTerm, TNode bagTerm);
 }; /* class TheoryBagsRewriter */
 
 }  // namespace bags

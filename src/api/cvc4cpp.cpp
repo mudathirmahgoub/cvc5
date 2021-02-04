@@ -3438,8 +3438,10 @@ Term Solver::mkTermHelper(Kind kind, const std::vector<Term>& children) const
       // integers and reals (both are Rationals).
       // At the API, mkReal and mkInteger are different and therefore the
       // element type can be used safely here.
-      Node singleton = getNodeManager()->mkSingleton(type, *children[0].d_node);
-      res = Term(this, singleton).getExpr();
+      // Node singleton = getNodeManager()->mkSingleton(type, *children[0].d_node);
+      Node one = getNodeManager()->mkConst(Rational(1));
+      Node bag = getNodeManager()->mkBag(type, *children[0].d_node, one);
+      res = Term(this, bag).getExpr();
     }
     else if (kind == api::MK_BAG)
     {
@@ -3454,6 +3456,30 @@ Term Solver::mkTermHelper(Kind kind, const std::vector<Term>& children) const
       Node bag = getNodeManager()->mkBag(
           type, *children[0].d_node, *children[1].d_node);
       res = Term(this, bag).getExpr();
+    }
+    else if (kind == UNION || kind == INTERSECTION || kind == SETMINUS
+             || kind == SUBSET || kind == MEMBER)
+    {
+      switch (kind)
+      {
+        case UNION: k = extToIntKind(UNION_DISJOINT); break;
+        case INTERSECTION: k = extToIntKind(INTERSECTION_MIN); break;
+        case SETMINUS: k = extToIntKind(DIFFERENCE_REMOVE); break;
+        case SUBSET: k = extToIntKind(SUBBAG); break;
+        case MEMBER:
+        {
+          k = extToIntKind(BAG_COUNT);
+          res = d_exprMgr->mkExpr(k, echildren);
+          Term countTerm = Term(this, res);
+
+          Term one = mkInteger(1);
+          Term equal = mkTerm(EQUAL, countTerm, one);
+          return equal;
+        }
+        break;
+        default: break;
+      }
+      res = d_exprMgr->mkExpr(k, echildren);
     }
     else
     {
@@ -3814,8 +3840,8 @@ Sort Solver::mkSetSort(Sort elemSort) const
       << "non-null element sort";
   CVC4_API_SOLVER_CHECK_SORT(elemSort);
 
-  return Sort(this, getNodeManager()->mkSetType(*elemSort.d_type));
-
+  //return Sort(this, getNodeManager()->mkSetType(*elemSort.d_type));
+  return Sort(this, getNodeManager()->mkBagType(*elemSort.d_type));
   CVC4_API_SOLVER_TRY_CATCH_END;
 }
 

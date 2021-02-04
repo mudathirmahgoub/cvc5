@@ -2531,7 +2531,7 @@ void SetBenchmarkStatusCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 SetBenchmarkLogicCommand::SetBenchmarkLogicCommand(std::string logic)
-    : d_logic(logic)
+    : d_logic("ALL")
 {
 }
 

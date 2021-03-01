@@ -287,7 +287,8 @@ bool TermUtil::isAssoc(Kind k, bool reqNAry)
 {
   if (reqNAry)
   {
-    if (k == UNION || k == INTERSECTION)
+    if (k == UNION || k == INTERSECTION || k == UNION_DISJOINT || k == UNION_MAX
+        || k == INTERSECTION_MIN)
     {
       return false;
     }
@@ -296,7 +297,8 @@ bool TermUtil::isAssoc(Kind k, bool reqNAry)
          || k == XOR || k == BITVECTOR_PLUS || k == BITVECTOR_MULT
          || k == BITVECTOR_AND || k == BITVECTOR_OR || k == BITVECTOR_XOR
          || k == BITVECTOR_XNOR || k == BITVECTOR_CONCAT || k == STRING_CONCAT
-         || k == UNION || k == INTERSECTION || k == JOIN || k == PRODUCT
+         || k == UNION || k == INTERSECTION || k == UNION_DISJOINT
+         || k == UNION_MAX || k == INTERSECTION_MIN || k == JOIN || k == PRODUCT
          || k == SEP_STAR;
 }
 

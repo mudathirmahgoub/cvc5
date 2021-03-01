@@ -176,9 +176,17 @@ Node TermDb::getOrMakeTypeFreshVariable(TypeNode tn)
 Node TermDb::getMatchOperator( Node n ) {
   Kind k = n.getKind();
   //datatype operators may be parametric, always assume they are
-  if (k == SELECT || k == STORE || k == UNION || k == INTERSECTION
-      || k == SUBSET || k == SETMINUS || k == MEMBER || k == SINGLETON
+  if (/** arrays */
+      k == SELECT || k == STORE
+      /** sets */
+      || k == UNION || k == INTERSECTION || k == SUBSET || k == SETMINUS
+      || k == MEMBER || k == SINGLETON
+      /** bags */
+      || k == UNION_MAX || k == UNION_DISJOINT || k == INTERSECTION_MIN
+      || k == DIFFERENCE_SUBTRACT || k == DIFFERENCE_REMOVE
+      /** datatypes */
       || k == APPLY_SELECTOR_TOTAL || k == APPLY_SELECTOR || k == APPLY_TESTER
+      /** others */
       || k == SEP_PTO || k == HO_APPLY || k == SEQ_NTH)
   {
     //since it is parametric, use a particular one as op

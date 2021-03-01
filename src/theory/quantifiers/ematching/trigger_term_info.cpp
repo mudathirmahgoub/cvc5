@@ -53,7 +53,10 @@ bool TriggerTermInfo::isAtomicTriggerKind(Kind k)
   return k == APPLY_UF || k == SELECT || k == STORE || k == APPLY_CONSTRUCTOR
          || k == APPLY_SELECTOR || k == APPLY_SELECTOR_TOTAL
          || k == APPLY_TESTER || k == UNION || k == INTERSECTION || k == SUBSET
-         || k == SETMINUS || k == MEMBER || k == SINGLETON || k == SEP_PTO
+         || k == SETMINUS || k == MEMBER || k == SINGLETON || k == UNION_MAX
+         || k == UNION_DISJOINT || k == INTERSECTION_MIN || k == SUBBAG
+         || k == DIFFERENCE_SUBTRACT || k == DIFFERENCE_REMOVE || k == BAG_COUNT
+         || k == MK_BAG || k == DUPLICATE_REMOVAL || k == SEP_PTO
          || k == BITVECTOR_TO_NAT || k == INT_TO_BITVECTOR || k == HO_APPLY
          || k == STRING_LENGTH || k == SEQ_NTH;
 }

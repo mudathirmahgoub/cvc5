@@ -52,9 +52,9 @@ bool TriggerTermInfo::isAtomicTriggerKind(Kind k)
   // where these two things require those kinds respectively.
   return k == APPLY_UF || k == SELECT || k == STORE || k == APPLY_CONSTRUCTOR
          || k == APPLY_SELECTOR || k == APPLY_SELECTOR_TOTAL
-         || k == APPLY_TESTER || k == UNION || k == INTERSECTION || k == SUBSET
+         || k == APPLY_TESTER || k == UNION || k == INTERSECTION
          || k == SETMINUS || k == MEMBER || k == SINGLETON || k == UNION_MAX
-         || k == UNION_DISJOINT || k == INTERSECTION_MIN || k == SUBBAG
+         || k == UNION_DISJOINT || k == INTERSECTION_MIN
          || k == DIFFERENCE_SUBTRACT || k == DIFFERENCE_REMOVE || k == BAG_COUNT
          || k == MK_BAG || k == DUPLICATE_REMOVAL || k == SEP_PTO
          || k == BITVECTOR_TO_NAT || k == INT_TO_BITVECTOR || k == HO_APPLY

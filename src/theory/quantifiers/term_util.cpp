@@ -306,7 +306,8 @@ bool TermUtil::isComm(Kind k, bool reqNAry)
 {
   if (reqNAry)
   {
-    if (k == UNION || k == INTERSECTION)
+    if (k == UNION || k == INTERSECTION || k == UNION_DISJOINT || k == UNION_MAX
+        || k == INTERSECTION_MIN)
     {
       return false;
     }
@@ -315,6 +316,7 @@ bool TermUtil::isComm(Kind k, bool reqNAry)
          || k == OR || k == XOR || k == BITVECTOR_PLUS || k == BITVECTOR_MULT
          || k == BITVECTOR_AND || k == BITVECTOR_OR || k == BITVECTOR_XOR
          || k == BITVECTOR_XNOR || k == UNION || k == INTERSECTION
+         || k == UNION_DISJOINT || k == UNION_MAX || k == INTERSECTION_MIN
          || k == SEP_STAR;
 }
 

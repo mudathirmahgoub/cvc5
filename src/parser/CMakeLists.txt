@@ -3,12 +3,11 @@
 ## Top contributors (to current version):
 ##   Mathias Preiner, Aina Niemetz, Andrew Reynolds
 ## This file is part of the CVC4 project.
-## Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+## Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
 ## in the top-level source directory and their institutional affiliations.
 ## All rights reserved.  See the file COPYING in the top-level source
 ## directory for licensing information.
 ##
-set(ANTLR_HOME ${ANTLR_DIR})
 find_package(ANTLR REQUIRED)
 
 if(NOT HAVE_ANTLR3_FILE_STREAM_NEW)

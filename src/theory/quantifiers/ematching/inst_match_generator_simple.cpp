@@ -4,7 +4,7 @@
  ** Top contributors (to current version):
  **   Andrew Reynolds, Morgan Deters, Mathias Preiner
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -13,7 +13,13 @@
  **/
 #include "theory/quantifiers/ematching/inst_match_generator_simple.h"
 
+#include "options/quantifiers_options.h"
 #include "theory/quantifiers/ematching/trigger_term_info.h"
+#include "theory/quantifiers/ematching/trigger_trie.h"
+#include "theory/quantifiers/instantiate.h"
+#include "theory/quantifiers/quantifiers_state.h"
+#include "theory/quantifiers/term_database.h"
+#include "theory/quantifiers/term_util.h"
 #include "theory/quantifiers_engine.h"
 
 using namespace CVC4::kind;
@@ -95,7 +101,7 @@ uint64_t InstMatchGeneratorSimple::addInstantiations(Node q,
           if (t.first != r)
           {
             InstMatch m(q);
-            addInstantiations(m, qe, addedLemmas, 0, &(t.second));
+            addInstantiations(m, qe, addedLemmas, 0, &(t.second), tparent);
             if (qs.isInConflict())
             {
               break;
@@ -112,7 +118,7 @@ uint64_t InstMatchGeneratorSimple::addInstantiations(Node q,
   if (tat && !qs.isInConflict())
   {
     InstMatch m(q);
-    addInstantiations(m, qe, addedLemmas, 0, tat);
+    addInstantiations(m, qe, addedLemmas, 0, tat, tparent);
   }
   return addedLemmas;
 }
@@ -121,7 +127,8 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
                                                  QuantifiersEngine* qe,
                                                  uint64_t& addedLemmas,
                                                  size_t argIndex,
-                                                 TNodeTrie* tat)
+                                                 TNodeTrie* tat,
+                                                 Trigger* tparent)
 {
   Debug("simple-trigger-debug")
       << "Add inst " << argIndex << " " << d_match_pattern << std::endl;
@@ -143,7 +150,8 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
     }
     // we do not need the trigger parent for simple triggers (no post-processing
     // required)
-    if (qe->getInstantiate()->addInstantiation(d_quant, m.d_vals))
+    if (sendInstantiation(
+            tparent, m, InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE))
     {
       addedLemmas++;
       Debug("simple-trigger") << "-> Produced instantiation " << m << std::endl;
@@ -165,7 +173,8 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
         if (prev.isNull() || prev == t)
         {
           m.setValue(v, t);
-          addInstantiations(m, qe, addedLemmas, argIndex + 1, &(tt.second));
+          addInstantiations(
+              m, qe, addedLemmas, argIndex + 1, &(tt.second), tparent);
           m.setValue(v, prev);
           if (qs.isInConflict())
           {
@@ -181,7 +190,7 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
   std::map<TNode, TNodeTrie>::iterator it = tat->d_data.find(r);
   if (it != tat->d_data.end())
   {
-    addInstantiations(m, qe, addedLemmas, argIndex + 1, &(it->second));
+    addInstantiations(m, qe, addedLemmas, argIndex + 1, &(it->second), tparent);
   }
 }
 

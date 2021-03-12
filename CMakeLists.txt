@@ -3,7 +3,7 @@
 ## Top contributors (to current version):
 ##   Mathias Preiner, Aina Niemetz, Gereon Kremer
 ## This file is part of the CVC4 project.
-## Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+## Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
 ## in the top-level source directory and their institutional affiliations.
 ## All rights reserved.  See the file COPYING in the top-level source
 ## directory for licensing information.
@@ -67,9 +67,6 @@ if(CADICAL_DIR)
 endif()
 if(CRYPTOMINISAT_DIR)
   list(APPEND CMAKE_PREFIX_PATH "${CRYPTOMINISAT_DIR}")
-endif()
-if(CXXTEST_DIR)
-  list(APPEND CMAKE_PREFIX_PATH "${CXXTEST_DIR}")
 endif()
 if(DRAT2ER_DIR)
   list(APPEND CMAKE_PREFIX_PATH "${DRAT2ER_DIR}")
@@ -164,7 +161,6 @@ set(ABC_DIR           "" CACHE STRING "Set ABC install directory")
 set(ANTLR_DIR         "" CACHE STRING "Set ANTLR3 install directory")
 set(CADICAL_DIR       "" CACHE STRING "Set CaDiCaL install directory")
 set(CRYPTOMINISAT_DIR "" CACHE STRING "Set CryptoMiniSat install directory")
-set(CXXTEST_DIR       "" CACHE STRING "Set CxxTest install directory")
 set(DRAT2ER_DIR       "" CACHE STRING "Set drat2er install directory")
 set(GLPK_DIR          "" CACHE STRING "Set GLPK install directory")
 set(GMP_DIR           "" CACHE STRING "Set GMP install directory")
@@ -234,7 +230,6 @@ include(Config${CMAKE_BUILD_TYPE})
 
 add_check_c_cxx_flag("-O${OPTIMIZATION_LEVEL}")
 add_check_c_cxx_flag("-Wall")
-add_check_c_cxx_flag("-Werror")
 add_check_c_cxx_flag("-Wno-unused-private-field")
 add_check_c_flag("-fexceptions")
 add_check_cxx_flag("-Wsuggest-override")
@@ -276,16 +271,6 @@ else()
 endif()
 
 #-----------------------------------------------------------------------------#
-# Set options for best configuration
-
-if(ENABLE_BEST)
-  cvc4_set_option(USE_ABC ON)
-  cvc4_set_option(USE_CADICAL ON)
-  cvc4_set_option(USE_CLN ON)
-  cvc4_set_option(USE_CRYPTOMINISAT ON)
-  cvc4_set_option(USE_GLPK ON)
-  cvc4_set_option(USE_EDITLINE ON)
-endif()
 
 # Only enable unit testing if assertions are enabled. Otherwise, unit tests
 # that expect AssertionException to be thrown will fail.
@@ -353,24 +338,6 @@ endif()
 # This needs to be enabled here rather than in subdirectory test in order to
 # allow calling ctest from the root build directory.
 enable_testing()
-
-#-----------------------------------------------------------------------------#
-# Check GCC version.
-#
-# GCC version 4.5.1 builds MiniSat incorrectly with -O2, which results in
-# incorrect answers.
-
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  execute_process(
-    COMMAND ${CMAKE_CXX_COMPILER} -dumpversion
-    OUTPUT_VARIABLE GCC_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(GCC_VERSION VERSION_EQUAL "4.5.1")
-    message(FATAL_ERROR
-      "GCC 4.5.1's optimizer is known to build MiniSat incorrectly "
-      "(and by extension CVC4).")
-  endif()
-endif()
 
 #-----------------------------------------------------------------------------#
 # Check options, find packages and configure build.
@@ -559,6 +526,11 @@ if(GPL_LIBS)
 endif()
 
 #-----------------------------------------------------------------------------#
+# Provide targets to inspect iwyu suggestions
+
+include(IWYU)
+
+#-----------------------------------------------------------------------------#
 # Generate CVC4's cvc4autoconfig.h header
 
 include(ConfigureCVC4)
@@ -689,7 +661,6 @@ endif()
 message("")
 print_config("GPL                       :" ENABLE_GPL)
 print_config("Best configuration        :" ENABLE_BEST)
-print_config("Optimization level        :" OPTIMIZATION_LEVEL)
 message("")
 print_config("Assertions                :" ENABLE_ASSERTIONS)
 print_config("Debug symbols             :" ENABLE_DEBUG_SYMBOLS)
@@ -724,7 +695,7 @@ print_config("Kissat                    :" USE_KISSAT)
 print_config("LFSC                      :" USE_LFSC)
 print_config("LibPoly                   :" USE_POLY)
 message("")
-print_config("BUILD_LIB_ONLY            :" BUILD_LIB_ONLY)
+print_config("Build libcvc4 only        :" BUILD_LIB_ONLY)
 
 if(CVC4_USE_CLN_IMP)
   message("MP library                : cln")

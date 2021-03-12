@@ -4,7 +4,7 @@
  ** Top contributors (to current version):
  **   Mathias Preiner, Aina Niemetz, Andrew Reynolds
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -18,12 +18,16 @@
 #include <unordered_set>
 
 #include "expr/node_algorithm.h"
+#include "options/quantifiers_options.h"
 #include "theory/bv/theory_bv_utils.h"
 #include "theory/datatypes/sygus_datatype_utils.h"
+#include "theory/quantifiers/first_order_model.h"
 #include "theory/quantifiers/sygus/sygus_enumerator.h"
 #include "theory/quantifiers/sygus/sygus_grammar_cons.h"
 #include "theory/quantifiers/sygus/synth_engine.h"
+#include "theory/quantifiers/term_util.h"
 #include "theory/quantifiers_engine.h"
+#include "theory/rewriter.h"
 
 namespace CVC4 {
 namespace theory {
@@ -282,7 +286,7 @@ void SygusInst::check(Theory::Effort e, QEffort quant_e)
 
     if (mode == options::SygusInstMode::PRIORITY_INST)
     {
-      if (!inst->addInstantiation(q, terms))
+      if (!inst->addInstantiation(q, terms, InferenceId::QUANTIFIERS_INST_SYQI))
       {
         sendEvalUnfoldLemmas(eval_unfold_lemmas);
       }
@@ -291,13 +295,13 @@ void SygusInst::check(Theory::Effort e, QEffort quant_e)
     {
       if (!sendEvalUnfoldLemmas(eval_unfold_lemmas))
       {
-        inst->addInstantiation(q, terms);
+        inst->addInstantiation(q, terms, InferenceId::QUANTIFIERS_INST_SYQI);
       }
     }
     else
     {
       Assert(mode == options::SygusInstMode::INTERLEAVE);
-      inst->addInstantiation(q, terms);
+      inst->addInstantiation(q, terms, InferenceId::QUANTIFIERS_INST_SYQI);
       sendEvalUnfoldLemmas(eval_unfold_lemmas);
     }
   }
@@ -309,7 +313,8 @@ bool SygusInst::sendEvalUnfoldLemmas(const std::vector<Node>& lemmas)
   for (const Node& lem : lemmas)
   {
     Trace("sygus-inst") << "Evaluation unfolding: " << lem << std::endl;
-    added_lemma |= d_qim.addPendingLemma(lem, InferenceId::UNKNOWN);
+    added_lemma |=
+        d_qim.addPendingLemma(lem, InferenceId::QUANTIFIERS_SYQI_EVAL_UNFOLD);
   }
   return added_lemma;
 }

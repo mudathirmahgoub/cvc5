@@ -2,9 +2,9 @@
 /*! \file test_smt.h
  ** \verbatim
  ** Top contributors (to current version):
- **   Aina Niemetz
+ **   Aina Niemetz, Andrew Reynolds, Morgan Deters
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -15,12 +15,16 @@
 #ifndef CVC4__TEST__UNIT__TEST_SMT_H
 #define CVC4__TEST__UNIT__TEST_SMT_H
 
+#include "expr/dtype_cons.h"
 #include "expr/node.h"
 #include "expr/node_manager.h"
 #include "smt/smt_engine.h"
 #include "smt/smt_engine_scope.h"
 #include "test.h"
+#include "theory/output_channel.h"
+#include "theory/rewriter.h"
 #include "theory/theory.h"
+#include "theory/theory_state.h"
 #include "theory/valuation.h"
 #include "util/resource_manager.h"
 #include "util/unsafe_interrupt_exception.h"
@@ -37,7 +41,7 @@ class TestSmt : public TestInternal
  protected:
   void SetUp() override
   {
-    d_nodeManager.reset(new NodeManager(nullptr));
+    d_nodeManager.reset(new NodeManager());
     d_nmScope.reset(new NodeManagerScope(d_nodeManager.get()));
     d_smtEngine.reset(new SmtEngine(d_nodeManager.get()));
     d_smtEngine->finishInit();
@@ -53,7 +57,7 @@ class TestSmtNoFinishInit : public TestInternal
  protected:
   void SetUp() override
   {
-    d_nodeManager.reset(new NodeManager(nullptr));
+    d_nodeManager.reset(new NodeManager());
     d_nmScope.reset(new NodeManagerScope(d_nodeManager.get()));
     d_smtEngine.reset(new SmtEngine(d_nodeManager.get()));
   }

@@ -2,9 +2,9 @@
 /*! \file inst_match_generator_multi.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds
+ **   Andrew Reynolds, Morgan Deters, Tim King
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -15,7 +15,9 @@
 #include "theory/quantifiers/ematching/inst_match_generator_multi.h"
 
 #include "theory/quantifiers/quantifiers_state.h"
+#include "theory/quantifiers/term_util.h"
 #include "theory/quantifiers_engine.h"
+#include "theory/uf/equality_engine_iterator.h"
 
 using namespace CVC4::kind;
 
@@ -230,7 +232,8 @@ void InstMatchGeneratorMulti::processNewInstantiations(QuantifiersEngine* qe,
   if (childIndex == endChildIndex)
   {
     // m is an instantiation
-    if (sendInstantiation(tparent, m))
+    if (sendInstantiation(
+            tparent, m, InferenceId::QUANTIFIERS_INST_E_MATCHING_MT))
     {
       addedLemmas++;
       Trace("multi-trigger-cache-debug")

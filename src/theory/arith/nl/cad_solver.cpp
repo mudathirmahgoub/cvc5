@@ -4,7 +4,7 @@
  ** Top contributors (to current version):
  **   Gereon Kremer
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -14,15 +14,11 @@
 
 #include "theory/arith/nl/cad_solver.h"
 
-#ifdef CVC4_POLY_IMP
-#include <poly/polyxx.h>
-#endif
-
-#include "options/arith_options.h"
 #include "theory/inference_id.h"
+#include "theory/arith/inference_manager.h"
 #include "theory/arith/nl/cad/cdcac.h"
+#include "theory/arith/nl/nl_model.h"
 #include "theory/arith/nl/poly_conversion.h"
-#include "util/poly_util.h"
 
 namespace CVC4 {
 namespace theory {

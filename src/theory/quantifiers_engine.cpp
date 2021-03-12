@@ -2,9 +2,9 @@
 /*! \file quantifiers_engine.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds, Morgan Deters, Mathias Preiner
+ **   Andrew Reynolds, Tim King, Morgan Deters
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -20,10 +20,23 @@
 #include "options/uf_options.h"
 #include "smt/smt_engine_scope.h"
 #include "smt/smt_statistics_registry.h"
+#include "theory/quantifiers/ematching/trigger_trie.h"
+#include "theory/quantifiers/equality_query.h"
+#include "theory/quantifiers/first_order_model.h"
 #include "theory/quantifiers/fmf/first_order_model_fmc.h"
 #include "theory/quantifiers/fmf/full_model_check.h"
+#include "theory/quantifiers/fmf/model_builder.h"
+#include "theory/quantifiers/quantifiers_inference_manager.h"
 #include "theory/quantifiers/quantifiers_modules.h"
 #include "theory/quantifiers/quantifiers_rewriter.h"
+#include "theory/quantifiers/quantifiers_state.h"
+#include "theory/quantifiers/quant_module.h"
+#include "theory/quantifiers/relevant_domain.h"
+#include "theory/quantifiers/skolemize.h"
+#include "theory/quantifiers/sygus/term_database_sygus.h"
+#include "theory/quantifiers/term_util.h"
+#include "theory/quantifiers/term_database.h"
+#include "theory/quantifiers/term_enumeration.h"
 #include "theory/theory_engine.h"
 #include "theory/uf/equality_engine.h"
 
@@ -43,32 +56,21 @@ QuantifiersEngine::QuantifiersEngine(
       d_decManager(nullptr),
       d_pnm(pnm),
       d_qreg(),
+      d_treg(qstate, qim, d_qreg),
       d_tr_trie(new inst::TriggerTrie),
       d_model(nullptr),
       d_builder(nullptr),
-      d_term_db(new quantifiers::TermDb(qstate, qim, d_qreg)),
       d_eq_query(nullptr),
-      d_sygus_tdb(nullptr),
       d_instantiate(
           new quantifiers::Instantiate(this, qstate, qim, d_qreg, pnm)),
       d_skolemize(new quantifiers::Skolemize(d_qstate, d_pnm)),
-      d_term_enum(new quantifiers::TermEnumeration),
       d_quants_prereg(qstate.getUserContext()),
-      d_quants_red(qstate.getUserContext()),
-      d_presolve(qstate.getUserContext(), true),
-      d_presolve_in(qstate.getUserContext()),
-      d_presolve_cache(qstate.getUserContext())
+      d_quants_red(qstate.getUserContext())
 {
   //---- utilities
   // quantifiers registry must come before the other utilities
   d_util.push_back(&d_qreg);
-  d_util.push_back(d_term_db.get());
-
-  if (options::sygus() || options::sygusInst())
-  {
-    // must be constructed here since it is required for datatypes finistInit
-    d_sygus_tdb.reset(new quantifiers::TermDbSygus(this, qstate, qim));
-  }
+  d_util.push_back(d_treg.getTermDatabase());
 
   d_util.push_back(d_instantiate.get());
 
@@ -101,8 +103,8 @@ QuantifiersEngine::QuantifiersEngine(
     d_model.reset(new quantifiers::FirstOrderModel(
         this, qstate, d_qreg, "FirstOrderModel"));
   }
-  d_eq_query.reset(new quantifiers::EqualityQueryQuantifiersEngine(
-      qstate, d_term_db.get(), d_model.get()));
+  d_eq_query.reset(
+      new quantifiers::EqualityQueryQuantifiersEngine(qstate, d_model.get()));
   d_util.insert(d_util.begin(), d_eq_query.get());
 }
 
@@ -151,11 +153,15 @@ quantifiers::FirstOrderModel* QuantifiersEngine::getModel() const
 }
 quantifiers::TermDb* QuantifiersEngine::getTermDatabase() const
 {
-  return d_term_db.get();
+  return d_treg.getTermDatabase();
 }
 quantifiers::TermDbSygus* QuantifiersEngine::getTermDatabaseSygus() const
 {
-  return d_sygus_tdb.get();
+  return d_treg.getTermDatabaseSygus();
+}
+quantifiers::TermEnumeration* QuantifiersEngine::getTermEnumeration() const
+{
+  return d_treg.getTermEnumeration();
 }
 quantifiers::Instantiate* QuantifiersEngine::getInstantiate() const
 {
@@ -164,10 +170,6 @@ quantifiers::Instantiate* QuantifiersEngine::getInstantiate() const
 quantifiers::Skolemize* QuantifiersEngine::getSkolemize() const
 {
   return d_skolemize.get();
-}
-quantifiers::TermEnumeration* QuantifiersEngine::getTermEnumeration() const
-{
-  return d_term_enum.get();
 }
 inst::TriggerTrie* QuantifiersEngine::getTriggerDatabase() const
 {
@@ -186,7 +188,7 @@ bool QuantifiersEngine::isFiniteBound(Node q, Node v) const
   {
     return true;
   }
-  else if (d_term_enum->mayComplete(tn))
+  else if (d_treg.getTermEnumeration()->mayComplete(tn))
   {
     return true;
   }
@@ -243,18 +245,9 @@ void QuantifiersEngine::presolve() {
   for( unsigned i=0; i<d_modules.size(); i++ ){
     d_modules[i]->presolve();
   }
-  d_term_db->presolve();
-  d_presolve = false;
-  //add all terms to database
-  if (options::incrementalSolving() && !options::termDbCd())
-  {
-    Trace("quant-engine-proc") << "Add presolve cache " << d_presolve_cache.size() << std::endl;
-    for (const Node& t : d_presolve_cache)
-    {
-      addTermToDatabase(t);
-    }
-    Trace("quant-engine-proc") << "Done add presolve cache " << std::endl;
-  }
+  // presolve with term registry, which populates the term database based on
+  // terms registered before presolve when in incremental mode
+  d_treg.presolve();
 }
 
 void QuantifiersEngine::ppNotifyAssertions(
@@ -730,37 +723,11 @@ void QuantifiersEngine::assertQuantifier( Node f, bool pol ){
   {
     mdl->assertNode(f);
   }
-  addTermToDatabase(d_qreg.getInstConstantBody(f), true);
+  // add term to the registry
+  d_treg.addTerm(d_qreg.getInstConstantBody(f), true);
 }
 
-void QuantifiersEngine::addTermToDatabase(Node n, bool withinQuant)
-{
-  // don't add terms in quantifier bodies
-  if (withinQuant && !options::registerQuantBodyTerms())
-  {
-    return;
-  }
-  if (options::incrementalSolving() && !options::termDbCd())
-  {
-    if( d_presolve_in.find( n )==d_presolve_in.end() ){
-      d_presolve_in.insert( n );
-      d_presolve_cache.push_back( n );
-    }
-  }
-  //only wait if we are doing incremental solving
-  if (!d_presolve || !options::incrementalSolving() || options::termDbCd())
-  {
-    d_term_db->addTerm(n);
-    if (d_sygus_tdb && options::sygusEvalUnfold())
-    {
-      d_sygus_tdb->getEvalUnfold()->registerEvalTerm(n);
-    }
-  }
-}
-
-void QuantifiersEngine::eqNotifyNewClass(TNode t) {
-  addTermToDatabase( t );
-}
+void QuantifiersEngine::eqNotifyNewClass(TNode t) { d_treg.addTerm(t); }
 
 void QuantifiersEngine::markRelevant( Node q ) {
   d_model->markRelevant( q );
@@ -800,21 +767,12 @@ QuantifiersEngine::Statistics::Statistics()
       d_ematching_time("theory::QuantifiersEngine::time_ematching"),
       d_num_quant("QuantifiersEngine::Num_Quantifiers", 0),
       d_instantiation_rounds("QuantifiersEngine::Rounds_Instantiation_Full", 0),
-      d_instantiation_rounds_lc("QuantifiersEngine::Rounds_Instantiation_Last_Call", 0),
+      d_instantiation_rounds_lc(
+          "QuantifiersEngine::Rounds_Instantiation_Last_Call", 0),
       d_triggers("QuantifiersEngine::Triggers", 0),
       d_simple_triggers("QuantifiersEngine::Triggers_Simple", 0),
       d_multi_triggers("QuantifiersEngine::Triggers_Multi", 0),
-      d_multi_trigger_instantiations("QuantifiersEngine::Multi_Trigger_Instantiations", 0),
-      d_red_alpha_equiv("QuantifiersEngine::Reductions_Alpha_Equivalence", 0),
-      d_instantiations_user_patterns("QuantifiersEngine::Instantiations_User_Patterns", 0),
-      d_instantiations_auto_gen("QuantifiersEngine::Instantiations_Auto_Gen", 0),
-      d_instantiations_guess("QuantifiersEngine::Instantiations_Guess", 0),
-      d_instantiations_qcf("QuantifiersEngine::Instantiations_Qcf_Conflict", 0),
-      d_instantiations_qcf_prop("QuantifiersEngine::Instantiations_Qcf_Prop", 0),
-      d_instantiations_fmf_exh("QuantifiersEngine::Instantiations_Fmf_Exh", 0),
-      d_instantiations_fmf_mbqi("QuantifiersEngine::Instantiations_Fmf_Mbqi", 0),
-      d_instantiations_cbqi("QuantifiersEngine::Instantiations_Cbqi", 0),
-      d_instantiations_rr("QuantifiersEngine::Instantiations_Rewrite_Rules", 0)
+      d_red_alpha_equiv("QuantifiersEngine::Reductions_Alpha_Equivalence", 0)
 {
   smtStatisticsRegistry()->registerStat(&d_time);
   smtStatisticsRegistry()->registerStat(&d_qcf_time);
@@ -825,17 +783,7 @@ QuantifiersEngine::Statistics::Statistics()
   smtStatisticsRegistry()->registerStat(&d_triggers);
   smtStatisticsRegistry()->registerStat(&d_simple_triggers);
   smtStatisticsRegistry()->registerStat(&d_multi_triggers);
-  smtStatisticsRegistry()->registerStat(&d_multi_trigger_instantiations);
   smtStatisticsRegistry()->registerStat(&d_red_alpha_equiv);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_user_patterns);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_auto_gen);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_guess);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_qcf);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_qcf_prop);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_fmf_exh);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_fmf_mbqi);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_cbqi);
-  smtStatisticsRegistry()->registerStat(&d_instantiations_rr);
 }
 
 QuantifiersEngine::Statistics::~Statistics(){
@@ -848,17 +796,7 @@ QuantifiersEngine::Statistics::~Statistics(){
   smtStatisticsRegistry()->unregisterStat(&d_triggers);
   smtStatisticsRegistry()->unregisterStat(&d_simple_triggers);
   smtStatisticsRegistry()->unregisterStat(&d_multi_triggers);
-  smtStatisticsRegistry()->unregisterStat(&d_multi_trigger_instantiations);
   smtStatisticsRegistry()->unregisterStat(&d_red_alpha_equiv);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_user_patterns);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_auto_gen);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_guess);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_qcf);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_qcf_prop);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_fmf_exh);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_fmf_mbqi);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_cbqi);
-  smtStatisticsRegistry()->unregisterStat(&d_instantiations_rr);
 }
 
 Node QuantifiersEngine::getInternalRepresentative( Node a, Node q, int index ){

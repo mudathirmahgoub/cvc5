@@ -3,7 +3,7 @@
 ## Top contributors (to current version):
 ##   Mathias Preiner, Andrew Reynolds, Gereon Kremer
 ## This file is part of the CVC4 project.
-## Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+## Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
 ## in the top-level source directory and their institutional affiliations.
 ## All rights reserved.  See the file COPYING in the top-level source
 ## directory for licensing information.
@@ -223,13 +223,13 @@ libcvc4_add_sources(
   smt/dump.h
   smt/dump_manager.cpp
   smt/dump_manager.h
+  smt/env.cpp
+  smt/env.h
   smt/expand_definitions.cpp
   smt/expand_definitions.h
   smt/listeners.cpp
   smt/listeners.h
   smt/logic_exception.h
-  smt/logic_request.cpp
-  smt/logic_request.h
   smt/interpolation_solver.cpp
   smt/interpolation_solver.h
   smt/managed_ostreams.cpp
@@ -242,6 +242,8 @@ libcvc4_add_sources(
   smt/model_blocker.h
   smt/node_command.cpp
   smt/node_command.h
+  smt/optimization_solver.cpp
+  smt/optimization_solver.h
   smt/options_manager.cpp
   smt/options_manager.h
   smt/output_manager.cpp
@@ -516,6 +518,8 @@ libcvc4_add_sources(
   theory/bv/bitblast/eager_bitblaster.h
   theory/bv/bitblast/lazy_bitblaster.cpp
   theory/bv/bitblast/lazy_bitblaster.h
+  theory/bv/bitblast/proof_bitblaster.cpp
+  theory/bv/bitblast/proof_bitblaster.h
   theory/bv/bitblast/simple_bitblaster.cpp
   theory/bv/bitblast/simple_bitblaster.h
   theory/bv/bv_eager_solver.cpp
@@ -584,6 +588,8 @@ libcvc4_add_sources(
   theory/datatypes/theory_datatypes_type_rules.h
   theory/datatypes/theory_datatypes_utils.cpp
   theory/datatypes/theory_datatypes_utils.h
+  theory/datatypes/tuple_project_op.cpp
+  theory/datatypes/tuple_project_op.h
   theory/datatypes/type_enumerator.cpp
   theory/datatypes/type_enumerator.h
   theory/decision_manager.cpp
@@ -708,6 +714,8 @@ libcvc4_add_sources(
   theory/quantifiers/fmf/model_engine.h
   theory/quantifiers/fun_def_evaluator.cpp
   theory/quantifiers/fun_def_evaluator.h
+  theory/quantifiers/index_trie.cpp
+  theory/quantifiers/index_trie.h
   theory/quantifiers/inst_match.cpp
   theory/quantifiers/inst_match.h
   theory/quantifiers/inst_match_trie.cpp
@@ -756,6 +764,8 @@ libcvc4_add_sources(
   theory/quantifiers/skolemize.h
   theory/quantifiers/solution_filter.cpp
   theory/quantifiers/solution_filter.h
+  theory/quantifiers/term_tuple_enumerator.cpp
+  theory/quantifiers/term_tuple_enumerator.h
   theory/quantifiers/sygus/ce_guided_single_inv.cpp
   theory/quantifiers/sygus/ce_guided_single_inv.h
   theory/quantifiers/sygus/ce_guided_single_inv_sol.cpp
@@ -842,6 +852,8 @@ libcvc4_add_sources(
   theory/quantifiers/term_database.h
   theory/quantifiers/term_enumeration.cpp
   theory/quantifiers/term_enumeration.h
+  theory/quantifiers/term_registry.cpp
+  theory/quantifiers/term_registry.h
   theory/quantifiers/term_util.cpp
   theory/quantifiers/term_util.h
   theory/quantifiers/theory_quantifiers.cpp
@@ -892,6 +904,8 @@ libcvc4_add_sources(
   theory/shared_solver_distributed.h
   theory/shared_terms_database.cpp
   theory/shared_terms_database.h
+  theory/skolem_lemma.cpp
+  theory/skolem_lemma.h
   theory/smt_engine_subsolver.cpp
   theory/smt_engine_subsolver.h
   theory/sort_inference.cpp
@@ -1193,12 +1207,8 @@ install(FILES
           expr/sequence.h
           expr/symbol_manager.h
           expr/symbol_table.h
-          expr/type.h
           expr/uninterpreted_constant.h
-          expr/variable_type_map.h
-          ${CMAKE_CURRENT_BINARY_DIR}/expr/expr.h
           ${CMAKE_CURRENT_BINARY_DIR}/expr/kind.h
-          ${CMAKE_CURRENT_BINARY_DIR}/expr/expr_manager.h
         DESTINATION
           ${CMAKE_INSTALL_INCLUDEDIR}/cvc4/expr)
 install(FILES

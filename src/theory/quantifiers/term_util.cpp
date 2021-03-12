@@ -2,9 +2,9 @@
 /*! \file term_util.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds, Morgan Deters, Tianyi Liang
+ **   Andrew Reynolds, Mathias Preiner, Morgan Deters
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -25,6 +25,7 @@
 #include "theory/quantifiers/term_enumeration.h"
 #include "theory/quantifiers_engine.h"
 #include "theory/strings/word.h"
+#include "theory/rewriter.h"
 
 using namespace std;
 using namespace CVC4::kind;
@@ -461,10 +462,8 @@ bool TermUtil::isIdempotentArg(Node n, Kind ik, int arg)
       return true;
     }
     else if (ik == MINUS || ik == BITVECTOR_SHL || ik == BITVECTOR_LSHR
-             || ik == BITVECTOR_ASHR
-             || ik == BITVECTOR_SUB
-             || ik == BITVECTOR_UREM
-             || ik == BITVECTOR_UREM_TOTAL)
+             || ik == BITVECTOR_ASHR || ik == BITVECTOR_SUB
+             || ik == BITVECTOR_UREM)
     {
       return arg == 1;
     }
@@ -479,7 +478,6 @@ bool TermUtil::isIdempotentArg(Node n, Kind ik, int arg)
              || ik == INTS_DIVISION_TOTAL
              || ik == INTS_MODULUS
              || ik == INTS_MODULUS_TOTAL
-             || ik == BITVECTOR_UDIV_TOTAL
              || ik == BITVECTOR_UDIV
              || ik == BITVECTOR_SDIV)
     {
@@ -506,15 +504,14 @@ Node TermUtil::isSingularArg(Node n, Kind ik, unsigned arg)
       return n;
     }
     else if (ik == BITVECTOR_SHL || ik == BITVECTOR_LSHR || ik == BITVECTOR_ASHR
-             || ik == BITVECTOR_UREM
-             || ik == BITVECTOR_UREM_TOTAL)
+             || ik == BITVECTOR_UREM)
     {
       if (arg == 0)
       {
         return n;
       }
     }
-    else if (ik == BITVECTOR_UDIV_TOTAL || ik == BITVECTOR_UDIV
+    else if (ik == BITVECTOR_UDIV || ik == BITVECTOR_UDIV
              || ik == BITVECTOR_SDIV)
     {
       if (arg == 0)
@@ -557,7 +554,7 @@ Node TermUtil::isSingularArg(Node n, Kind ik, unsigned arg)
   }
   else if (n == mkTypeValue(tn, 1))
   {
-    if (ik == BITVECTOR_UREM_TOTAL)
+    if (ik == BITVECTOR_UREM)
     {
       return mkTypeValue(tn, 0);
     }

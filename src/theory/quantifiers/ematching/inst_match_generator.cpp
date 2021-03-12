@@ -2,9 +2,9 @@
 /*! \file inst_match_generator.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds, Morgan Deters, Mathias Preiner
+ **   Andrew Reynolds, Morgan Deters, Tim King
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -14,6 +14,7 @@
 
 #include "theory/quantifiers/ematching/inst_match_generator.h"
 
+#include "expr/dtype_cons.h"
 #include "options/quantifiers_options.h"
 #include "theory/datatypes/theory_datatypes_utils.h"
 #include "theory/quantifiers/ematching/candidate_generator.h"
@@ -41,9 +42,11 @@ IMGenerator::IMGenerator(quantifiers::QuantifiersState& qs,
 {
 }
 
-bool IMGenerator::sendInstantiation(Trigger* tparent, InstMatch& m)
+bool IMGenerator::sendInstantiation(Trigger* tparent,
+                                    InstMatch& m,
+                                    InferenceId id)
 {
-  return tparent->sendInstantiation(m);
+  return tparent->sendInstantiation(m, id);
 }
 
 InstMatchGenerator::InstMatchGenerator(
@@ -425,7 +428,8 @@ int InstMatchGenerator::getMatch(
     if (success)
     {
       Trace("matching-debug2") << "Continue next " << d_next << std::endl;
-      ret_val = continueNextMatch(f, m, qe, tparent);
+      ret_val = continueNextMatch(
+          f, m, qe, tparent, InferenceId::QUANTIFIERS_INST_E_MATCHING);
     }
   }
   if (ret_val < 0)
@@ -441,14 +445,15 @@ int InstMatchGenerator::getMatch(
 int InstMatchGenerator::continueNextMatch(Node q,
                                           InstMatch& m,
                                           QuantifiersEngine* qe,
-                                          Trigger* tparent)
+                                          Trigger* tparent,
+                                          InferenceId id)
 {
   if( d_next!=NULL ){
     return d_next->getNextMatch(q, m, qe, tparent);
   }
   if (d_active_add)
   {
-    return sendInstantiation(tparent, m) ? 1 : -1;
+    return sendInstantiation(tparent, m, id) ? 1 : -1;
   }
   return 1;
 }
@@ -558,7 +563,7 @@ uint64_t InstMatchGenerator::addInstantiations(Node f,
   while (getNextMatch(f, m, qe, tparent) > 0)
   {
     if( !d_active_add ){
-      if (sendInstantiation(tparent, m))
+      if (sendInstantiation(tparent, m, InferenceId::UNKNOWN))
       {
         addedLemmas++;
         if (d_qstate.isInConflict())

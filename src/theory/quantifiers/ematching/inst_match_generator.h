@@ -2,9 +2,9 @@
 /*! \file inst_match_generator.h
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds, Morgan Deters, Tim King
+ **   Andrew Reynolds, Mathias Preiner, Tim King
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -19,6 +19,7 @@
 
 #include <map>
 #include "expr/node_trie.h"
+#include "theory/inference_id.h"
 #include "theory/quantifiers/inst_match.h"
 
 namespace CVC4 {
@@ -118,7 +119,7 @@ public:
    * indicating that an instantiation was enqueued in the quantifier engine's
    * lemma cache.
    */
-  bool sendInstantiation(Trigger* tparent, InstMatch& m);
+  bool sendInstantiation(Trigger* tparent, InstMatch& m, InferenceId id);
   /** The state of the quantifiers engine */
   quantifiers::QuantifiersState& d_qstate;
   /** The quantifiers inference manager */
@@ -426,7 +427,8 @@ class InstMatchGenerator : public IMGenerator {
   int continueNextMatch(Node q,
                         InstMatch& m,
                         QuantifiersEngine* qe,
-                        Trigger* tparent);
+                        Trigger* tparent,
+                        InferenceId id);
   /** Get inst match generator
    *
    * Gets the InstMatchGenerator that implements the

@@ -2,9 +2,9 @@
 /*! \file var_match_generator.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Andrew Reynolds, Morgan Deters, Mathias Preiner
+ **   Andrew Reynolds
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2020 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
  ** in the top-level source directory and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -13,7 +13,9 @@
  **/
 #include "theory/quantifiers/ematching/var_match_generator.h"
 
+#include "theory/quantifiers/term_util.h"
 #include "theory/quantifiers_engine.h"
+#include "theory/rewriter.h"
 
 using namespace CVC4::kind;
 
@@ -65,7 +67,8 @@ int VarMatchGeneratorTermSubs::getNextMatch(Node q,
     }
     else
     {
-      ret_val = continueNextMatch(q, m, qe, tparent);
+      ret_val = continueNextMatch(
+          q, m, qe, tparent, InferenceId::QUANTIFIERS_INST_E_MATCHING_VAR_GEN);
       if (ret_val > 0)
       {
         return ret_val;

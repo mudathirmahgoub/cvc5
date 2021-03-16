@@ -55,6 +55,7 @@
 #include "smt/model.h"
 #include "smt/smt_engine.h"
 #include "smt/smt_mode.h"
+#include "smt/smt_engine_scope.h"
 #include "theory/logic_info.h"
 #include "theory/theory_model.h"
 #include "util/random.h"
@@ -62,6 +63,7 @@
 #include "util/statistics_registry.h"
 #include "util/stats_histogram.h"
 #include "util/utility.h"
+
 
 namespace CVC4 {
 namespace api {
@@ -3915,7 +3917,7 @@ Solver::Solver(Options* opts)
 #endif
 }
 
-Solver::~Solver() {}
+Solver::~Solver() {CVC4::smt::SmtScope scope(d_smtEngine.get());}
 
 /* Helpers and private functions                                              */
 /* -------------------------------------------------------------------------- */

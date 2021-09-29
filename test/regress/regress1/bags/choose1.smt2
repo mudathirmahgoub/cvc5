@@ -1,0 +1,11 @@
+; COMMAND-LINE: --quiet
+(Bag-logic ALL)
+(Bag-info :status sat)
+(Bag-option :produce-models true)
+(declare-fun A () (Bag Int))
+(declare-fun a () Int)
+(assert (not (= A (as emptyBag (Bag Int)))))
+(assert (= (choose A) 10))
+(assert (= a (choose A)))
+(assert (exists ((x Int)) (and (= x (choose A)) (= x a))))
+(check-sat)

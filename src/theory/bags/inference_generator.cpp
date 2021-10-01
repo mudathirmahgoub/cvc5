@@ -304,9 +304,8 @@ InferInfo InferenceGenerator::map(Node n, Node e)
   Node A = n[1];
   std::cout<<"f: " << f << std::endl;
   std::cout<<"A: " << A << std::endl;
-  // declare an uninterpreted function uf: Int -> T
+
   TypeNode domainType = f.getType().getArgTypes()[0];
-  TypeNode ufType = d_nm->mkFunctionType(d_nm->integerType(), domainType);
   Node emptybag = d_nm->mkConst(EmptyBag(A.getType()));
   Node isEmpty = d_nm->mkNode(kind::EQUAL, A, emptybag);
   Node mapSkolem = getSkolem(n, inferInfo);
@@ -320,10 +319,10 @@ InferInfo InferenceGenerator::map(Node n, Node e)
 
   Node difference = d_nm->mkNode(kind::DIFFERENCE_REMOVE, A, bagX);
   Node differenceSkolem = getSkolem(difference, inferInfo);
-  Node mapDifference = d_nm->mkNode(kind::BAG_MAP, f, difference);
+  Node mapDifference = d_nm->mkNode(kind::BAG_MAP, f, differenceSkolem);
   Node mapDifferenceSkolem = getSkolem(mapDifference, inferInfo);
   Node countMapDifference1 =
-      d_nm->mkNode(kind::BAG_COUNT, e, mapDifference);
+      d_nm->mkNode(kind::BAG_COUNT, e, mapDifferenceSkolem);
   Node countMapDifference2 =
       d_nm->mkNode(kind::PLUS, countX, countMapDifference1);
   Node ite = d_nm->mkNode(

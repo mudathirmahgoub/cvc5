@@ -147,7 +147,7 @@ BagsRewriteResponse BagsRewriter::rewriteSubBag(const TNode& n) const
 {
   Assert(n.getKind() == SUBBAG);
 
-  // (bag.is_included A B) = ((difference_subtract A B) == emptybag)
+  // (subbag A B) = ((difference_subtract A B) == emptybag)
   Node emptybag = d_nm->mkConst(EmptyBag(n[0].getType()));
   Node subtract = d_nm->mkNode(DIFFERENCE_SUBTRACT, n[0], n[1]);
   Node equal = subtract.eqNode(emptybag);

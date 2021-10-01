@@ -17,6 +17,7 @@
 
 #include "expr/attribute.h"
 #include "expr/bound_var_manager.h"
+#include "expr/emptybag.h"
 #include "expr/skolem_manager.h"
 #include "theory/bags/inference_manager.h"
 #include "theory/bags/solver_state.h"
@@ -301,84 +302,41 @@ InferInfo InferenceGenerator::map(Node n, Node e)
   InferInfo inferInfo(d_im, InferenceId::BAGS_MAP);
   Node f = n[0];
   Node A = n[1];
+  std::cout<<"f: " << f << std::endl;
+  std::cout<<"A: " << A << std::endl;
   // declare an uninterpreted function uf: Int -> T
   TypeNode domainType = f.getType().getArgTypes()[0];
   TypeNode ufType = d_nm->mkFunctionType(d_nm->integerType(), domainType);
-  Node uf = d_sm->mkDummySkolem("uf", ufType);
-
-  // declare uninterpreted function sum: Int -> Int
-  TypeNode sumType =
-      d_nm->mkFunctionType(d_nm->integerType(), d_nm->integerType());
-  Node sum = d_sm->mkDummySkolem("sum", sumType);
-
-  // (= (sum 0) 0)
-  Node sum_zero = d_nm->mkNode(kind::APPLY_UF, sum, d_zero);
-  Node baseCase = d_nm->mkNode(Kind::EQUAL, sum_zero, d_zero);
-
-  // guess the size of the preimage of e
-  Node preImageSize = d_sm->mkDummySkolem("preImageSize", d_nm->integerType());
-
-  // (= (sum preImageSize) (bag.count e skolem))
+  Node emptybag = d_nm->mkConst(EmptyBag(A.getType()));
+  Node isEmpty = d_nm->mkNode(kind::EQUAL, A, emptybag);
   Node mapSkolem = getSkolem(n, inferInfo);
-  Node countE = getMultiplicityTerm(e, mapSkolem);
-  Node totalSum = d_nm->mkNode(kind::APPLY_UF, sum, preImageSize);
-  Node totalSumEqualCountE = d_nm->mkNode(kind::EQUAL, totalSum, countE);
+  Node count = getMultiplicityTerm(e, mapSkolem);
 
-  // (forall ((i Int))
-  //        (let ((uf_i (uf i)))
-  //          (let ((count_uf_i (bag.count uf_i A)))
-  //            (=>
-  //             (and (>= i 1) (<= i preImageSize))
-  //             (and
-  //               (= (f uf_i) e)
-  //               (>= count_uf_i 1)
-  //               (= (sum i) (+ (sum (- i 1)) count_uf_i)))))))
+  Node x = d_nm->mkNode(kind::BAG_CHOOSE, A);
+  Node countX = getMultiplicityTerm(x, A);
+  Node bagX = d_nm->mkBag(domainType, x, countX);
+  Node f_x = d_nm->mkNode(kind::APPLY_UF, f, x);
+  Node f_xEqualE = d_nm->mkNode(kind::EQUAL, e, f_x);
 
-  BoundVarManager* bvm = d_nm->getBoundVarManager();
-  Node i = bvm->mkBoundVar<IndexVarAttribute>(n, "i", d_nm->integerType());
-  Node j =
-      bvm->mkBoundVar<SecondIndexVarAttribute>(n, "j", d_nm->integerType());
-  Node iList = d_nm->mkNode(kind::BOUND_VAR_LIST, i);
-  Node ijList = d_nm->mkNode(kind::BOUND_VAR_LIST, i, j);
-  Node iPlusOne = d_nm->mkNode(kind::PLUS, i, d_one);
-  Node iMinusOne = d_nm->mkNode(kind::MINUS, i, d_one);
-  Node uf_i = d_nm->mkNode(kind::APPLY_UF, uf, i);
-  Node uf_j = d_nm->mkNode(kind::APPLY_UF, uf, j);
-  Node f_uf_i = d_nm->mkNode(kind::APPLY_UF, f, uf_i);
-  Node uf_iPlusOne = d_nm->mkNode(kind::APPLY_UF, uf, iPlusOne);
-  Node uf_iMinusOne = d_nm->mkNode(kind::APPLY_UF, uf, iMinusOne);
-  Node interval1 = d_nm->mkNode(kind::AND,
-                                d_nm->mkNode(kind::GEQ, i, d_one),
-                                d_nm->mkNode(kind::LEQ, i, preImageSize));
-  Node sum_i = d_nm->mkNode(kind::APPLY_UF, sum, i);
-  Node sum_iPlusOne = d_nm->mkNode(kind::APPLY_UF, sum, iPlusOne);
-  Node sum_iMinusOne = d_nm->mkNode(kind::APPLY_UF, sum, iMinusOne);
-  Node count_iMinusOne = d_nm->mkNode(kind::BAG_COUNT, uf_iMinusOne, A);
-  Node count_uf_i = d_nm->mkNode(kind::BAG_COUNT, uf_i, A);
-  Node inductiveCase = d_nm->mkNode(
-      Kind::EQUAL, sum_i, d_nm->mkNode(kind::PLUS, sum_iMinusOne, count_uf_i));
-  Node f_iEqualE = d_nm->mkNode(kind::EQUAL, f_uf_i, e);
-  Node geqOne = d_nm->mkNode(kind::GEQ, count_uf_i, d_one);
-  Node andNode = d_nm->mkNode(kind::AND, f_iEqualE, geqOne, inductiveCase);
-  Node body1 = d_nm->mkNode(kind::OR, interval1.negate(), andNode);
-  Node forAll1 = d_nm->mkNode(kind::FORALL, iList, body1);
+  Node difference = d_nm->mkNode(kind::DIFFERENCE_REMOVE, A, bagX);
+  Node differenceSkolem = getSkolem(difference, inferInfo);
+  Node mapDifference = d_nm->mkNode(kind::BAG_MAP, f, difference);
+  Node mapDifferenceSkolem = getSkolem(mapDifference, inferInfo);
+  Node countMapDifference1 =
+      d_nm->mkNode(kind::BAG_COUNT, e, mapDifference);
+  Node countMapDifference2 =
+      d_nm->mkNode(kind::PLUS, countX, countMapDifference1);
+  Node ite = d_nm->mkNode(
+      kind::ITE,
+      isEmpty,
+      d_zero,
+      d_nm->mkNode(
+          kind::ITE, f_xEqualE, countMapDifference2, countMapDifference1));
 
-  // (forall ((i Int) (j Int))
-  //   (=>
-  //    (and (>= i 1) (< i j) (<= j preImageSize))
-  //    (not (= (uf i) (uf j))))))
-  Node interval2 = d_nm->mkNode(kind::AND,
-                                d_nm->mkNode(kind::GEQ, i, d_one),
-                                d_nm->mkNode(kind::LT, i, j),
-                                d_nm->mkNode(kind::LEQ, j, preImageSize));
-  Node uf_i_equals_uf_j = d_nm->mkNode(kind::EQUAL, uf_i, uf_j);
-  Node notEqual = d_nm->mkNode(kind::EQUAL, uf_i, uf_j).negate();
-  Node body2 = d_nm->mkNode(kind::OR, interval2.negate(), notEqual);
-  Node forAll2 = d_nm->mkNode(kind::FORALL, ijList, body2);
-  Node conclusion = d_nm->mkNode(
-      kind::AND, {baseCase, totalSumEqualCountE, forAll1, forAll2});
-  std::cout << "conclusion: " << conclusion << std::endl << std::endl;
-  inferInfo.d_conclusion = conclusion;
+  Node equal = d_nm->mkNode(kind::EQUAL, count, ite);
+
+  std::cout << "conclusion: " << equal << std::endl << std::endl;
+  inferInfo.d_conclusion = equal;
   return inferInfo;
 }
 

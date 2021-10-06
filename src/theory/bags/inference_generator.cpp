@@ -302,8 +302,8 @@ InferInfo InferenceGenerator::map(Node n, Node e)
   InferInfo inferInfo(d_im, InferenceId::BAGS_MAP);
   Node f = n[0];
   Node A = n[1];
-  std::cout<<"f: " << f << std::endl;
-  std::cout<<"A: " << A << std::endl;
+  std::cout << "f: " << f << std::endl;
+  std::cout << "A: " << A << std::endl;
 
   TypeNode domainType = f.getType().getArgTypes()[0];
   Node emptybag = d_nm->mkConst(EmptyBag(A.getType()));
@@ -333,9 +333,25 @@ InferInfo InferenceGenerator::map(Node n, Node e)
           kind::ITE, f_xEqualE, countMapDifference2, countMapDifference1));
 
   Node equal = d_nm->mkNode(kind::EQUAL, count, ite);
+  TypeNode rangeType = n[0].getType().getRangeType();
+  Node mapDefinition1 = d_nm->mkNode(
+      kind::EQUAL,
+      isEmpty,
+      d_nm->mkNode(kind::EQUAL, n, d_nm->mkConst(EmptyBag(d_nm->mkBagType(rangeType)))));
 
-  std::cout << "conclusion: " << equal << std::endl << std::endl;
-  inferInfo.d_conclusion = equal;
+  Node mapDefinition2 = d_nm->mkNode(
+      kind::EQUAL,
+      isEmpty.negate(),
+      d_nm->mkNode(kind::EQUAL,
+                   n,
+                   d_nm->mkNode(kind::UNION_DISJOINT,
+                                d_nm->mkBag(rangeType, f_x, countX),
+                                mapDifference)));
+  inferInfo.d_conclusion =
+      equal.andNode(mapDefinition1).andNode(mapDefinition2);
+
+  std::cout << "conclusion: " << inferInfo.d_conclusion << std::endl << std::endl;
+
   return inferInfo;
 }
 

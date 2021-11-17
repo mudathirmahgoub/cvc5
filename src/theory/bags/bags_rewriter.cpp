@@ -61,6 +61,10 @@ RewriteResponse BagsRewriter::postRewrite(TNode n)
   {
     response = postRewriteEqual(n);
   }
+  else if (n.getKind() == BAG_MAKE)
+  {
+    response = rewriteMakeBag(n);
+  }
   else if (n.getKind() == BAG_CHOOSE)
   {
     response = rewriteChoose(n);
@@ -158,13 +162,6 @@ BagsRewriteResponse BagsRewriter::rewriteSubBag(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteMakeBag(const TNode& n) const
 {
   Assert(n.getKind() == BAG_MAKE);
-  // return bag.empty for negative or zero multiplicity
-  if (n[1].isConst() && n[1].getConst<Rational>().sgn() != 1)
-  {
-    // (bag x c) = bag.empty where c <= 0
-    Node emptybag = d_nm->mkConst(EmptyBag(n.getType()));
-    return BagsRewriteResponse(emptybag, Rewrite::BAG_MAKE_COUNT_NEGATIVE);
-  }
   return BagsRewriteResponse(n, Rewrite::NONE);
 }
 

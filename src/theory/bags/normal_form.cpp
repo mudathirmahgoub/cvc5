@@ -237,12 +237,13 @@ Node NormalForm::constructBagFromElements(TypeNode t,
 
 Node NormalForm::evaluateMakeBag(TNode n)
 {
-  // the case where n is const should be handled earlier.
-  // here we handle the case where the multiplicity is zero or negative
-  Assert(n.getKind() == BAG_MAKE && !n.isConst()
-         && n[1].getConst<Rational>().sgn() < 1);
-  Node emptybag = NodeManager::currentNM()->mkConst(EmptyBag(n.getType()));
-  return emptybag;
+  if(n.getKind() == BAG_MAKE && n[1].getConst<Rational>().isZero())
+  {
+    Node emptybag = NodeManager::currentNM()->mkConst(EmptyBag(n.getType()));
+    return emptybag;
+  }
+  std::cout<<"evaluateMakeBag: " << n << std::endl;
+  return n;
 }
 
 Node NormalForm::evaluateBagCount(TNode n)

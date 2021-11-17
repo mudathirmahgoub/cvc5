@@ -184,7 +184,7 @@ bool BagMakeTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
   // for a bag to be a constant, both the element and its multiplicity should
   // be constants, and the multiplicity should be > 0.
   return n[0].isConst() && n[1].isConst()
-         && n[1].getConst<Rational>().sgn() == 1;
+         && n[1].getConst<Rational>() >= Rational(0);
 }
 
 TypeNode IsSingletonTypeRule::computeType(NodeManager* nodeManager,

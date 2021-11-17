@@ -73,8 +73,6 @@ class BagsRewriter : public TheoryRewriter
   /**
    * rewrites for n include:
    * - (bag x 0) = (bag.empty T) where T is the type of x
-   * - (bag x (-c)) = (bag.empty T) where T is the type of x, and c > 0 is a
-   *   constant
    * - otherwise = n
    */
   BagsRewriteResponse rewriteMakeBag(const TNode& n) const;

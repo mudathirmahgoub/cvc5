@@ -48,9 +48,17 @@ class InferenceGenerator
 
   /**
    * @param n is (bag x c) of type (Bag E)
+   * @return an inference that represents the following lemma:
+   * (= (bag.count e skolem) c))
+   * where skolem = (bag x c) is a fresh variable
+   */
+  InferInfo bagMake(Node n);
+
+  /**
+   * @param n is (bag x c) of type (Bag E)
    * @param e is a node of type E
    * @return an inference that represents the following lemma:
-   * (ite (and (= e x) (>= c 1))
+   * (ite (and (= e x) )
    *   (= (bag.count e skolem) c)
    *   (= (bag.count e skolem) 0))
    * where skolem = (bag x c) is a fresh variable
@@ -142,7 +150,7 @@ class InferenceGenerator
    *   (=
    *     (bag.count e skolem)
    *     (ite
-   *       (<= (bag.count e B) 0)
+   *       (= (bag.count e B) 0)
    *       (bag.count e A)
    *       0))))
    * where skolem is a fresh variable equals (bag.difference_remove A B)

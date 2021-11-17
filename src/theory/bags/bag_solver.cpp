@@ -175,6 +175,8 @@ void BagSolver::checkBagMake(const Node& n)
     InferInfo i = d_ig.bagMake(n, e);
     d_im.lemmaTheoryInference(&i);
   }
+  InferInfo i = d_ig.bagMake(n);
+  d_im.lemmaTheoryInference(&i);
 }
 void BagSolver::checkNonNegativeCountTerms(const Node& bag, const Node& element)
 {

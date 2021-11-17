@@ -56,13 +56,30 @@ InferInfo InferenceGenerator::nonNegativeCount(Node n, Node e)
   return inferInfo;
 }
 
+InferInfo InferenceGenerator::bagMake(Node n)
+{
+  Assert(n.getKind() == BAG_MAKE);
+
+  /*
+   * (= (bag.count e skolem) c))
+   */
+  Node x = n[0];
+  Node c = n[1];
+  InferInfo inferInfo(d_im, InferenceId::BAGS_BAG_MAKE);
+  Node skolem = getSkolem(n, inferInfo);
+  Node count = getMultiplicityTerm(x, skolem);
+  Node equalC = d_nm->mkNode(EQUAL, count, c);
+  inferInfo.d_conclusion = equalC;
+  return inferInfo;
+}
+
 InferInfo InferenceGenerator::bagMake(Node n, Node e)
 {
   Assert(n.getKind() == BAG_MAKE);
   Assert(e.getType() == n.getType().getBagElementType());
 
   /*
-   * (ite (and (= e x) (>= c 1))
+   * (ite (and (= e x))
    *   (= (bag.count e skolem) c)
    *   (= (bag.count e skolem) 0))
    */
@@ -70,13 +87,11 @@ InferInfo InferenceGenerator::bagMake(Node n, Node e)
   Node c = n[1];
   InferInfo inferInfo(d_im, InferenceId::BAGS_BAG_MAKE);
   Node same = d_nm->mkNode(EQUAL, e, x);
-  Node geq = d_nm->mkNode(GEQ, c, d_one);
-  Node andNode = same.andNode(geq);
   Node skolem = getSkolem(n, inferInfo);
   Node count = getMultiplicityTerm(e, skolem);
   Node equalC = d_nm->mkNode(EQUAL, count, c);
   Node equalZero = d_nm->mkNode(EQUAL, count, d_zero);
-  Node ite = d_nm->mkNode(ITE, andNode, equalC, equalZero);
+  Node ite = d_nm->mkNode(ITE, same, equalC, equalZero);
   inferInfo.d_conclusion = ite;
   return inferInfo;
 }
@@ -259,7 +274,7 @@ InferInfo InferenceGenerator::differenceRemove(Node n, Node e)
   Node skolem = getSkolem(n, inferInfo);
   Node count = getMultiplicityTerm(e, skolem);
 
-  Node notInB = d_nm->mkNode(LEQ, countB, d_zero);
+  Node notInB = d_nm->mkNode(EQUAL, countB, d_zero);
   Node difference = d_nm->mkNode(ITE, notInB, countA, d_zero);
   Node equal = count.eqNode(difference);
   inferInfo.d_conclusion = equal;

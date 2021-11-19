@@ -48,6 +48,14 @@ class InferenceGenerator
   InferInfo nonNegativeCount(Node n, Node e);
 
   /**
+   * @param n is (bag x c) of type (Bag E) where c is not a constant
+   * @return an inference that represents the following lemma:
+   * (or (>= c 1))
+   *     (and (<= c 0) (= (bag x c) (as bag.empty (Bag E))))
+   */
+  InferInfo bagMake(Node n);
+
+  /**
    * @param n is (bag x c) of type (Bag E)
    * @param e is a node of type E
    * @return an inference that represents the following lemma:

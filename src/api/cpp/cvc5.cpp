@@ -63,6 +63,7 @@
 #include "options/options.h"
 #include "options/options_public.h"
 #include "options/smt_options.h"
+#include "options/quantifiers_options.h"
 #include "proof/unsat_core.h"
 #include "smt/env.h"
 #include "smt/model.h"
@@ -83,6 +84,7 @@
 #include "util/statistics_stats.h"
 #include "util/statistics_value.h"
 #include "util/string.h"
+#include "util/synth_result.h"
 #include "util/uninterpreted_sort_value.h"
 #include "util/utility.h"
 
@@ -114,7 +116,7 @@ const static std::unordered_map<Kind, std::pair<cvc5::Kind, std::string>>
     s_kinds{
         KIND_ENUM(INTERNAL_KIND, cvc5::Kind::UNDEFINED_KIND),
         KIND_ENUM(UNDEFINED_KIND, cvc5::Kind::UNDEFINED_KIND),
-        KIND_ENUM(NULL_EXPR, cvc5::Kind::NULL_EXPR),
+        KIND_ENUM(NULL_TERM, cvc5::Kind::NULL_EXPR),
         /* Builtin ---------------------------------------------------------- */
         KIND_ENUM(UNINTERPRETED_SORT_VALUE,
                   cvc5::Kind::UNINTERPRETED_SORT_VALUE),
@@ -400,7 +402,7 @@ const static std::unordered_map<Kind, std::pair<cvc5::Kind, std::string>>
 const static std::unordered_map<cvc5::Kind, Kind, cvc5::kind::KindHashFunction>
     s_kinds_internal{
         {cvc5::Kind::UNDEFINED_KIND, UNDEFINED_KIND},
-        {cvc5::Kind::NULL_EXPR, NULL_EXPR},
+        {cvc5::Kind::NULL_EXPR, NULL_TERM},
         /* Builtin --------------------------------------------------------- */
         {cvc5::Kind::UNINTERPRETED_SORT_VALUE, UNINTERPRETED_SORT_VALUE},
         {cvc5::Kind::EQUAL, EQUAL},
@@ -985,6 +987,45 @@ std::ostream& operator<<(std::ostream& out, enum Result::UnknownExplanation e)
     case Result::UNKNOWN_REASON: out << "UNKNOWN_REASON"; break;
     default: Unhandled() << e;
   }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* SynthResult */
+/* -------------------------------------------------------------------------- */
+
+SynthResult::SynthResult(const cvc5::SynthResult& r)
+    : d_result(new cvc5::SynthResult(r))
+{
+}
+
+SynthResult::SynthResult() : d_result(new cvc5::SynthResult()) {}
+
+bool SynthResult::isNull() const
+{
+  return d_result->getStatus() == cvc5::SynthResult::NONE;
+}
+
+bool SynthResult::hasSolution(void) const
+{
+  return d_result->getStatus() == cvc5::SynthResult::SOLUTION;
+}
+
+bool SynthResult::hasNoSolution() const
+{
+  return d_result->getStatus() == cvc5::SynthResult::NO_SOLUTION;
+}
+
+bool SynthResult::isUnknown() const
+{
+  return d_result->getStatus() == cvc5::SynthResult::UNKNOWN;
+}
+
+std::string SynthResult::toString(void) const { return d_result->toString(); }
+
+std::ostream& operator<<(std::ostream& out, const SynthResult& sr)
+{
+  out << sr.toString();
   return out;
 }
 
@@ -1759,7 +1800,7 @@ bool Sort::isNullHelper() const { return d_type->isNull(); }
 /* Op                                                                     */
 /* -------------------------------------------------------------------------- */
 
-Op::Op() : d_solver(nullptr), d_kind(NULL_EXPR), d_node(new cvc5::Node()) {}
+Op::Op() : d_solver(nullptr), d_kind(NULL_TERM), d_node(new cvc5::Node()) {}
 
 Op::Op(const Solver* slv, const Kind k)
     : d_solver(slv), d_kind(k), d_node(new cvc5::Node())
@@ -1810,7 +1851,7 @@ bool Op::operator!=(const Op& t) const
 
 Kind Op::getKind() const
 {
-  CVC5_API_CHECK(d_kind != NULL_EXPR) << "Expecting a non-null Kind";
+  CVC5_API_CHECK(d_kind != NULL_TERM) << "Expecting a non-null Kind";
   //////// all checks before this line
   return d_kind;
 }
@@ -2080,7 +2121,7 @@ std::ostream& operator<<(std::ostream& out, const Op& t)
 
 bool Op::isNullHelper() const
 {
-  return (d_node->isNull() && (d_kind == NULL_EXPR));
+  return (d_node->isNull() && (d_kind == NULL_TERM));
 }
 
 bool Op::isIndexedHelper() const { return !d_node->isNull(); }
@@ -7410,10 +7451,12 @@ void Solver::setOption(const std::string& option,
   CVC5_API_TRY_CATCH_END;
 }
 
-Term Solver::mkSygusVar(const Sort& sort, const std::string& symbol) const
+Term Solver::declareSygusVar(const Sort& sort, const std::string& symbol) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_SORT(sort);
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot call declareSygusVar unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   Node res = getNodeManager()->mkBoundVar(symbol, *sort.d_type);
   (void)res.getType(true); /* kick off type checking */
@@ -7446,6 +7489,8 @@ Term Solver::synthFun(const std::string& symbol,
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
   CVC5_API_SOLVER_CHECK_SORT(sort);
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot call synthFun unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   return synthFunHelper(symbol, boundVars, sort);
   ////////
@@ -7460,6 +7505,8 @@ Term Solver::synthFun(const std::string& symbol,
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
   CVC5_API_SOLVER_CHECK_SORT(sort);
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot call synthFun unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   return synthFunHelper(symbol, boundVars, sort, false, &grammar);
   ////////
@@ -7471,6 +7518,8 @@ Term Solver::synthInv(const std::string& symbol,
 {
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot call synthInv unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   return synthFunHelper(
       symbol, boundVars, Sort(this, getNodeManager()->booleanType()), true);
@@ -7484,6 +7533,8 @@ Term Solver::synthInv(const std::string& symbol,
 {
   CVC5_API_TRY_CATCH_BEGIN;
   CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot call synthInv unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   return synthFunHelper(symbol,
                         boundVars,
@@ -7501,6 +7552,8 @@ void Solver::addSygusConstraint(const Term& term) const
   CVC5_API_ARG_CHECK_EXPECTED(
       term.d_node->getType() == getNodeManager()->booleanType(), term)
       << "boolean term";
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot addSygusConstraint unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   d_slv->assertSygusConstraint(*term.d_node, false);
   ////////
@@ -7514,6 +7567,8 @@ void Solver::addSygusAssume(const Term& term) const
   CVC5_API_ARG_CHECK_EXPECTED(
       term.d_node->getType() == getNodeManager()->booleanType(), term)
       << "boolean term";
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot addSygusAssume unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   d_slv->assertSygusConstraint(*term.d_node, true);
   ////////
@@ -7544,6 +7599,8 @@ void Solver::addSygusInvConstraint(Term inv,
 
   CVC5_API_CHECK(post.d_node->getType() == invType)
       << "Expected inv and post to have the same sort";
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot addSygusInvConstraint unless sygus is enabled (use --sygus)";
   //////// all checks before this line
 
   const std::vector<TypeNode>& invArgTypes = invType.getArgTypes();
@@ -7569,18 +7626,22 @@ void Solver::addSygusInvConstraint(Term inv,
   CVC5_API_TRY_CATCH_END;
 }
 
-Result Solver::checkSynth() const
+SynthResult Solver::checkSynth() const
 {
   CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot checkSynth unless sygus is enabled (use --sygus)";
   //////// all checks before this line
   return d_slv->checkSynth();
   ////////
   CVC5_API_TRY_CATCH_END;
 }
 
-Result Solver::checkSynthNext() const
+SynthResult Solver::checkSynthNext() const
 {
   CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_CHECK(d_slv->getOptions().quantifiers.sygus)
+      << "Cannot checkSynthNext unless sygus is enabled (use --sygus)";
   CVC5_API_CHECK(d_slv->getOptions().base.incrementalSolving)
       << "Cannot checkSynthNext when not solving incrementally (use "
          "--incremental)";

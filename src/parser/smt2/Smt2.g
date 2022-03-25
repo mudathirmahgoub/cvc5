@@ -281,8 +281,8 @@ command [std::unique_ptr<cvc5::Command>* cmd]
       // we allow overloading for function declarations
       if( PARSER_STATE->sygus() )
       {
-        PARSER_STATE->parseErrorLogic("declare-fun are not allowed in sygus "
-                                      "version 2.0");
+        PARSER_STATE->parseError("declare-fun are not allowed in sygus "
+                                 "version 2.0");
       }
       else
       {
@@ -518,7 +518,7 @@ sygusCommand returns [std::unique_ptr<cvc5::Command> cmd]
     { PARSER_STATE->checkUserSymbol(name); }
     sortSymbol[t,CHECK_DECLARED]
     {
-      api::Term var = SOLVER->mkSygusVar(t, name);
+      api::Term var = SOLVER->declareSygusVar(t, name);
       PARSER_STATE->defineVar(name, var);
       cmd.reset(new DeclareSygusVarCommand(name, var, t));
     }
@@ -780,8 +780,8 @@ smt25Command[std::unique_ptr<cvc5::Command>* cmd]
     { // allow overloading here
       if( PARSER_STATE->sygus() )
       {
-        PARSER_STATE->parseErrorLogic("declare-const is not allowed in sygus "
-                                      "version 2.0");
+        PARSER_STATE->parseError("declare-const is not allowed in sygus "
+                                 "version 2.0");
       }
       api::Term c =
           PARSER_STATE->bindVar(name, t, true);
@@ -1248,7 +1248,7 @@ symbolicExpr[cvc5::api::Term& sexpr]
  */
 term[cvc5::api::Term& expr, cvc5::api::Term& expr2]
 @init {
-  api::Kind kind = api::NULL_EXPR;
+  api::Kind kind = api::NULL_TERM;
   cvc5::api::Term f;
   std::string name;
   cvc5::api::Sort type;
@@ -1272,7 +1272,7 @@ term[cvc5::api::Term& expr, cvc5::api::Term& expr2]
 termNonVariable[cvc5::api::Term& expr, cvc5::api::Term& expr2]
 @init {
   Trace("parser") << "term: " << AntlrInput::tokenText(LT(1)) << std::endl;
-  api::Kind kind = api::NULL_EXPR;
+  api::Kind kind = api::NULL_TERM;
   std::string name;
   std::vector<cvc5::api::Term> args;
   std::vector< std::pair<std::string, cvc5::api::Sort> > sortedVarNames;

@@ -299,6 +299,20 @@ bool Smt2::isOperatorEnabled(const std::string& name) const {
   return d_operatorKindMap.find(name) != d_operatorKindMap.end();
 }
 
+modes::BlockModelsMode Smt2::getBlockModelsMode(const std::string& mode)
+{
+  if (mode == "literals")
+  {
+    return modes::BlockModelsMode::LITERALS;
+  }
+  else if (mode == "values")
+  {
+    return modes::BlockModelsMode::VALUES;
+  }
+  parseError(std::string("Unknown block models mode `") + mode + "'");
+  return modes::BlockModelsMode::LITERALS;
+}
+
 bool Smt2::isTheoryEnabled(internal::theory::TheoryId theory) const
 {
   return d_logic.isTheoryEnabled(theory);
@@ -697,7 +711,7 @@ cvc5::Grammar* Smt2::mkGrammar(const std::vector<cvc5::Term>& boundVars,
                                const std::vector<cvc5::Term>& ntSymbols)
 {
   d_allocGrammars.emplace_back(
-      new cvc5::Grammar(d_solver->mkSygusGrammar(boundVars, ntSymbols)));
+      new cvc5::Grammar(d_solver->mkGrammar(boundVars, ntSymbols)));
   return d_allocGrammars.back().get();
 }
 
@@ -1087,8 +1101,8 @@ cvc5::Term Smt2::applyParseOp(ParseOp& p, std::vector<cvc5::Term>& args)
     cvc5::Term ret;
     if (p.d_kind == cvc5::APPLY_SELECTOR)
     {
-      ret = d_solver->mkTerm(cvc5::APPLY_SELECTOR,
-                             {dt[0][n].getSelectorTerm(), args[0]});
+      ret =
+          d_solver->mkTerm(cvc5::APPLY_SELECTOR, {dt[0][n].getTerm(), args[0]});
     }
     else
     {

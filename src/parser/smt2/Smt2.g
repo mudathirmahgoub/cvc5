@@ -1045,9 +1045,13 @@ extendedCommand[std::unique_ptr<cvc5::Command>* cmd]
       PARSER_STATE->defineVar(name, pool);
       cmd->reset(new DeclarePoolCommand(name, pool, t, terms));
     }
-  | BLOCK_MODEL_TOK { PARSER_STATE->checkThatLogicIsSet(); }
-    { cmd->reset(new BlockModelCommand()); }
-
+  | BLOCK_MODEL_TOK KEYWORD { PARSER_STATE->checkThatLogicIsSet(); }
+    {
+      modes::BlockModelsMode mode =
+        PARSER_STATE->getBlockModelsMode(
+          AntlrInput::tokenText($KEYWORD).c_str() + 1);
+      cmd->reset(new BlockModelCommand(mode));
+    }
   | BLOCK_MODEL_VALUES_TOK { PARSER_STATE->checkThatLogicIsSet(); }
     ( LPAREN_TOK termList[terms,e] RPAREN_TOK
       { cmd->reset(new BlockModelValuesCommand(terms)); }
@@ -1380,7 +1384,7 @@ termNonVariable[cvc5::Term& expr, cvc5::Term& expr2]
           {
             // lookup constructor by name
             cvc5::DatatypeConstructor dc = dt.getConstructor(f.toString());
-            cvc5::Term scons = dc.getInstantiatedConstructorTerm(expr.getSort());
+            cvc5::Term scons = dc.getInstantiatedTerm(expr.getSort());
             // take the type of the specialized constructor instead
             type = scons.getSort();
           }

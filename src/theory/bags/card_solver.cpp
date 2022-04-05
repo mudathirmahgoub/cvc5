@@ -75,32 +75,39 @@ void CardSolver::checkCardinalityGraph()
     Node bag = d_state.getRepresentative(pair.first[0]);
     Trace("bags-card") << "CardSolver::checkCardinalityGraph bag rep: " << bag
                        << std::endl;
-    // enumerate all bag terms with bag operators
+    // look for all bag terms that have children in the equivalent class of bag
     eq::EqClassIterator it =
         eq::EqClassIterator(bag, d_state.getEqualityEngine());
     while (!it.isFinished())
     {
       Node n = (*it);
-      Kind k = n.getKind();
-      switch (k)
+      for (auto& child : getChildren(n))
       {
-        case BAG_EMPTY: checkEmpty(pair, n); break;
-        case BAG_MAKE: checkBagMake(pair, n); break;
-        case BAG_UNION_DISJOINT:
+        if (bag != d_state.getRepresentative(child))
         {
-          checkUnionDisjoint(pair, n);
-          break;
+          continue;
         }
-        case BAG_UNION_MAX: checkUnionMax(pair, n); break;
-        case BAG_INTER_MIN: checkIntersectionMin(pair, n); break;
-        case BAG_DIFFERENCE_SUBTRACT: checkDifferenceSubtract(pair, n); break;
-        case BAG_DIFFERENCE_REMOVE: checkDifferenceRemove(pair, n); break;
-        default: break;
-      }
-      if (d_im.hasSentLemma())
-      {
-        // exit with each new pending lemma
-        return;
+        Kind k = n.getKind();
+        switch (k)
+        {
+          case BAG_EMPTY: checkEmpty(pair, n); break;
+          case BAG_MAKE: checkBagMake(pair, n); break;
+          case BAG_UNION_DISJOINT:
+          {
+            checkUnionDisjoint(pair, n);
+            break;
+          }
+          case BAG_UNION_MAX: checkUnionMax(pair, n); break;
+          case BAG_INTER_MIN: checkIntersectionMin(pair, n); break;
+          case BAG_DIFFERENCE_SUBTRACT: checkDifferenceSubtract(pair, n); break;
+          case BAG_DIFFERENCE_REMOVE: checkDifferenceRemove(pair, n); break;
+          default: break;
+        }
+        if (d_im.hasSentLemma())
+        {
+          // exit with each new pending lemma
+          return;
+        }
       }
       it++;
     }

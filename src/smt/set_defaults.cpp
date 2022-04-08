@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Andres Noetzli, Haniel Barbosa
+ *   Andrew Reynolds, Gereon Kremer, Haniel Barbosa
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -815,7 +815,8 @@ void SetDefaults::setDefaultsPost(const LogicInfo& logic, Options& opts) const
     }
   }
   else if (logic.isQuantified() && logic.isTheoryEnabled(theory::THEORY_ARITH)
-           && logic.areRealsUsed() && !logic.areIntegersUsed())
+           && logic.areRealsUsed() && !logic.areIntegersUsed()
+           && !logic.areTranscendentalsUsed())
   {
     if (!opts.arith.nlCov && !opts.arith.nlCovWasSetByUser)
     {

@@ -26,6 +26,7 @@ set(regress_0_tests
   regress0/arith/arith.01.cvc.smt2
   regress0/arith/arith.02.cvc.smt2
   regress0/arith/arith.03.cvc.smt2
+  regress0/arith/arith-rewrite-with-ran.smt2
   regress0/arith/bug443.delta01.smtv1.smt2
   regress0/arith/bug547.2.smt2
   regress0/arith/bug549.cvc.smt2
@@ -490,6 +491,7 @@ set(regress_0_tests
   regress0/cvc3.userdoc.04.cvc.smt2
   regress0/cvc3.userdoc.05.cvc.smt2
   regress0/cvc3.userdoc.06.cvc.smt2
+  regress0/cvc5-printing.cpp-sample.smt2
   regress0/datatypes/4482-unc-simp-one.smt2
   regress0/datatypes/boolean-equality.cvc.smt2
   regress0/datatypes/boolean-terms-datatype.cvc.smt2
@@ -797,6 +799,8 @@ set(regress_0_tests
   regress0/nl/issue8161-var-elim.smt2
   regress0/nl/issue8226-ran-refinement.smt2
   regress0/nl/issue8414-ran-rational.smt2
+  regress0/nl/issue8515-cov-iand.smt2
+  regress0/nl/issue8516-cov-sin.smt2
   regress0/nl/lazard-spurious-root.smt2
   regress0/nl/magnitude-wrong-1020-m.smt2
   regress0/nl/mult-po.smt2
@@ -884,6 +888,8 @@ set(regress_0_tests
   regress0/parser/named-attr.smt2
   regress0/parser/proj-issue370-push-pop-global.smt2
   regress0/parser/quoted-define-fun.smt2
+  regress0/parser/real-numerals.smt2
+  regress0/parser/set-bag-left-associative.smt2
   regress0/parser/shadow_fun_symbol_all.smt2
   regress0/parser/shadow_fun_symbol_nirat.smt2
   regress0/parser/strings20.smt2
@@ -952,6 +958,7 @@ set(regress_0_tests
   regress0/proofs/cyclic-ucp.smt2
   regress0/proofs/issue277-circuit-propagator.smt2
   regress0/proofs/lfsc-test-1.smt2
+  regress0/proofs/nomerge-alethe-pf.smt2
   regress0/proofs/open-pf-datatypes.smt2
   regress0/proofs/open-pf-if-unordered-iff.smt2
   regress0/proofs/open-pf-rederivation.smt2
@@ -969,6 +976,7 @@ set(regress_0_tests
   regress0/proofs/qgu-fuzz-4-bool-chainres-postprocessing-singleton.smt2
   regress0/proofs/qgu-fuzz-5-bool-open-sat.smt2
   regress0/proofs/scope.smt2
+  regress0/proofs/tricky-sat-assumption-incremental-bookeeping.smt2
   regress0/proofs/trust-subs-eq-open.smt2
   regress0/push-pop/boolean/fuzz_12.smt2
   regress0/push-pop/boolean/fuzz_13.smt2
@@ -1052,7 +1060,7 @@ set(regress_0_tests
   regress0/quantifiers/issue8001-mem-leak.smt2
   regress0/quantifiers/issue8159-3-qext-nterm.smt2
   regress0/quantifiers/issue8227-subs-shadow.smt2
-  regress0/quantifiers/issue8466-syqi-bool.smt2 
+  regress0/quantifiers/issue8466-syqi-bool.smt2
   regress0/quantifiers/lra-triv-gn.smt2
   regress0/quantifiers/macro-back-subs-sat.smt2
   regress0/quantifiers/macros-int-real.smt2
@@ -2227,6 +2235,9 @@ set(regress_1_tests
   regress1/quantifiers/issue8456-2-syqi-ic.smt2
   regress1/quantifiers/issue8456-syqi-ic.smt2
   regress1/quantifiers/issue8497-syqi-str-fmf.smt2
+  regress1/quantifiers/issue8517-exp-exp.smt2
+  regress1/quantifiers/issue8520-cegqi-nl-cov.smt2
+  regress1/quantifiers/issue8572-sygus-inst-ic-purify.smt2
   regress1/quantifiers/issue993.smt2
   regress1/quantifiers/javafe.ast.StmtVec.009.smt2
   regress1/quantifiers/lia-witness-div-pp.smt2

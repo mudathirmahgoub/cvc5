@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Morgan Deters, Tim King
+ *   Andrew Reynolds, Andres Noetzli, Morgan Deters
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -571,10 +571,15 @@ std::vector<TypeNode> NodeManager::mkMutualDatatypeTypes(
     const std::vector<DType>& datatypes, uint32_t flags)
 {
   std::set<TypeNode> unresolvedTypes;
-  return mkMutualDatatypeTypes(datatypes, unresolvedTypes, flags);
+  // scan the list of datatypes to find unresolved datatypes
+  for (const DType& dt : datatypes)
+  {
+    dt.collectUnresolvedDatatypeTypes(unresolvedTypes);
+  }
+  return mkMutualDatatypeTypesInternal(datatypes, unresolvedTypes, flags);
 }
 
-std::vector<TypeNode> NodeManager::mkMutualDatatypeTypes(
+std::vector<TypeNode> NodeManager::mkMutualDatatypeTypesInternal(
     const std::vector<DType>& datatypes,
     const std::set<TypeNode>& unresolvedTypes,
     uint32_t flags)
@@ -880,7 +885,7 @@ void NodeManager::reclaimZombiesUntil(uint32_t k)
 
 size_t NodeManager::poolSize() const { return d_nodeValuePool.size(); }
 
-TypeNode NodeManager::mkSort(uint32_t flags)
+TypeNode NodeManager::mkSort()
 {
   NodeBuilder nb(this, kind::SORT_TYPE);
   Node sortTag = NodeBuilder(this, kind::SORT_TAG);
@@ -888,7 +893,7 @@ TypeNode NodeManager::mkSort(uint32_t flags)
   return nb.constructTypeNode();
 }
 
-TypeNode NodeManager::mkSort(const std::string& name, uint32_t flags)
+TypeNode NodeManager::mkSort(const std::string& name)
 {
   NodeBuilder nb(this, kind::SORT_TYPE);
   Node sortTag = NodeBuilder(this, kind::SORT_TAG);
@@ -899,8 +904,7 @@ TypeNode NodeManager::mkSort(const std::string& name, uint32_t flags)
 }
 
 TypeNode NodeManager::mkSort(TypeNode constructor,
-                             const std::vector<TypeNode>& children,
-                             uint32_t flags)
+                             const std::vector<TypeNode>& children)
 {
   Assert(constructor.getKind() == kind::SORT_TYPE
          && constructor.getNumChildren() == 0)
@@ -922,9 +926,7 @@ TypeNode NodeManager::mkSort(TypeNode constructor,
   return type;
 }
 
-TypeNode NodeManager::mkSortConstructor(const std::string& name,
-                                        size_t arity,
-                                        uint32_t flags)
+TypeNode NodeManager::mkSortConstructor(const std::string& name, size_t arity)
 {
   Assert(arity > 0);
   NodeBuilder nb(this, kind::SORT_TYPE);
@@ -934,6 +936,15 @@ TypeNode NodeManager::mkSortConstructor(const std::string& name,
   setAttribute(type, expr::VarNameAttr(), name);
   setAttribute(type, expr::SortArityAttr(), arity);
   return type;
+}
+
+TypeNode NodeManager::mkUnresolvedDatatypeSort(const std::string& name,
+                                               size_t arity)
+{
+  TypeNode usort = arity > 0 ? mkSortConstructor(name, arity) : mkSort(name);
+  // mark that it is an unresolved sort
+  setAttribute(usort, expr::UnresolvedDatatypeAttr(), true);
+  return usort;
 }
 
 Node NodeManager::mkVar(const std::string& name, const TypeNode& type)
@@ -1083,6 +1094,15 @@ Node NodeManager::mkInstConstant(const TypeNode& type)
   Node n = NodeBuilder(this, kind::INST_CONSTANT);
   n.setAttribute(TypeAttr(), type);
   n.setAttribute(TypeCheckedAttr(), true);
+  return n;
+}
+
+Node NodeManager::mkRawSymbol(const std::string& name, const TypeNode& type)
+{
+  Node n = NodeBuilder(this, kind::RAW_SYMBOL);
+  n.setAttribute(TypeAttr(), type);
+  n.setAttribute(TypeCheckedAttr(), true);
+  setAttribute(n, expr::VarNameAttr(), name);
   return n;
 }
 

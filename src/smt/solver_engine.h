@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
-
+ *   Andrew Reynolds, Aina Niemetz, Morgan Deters
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -227,7 +227,7 @@ class CVC5_EXPORT SolverEngine
    * This adds an assertion to the assertion stack that blocks the current
    * model based on the current options configured by cvc5.
    */
-  void blockModel();
+  void blockModel(modes::BlockModelsMode mode);
 
   /**
    * Block the current model values of (at least) the values in exprs.

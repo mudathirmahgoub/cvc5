@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andres Noetzli
+ *   Mudathir Mohamed, Gereon Kremer, Andres Noetzli
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -202,7 +202,7 @@ public class Statistics
     // (assert (forall ((x Person)) (not (set.member (mkTuple x x) ancestor))))
     Term var = solver.mkVar(personSort, "x");
     DatatypeConstructor constructor = tupleArity2.getDatatype().getConstructor(0);
-    Term xxTuple = solver.mkTerm(APPLY_CONSTRUCTOR, constructor.getConstructorTerm(), var, var);
+    Term xxTuple = solver.mkTerm(APPLY_CONSTRUCTOR, constructor.getTerm(), var, var);
     Term member = solver.mkTerm(SET_MEMBER, xxTuple, ancestor);
     Term notMember = solver.mkTerm(NOT, member);
 

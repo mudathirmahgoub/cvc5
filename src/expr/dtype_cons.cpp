@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Morgan Deters, Tim King
+ *   Andrew Reynolds, Morgan Deters, Aina Niemetz
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -40,17 +40,17 @@ DTypeConstructor::DTypeConstructor(std::string name,
   Assert(name != "");
 }
 
-void DTypeConstructor::addArg(std::string selectorName, TypeNode selectorType)
+void DTypeConstructor::addArg(std::string selectorName, TypeNode rangeType)
 {
   // We don't want to introduce a new data member, because eventually
   // we're going to be a constant stuffed inside a node.  So we stow
   // the selector type away inside a var until resolution (when we can
   // create the proper selector type)
   Assert(!isResolved());
-  Assert(!selectorType.isNull());
+  Assert(!rangeType.isNull());
   SkolemManager* sm = NodeManager::currentNM()->getSkolemManager();
   Node sel = sm->mkDummySkolem("unresolved_" + selectorName,
-                               selectorType,
+                               rangeType,
                                "is an unresolved selector type placeholder",
                                SkolemManager::SKOLEM_EXACT_NAME);
   // can use null updater for now

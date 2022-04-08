@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Abdalrhman Mohamed, Andrew Reynolds, Morgan Deters
+ *   Abdalrhman Mohamed, Andrew Reynolds, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -376,7 +376,8 @@ void Printer::toStreamCmdGetModel(std::ostream& out) const
   printUnknownCommand(out, "ge-model");
 }
 
-void Printer::toStreamCmdBlockModel(std::ostream& out) const
+void Printer::toStreamCmdBlockModel(std::ostream& out,
+                                    modes::BlockModelsMode mode) const
 {
   printUnknownCommand(out, "block-model");
 }

@@ -150,7 +150,7 @@ void TheoryBags::initialize()
   d_state.reset();
   d_state.collectDisequalBagTerms();
   collectBagsAndCountTerms();
-  generateRelatedCardinalityTerms();
+  //generateRelatedCardinalityTerms();
 }
 
 void TheoryBags::collectBagsAndCountTerms()

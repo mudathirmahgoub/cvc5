@@ -727,13 +727,12 @@ InferInfo InferenceGenerator::groupNotEmpty(Node n)
   Node emptyPart = d_nm->mkConst(EmptyBag(A.getType()));
   Node skolem = registerAndAssertSkolemLemma(n, "skolem_bag");
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_NOT_EMPTY);
-  Node count = getMultiplicityTerm(emptyPart, skolem);
-  Node member = count.eqNode(d_one);
   Node A_isEmpty = A.eqNode(emptyPart);
+
   Node singleton = d_nm->mkNode(BAG_MAKE, emptyPart, d_one);
   Node groupIsSingleton = skolem.eqNode(singleton);
   Node equivalence = A_isEmpty.eqNode(groupIsSingleton);
-  inferInfo.d_conclusion = d_nm->mkNode(AND, member, equivalence);
+  inferInfo.d_conclusion = equivalence;
   return inferInfo;
 }
 
@@ -748,6 +747,8 @@ InferInfo InferenceGenerator::groupUp(Node n, Node e, Node part)
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_UP);
   Node count_e_A = getMultiplicityTerm(e, A);
 
+  inferInfo.d_premises.push_back(d_nm->mkNode(GEQ, count_e_A, d_one));
+
   Node part_e = d_nm->mkNode(APPLY_UF, part, e);
 
   Node count_e_part_e = getMultiplicityTerm(e, part_e);
@@ -756,10 +757,10 @@ InferInfo InferenceGenerator::groupUp(Node n, Node e, Node part)
   Node skolem = registerAndAssertSkolemLemma(n, "skolem_bag");
   Node count_part_e = getMultiplicityTerm(part_e, skolem);
   Node part_e_member = d_nm->mkNode(EQUAL, count_part_e, d_one);
-  Node e_not_member = d_nm->mkNode(EQUAL, count_e_A, d_zero);
-  Node emptyPart = d_nm->mkConst(EmptyBag(bagType));
-  Node part_e_empty = emptyPart.eqNode(part_e);
-  Node equivalence = e_not_member.eqNode(part_e_empty);
+  Node e_isNotMember = count_e_A.eqNode(d_zero);
+  Node empty = d_nm->mkConst(EmptyBag(bagType));
+  Node part_e_isEmpty = part_e.eqNode(empty);
+  Node equivalence = e_isNotMember.eqNode(part_e_isEmpty);
   inferInfo.d_conclusion =
       d_nm->mkNode(AND, {sameMultiplicity, part_e_member, equivalence});
   return inferInfo;
@@ -796,25 +797,26 @@ InferInfo InferenceGenerator::groupPartCount(Node n, Node B)
 
   Node A = n[0];
   TypeNode bagType = A.getType();
+  Node empty = d_nm->mkConst(EmptyBag(bagType));
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_PART_COUNT);
 
   Node skolem = registerAndAssertSkolemLemma(n, "skolem_bag");
   Node count_B_n = getMultiplicityTerm(B, skolem);
   inferInfo.d_premises.push_back(d_nm->mkNode(GEQ, count_B_n, d_one));
+  Node A_notEmpty = A.eqNode(empty).notNode();
+  inferInfo.d_premises.push_back(A_notEmpty);
 
-  Node e = d_sm->mkSkolemFunction(
+  Node x = d_sm->mkSkolemFunction(
       SkolemFunId::TABLES_GROUP_PART, bagType.getBagElementType(), {n, B});
 
-  Node count_e_A = getMultiplicityTerm(e, A);
-  Node count_e_B = getMultiplicityTerm(e, B);
-  Node sameMultiplicity = count_e_A.eqNode(count_e_B);
-  Node member = d_nm->mkNode(GEQ, count_e_B, d_one);
-  Node empty = d_nm->mkConst(EmptyBag(bagType));
-  Node notEmpty = B.eqNode(empty).notNode();
-  Node implies = notEmpty.impNode(sameMultiplicity.andNode(member));
-
-  inferInfo.d_conclusion = count_B_n.eqNode(d_one).andNode(implies);
+  Node count_x_A = getMultiplicityTerm(x, A);
+  Node count_x_B = getMultiplicityTerm(x, B);
+  Node sameMultiplicity = count_x_A.eqNode(count_x_B);
+  Node member_x_B = d_nm->mkNode(GEQ, count_x_B, d_one);
+  Node member_B_n = count_B_n.eqNode(d_one);
+  inferInfo.d_conclusion =
+      d_nm->mkNode(AND, {member_B_n, sameMultiplicity, member_x_B});
   return inferInfo;
 }
 

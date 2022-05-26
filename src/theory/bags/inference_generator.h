@@ -370,10 +370,11 @@ class InferenceGenerator
   /**
    * @param n has form ((_ table.group n1 ... nk) A) where A has type T
    * @return an inference that represents:
-   * (and
-   *  (= (= A (as bag.empty T)) (= skolem (as bag.empty (bag T) ))
-   *  (= 1 (bag.count (as bag.empty T) skolem)))
+   * (=
+   *   (= A (as bag.empty T))
+   *   (= skolem (as bag.empty (bag T)))
    * )
+   * where skolem is a variable equals ((_ table.group n1 ... nk) A)
    */
   InferInfo groupNotEmpty(Node n);
   /**
@@ -381,13 +382,12 @@ class InferenceGenerator
    * @param e an element of type T
    * @param part a function of type T -> (Table T)
    * @return an inference that represents:
-   * (and
-   *   (= (bag.count e A) (bag.count e (part e))
-   *   (= (bag.count (part e) skolem) 1)
-   *   (= (= (bag.count e A) 0)
-   *      (= (part e) (as bag.empty (Table T))))
+   * (=>
+   *   (bag.member e A)
+   *   (and
+   *     (= (bag.count e A) (bag.count e (part e))
+   *     (= (bag.count (part e) skolem) 1)
    * )
-   *
    * where skolem is a variable equals ((_ table.group n1 ... nk) A)
    */
   InferInfo groupUp(Node n, Node e, Node part);
@@ -414,20 +414,19 @@ class InferenceGenerator
    * @param B an element of type (Table T)
    * @return an inference that represents:
    * (=>
-   *   (bag.member B skolem)
+   *   (and
+   *     (bag.member B skolem)
+   *     (distinct A (as bag.empty (Table T)))
+   *   )
    *   (and
    *     (= (bag.count B skolem) 1)
-   *     (=>
-   *       (distinct B (as bag.empty (Table T)))
-   *       (and
-   *         (= (bag.count k_{n,B} B) (bag.count k_{n,B} A)
-   *         (>= (bag.count k_{n,B} B) 1)
-   *       )
-   *     )
+   *     (= (bag.count x_{n,B} B) (bag.count x_{n,B} A)
+   *     (>= (bag.count x_{n,B} B) 1)
    *   )
    * )
    * where skolem is a variable equals ((_ table.group n1 ... nk) A), and
-   * k_{n, B} is a fresh skolem of type T.
+   * x_{n, B} is a fresh skolem of type T.
+   * Note that when A is not empty, any part B of the group is not empty.
    */
   InferInfo groupPartCount(Node n, Node B);
   /**

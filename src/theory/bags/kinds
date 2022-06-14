@@ -117,7 +117,7 @@ operator TABLE_PRODUCT             2 "table cross product"
 # table.project operator extends datatypes tuple_project operator to a bag of tuples
 constant TABLE_PROJECT_OP \
   class \
-  TableProjectOp \
+  TableProjectOp+ \
   ::cvc5::internal::TableProjectOpHashFunction \
   "theory/bags/table_project_op.h" \
   "operator for TABLE_PROJECT; payload is an instance of the cvc5::internal::TableProjectOp class"
@@ -147,8 +147,8 @@ parameterized TABLE_JOIN TABLE_JOIN_OP 2 "table join"
 # table.group operator
 constant TABLE_GROUP_OP \
   class \
-  TableGroupOp \
-  ::cvc5::internal::TableGroupOpHashFunction \
+  TableProjectOp+ \
+  ::cvc5::internal::TableProjectOpHashFunction \
   "theory/bags/table_project_op.h" \
   "operator for TABLE_GROUP; payload is an instance of the cvc5::internal::TableGroupOp class"
 

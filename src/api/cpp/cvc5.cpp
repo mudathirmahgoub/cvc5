@@ -4891,11 +4891,46 @@ void Solver::increment_vars_consts_stats(const Sort& sort, bool is_var) const
 /* Split out to avoid nested API calls (problematic with API tracing).        */
 /* .......................................................................... */
 
+const static std::unordered_map<Kind, internal::Kind> s_op_kinds{
+    {BITVECTOR_EXTRACT, internal::Kind::BITVECTOR_EXTRACT_OP},
+    {BITVECTOR_REPEAT, internal::Kind::BITVECTOR_REPEAT_OP},
+    {BITVECTOR_ROTATE_LEFT, internal::Kind::BITVECTOR_ROTATE_LEFT_OP},
+    {BITVECTOR_ROTATE_RIGHT, internal::Kind::BITVECTOR_ROTATE_RIGHT_OP},
+    {BITVECTOR_SIGN_EXTEND, internal::Kind::BITVECTOR_SIGN_EXTEND_OP},
+    {BITVECTOR_ZERO_EXTEND, internal::Kind::BITVECTOR_ZERO_EXTEND_OP},
+    {DIVISIBLE, internal::Kind::DIVISIBLE_OP},
+    {FLOATINGPOINT_TO_SBV, internal::Kind::FLOATINGPOINT_TO_SBV_OP},
+    {FLOATINGPOINT_TO_UBV, internal::Kind::FLOATINGPOINT_TO_UBV_OP},
+    {FLOATINGPOINT_TO_FP_FROM_IEEE_BV,
+     internal::Kind::FLOATINGPOINT_TO_FP_FROM_IEEE_BV_OP},
+    {FLOATINGPOINT_TO_FP_FROM_FP,
+     internal::Kind::FLOATINGPOINT_TO_FP_FROM_FP_OP},
+    {FLOATINGPOINT_TO_FP_FROM_REAL,
+     internal::Kind::FLOATINGPOINT_TO_FP_FROM_REAL_OP},
+    {FLOATINGPOINT_TO_FP_FROM_SBV,
+     internal::Kind::FLOATINGPOINT_TO_FP_FROM_SBV_OP},
+    {FLOATINGPOINT_TO_FP_FROM_UBV,
+     internal::Kind::FLOATINGPOINT_TO_FP_FROM_UBV_OP},
+    {IAND, internal::Kind::IAND_OP},
+    {INT_TO_BITVECTOR, internal::Kind::INT_TO_BITVECTOR_OP},
+    {REGEXP_REPEAT, internal::Kind::REGEXP_REPEAT_OP},
+    {REGEXP_LOOP, internal::Kind::REGEXP_LOOP_OP},
+    {TUPLE_PROJECT, internal::Kind::TUPLE_PROJECT_OP},
+    {TABLE_PROJECT, internal::Kind::TABLE_PROJECT_OP},
+    {TABLE_AGGREGATE, internal::Kind::TABLE_AGGREGATE_OP},
+    {TABLE_JOIN, internal::Kind::TABLE_JOIN_OP},
+    {TABLE_GROUP, internal::Kind::TABLE_PROJECT_OP},
+    {TUPLE_PROJECT, internal::Kind::TUPLE_PROJECT_OP},
+    //{RELATION_PROJECT, internal::Kind::RELATION_PROJECT_OP},
+    {RELATION_AGGREGATE, internal::Kind::RELATION_AGGREGATE_OP},
+    {RELATION_GROUP, internal::Kind::RELATION_GROUP_OP},
+};
+
 template <typename T>
 Op Solver::mkOpHelper(Kind kind, const T& t) const
 {
   //////// all checks before this line
-  internal::Node res = getNodeManager()->mkConst(extToIntKind(kind), t);
+  internal::Node res = getNodeManager()->mkConst(s_op_kinds.at(kind), t);
   static_cast<void>(res.getType(true)); /* kick off type checking */
   return Op(this, kind, res);
 }

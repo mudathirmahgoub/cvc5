@@ -619,8 +619,8 @@ TypeNode RelationAggregateTypeRule::computeType(NodeManager* nm,
                                                 TNode n,
                                                 bool check)
 {
-  Assert(n.getKind() == kind::RELATION_AGGREGATE && n.hasOperator()
-         && n.getOperator().getKind() == kind::RELATION_AGGREGATE_OP);
+//  Assert(n.getKind() == kind::RELATION_AGGREGATE && n.hasOperator()
+//         && n.getOperator().getKind() == kind::RELATION_AGGREGATE_OP);
   RelationAggregateOp op = n.getOperator().getConst<RelationAggregateOp>();
   const std::vector<uint32_t>& indices = op.getIndices();
 

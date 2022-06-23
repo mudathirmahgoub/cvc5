@@ -91,7 +91,7 @@ class LinuxAmd64 extends Platform
 
   @Override String[] getLibraries()
   {
-    return new String[] {"libcvc5.so.1", "libcvc5jni.so", "libpoly.so.0.1.9", "libpolyxx.so.0.1.9"};
+    return new String[] {"libcvc5.so.1", "libcvc5jni.so", "libpoly.so.0.1.11", "libpolyxx.so.0.1.11"};
   }
 
   @Override void copyLibraries(String dir, String prefix)
@@ -101,9 +101,9 @@ class LinuxAmd64 extends Platform
       super.copyLibraries(dir, prefix);
       // symbolic links
       Runtime.getRuntime().exec("ln -s " + prefix + "libcvc5.so.1 " + prefix + "libcvc5.so");
-      Runtime.getRuntime().exec("ln -s " + prefix + "libpoly.so.0.1.9 " + prefix + "libpoly.so.0");
+      Runtime.getRuntime().exec("ln -s " + prefix + "libpoly.so.0.1.11 " + prefix + "libpoly.so.0");
       Runtime.getRuntime().exec(
-          "ln -s " + prefix + "libpolyxx.so.0.1.9 " + prefix + "libpolyxx.so.0");
+          "ln -s " + prefix + "libpolyxx.so.0.1.11 " + prefix + "libpolyxx.so.0");
       Runtime.getRuntime().exec("ln -s " + prefix + "libpoly.so.0 " + prefix + "libpoly.so");
       Runtime.getRuntime().exec("ln -s " + prefix + "libpolyxx.so.0 " + prefix + "libpolyxx.so");
     }
@@ -120,12 +120,31 @@ class MacX86_64 extends Platform
   static MacX86_64 MAC_X86_64 = new MacX86_64();
   private MacX86_64()
   {
-    super("Mac*", "x86_64", "mac-x86_64");
+    //super("Mac*", "x86_64", "mac-x86_64");
+    super("mac\\s*os.*", "ppc|power|powerpc.*|x86.*", "mac-86_64");
   }
   @Override String[] getLibraries()
   {
     return new String[] {
-        "libcvc5.dylib.1", "libcvc5jni.dylib", "libpoly.dylib.0.1.9", "libpolyxx.dylib.0.1.9"};
+        "libcvc5.1.dylib", "libcvc5jni.dylib", "libpoly.0.1.11.dylib", "libpolyxx.0.1.11.dylib"};
+  }
+  @Override void copyLibraries(String dir, String prefix)
+  {
+    try
+    {
+      super.copyLibraries(dir, prefix);
+      // symbolic links
+      Runtime.getRuntime().exec("ln -s " + prefix + "libcvc5.1.dylib " + prefix + "libcvc5.so");
+      Runtime.getRuntime().exec("ln -s " + prefix + "libpoly.0.1.11.dylib " + prefix + "libpoly.0.dylib");
+      Runtime.getRuntime().exec(
+          "ln -s " + prefix + "libpolyxx.0.1.11.dylib " + prefix + "libpolyxx.0.dylib");
+      Runtime.getRuntime().exec("ln -s " + prefix + "libpoly.0.dylib " + prefix + "libpoly.dylib");
+      Runtime.getRuntime().exec("ln -s " + prefix + "libpolyxx.0.dylib " + prefix + "libpolyxx.dylib");
+    }
+    catch (Exception e)
+    {
+      throw new RuntimeException(e);
+    }
   }
 }
 

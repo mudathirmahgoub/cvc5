@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Haniel Barbosa, Andrew Reynolds, Gereon Kremer
+ *   Haniel Barbosa, Andrew Reynolds, Mathias Preiner
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -20,10 +20,9 @@
 
 #include <vector>
 
-#include "context/cdhashmap.h"
-#include "proof/proof_generator.h"
+#include "proof/proof.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 class ProofNodeManager;
 
@@ -36,7 +35,7 @@ class ProofNodeManager;
  * connecting, for the proof generated to one fact, assumptions to the proofs
  * generated for those assumptinos that are registered in the chain.
  */
-class LazyCDProofChain : public ProofGenerator
+class LazyCDProofChain : public CDProof
 {
  public:
   /** Constructor
@@ -92,6 +91,11 @@ class LazyCDProofChain : public ProofGenerator
    * it is required to do so. This mapping is maintained in the remainder of
    * the current context (according to the context c provided to this class).
    *
+   * It is important to note that pg is asked to provide a proof for expected
+   * only when no other call for the fact expected is provided via the addStep
+   * method of this class. In particular, pg is asked to prove expected when it
+   * appears as the conclusion of an ASSUME leaf within CDProof::getProofFor.
+   *
    * Moreover the lazy steps of this class are expected to fulfill the
    * requirement that pg.getProofFor(expected) generates a proof node closed
    * with relation to
@@ -136,6 +140,14 @@ class LazyCDProofChain : public ProofGenerator
    * true if we should recurse on its proof.
    */
   ProofGenerator* getGeneratorForInternal(Node fact, bool& rec);
+  /**
+   * Get internal proof for fact from the underlying CDProof, if any, otherwise
+   * via a call to the above method.
+   *
+   * Returns a nullptr when no internal proof stored.
+   */
+  std::shared_ptr<ProofNode> getProofForInternal(Node fact, bool& rec);
+
   /** The proof manager, used for allocating new ProofNode objects */
   ProofNodeManager* d_manager;
   /** Whether this instance is robust to cycles in the chain. */
@@ -152,6 +164,6 @@ class LazyCDProofChain : public ProofGenerator
   std::string d_name;
 };
 
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__PROOF__LAZY_PROOF_CHAIN_H */

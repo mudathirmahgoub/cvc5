@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Morgan Deters, Justin Xu
+ *   Andrew Reynolds, Morgan Deters, Aina Niemetz
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -25,7 +25,7 @@
 #include "smt/process_assertions.h"
 #include "theory/booleans/circuit_propagator.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 class TheoryEngine;
 
@@ -62,12 +62,16 @@ class Preprocessor : protected EnvObj
   /**
    * Process the assertions that have been asserted in argument as. Returns
    * true if no conflict was discovered while preprocessing them.
+   *
+   * @param as The assertions.
    */
   bool process(Assertions& as);
   /**
    * Clear learned literals from the Boolean propagator.
    */
   void clearLearnedLiterals();
+  /** Get learned literals */
+  std::vector<Node> getLearnedLiterals() const;
   /**
    * Cleanup, which deletes the processing passes owned by this module. This
    * is required to be done explicitly so that passes are deleted before the
@@ -97,9 +101,13 @@ class Preprocessor : protected EnvObj
   /** Same as above, for a list of assertions, updating in place */
   void expandDefinitions(std::vector<Node>& ns);
   /**
-   * Set proof node manager. Enables proofs in this preprocessor.
+   * Enable proofs for this preprocessor. This must be called
+   * explicitly since we construct the preprocessor before we know
+   * whether proofs are enabled.
+   *
+   * @param pppg The preprocess proof generator of the proof manager.
    */
-  void setProofGenerator(PreprocessProofGenerator* pppg);
+  void enableProofs(PreprocessProofGenerator* pppg);
 
  private:
   /** Reference to the abstract values utility */
@@ -121,11 +129,9 @@ class Preprocessor : protected EnvObj
    * passes.
    */
   ProcessAssertions d_processor;
-  /** Proof node manager */
-  ProofNodeManager* d_pnm;
 };
 
 }  // namespace smt
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif

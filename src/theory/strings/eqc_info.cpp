@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Aina Niemetz
+ *   Andrew Reynolds, Mathias Preiner
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -20,9 +20,9 @@
 
 using namespace std;
 using namespace cvc5::context;
-using namespace cvc5::kind;
+using namespace cvc5::internal::kind;
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace strings {
 
@@ -100,7 +100,7 @@ Node EqcInfo::addEndpointConst(Node t, Node c, bool isSuf)
     {
       Trace("strings-eager-pconf")
           << "Conflict for " << prevC << ", " << c << std::endl;
-      Node ret = mkMergeConflict(t, prev);
+      Node ret = mkMergeConflict(t, prev, false);
       Trace("strings-eager-pconf")
           << "String: eager prefix conflict: " << ret << std::endl;
       return ret;
@@ -117,8 +117,11 @@ Node EqcInfo::addEndpointConst(Node t, Node c, bool isSuf)
   return Node::null();
 }
 
-Node EqcInfo::mkMergeConflict(Node t, Node prev)
+Node EqcInfo::mkMergeConflict(Node t, Node prev, bool isArith)
 {
+  Trace("strings-eager-debug")
+      << "mkMergeConflict " << t << ", " << prev << std::endl;
+  NodeManager* nm = NodeManager::currentNM();
   std::vector<Node> ccs;
   Node r[2];
   for (unsigned i = 0; i < 2; i++)
@@ -127,7 +130,7 @@ Node EqcInfo::mkMergeConflict(Node t, Node prev)
     if (tp.getKind() == STRING_IN_REGEXP)
     {
       ccs.push_back(tp);
-      r[i] = tp[0];
+      r[i] = isArith ? nm->mkNode(STRING_LENGTH, tp[0]) : tp[0];
     }
     else
     {
@@ -139,9 +142,9 @@ Node EqcInfo::mkMergeConflict(Node t, Node prev)
     ccs.push_back(r[0].eqNode(r[1]));
   }
   Assert(!ccs.empty());
-  return NodeManager::currentNM()->mkAnd(ccs);
+  return nm->mkAnd(ccs);
 }
 
 }  // namespace strings
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

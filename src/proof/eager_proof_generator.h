@@ -4,7 +4,7 @@
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -24,7 +24,7 @@
 #include "proof/proof_rule.h"
 #include "proof/trust_node.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 class ProofNode;
 class ProofNodeManager;
@@ -158,6 +158,21 @@ class EagerProofGenerator : public ProofGenerator
    * a proof of a = b
    */
   TrustNode mkTrustedRewrite(Node a, Node b, std::shared_ptr<ProofNode> pf);
+  /**
+   * Make trust node from a single step proof. This is a convenience function
+   * that avoids the need to explictly construct ProofNode by the caller.
+   *
+   * @param a the original
+   * @param b what is rewrites to
+   * @param id The rule of the proof concluding a=b
+   * @param args The arguments to the proof concluding a=b,
+   * @return The trust node corresponding to the fact that this generator has
+   * a proof of a=b.
+   */
+  TrustNode mkTrustedRewrite(Node a,
+                             Node b,
+                             PfRule id,
+                             const std::vector<Node>& args);
   //--------------------------------------- common proofs
   /**
    * This returns the trust node corresponding to the splitting lemma
@@ -189,6 +204,6 @@ class EagerProofGenerator : public ProofGenerator
   NodeProofNodeMap d_proofs;
 };
 
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__PROOF__PROOF_GENERATOR_H */

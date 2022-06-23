@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds
+ *   Andrew Reynolds, Haniel Barbosa, Mathias Preiner
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -17,14 +17,18 @@
 
 #include "expr/attribute.h"
 
-using namespace cvc5::kind;
+using namespace cvc5::internal::kind;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 NodeConverter::NodeConverter(bool forceIdem) : d_forceIdem(forceIdem) {}
 
 Node NodeConverter::convert(Node n)
 {
+  if (n.isNull())
+  {
+    return n;
+  }
   Trace("nconv-debug") << "NodeConverter::convert: " << n << std::endl;
   NodeManager* nm = NodeManager::currentNM();
   std::unordered_map<Node, Node>::iterator it;
@@ -48,6 +52,8 @@ Node NodeConverter::convert(Node n)
       d_preCache[cur] = curp;
       if (!curp.isNull())
       {
+        Trace("nconv-debug2")
+            << "..pre-rewrite changed " << cur << " into " << curp << std::endl;
         visit.push_back(cur);
         visit.push_back(curp);
       }
@@ -70,6 +76,7 @@ Node NodeConverter::convert(Node n)
     }
     else if (it->second.isNull())
     {
+      Trace("nconv-debug2") << "..post-visit " << cur << std::endl;
       it = d_preCache.find(cur);
       Assert(it != d_preCache.end());
       if (!it->second.isNull())
@@ -78,6 +85,8 @@ Node NodeConverter::convert(Node n)
         Assert(d_cache.find(it->second) != d_cache.end());
         Node ret = d_cache[it->second];
         addToCache(cur, ret);
+        Trace("nconv-debug2")
+            << "..from cache changed " << cur << " into " << ret << std::endl;
       }
       else
       {
@@ -103,13 +112,17 @@ Node NodeConverter::convert(Node n)
         if (childChanged)
         {
           ret = nm->mkNode(ret.getKind(), children);
+          Trace("nconv-debug2") << "..from children changed " << cur << " into "
+                                << ret << std::endl;
         }
         // run the callback for the current application
         Node cret = postConvert(ret);
         if (!cret.isNull() && ret != cret)
         {
-          AlwaysAssert(cret.getType().isComparableTo(ret.getType()))
+          AlwaysAssert(cret.getType() == ret.getType())
               << "Converting " << ret << " to " << cret << " changes type";
+          Trace("nconv-debug2") << "..post-rewrite changed " << ret << " into "
+                                << cret << std::endl;
           ret = cret;
         }
         addToCache(cur, ret);
@@ -183,11 +196,8 @@ TypeNode NodeConverter::convertType(TypeNode tn)
         // reconstruct using a node builder, which seems to be required for
         // type nodes.
         NodeBuilder nb(ret.getKind());
-        if (ret.getMetaKind() == kind::metakind::PARAMETERIZED)
-        {
-          // push the operator
-          nb << ret.getOperator();
-        }
+        // there are no parameterized types
+        Assert (ret.getMetaKind() != kind::metakind::PARAMETERIZED);
         for (TypeNode::const_iterator j = ret.begin(), iend = ret.end();
              j != iend;
              ++j)
@@ -248,4 +258,4 @@ TypeNode NodeConverter::postConvertType(TypeNode tn)
 }
 bool NodeConverter::shouldTraverse(Node n) { return true; }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

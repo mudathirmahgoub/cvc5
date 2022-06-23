@@ -4,7 +4,7 @@
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -20,7 +20,7 @@
 
 #include "expr/node.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 class ProofGenerator;
 class ProofNode;
@@ -28,7 +28,7 @@ class ProofNode;
 /**
  * Debug check closed on Trace c. Context ctx is string for debugging.
  * This method throws an assertion failure if pg cannot provide a closed
- * proof for fact proven. This is checked only if --proof-eager-checking
+ * proof for fact proven. This is checked only if --proof-check=eager
  * is enabled or the Trace c is enabled.
  *
  * @param reqGen Whether we consider a null generator to be a failure.
@@ -68,6 +68,6 @@ void pfnEnsureClosedWrt(ProofNode* pn,
                         const std::vector<Node>& assumps,
                         const char* c,
                         const char* ctx);
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__PROOF__PROOF_ENSURE_CLOSED_H */

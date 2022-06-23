@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Mudathir Mohamed
+ *   Andrew Reynolds, Mudathir Mohamed, Aina Niemetz
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -21,11 +21,12 @@
 #include <map>
 #include <vector>
 
+#include "context/cdhashset.h"
 #include "theory/sets/skolem_cache.h"
 #include "theory/theory_state.h"
 #include "theory/uf/equality_engine.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace sets {
 
@@ -138,8 +139,8 @@ class SolverState : public TheoryState
   bool hasMembers(Node r) const;
   /** Get binary operator index
    *
-   * This returns a mapping from binary operator kinds (INTERSECT, SETMINUS,
-   * UNION) to index of terms of that kind. Each kind k maps to a map whose
+   * This returns a mapping from binary operator kinds (INTERSECT, SET_MINUS,
+   * SET_UNION) to index of terms of that kind. Each kind k maps to a map whose
    * entries are of the form [r1 -> r2 -> t], where t is a term in the current
    * context, and t is of the form <k>(t1,t2) where t1=r1 and t2=r2 hold in the
    * current context. The term t is the representative of its congruence class.
@@ -160,6 +161,13 @@ class SolverState : public TheoryState
    * map is a representative of its congruence class.
    */
   const std::map<Kind, std::vector<Node> >& getOperatorList() const;
+  /** Get the list of all set.filter terms */
+  const std::vector<Node>& getFilterTerms() const;
+  /** Get the list of all set.map terms in the current user context */
+  const context::CDHashSet<Node>& getMapTerms() const;
+  /** Get the list of all skolem elements generated for map terms down rules in
+   * the current user context */
+  std::shared_ptr<context::CDHashSet<Node>> getMapSkolemElements(Node n);
   /** Get the list of all comprehension sets in the current context */
   const std::vector<Node>& getComprehensionSets() const;
 
@@ -187,13 +195,17 @@ class SolverState : public TheoryState
    */
   bool merge(TNode t1, TNode t2, std::vector<Node>& facts, TNode cset);
 
+  /** register the skolem element for the set.map term n */
+  void registerMapSkolemElement(const Node& n, const Node& element);
+
  private:
   /** constants */
   Node d_true;
   Node d_false;
   /** the empty vector and map */
-  std::vector<Node> d_emptyVec;
-  std::map<Node, Node> d_emptyMap;
+  const std::vector<Node> d_emptyVec;
+  /** a convenient constant empty map */
+  const std::map<Node, Node> d_emptyMap;
   /** Reference to skolem cache */
   SkolemCache& d_skCache;
   /** The list of all equivalence classes of type set in the current context */
@@ -208,6 +220,13 @@ class SolverState : public TheoryState
   std::map<Node, Node> d_congruent;
   /** Map from equivalence classes to the list of non-variable sets in it */
   std::map<Node, std::vector<Node> > d_nvar_sets;
+  /** A list of filter terms. It is initialized during full effort check */
+  std::vector<Node> d_filterTerms;
+  /** User context collection of set.map terms */
+  context::CDHashSet<Node> d_mapTerms;
+  /** User context collection of skolem elements generated for set.map terms */
+  context::CDHashMap<Node, std::shared_ptr<context::CDHashSet<Node>>>
+      d_mapSkolemElements;
   /** Map from equivalence classes to the list of comprehension sets in it */
   std::map<Node, std::vector<Node> > d_compSets;
   /** Map from equivalence classes to a variable sets in it */
@@ -220,7 +239,7 @@ class SolverState : public TheoryState
    */
   std::map<Node, std::map<Node, Node> > d_pol_mems[2];
   // -------------------------------- term indices
-  /** Term index for MEMBER
+  /** Term index for SET_MEMBER
    *
    * A term index maps equivalence class representatives to the representative
    * of their congruence class.
@@ -231,9 +250,9 @@ class SolverState : public TheoryState
    * class, and r1=t1 and r2=t2 hold in the current context.
    */
   std::map<Node, std::map<Node, Node> > d_members_index;
-  /** Term index for SINGLETON */
+  /** Term index for SET_SINGLETON */
   std::map<Node, Node> d_singleton_index;
-  /** Indices for the binary kinds INTERSECT, SETMINUS and UNION. */
+  /** Indices for the binary kinds INTERSECT, SET_MINUS and SET_UNION. */
   std::map<Kind, std::map<Node, std::map<Node, Node> > > d_bop_index;
   /** A list of comprehension sets */
   std::vector<Node> d_allCompSets;
@@ -268,6 +287,6 @@ class SolverState : public TheoryState
 
 }  // namespace sets
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__SETS__THEORY_SOLVER_STATE_H */

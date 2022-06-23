@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds
+ *   Andrew Reynolds, Haniel Barbosa, Morgan Deters
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -15,11 +15,13 @@
 
 #include "theory/uf/theory_uf_rewriter.h"
 
+#include "expr/function_array_const.h"
 #include "expr/node_algorithm.h"
 #include "theory/rewriter.h"
 #include "theory/substitutions.h"
+#include "theory/uf/function_const.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace uf {
 
@@ -52,11 +54,11 @@ RewriteResponse TheoryUfRewriter::postRewrite(TNode node)
   }
   if (node.getKind() == kind::APPLY_UF)
   {
-    if (node.getOperator().getKind() == kind::LAMBDA)
+    Node lambda = FunctionConst::toLambda(node.getOperator());
+    if (!lambda.isNull())
     {
-      Trace("uf-ho-beta") << "uf-ho-beta : beta-reducing all args of : " << node
-                          << "\n";
-      TNode lambda = node.getOperator();
+      Trace("uf-ho-beta") << "uf-ho-beta : beta-reducing all args of : "
+                          << lambda << " for " << node << "\n";
       Node ret;
       // build capture-avoiding substitution since in HOL shadowing may have
       // been introduced
@@ -72,7 +74,7 @@ RewriteResponse TheoryUfRewriter::postRewrite(TNode node)
         {
           subs.push_back(s);
         }
-        if (Trace.isOn("uf-ho-beta"))
+        if (TraceIsOn("uf-ho-beta"))
         {
           Trace("uf-ho-beta") << "uf-ho-beta: ..sub of " << subs.size()
                               << " vars into " << subs.size() << " terms :\n";
@@ -101,17 +103,18 @@ RewriteResponse TheoryUfRewriter::postRewrite(TNode node)
   }
   else if (node.getKind() == kind::HO_APPLY)
   {
-    if (node[0].getKind() == kind::LAMBDA)
+    Node lambda = FunctionConst::toLambda(node[0]);
+    if (!lambda.isNull())
     {
       // resolve one argument of the lambda
       Trace("uf-ho-beta") << "uf-ho-beta : beta-reducing one argument of : "
-                          << node[0] << " with " << node[1] << "\n";
+                          << lambda << " with " << node[1] << "\n";
 
       // reconstruct the lambda first to avoid variable shadowing
-      Node new_body = node[0][1];
-      if (node[0][0].getNumChildren() > 1)
+      Node new_body = lambda[1];
+      if (lambda[0].getNumChildren() > 1)
       {
-        std::vector<Node> new_vars(node[0][0].begin() + 1, node[0][0].end());
+        std::vector<Node> new_vars(lambda[0].begin() + 1, lambda[0].end());
         std::vector<Node> largs;
         largs.push_back(
             NodeManager::currentNM()->mkNode(kind::BOUND_VAR_LIST, new_vars));
@@ -125,19 +128,24 @@ RewriteResponse TheoryUfRewriter::postRewrite(TNode node)
       // been introduced
       if (d_isHigherOrder)
       {
-        Node arg = Rewriter::rewrite(node[1]);
-        Node var = node[0][0][0];
+        Node arg = node[1];
+        Node var = lambda[0][0];
         new_body = expr::substituteCaptureAvoiding(new_body, var, arg);
       }
       else
       {
-        TNode arg = Rewriter::rewrite(node[1]);
-        TNode var = node[0][0][0];
+        TNode arg = node[1];
+        TNode var = lambda[0][0];
         new_body = new_body.substitute(var, arg);
       }
       Trace("uf-ho-beta") << "uf-ho-beta : ..new body : " << new_body << "\n";
       return RewriteResponse(REWRITE_AGAIN_FULL, new_body);
     }
+  }
+  else if (node.getKind() == kind::LAMBDA)
+  {
+    Node ret = rewriteLambda(node);
+    return RewriteResponse(REWRITE_DONE, ret);
   }
   return RewriteResponse(REWRITE_DONE, node);
 }
@@ -204,6 +212,42 @@ Node TheoryUfRewriter::decomposeHoApply(TNode n,
 }
 bool TheoryUfRewriter::canUseAsApplyUfOperator(TNode n) { return n.isVar(); }
 
+Node TheoryUfRewriter::rewriteLambda(Node node)
+{
+  Assert(node.getKind() == kind::LAMBDA);
+  // The following code ensures that if node is equivalent to a constant
+  // lambda, then we return the canonical representation for the lambda, which
+  // in turn ensures that two constant lambdas are equivalent if and only
+  // if they are the same node.
+  // We canonicalize lambdas by turning them into array constants, applying
+  // normalization on array constants, and then converting the array constant
+  // back to a lambda.
+  Trace("builtin-rewrite") << "Rewriting lambda " << node << "..." << std::endl;
+  Node anode = FunctionConst::toArrayConst(node);
+  // Only rewrite constant array nodes, since these are the only cases
+  // where we require canonicalization of lambdas. Moreover, applying the
+  // below code is not correct if the arguments to the lambda occur
+  // in return values. For example, lambda x. ite( x=1, f(x), c ) would
+  // be converted to (store (storeall ... c) 1 f(x)), and then converted
+  // to lambda y. ite( y=1, f(x), c), losing the relation between x and y.
+  if (!anode.isNull() && anode.isConst())
+  {
+    Assert(anode.getType().isArray());
+    Node retNode = NodeManager::currentNM()->mkConst(
+        FunctionArrayConst(node.getType(), anode));
+    Assert(anode.isConst() == retNode.isConst());
+    Assert(retNode.getType() == node.getType());
+    Assert(expr::hasFreeVar(node) == expr::hasFreeVar(retNode));
+    return retNode;
+  }
+  else
+  {
+    Trace("builtin-rewrite-debug")
+        << "...failed to get array representation." << std::endl;
+  }
+  return node;
+}
+
 }  // namespace uf
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

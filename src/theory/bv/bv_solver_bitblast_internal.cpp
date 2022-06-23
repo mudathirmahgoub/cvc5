@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Mathias Preiner, Gereon Kremer, Haniel Barbosa
+ *   Mathias Preiner, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -16,13 +16,14 @@
 
 #include "theory/bv/bv_solver_bitblast_internal.h"
 
+#include "options/bv_options.h"
 #include "proof/conv_proof_generator.h"
 #include "theory/bv/bitblast/bitblast_proof_generator.h"
 #include "theory/bv/theory_bv.h"
 #include "theory/bv/theory_bv_utils.h"
 #include "theory/theory_model.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace bv {
 
@@ -103,6 +104,12 @@ void BVSolverBitblastInternal::addBBLemma(TNode fact)
   }
 }
 
+bool BVSolverBitblastInternal::needsEqualityEngine(EeSetupInfo& esi)
+{
+  // Disable equality engine if --bitblast=eager is enabled.
+  return options().bv.bitblastMode != options::BitblastMode::EAGER;
+}
+
 bool BVSolverBitblastInternal::preNotifyFact(
     TNode atom, bool pol, TNode fact, bool isPrereg, bool isInternal)
 {
@@ -141,12 +148,14 @@ bool BVSolverBitblastInternal::preNotifyFact(
     }
   }
 
-  return false;  // Return false to enable equality engine reasoning in Theory.
+  // Disable the equality engine in --bitblast=eager mode. Otherwise return
+  // false to enable equality engine reasoning in Theory.
+  return options().bv.bitblastMode == options::BitblastMode::EAGER;
 }
 
 TrustNode BVSolverBitblastInternal::explain(TNode n)
 {
-  Debug("bv-bitblast-internal") << "explain called on " << n << std::endl;
+  Trace("bv-bitblast-internal") << "explain called on " << n << std::endl;
   return d_im.explainLit(n);
 }
 
@@ -197,4 +206,4 @@ BVProofRuleChecker* BVSolverBitblastInternal::getProofChecker()
 
 }  // namespace bv
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

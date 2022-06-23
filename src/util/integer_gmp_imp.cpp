@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Aina Niemetz, Tim King, Gereon Kremer
+ *   Aina Niemetz, Gereon Kremer, Tim King
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -14,6 +14,7 @@
  */
 
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -28,7 +29,7 @@
 
 using namespace std;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 Integer::Integer(const char* s, unsigned base)
   : d_value(s, base)
@@ -37,6 +38,33 @@ Integer::Integer(const char* s, unsigned base)
 Integer::Integer(const std::string& s, unsigned base)
   : d_value(s, base)
 {}
+
+#ifdef CVC5_NEED_INT64_T_OVERLOADS
+Integer::Integer(int64_t z)
+{
+  if (std::numeric_limits<signed long int>::min() <= z
+      && z <= std::numeric_limits<signed long int>::max())
+  {
+    d_value = static_cast<signed long int>(z);
+  }
+  else
+  {
+    d_value = std::to_string(z);
+  }
+}
+Integer::Integer(uint64_t z)
+{
+  if (std::numeric_limits<unsigned long int>::min() <= z
+      && z <= std::numeric_limits<unsigned long int>::max())
+  {
+    d_value = static_cast<unsigned long int>(z);
+  }
+  else
+  {
+    d_value = std::to_string(z);
+  }
+}
+#endif /* CVC5_NEED_INT64_T_OVERLOADS */
 
 Integer& Integer::operator=(const Integer& x)
 {
@@ -402,28 +430,73 @@ unsigned int Integer::getUnsignedInt() const
   return (unsigned int)d_value.get_ui();
 }
 
-bool Integer::fitsSignedLong() const { return d_value.fits_slong_p(); }
-
-bool Integer::fitsUnsignedLong() const { return d_value.fits_ulong_p(); }
-
 long Integer::getLong() const
 {
-  long si = d_value.get_si();
-  // ensure there wasn't overflow
-  CheckArgument(mpz_cmp_si(d_value.get_mpz_t(), si) == 0,
+  // ensure there it fits
+  CheckArgument(mpz_fits_slong_p(d_value.get_mpz_t()) != 0,
                 this,
                 "Overflow detected in Integer::getLong().");
-  return si;
+  return d_value.get_si();
 }
 
 unsigned long Integer::getUnsignedLong() const
 {
-  unsigned long ui = d_value.get_ui();
-  // ensure there wasn't overflow
-  CheckArgument(mpz_cmp_ui(d_value.get_mpz_t(), ui) == 0,
+  // ensure that it fits
+  CheckArgument(mpz_fits_ulong_p(d_value.get_mpz_t()) != 0,
                 this,
                 "Overflow detected in Integer::getUnsignedLong().");
-  return ui;
+  return d_value.get_ui();
+}
+
+int64_t Integer::getSigned64() const
+{
+  if constexpr (sizeof(int64_t) == sizeof(signed long int))
+  {
+    return getLong();
+  }
+  else
+  {
+    if (mpz_fits_slong_p(d_value.get_mpz_t()) != 0)
+    {
+      return getLong();
+    }
+    try
+    {
+      return std::stoll(toString());
+    }
+    catch (const std::exception& e)
+    {
+      CheckArgument(
+          false, this, "Overflow detected in Integer::getSigned64().");
+    }
+  }
+  return 0;
+}
+uint64_t Integer::getUnsigned64() const
+{
+  if constexpr (sizeof(uint64_t) == sizeof(unsigned long int))
+  {
+    return getUnsignedLong();
+  }
+  else
+  {
+    if (mpz_fits_ulong_p(d_value.get_mpz_t()) != 0)
+    {
+      return getUnsignedLong();
+    }
+    try
+    {
+      CheckArgument(
+          sgn() >= 0, this, "Overflow detected in Integer::getUnsigned64().");
+      return std::stoull(toString());
+    }
+    catch (const std::exception& e)
+    {
+      CheckArgument(
+          false, this, "Overflow detected in Integer::getUnsigned64().");
+    }
+  }
+  return 0;
 }
 
 size_t Integer::hash() const { return gmpz_hash(d_value.get_mpz_t()); }
@@ -480,4 +553,4 @@ const Integer& Integer::max(const Integer& a, const Integer& b)
   return (a >= b) ? a : b;
 }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

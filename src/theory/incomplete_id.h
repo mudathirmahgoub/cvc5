@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds
+ *   Andrew Reynolds, Aina Niemetz
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -20,7 +20,7 @@
 
 #include <iosfwd>
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 
 /**
@@ -44,8 +44,14 @@ enum class IncompleteId
   QUANTIFIERS_RECORDED_INST,
   // incomplete due to limited number of allowed instantiation rounds
   QUANTIFIERS_MAX_INST_ROUNDS,
+  // we solved a negated synthesis conjecture and will terminate as a subsolver
+  // with unknown
+  QUANTIFIERS_SYGUS_SOLVED,
   // incomplete due to separation logic
   SEP,
+  // Higher order operators like sets.map were used in combination with set
+  // cardinality constraints
+  SETS_HO_CARD,
   // relations were used in combination with set cardinality constraints
   SETS_RELS_CARD,
   // we skipped processing a looping word equation
@@ -86,6 +92,6 @@ const char* toString(IncompleteId i);
 std::ostream& operator<<(std::ostream& out, IncompleteId i);
 
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__INCOMPLETE_ID_H */

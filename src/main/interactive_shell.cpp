@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Morgan Deters, Christopher L. Conway, Andrew V. Jones
+ *   Morgan Deters, Christopher L. Conway, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -50,9 +50,9 @@
 
 using namespace std;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
-using namespace parser;
+using namespace cvc5::parser;
 using namespace language;
 
 const string InteractiveShell::INPUT_FILENAME = "<shell>";
@@ -81,7 +81,7 @@ static set<string> s_declarations;
 
 #endif /* HAVE_LIBEDITLINE */
 
-InteractiveShell::InteractiveShell(api::Solver* solver,
+InteractiveShell::InteractiveShell(Solver* solver,
                                    SymbolManager* sm,
                                    std::istream& in,
                                    std::ostream& out)
@@ -89,7 +89,7 @@ InteractiveShell::InteractiveShell(api::Solver* solver,
 {
   ParserBuilder parserBuilder(solver, sm, true);
   /* Create parser with bogus input. */
-  d_parser = parserBuilder.build();
+  d_parser.reset(parserBuilder.build());
   if (d_solver->getOptionInfo("force-logic").setByUser)
   {
     LogicInfo tmp(d_solver->getOption("force-logic"));
@@ -129,13 +129,16 @@ InteractiveShell::InteractiveShell(api::Solver* solver,
     d_usingEditline = true;
     int err = ::read_history(d_historyFilename.c_str());
     ::stifle_history(s_historyLimit);
-    if(Notice.isOn()) {
+    if (d_solver->getOptionInfo("verbosity").intValue() >= 1)
+    {
       if(err == 0) {
-        Notice() << "Read " << ::history_length << " lines of history from "
-                 << d_historyFilename << std::endl;
+        d_solver->getDriverOptions().err()
+            << "Read " << ::history_length << " lines of history from "
+            << d_historyFilename << std::endl;
       } else {
-        Notice() << "Could not read history from " << d_historyFilename
-                 << ": " << strerror(err) << std::endl;
+        d_solver->getDriverOptions().err()
+            << "Could not read history from " << d_historyFilename << ": "
+            << strerror(err) << std::endl;
       }
     }
   }
@@ -151,15 +154,20 @@ InteractiveShell::InteractiveShell(api::Solver* solver,
 InteractiveShell::~InteractiveShell() {
 #if HAVE_LIBEDITLINE
   int err = ::write_history(d_historyFilename.c_str());
-  if(err == 0) {
-    Notice() << "Wrote " << ::history_length << " lines of history to "
-             << d_historyFilename << std::endl;
-  } else {
-    Notice() << "Could not write history to " << d_historyFilename
-             << ": " << strerror(err) << std::endl;
+  if (d_solver->getOptionInfo("verbosity").intValue() >= 1)
+  {
+    if (err == 0)
+    {
+      d_solver->getDriverOptions().err()
+          << "Wrote " << ::history_length << " lines of history to "
+          << d_historyFilename << std::endl;
+    } else {
+      d_solver->getDriverOptions().err()
+          << "Could not write history to " << d_historyFilename << ": "
+          << strerror(err) << std::endl;
+  }
   }
 #endif /* HAVE_LIBEDITLINE */
-  delete d_parser;
 }
 
 Command* InteractiveShell::readCommand()
@@ -212,7 +220,7 @@ restart:
 
   string input = "";
   while(true) {
-    Debug("interactive") << "Input now '" << input << line << "'" << endl
+    Trace("interactive") << "Input now '" << input << line << "'" << endl
                          << flush;
 
     Assert(!(d_in.fail() && !d_in.eof()) || line.empty());
@@ -256,7 +264,7 @@ restart:
       /* Extract the newline delimiter from the stream too */
       int c CVC5_UNUSED = d_in.get();
       Assert(c == '\n');
-      Debug("interactive") << "Next char is '" << (char)c << "'" << endl
+      Trace("interactive") << "Next char is '" << (char)c << "'" << endl
                            << flush;
     }
 
@@ -288,7 +296,7 @@ restart:
       }
     } else {
       /* No continuation, we're done. */
-      Debug("interactive") << "Leaving input loop." << endl << flush;
+      Trace("interactive") << "Leaving input loop." << endl << flush;
       break;
     }
   }
@@ -374,8 +382,8 @@ restart:
 #if HAVE_LIBEDITLINE
 
 char** commandCompletion(const char* text, int start, int end) {
-  Debug("rl") << "text: " << text << endl;
-  Debug("rl") << "start: " << start << " end: " << end << endl;
+  Trace("rl") << "text: " << text << endl;
+  Trace("rl") << "start: " << start << " end: " << end << endl;
   return rl_completion_matches(text, commandGenerator);
 }
 
@@ -423,4 +431,4 @@ char* commandGenerator(const char* text, int state) {
 
 #endif /* HAVE_LIBEDITLINE */
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

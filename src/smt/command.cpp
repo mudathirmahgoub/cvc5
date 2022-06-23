@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Tim King, Abdalrhman Mohamed, Morgan Deters
+ *   Andrew Reynolds, Tim King, Abdalrhman Mohamed
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -26,27 +26,26 @@
 #include "base/check.h"
 #include "base/modal_exception.h"
 #include "base/output.h"
-#include "expr/expr_iomanip.h"
 #include "expr/node.h"
 #include "expr/symbol_manager.h"
 #include "expr/type_node.h"
+#include "options/io_utils.h"
 #include "options/main_options.h"
 #include "options/options.h"
 #include "options/printer_options.h"
 #include "options/smt_options.h"
 #include "printer/printer.h"
 #include "proof/unsat_core.h"
-#include "smt/dump.h"
-#include "smt/model.h"
 #include "util/smt2_quote_string.h"
-#include "util/unsafe_interrupt_exception.h"
 #include "util/utility.h"
 
 using namespace std;
 
 namespace cvc5 {
 
-std::string sexprToString(api::Term sexpr)
+using namespace internal;
+
+std::string sexprToString(cvc5::Term sexpr)
 {
   // if sexpr is a constant string, return the stored constant string. We don't
   // call Term::toString as its result depends on the output language.
@@ -60,7 +59,7 @@ std::string sexprToString(api::Term sexpr)
   }
 
   // if sexpr is not a spec constant, make sure it is an array of sub-sexprs
-  Assert(sexpr.getKind() == api::SEXPR);
+  Assert(sexpr.getKind() == cvc5::SEXPR);
 
   std::stringstream ss;
   auto it = sexpr.begin();
@@ -78,17 +77,13 @@ std::string sexprToString(api::Term sexpr)
   return ss.str();
 }
 
-const int CommandPrintSuccess::s_iosIndex = std::ios_base::xalloc();
 const CommandSuccess* CommandSuccess::s_instance = new CommandSuccess();
 const CommandInterrupted* CommandInterrupted::s_instance =
     new CommandInterrupted();
 
 std::ostream& operator<<(std::ostream& out, const Command& c)
 {
-  c.toStream(out,
-             Node::setdepth::getDepth(out),
-             Node::dag::getDag(out),
-             Node::setlanguage::getLanguage(out));
+  c.toStream(out);
   return out;
 }
 
@@ -107,7 +102,7 @@ ostream& operator<<(ostream& out, const Command* c)
 
 std::ostream& operator<<(std::ostream& out, const CommandStatus& s)
 {
-  s.toStream(out, Node::setlanguage::getLanguage(out));
+  s.toStream(out);
   return out;
 }
 
@@ -121,46 +116,6 @@ ostream& operator<<(ostream& out, const CommandStatus* s)
   {
     out << *s;
   }
-  return out;
-}
-
-/* output stream insertion operator for benchmark statuses */
-std::ostream& operator<<(std::ostream& out, BenchmarkStatus status)
-{
-  switch (status)
-  {
-    case SMT_SATISFIABLE: return out << "sat";
-
-    case SMT_UNSATISFIABLE: return out << "unsat";
-
-    case SMT_UNKNOWN: return out << "unknown";
-
-    default: return out << "BenchmarkStatus::[UNKNOWNSTATUS!]";
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* class CommandPrintSuccess                                                  */
-/* -------------------------------------------------------------------------- */
-
-void CommandPrintSuccess::applyPrintSuccess(std::ostream& out)
-{
-  out.iword(s_iosIndex) = d_printSuccess;
-}
-
-bool CommandPrintSuccess::getPrintSuccess(std::ostream& out)
-{
-  return out.iword(s_iosIndex);
-}
-
-void CommandPrintSuccess::setPrintSuccess(std::ostream& out, bool printSuccess)
-{
-  out.iword(s_iosIndex) = printSuccess;
-}
-
-std::ostream& operator<<(std::ostream& out, CommandPrintSuccess cps)
-{
-  cps.applyPrintSuccess(out);
   return out;
 }
 
@@ -204,14 +159,16 @@ bool Command::interrupted() const
          && dynamic_cast<const CommandInterrupted*>(d_commandStatus) != NULL;
 }
 
-void Command::invoke(api::Solver* solver, SymbolManager* sm, std::ostream& out)
+void Command::invoke(cvc5::Solver* solver, SymbolManager* sm, std::ostream& out)
 {
   invoke(solver, sm);
-  if (!(isMuted() && ok()))
+  if (!ok())
   {
-    printResult(
-        out,
-        std::stoul(solver->getOption("command-verbosity:" + getCommandName())));
+    out << *d_commandStatus;
+  }
+  else if (!isMuted())
+  {
+    printResult(out);
   }
 }
 
@@ -222,23 +179,20 @@ std::string Command::toString() const
   return ss.str();
 }
 
-void CommandStatus::toStream(std::ostream& out, Language language) const
+void CommandStatus::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStream(out, this);
+  Printer::getPrinter(out)->toStream(out, this);
 }
 
-void Command::printResult(std::ostream& out, uint32_t verbosity) const
+void Command::printResult(std::ostream& out) const
 {
-  if (d_commandStatus != NULL)
+  if (d_commandStatus != nullptr)
   {
-    if ((!ok() && verbosity >= 1) || verbosity >= 2)
-    {
-      out << *d_commandStatus;
-    }
+    out << *d_commandStatus;
   }
 }
 
-void Command::resetSolver(api::Solver* solver)
+void Command::resetSolver(cvc5::Solver* solver)
 {
   std::unique_ptr<Options> opts = std::make_unique<Options>();
   opts->copyValues(*solver->d_originalOptions);
@@ -248,29 +202,29 @@ void Command::resetSolver(api::Solver* solver)
   // CommandExecutor such that this reconstruction can be done within the
   // CommandExecutor, who actually owns the solver.
   solver->~Solver();
-  new (solver) api::Solver(std::move(opts));
+  new (solver) cvc5::Solver(std::move(opts));
 }
 
-Node Command::termToNode(const api::Term& term) { return term.getNode(); }
+Node Command::termToNode(const cvc5::Term& term) { return term.getNode(); }
 
 std::vector<Node> Command::termVectorToNodes(
-    const std::vector<api::Term>& terms)
+    const std::vector<cvc5::Term>& terms)
 {
-  return api::Term::termVectorToNodes(terms);
+  return cvc5::Term::termVectorToNodes(terms);
 }
 
-TypeNode Command::sortToTypeNode(const api::Sort& sort)
+TypeNode Command::sortToTypeNode(const cvc5::Sort& sort)
 {
   return sort.getTypeNode();
 }
 
 std::vector<TypeNode> Command::sortVectorToTypeNodes(
-    const std::vector<api::Sort>& sorts)
+    const std::vector<cvc5::Sort>& sorts)
 {
-  return api::Sort::sortVectorToTypeNodes(sorts);
+  return cvc5::Sort::sortVectorToTypeNodes(sorts);
 }
 
-TypeNode Command::grammarToTypeNode(api::Grammar* grammar)
+TypeNode Command::grammarToTypeNode(cvc5::Grammar* grammar)
 {
   return grammar == nullptr ? TypeNode::null()
                             : sortToTypeNode(grammar->resolve());
@@ -282,21 +236,17 @@ TypeNode Command::grammarToTypeNode(api::Grammar* grammar)
 
 EmptyCommand::EmptyCommand(std::string name) : d_name(name) {}
 std::string EmptyCommand::getName() const { return d_name; }
-void EmptyCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void EmptyCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   /* empty commands have no implementation */
   d_commandStatus = CommandSuccess::instance();
 }
 
-Command* EmptyCommand::clone() const { return new EmptyCommand(d_name); }
 std::string EmptyCommand::getCommandName() const { return "empty"; }
 
-void EmptyCommand::toStream(std::ostream& out,
-                            int toDepth,
-                            size_t dag,
-                            Language language) const
+void EmptyCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdEmpty(out, d_name);
+  Printer::getPrinter(out)->toStreamCmdEmpty(out, d_name);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -307,87 +257,69 @@ EchoCommand::EchoCommand(std::string output) : d_output(output) {}
 
 std::string EchoCommand::getOutput() const { return d_output; }
 
-void EchoCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void EchoCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   /* we don't have an output stream here, nothing to do */
   d_commandStatus = CommandSuccess::instance();
 }
 
-void EchoCommand::invoke(api::Solver* solver,
+void EchoCommand::invoke(cvc5::Solver* solver,
                          SymbolManager* sm,
                          std::ostream& out)
 {
-  out << cvc5::quoteString(d_output) << std::endl;
+  out << cvc5::internal::quoteString(d_output) << std::endl;
   Trace("dtview::command") << "* ~COMMAND: echo |" << d_output << "|~"
                            << std::endl;
   d_commandStatus = CommandSuccess::instance();
-  printResult(
-      out,
-      std::stoul(solver->getOption("command-verbosity:" + getCommandName())));
+  printResult(out);
 }
-
-Command* EchoCommand::clone() const { return new EchoCommand(d_output); }
 
 std::string EchoCommand::getCommandName() const { return "echo"; }
 
-void EchoCommand::toStream(std::ostream& out,
-                           int toDepth,
-                           size_t dag,
-                           Language language) const
+void EchoCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdEcho(out, d_output);
+  Printer::getPrinter(out)->toStreamCmdEcho(out, d_output);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class AssertCommand                                                        */
 /* -------------------------------------------------------------------------- */
 
-AssertCommand::AssertCommand(const api::Term& t) : d_term(t) {}
+AssertCommand::AssertCommand(const cvc5::Term& t) : d_term(t) {}
 
-api::Term AssertCommand::getTerm() const { return d_term; }
-void AssertCommand::invoke(api::Solver* solver, SymbolManager* sm)
+cvc5::Term AssertCommand::getTerm() const { return d_term; }
+void AssertCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     solver->assertFormula(d_term);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
-  }
   catch (exception& e)
   {
     d_commandStatus = new CommandFailure(e.what());
   }
 }
 
-Command* AssertCommand::clone() const { return new AssertCommand(d_term); }
-
 std::string AssertCommand::getCommandName() const { return "assert"; }
 
-void AssertCommand::toStream(std::ostream& out,
-                             int toDepth,
-                             size_t dag,
-                             Language language) const
+void AssertCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdAssert(out, termToNode(d_term));
+  Printer::getPrinter(out)->toStreamCmdAssert(out, termToNode(d_term));
 }
 
 /* -------------------------------------------------------------------------- */
 /* class PushCommand                                                          */
 /* -------------------------------------------------------------------------- */
 
-void PushCommand::invoke(api::Solver* solver, SymbolManager* sm)
+PushCommand::PushCommand(uint32_t nscopes) : d_nscopes(nscopes) {}
+
+void PushCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    solver->push();
+    solver->push(d_nscopes);
     d_commandStatus = CommandSuccess::instance();
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -395,31 +327,25 @@ void PushCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* PushCommand::clone() const { return new PushCommand(); }
 std::string PushCommand::getCommandName() const { return "push"; }
 
-void PushCommand::toStream(std::ostream& out,
-                           int toDepth,
-                           size_t dag,
-                           Language language) const
+void PushCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdPush(out);
+  Printer::getPrinter(out)->toStreamCmdPush(out, d_nscopes);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class PopCommand                                                           */
 /* -------------------------------------------------------------------------- */
 
-void PopCommand::invoke(api::Solver* solver, SymbolManager* sm)
+PopCommand::PopCommand(uint32_t nscopes) : d_nscopes(nscopes) {}
+
+void PopCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    solver->pop();
+    solver->pop(d_nscopes);
     d_commandStatus = CommandSuccess::instance();
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -427,15 +353,11 @@ void PopCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* PopCommand::clone() const { return new PopCommand(); }
 std::string PopCommand::getCommandName() const { return "pop"; }
 
-void PopCommand::toStream(std::ostream& out,
-                          int toDepth,
-                          size_t dag,
-                          Language language) const
+void PopCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdPop(out);
+  Printer::getPrinter(out)->toStreamCmdPop(out, d_nscopes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -444,7 +366,7 @@ void PopCommand::toStream(std::ostream& out,
 
 CheckSatCommand::CheckSatCommand() {}
 
-void CheckSatCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void CheckSatCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   Trace("dtview::command") << "* ~COMMAND: " << getCommandName() << "~"
                            << std::endl;
@@ -459,59 +381,41 @@ void CheckSatCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Result CheckSatCommand::getResult() const { return d_result; }
+cvc5::Result CheckSatCommand::getResult() const { return d_result; }
 
-void CheckSatCommand::printResult(std::ostream& out, uint32_t verbosity) const
+void CheckSatCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    Trace("dtview::command") << "* RESULT: " << d_result << std::endl;
-    out << d_result << endl;
-  }
-}
-
-Command* CheckSatCommand::clone() const
-{
-  CheckSatCommand* c = new CheckSatCommand();
-  c->d_result = d_result;
-  return c;
+  out << d_result << endl;
 }
 
 std::string CheckSatCommand::getCommandName() const { return "check-sat"; }
 
-void CheckSatCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void CheckSatCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdCheckSat(out);
+  Printer::getPrinter(out)->toStreamCmdCheckSat(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class CheckSatAssumingCommand                                              */
 /* -------------------------------------------------------------------------- */
 
-CheckSatAssumingCommand::CheckSatAssumingCommand(api::Term term)
+CheckSatAssumingCommand::CheckSatAssumingCommand(cvc5::Term term)
     : d_terms({term})
 {
 }
 
 CheckSatAssumingCommand::CheckSatAssumingCommand(
-    const std::vector<api::Term>& terms)
+    const std::vector<cvc5::Term>& terms)
     : d_terms(terms)
 {
 }
 
-const std::vector<api::Term>& CheckSatAssumingCommand::getTerms() const
+const std::vector<cvc5::Term>& CheckSatAssumingCommand::getTerms() const
 {
   return d_terms;
 }
 
-void CheckSatAssumingCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void CheckSatAssumingCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   Trace("dtview::command") << "* ~COMMAND: (check-sat-assuming ( " << d_terms
                            << " )~" << std::endl;
@@ -526,30 +430,15 @@ void CheckSatAssumingCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Result CheckSatAssumingCommand::getResult() const
+cvc5::Result CheckSatAssumingCommand::getResult() const
 {
   Trace("dtview::command") << "* ~RESULT: " << d_result << "~" << std::endl;
   return d_result;
 }
 
-void CheckSatAssumingCommand::printResult(std::ostream& out,
-                                          uint32_t verbosity) const
+void CheckSatAssumingCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result << endl;
-  }
-}
-
-Command* CheckSatAssumingCommand::clone() const
-{
-  CheckSatAssumingCommand* c = new CheckSatAssumingCommand(d_terms);
-  c->d_result = d_result;
-  return c;
+  out << d_result << endl;
 }
 
 std::string CheckSatAssumingCommand::getCommandName() const
@@ -557,63 +446,10 @@ std::string CheckSatAssumingCommand::getCommandName() const
   return "check-sat-assuming";
 }
 
-void CheckSatAssumingCommand::toStream(std::ostream& out,
-                                       int toDepth,
-                                       size_t dag,
-                                       Language language) const
+void CheckSatAssumingCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdCheckSatAssuming(
+  Printer::getPrinter(out)->toStreamCmdCheckSatAssuming(
       out, termVectorToNodes(d_terms));
-}
-
-/* -------------------------------------------------------------------------- */
-/* class QueryCommand                                                         */
-/* -------------------------------------------------------------------------- */
-
-QueryCommand::QueryCommand(const api::Term& t) : d_term(t) {}
-
-api::Term QueryCommand::getTerm() const { return d_term; }
-void QueryCommand::invoke(api::Solver* solver, SymbolManager* sm)
-{
-  try
-  {
-    d_result = solver->checkEntailed(d_term);
-    d_commandStatus = CommandSuccess::instance();
-  }
-  catch (exception& e)
-  {
-    d_commandStatus = new CommandFailure(e.what());
-  }
-}
-
-api::Result QueryCommand::getResult() const { return d_result; }
-void QueryCommand::printResult(std::ostream& out, uint32_t verbosity) const
-{
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result << endl;
-  }
-}
-
-Command* QueryCommand::clone() const
-{
-  QueryCommand* c = new QueryCommand(d_term);
-  c->d_result = d_result;
-  return c;
-}
-
-std::string QueryCommand::getCommandName() const { return "query"; }
-
-void QueryCommand::toStream(std::ostream& out,
-                            int toDepth,
-                            size_t dag,
-                            Language language) const
-{
-  Printer::getPrinter(language)->toStreamCmdQuery(out, termToNode(d_term));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -621,23 +457,18 @@ void QueryCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 DeclareSygusVarCommand::DeclareSygusVarCommand(const std::string& id,
-                                               api::Term var,
-                                               api::Sort sort)
+                                               cvc5::Term var,
+                                               cvc5::Sort sort)
     : DeclarationDefinitionCommand(id), d_var(var), d_sort(sort)
 {
 }
 
-api::Term DeclareSygusVarCommand::getVar() const { return d_var; }
-api::Sort DeclareSygusVarCommand::getSort() const { return d_sort; }
+cvc5::Term DeclareSygusVarCommand::getVar() const { return d_var; }
+cvc5::Sort DeclareSygusVarCommand::getSort() const { return d_sort; }
 
-void DeclareSygusVarCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DeclareSygusVarCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* DeclareSygusVarCommand::clone() const
-{
-  return new DeclareSygusVarCommand(d_symbol, d_var, d_sort);
 }
 
 std::string DeclareSygusVarCommand::getCommandName() const
@@ -645,12 +476,9 @@ std::string DeclareSygusVarCommand::getCommandName() const
   return "declare-var";
 }
 
-void DeclareSygusVarCommand::toStream(std::ostream& out,
-                                      int toDepth,
-                                      size_t dag,
-                                      Language language) const
+void DeclareSygusVarCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDeclareVar(
+  Printer::getPrinter(out)->toStreamCmdDeclareVar(
       out, termToNode(d_var), sortToTypeNode(d_sort));
 }
 
@@ -659,11 +487,11 @@ void DeclareSygusVarCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 SynthFunCommand::SynthFunCommand(const std::string& id,
-                                 api::Term fun,
-                                 const std::vector<api::Term>& vars,
-                                 api::Sort sort,
+                                 cvc5::Term fun,
+                                 const std::vector<cvc5::Term>& vars,
+                                 cvc5::Sort sort,
                                  bool isInv,
-                                 api::Grammar* g)
+                                 cvc5::Grammar* g)
     : DeclarationDefinitionCommand(id),
       d_fun(fun),
       d_vars(vars),
@@ -673,28 +501,22 @@ SynthFunCommand::SynthFunCommand(const std::string& id,
 {
 }
 
-api::Term SynthFunCommand::getFunction() const { return d_fun; }
+cvc5::Term SynthFunCommand::getFunction() const { return d_fun; }
 
-const std::vector<api::Term>& SynthFunCommand::getVars() const
+const std::vector<cvc5::Term>& SynthFunCommand::getVars() const
 {
   return d_vars;
 }
 
-api::Sort SynthFunCommand::getSort() const { return d_sort; }
+cvc5::Sort SynthFunCommand::getSort() const { return d_sort; }
 bool SynthFunCommand::isInv() const { return d_isInv; }
 
-const api::Grammar* SynthFunCommand::getGrammar() const { return d_grammar; }
+const cvc5::Grammar* SynthFunCommand::getGrammar() const { return d_grammar; }
 
-void SynthFunCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SynthFunCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   sm->addFunctionToSynthesize(d_fun);
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* SynthFunCommand::clone() const
-{
-  return new SynthFunCommand(
-      d_symbol, d_fun, d_vars, d_sort, d_isInv, d_grammar);
 }
 
 std::string SynthFunCommand::getCommandName() const
@@ -702,13 +524,10 @@ std::string SynthFunCommand::getCommandName() const
   return d_isInv ? "synth-inv" : "synth-fun";
 }
 
-void SynthFunCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void SynthFunCommand::toStream(std::ostream& out) const
 {
   std::vector<Node> nodeVars = termVectorToNodes(d_vars);
-  Printer::getPrinter(language)->toStreamCmdSynthFun(
+  Printer::getPrinter(out)->toStreamCmdSynthFun(
       out,
       termToNode(d_fun),
       nodeVars,
@@ -720,13 +539,13 @@ void SynthFunCommand::toStream(std::ostream& out,
 /* class SygusConstraintCommand */
 /* -------------------------------------------------------------------------- */
 
-SygusConstraintCommand::SygusConstraintCommand(const api::Term& t,
+SygusConstraintCommand::SygusConstraintCommand(const cvc5::Term& t,
                                                bool isAssume)
     : d_term(t), d_isAssume(isAssume)
 {
 }
 
-void SygusConstraintCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SygusConstraintCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -746,31 +565,22 @@ void SygusConstraintCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Term SygusConstraintCommand::getTerm() const { return d_term; }
-
-Command* SygusConstraintCommand::clone() const
-{
-  return new SygusConstraintCommand(d_term, d_isAssume);
-}
+cvc5::Term SygusConstraintCommand::getTerm() const { return d_term; }
 
 std::string SygusConstraintCommand::getCommandName() const
 {
   return d_isAssume ? "assume" : "constraint";
 }
 
-void SygusConstraintCommand::toStream(std::ostream& out,
-                                      int toDepth,
-                                      size_t dag,
-                                      Language language) const
+void SygusConstraintCommand::toStream(std::ostream& out) const
 {
   if (d_isAssume)
   {
-    Printer::getPrinter(language)->toStreamCmdAssume(out, termToNode(d_term));
+    Printer::getPrinter(out)->toStreamCmdAssume(out, termToNode(d_term));
   }
   else
   {
-    Printer::getPrinter(language)->toStreamCmdConstraint(out,
-                                                         termToNode(d_term));
+    Printer::getPrinter(out)->toStreamCmdConstraint(out, termToNode(d_term));
   }
 }
 
@@ -779,20 +589,20 @@ void SygusConstraintCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 SygusInvConstraintCommand::SygusInvConstraintCommand(
-    const std::vector<api::Term>& predicates)
+    const std::vector<cvc5::Term>& predicates)
     : d_predicates(predicates)
 {
 }
 
-SygusInvConstraintCommand::SygusInvConstraintCommand(const api::Term& inv,
-                                                     const api::Term& pre,
-                                                     const api::Term& trans,
-                                                     const api::Term& post)
-    : SygusInvConstraintCommand(std::vector<api::Term>{inv, pre, trans, post})
+SygusInvConstraintCommand::SygusInvConstraintCommand(const cvc5::Term& inv,
+                                                     const cvc5::Term& pre,
+                                                     const cvc5::Term& trans,
+                                                     const cvc5::Term& post)
+    : SygusInvConstraintCommand(std::vector<cvc5::Term>{inv, pre, trans, post})
 {
 }
 
-void SygusInvConstraintCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SygusInvConstraintCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -806,14 +616,9 @@ void SygusInvConstraintCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-const std::vector<api::Term>& SygusInvConstraintCommand::getPredicates() const
+const std::vector<cvc5::Term>& SygusInvConstraintCommand::getPredicates() const
 {
   return d_predicates;
-}
-
-Command* SygusInvConstraintCommand::clone() const
-{
-  return new SygusInvConstraintCommand(d_predicates);
 }
 
 std::string SygusInvConstraintCommand::getCommandName() const
@@ -821,12 +626,9 @@ std::string SygusInvConstraintCommand::getCommandName() const
   return "inv-constraint";
 }
 
-void SygusInvConstraintCommand::toStream(std::ostream& out,
-                                         int toDepth,
-                                         size_t dag,
-                                         Language language) const
+void SygusInvConstraintCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdInvConstraint(
+  Printer::getPrinter(out)->toStreamCmdInvConstraint(
       out,
       termToNode(d_predicates[0]),
       termToNode(d_predicates[1]),
@@ -838,44 +640,50 @@ void SygusInvConstraintCommand::toStream(std::ostream& out,
 /* class CheckSynthCommand                                                    */
 /* -------------------------------------------------------------------------- */
 
-void CheckSynthCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void CheckSynthCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    d_result = solver->checkSynth();
+    d_result = d_isNext ? solver->checkSynthNext() : solver->checkSynth();
     d_commandStatus = CommandSuccess::instance();
     d_solution.clear();
     // check whether we should print the status
-    if (!d_result.isUnsat()
-        || options::sygusOut() == options::SygusSolutionOutMode::STATUS_AND_DEF
-        || options::sygusOut() == options::SygusSolutionOutMode::STATUS)
+    std::string sygusOut = solver->getOption("sygus-out");
+    if (!d_result.hasSolution() || sygusOut == "status-and-def"
+        || sygusOut == "status")
     {
-      if (options::sygusOut() == options::SygusSolutionOutMode::STANDARD)
+      if (d_result.hasSolution())
       {
-        d_solution << "fail" << endl;
+        d_solution << "feasible" << std::endl;
+      }
+      else if (d_result.hasNoSolution())
+      {
+        d_solution << "infeasible" << std::endl;
       }
       else
       {
-        d_solution << d_result << endl;
+        d_solution << "fail" << std::endl;
       }
     }
     // check whether we should print the solution
-    if (d_result.isUnsat()
-        && options::sygusOut() != options::SygusSolutionOutMode::STATUS)
+    if (d_result.hasSolution() && sygusOut != "status")
     {
-      std::vector<api::Term> synthFuns = sm->getFunctionsToSynthesize();
+      std::vector<cvc5::Term> synthFuns = sm->getFunctionsToSynthesize();
       d_solution << "(" << std::endl;
-      Printer* p = Printer::getPrinter(Language::LANG_SYGUS_V2);
-      for (api::Term& f : synthFuns)
+      options::ioutils::Scope scope(d_solution);
+      options::ioutils::applyOutputLanguage(d_solution,
+                                            Language::LANG_SYGUS_V2);
+      Printer* p = Printer::getPrinter(d_solution);
+      for (cvc5::Term& f : synthFuns)
       {
-        api::Term sol = solver->getSynthSolution(f);
-        std::vector<api::Term> formals;
-        if (sol.getKind() == api::LAMBDA)
+        cvc5::Term sol = solver->getSynthSolution(f);
+        std::vector<cvc5::Term> formals;
+        if (sol.getKind() == cvc5::LAMBDA)
         {
           formals.insert(formals.end(), sol[0].begin(), sol[0].end());
           sol = sol[1];
         }
-        api::Sort rangeSort = f.getSort();
+        cvc5::Sort rangeSort = f.getSort();
         if (rangeSort.isFunction())
         {
           rangeSort = rangeSort.getFunctionCodomainSort();
@@ -895,36 +703,34 @@ void CheckSynthCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Result CheckSynthCommand::getResult() const { return d_result; }
-void CheckSynthCommand::printResult(std::ostream& out, uint32_t verbosity) const
+cvc5::SynthResult CheckSynthCommand::getResult() const { return d_result; }
+void CheckSynthCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
+  out << d_solution.str();
+}
+
+std::string CheckSynthCommand::getCommandName() const
+{
+  return d_isNext ? "check-synth-next" : "check-synth";
+}
+
+void CheckSynthCommand::toStream(std::ostream& out) const
+{
+  if (d_isNext)
   {
-    this->Command::printResult(out, verbosity);
+    Printer::getPrinter(out)->toStreamCmdCheckSynthNext(out);
   }
   else
   {
-    out << d_solution.str();
+    Printer::getPrinter(out)->toStreamCmdCheckSynth(out);
   }
-}
-
-Command* CheckSynthCommand::clone() const { return new CheckSynthCommand(); }
-
-std::string CheckSynthCommand::getCommandName() const { return "check-synth"; }
-
-void CheckSynthCommand::toStream(std::ostream& out,
-                                 int toDepth,
-                                 size_t dag,
-                                 Language language) const
-{
-  Printer::getPrinter(language)->toStreamCmdCheckSynth(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class ResetCommand                                                         */
 /* -------------------------------------------------------------------------- */
 
-void ResetCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void ResetCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -938,22 +744,18 @@ void ResetCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* ResetCommand::clone() const { return new ResetCommand(); }
 std::string ResetCommand::getCommandName() const { return "reset"; }
 
-void ResetCommand::toStream(std::ostream& out,
-                            int toDepth,
-                            size_t dag,
-                            Language language) const
+void ResetCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdReset(out);
+  Printer::getPrinter(out)->toStreamCmdReset(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class ResetAssertionsCommand                                               */
 /* -------------------------------------------------------------------------- */
 
-void ResetAssertionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void ResetAssertionsCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -967,43 +769,30 @@ void ResetAssertionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* ResetAssertionsCommand::clone() const
-{
-  return new ResetAssertionsCommand();
-}
-
 std::string ResetAssertionsCommand::getCommandName() const
 {
   return "reset-assertions";
 }
 
-void ResetAssertionsCommand::toStream(std::ostream& out,
-                                      int toDepth,
-                                      size_t dag,
-                                      Language language) const
+void ResetAssertionsCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdResetAssertions(out);
+  Printer::getPrinter(out)->toStreamCmdResetAssertions(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class QuitCommand                                                          */
 /* -------------------------------------------------------------------------- */
 
-void QuitCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void QuitCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
-  Dump("benchmark") << *this;
   d_commandStatus = CommandSuccess::instance();
 }
 
-Command* QuitCommand::clone() const { return new QuitCommand(); }
 std::string QuitCommand::getCommandName() const { return "exit"; }
 
-void QuitCommand::toStream(std::ostream& out,
-                           int toDepth,
-                           size_t dag,
-                           Language language) const
+void QuitCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdQuit(out);
+  Printer::getPrinter(out)->toStreamCmdQuit(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1025,7 +814,7 @@ void CommandSequence::addCommand(Command* cmd)
 }
 
 void CommandSequence::clear() { d_commandSequence.clear(); }
-void CommandSequence::invoke(api::Solver* solver, SymbolManager* sm)
+void CommandSequence::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   for (; d_index < d_commandSequence.size(); ++d_index)
   {
@@ -1043,7 +832,7 @@ void CommandSequence::invoke(api::Solver* solver, SymbolManager* sm)
   d_commandStatus = CommandSuccess::instance();
 }
 
-void CommandSequence::invoke(api::Solver* solver,
+void CommandSequence::invoke(cvc5::Solver* solver,
                              SymbolManager* sm,
                              std::ostream& out)
 {
@@ -1061,17 +850,6 @@ void CommandSequence::invoke(api::Solver* solver,
 
   AlwaysAssert(d_commandStatus == NULL);
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* CommandSequence::clone() const
-{
-  CommandSequence* seq = new CommandSequence();
-  for (const_iterator i = begin(); i != end(); ++i)
-  {
-    seq->addCommand((*i)->clone());
-  }
-  seq->d_index = d_index;
-  return seq;
 }
 
 CommandSequence::const_iterator CommandSequence::begin() const
@@ -1096,26 +874,9 @@ CommandSequence::iterator CommandSequence::end()
 
 std::string CommandSequence::getCommandName() const { return "sequence"; }
 
-void CommandSequence::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void CommandSequence::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdCommandSequence(out,
-                                                            d_commandSequence);
-}
-
-/* -------------------------------------------------------------------------- */
-/* class DeclarationSequence                                                  */
-/* -------------------------------------------------------------------------- */
-
-void DeclarationSequence::toStream(std::ostream& out,
-                                   int toDepth,
-                                   size_t dag,
-                                   Language language) const
-{
-  Printer::getPrinter(language)->toStreamCmdDeclarationSequence(
-      out, d_commandSequence);
+  Printer::getPrinter(out)->toStreamCmdCommandSequence(out, d_commandSequence);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1135,27 +896,20 @@ std::string DeclarationDefinitionCommand::getSymbol() const { return d_symbol; }
 /* -------------------------------------------------------------------------- */
 
 DeclareFunctionCommand::DeclareFunctionCommand(const std::string& id,
-                                               api::Term func,
-                                               api::Sort sort)
+                                               cvc5::Term func,
+                                               cvc5::Sort sort)
     : DeclarationDefinitionCommand(id), d_func(func), d_sort(sort)
 {
 }
 
-api::Term DeclareFunctionCommand::getFunction() const { return d_func; }
-api::Sort DeclareFunctionCommand::getSort() const { return d_sort; }
+cvc5::Term DeclareFunctionCommand::getFunction() const { return d_func; }
+cvc5::Sort DeclareFunctionCommand::getSort() const { return d_sort; }
 
-void DeclareFunctionCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DeclareFunctionCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   // mark that it will be printed in the model
   sm->addModelDeclarationTerm(d_func);
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* DeclareFunctionCommand::clone() const
-{
-  DeclareFunctionCommand* dfc =
-      new DeclareFunctionCommand(d_symbol, d_func, d_sort);
-  return dfc;
 }
 
 std::string DeclareFunctionCommand::getCommandName() const
@@ -1163,23 +917,20 @@ std::string DeclareFunctionCommand::getCommandName() const
   return "declare-fun";
 }
 
-void DeclareFunctionCommand::toStream(std::ostream& out,
-                                      int toDepth,
-                                      size_t dag,
-                                      Language language) const
+void DeclareFunctionCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDeclareFunction(out,
-                                                            termToNode(d_func));
+  Printer::getPrinter(out)->toStreamCmdDeclareFunction(
+      out, d_symbol, sortToTypeNode(d_func.getSort()));
 }
 
 /* -------------------------------------------------------------------------- */
-/* class DeclareFunctionCommand                                               */
+/* class DeclarePoolCommand                                               */
 /* -------------------------------------------------------------------------- */
 
 DeclarePoolCommand::DeclarePoolCommand(const std::string& id,
-                                       api::Term func,
-                                       api::Sort sort,
-                                       const std::vector<api::Term>& initValue)
+                                       cvc5::Term func,
+                                       cvc5::Sort sort,
+                                       const std::vector<cvc5::Term>& initValue)
     : DeclarationDefinitionCommand(id),
       d_func(func),
       d_sort(sort),
@@ -1187,14 +938,14 @@ DeclarePoolCommand::DeclarePoolCommand(const std::string& id,
 {
 }
 
-api::Term DeclarePoolCommand::getFunction() const { return d_func; }
-api::Sort DeclarePoolCommand::getSort() const { return d_sort; }
-const std::vector<api::Term>& DeclarePoolCommand::getInitialValue() const
+cvc5::Term DeclarePoolCommand::getFunction() const { return d_func; }
+cvc5::Sort DeclarePoolCommand::getSort() const { return d_sort; }
+const std::vector<cvc5::Term>& DeclarePoolCommand::getInitialValue() const
 {
   return d_initValue;
 }
 
-void DeclarePoolCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DeclarePoolCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   // Notice that the pool is already declared by the parser so that it the
   // symbol is bound eagerly. This is analogous to DeclareSygusVarCommand.
@@ -1202,28 +953,74 @@ void DeclarePoolCommand::invoke(api::Solver* solver, SymbolManager* sm)
   d_commandStatus = CommandSuccess::instance();
 }
 
-Command* DeclarePoolCommand::clone() const
-{
-  DeclarePoolCommand* dfc =
-      new DeclarePoolCommand(d_symbol, d_func, d_sort, d_initValue);
-  return dfc;
-}
-
 std::string DeclarePoolCommand::getCommandName() const
 {
   return "declare-pool";
 }
 
-void DeclarePoolCommand::toStream(std::ostream& out,
-                                  int toDepth,
-                                  size_t dag,
-                                  Language language) const
+void DeclarePoolCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDeclarePool(
+  Printer::getPrinter(out)->toStreamCmdDeclarePool(
       out,
       d_func.toString(),
       sortToTypeNode(d_sort),
       termVectorToNodes(d_initValue));
+}
+
+/* -------------------------------------------------------------------------- */
+/* class DeclareOracleFunCommand */
+/* -------------------------------------------------------------------------- */
+
+DeclareOracleFunCommand::DeclareOracleFunCommand(const std::string& id,
+                                                 Sort sort)
+    : d_id(id), d_sort(sort), d_binName("")
+{
+}
+DeclareOracleFunCommand::DeclareOracleFunCommand(const std::string& id,
+                                                 Sort sort,
+                                                 const std::string& binName)
+    : d_id(id), d_sort(sort), d_binName(binName)
+{
+}
+
+const std::string& DeclareOracleFunCommand::getIdentifier() const
+{
+  return d_id;
+}
+
+Sort DeclareOracleFunCommand::getSort() const { return d_sort; }
+
+const std::string& DeclareOracleFunCommand::getBinaryName() const
+{
+  return d_binName;
+}
+
+void DeclareOracleFunCommand::invoke(Solver* solver, SymbolManager* sm)
+{
+  std::vector<Sort> args;
+  Sort ret;
+  if (d_sort.isFunction())
+  {
+    args = d_sort.getFunctionDomainSorts();
+    ret = d_sort.getFunctionCodomainSort();
+  }
+  else
+  {
+    ret = d_sort;
+  }
+  // will call solver declare oracle function when available in API
+  d_commandStatus = CommandSuccess::instance();
+}
+
+std::string DeclareOracleFunCommand::getCommandName() const
+{
+  return "declare-oracle-fun";
+}
+
+void DeclareOracleFunCommand::toStream(std::ostream& out) const
+{
+  Printer::getPrinter(out)->toStreamCmdDeclareOracleFun(
+      out, d_id, sortToTypeNode(d_sort), d_binName);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1232,23 +1029,22 @@ void DeclarePoolCommand::toStream(std::ostream& out,
 
 DeclareSortCommand::DeclareSortCommand(const std::string& id,
                                        size_t arity,
-                                       api::Sort sort)
+                                       cvc5::Sort sort)
     : DeclarationDefinitionCommand(id), d_arity(arity), d_sort(sort)
 {
 }
 
 size_t DeclareSortCommand::getArity() const { return d_arity; }
-api::Sort DeclareSortCommand::getSort() const { return d_sort; }
-void DeclareSortCommand::invoke(api::Solver* solver, SymbolManager* sm)
+cvc5::Sort DeclareSortCommand::getSort() const { return d_sort; }
+void DeclareSortCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
-  // mark that it will be printed in the model
-  sm->addModelDeclarationSort(d_sort);
+  // mark that it will be printed in the model, if it is an uninterpreted
+  // sort (arity 0)
+  if (d_arity == 0)
+  {
+    sm->addModelDeclarationSort(d_sort);
+  }
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* DeclareSortCommand::clone() const
-{
-  return new DeclareSortCommand(d_symbol, d_arity, d_sort);
 }
 
 std::string DeclareSortCommand::getCommandName() const
@@ -1256,55 +1052,43 @@ std::string DeclareSortCommand::getCommandName() const
   return "declare-sort";
 }
 
-void DeclareSortCommand::toStream(std::ostream& out,
-                                  int toDepth,
-                                  size_t dag,
-                                  Language language) const
+void DeclareSortCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDeclareType(out,
-                                                        sortToTypeNode(d_sort));
+  Printer::getPrinter(out)->toStreamCmdDeclareType(out, sortToTypeNode(d_sort));
 }
 
 /* -------------------------------------------------------------------------- */
 /* class DefineSortCommand                                                    */
 /* -------------------------------------------------------------------------- */
 
-DefineSortCommand::DefineSortCommand(const std::string& id, api::Sort sort)
+DefineSortCommand::DefineSortCommand(const std::string& id, cvc5::Sort sort)
     : DeclarationDefinitionCommand(id), d_params(), d_sort(sort)
 {
 }
 
 DefineSortCommand::DefineSortCommand(const std::string& id,
-                                     const std::vector<api::Sort>& params,
-                                     api::Sort sort)
+                                     const std::vector<cvc5::Sort>& params,
+                                     cvc5::Sort sort)
     : DeclarationDefinitionCommand(id), d_params(params), d_sort(sort)
 {
 }
 
-const std::vector<api::Sort>& DefineSortCommand::getParameters() const
+const std::vector<cvc5::Sort>& DefineSortCommand::getParameters() const
 {
   return d_params;
 }
 
-api::Sort DefineSortCommand::getSort() const { return d_sort; }
-void DefineSortCommand::invoke(api::Solver* solver, SymbolManager* sm)
+cvc5::Sort DefineSortCommand::getSort() const { return d_sort; }
+void DefineSortCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   d_commandStatus = CommandSuccess::instance();
 }
 
-Command* DefineSortCommand::clone() const
-{
-  return new DefineSortCommand(d_symbol, d_params, d_sort);
-}
-
 std::string DefineSortCommand::getCommandName() const { return "define-sort"; }
 
-void DefineSortCommand::toStream(std::ostream& out,
-                                 int toDepth,
-                                 size_t dag,
-                                 Language language) const
+void DefineSortCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDefineType(
+  Printer::getPrinter(out)->toStreamCmdDefineType(
       out, d_symbol, sortVectorToTypeNodes(d_params), sortToTypeNode(d_sort));
 }
 
@@ -1313,46 +1097,44 @@ void DefineSortCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 DefineFunctionCommand::DefineFunctionCommand(const std::string& id,
-                                             api::Term func,
-                                             api::Term formula,
-                                             bool global)
+                                             cvc5::Sort sort,
+                                             cvc5::Term formula)
     : DeclarationDefinitionCommand(id),
-      d_func(func),
       d_formals(),
-      d_formula(formula),
-      d_global(global)
+      d_sort(sort),
+      d_formula(formula)
 {
 }
 
 DefineFunctionCommand::DefineFunctionCommand(
     const std::string& id,
-    api::Term func,
-    const std::vector<api::Term>& formals,
-    api::Term formula,
-    bool global)
+    const std::vector<cvc5::Term>& formals,
+    cvc5::Sort sort,
+    cvc5::Term formula)
     : DeclarationDefinitionCommand(id),
-      d_func(func),
       d_formals(formals),
-      d_formula(formula),
-      d_global(global)
+      d_sort(sort),
+      d_formula(formula)
 {
 }
 
-api::Term DefineFunctionCommand::getFunction() const { return d_func; }
-const std::vector<api::Term>& DefineFunctionCommand::getFormals() const
+const std::vector<cvc5::Term>& DefineFunctionCommand::getFormals() const
 {
   return d_formals;
 }
 
-api::Term DefineFunctionCommand::getFormula() const { return d_formula; }
-void DefineFunctionCommand::invoke(api::Solver* solver, SymbolManager* sm)
+cvc5::Sort DefineFunctionCommand::getSort() const { return d_sort; }
+
+cvc5::Term DefineFunctionCommand::getFormula() const { return d_formula; }
+
+void DefineFunctionCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    if (!d_func.isNull())
-    {
-      solver->defineFun(d_func, d_formals, d_formula, d_global);
-    }
+    bool global = sm->getGlobalDeclarations();
+    cvc5::Term fun =
+        solver->defineFun(d_symbol, d_formals, d_sort, d_formula, global);
+    sm->getSymbolTable()->bind(d_symbol, fun, global);
     d_commandStatus = CommandSuccess::instance();
   }
   catch (exception& e)
@@ -1361,32 +1143,18 @@ void DefineFunctionCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* DefineFunctionCommand::clone() const
-{
-  return new DefineFunctionCommand(
-      d_symbol, d_func, d_formals, d_formula, d_global);
-}
-
 std::string DefineFunctionCommand::getCommandName() const
 {
   return "define-fun";
 }
 
-void DefineFunctionCommand::toStream(std::ostream& out,
-                                     int toDepth,
-                                     size_t dag,
-                                     Language language) const
+void DefineFunctionCommand::toStream(std::ostream& out) const
 {
-  TypeNode rangeType = termToNode(d_func).getType();
-  if (rangeType.isFunction())
-  {
-    rangeType = rangeType.getRangeType();
-  }
-  Printer::getPrinter(language)->toStreamCmdDefineFunction(
+  Printer::getPrinter(out)->toStreamCmdDefineFunction(
       out,
-      d_func.toString(),
+      d_symbol,
       termVectorToNodes(d_formals),
-      rangeType,
+      sortToTypeNode(d_sort),
       termToNode(d_formula));
 }
 
@@ -1395,12 +1163,7 @@ void DefineFunctionCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 DefineFunctionRecCommand::DefineFunctionRecCommand(
-
-    api::Term func,
-    const std::vector<api::Term>& formals,
-    api::Term formula,
-    bool global)
-    : d_global(global)
+    cvc5::Term func, const std::vector<cvc5::Term>& formals, cvc5::Term formula)
 {
   d_funcs.push_back(func);
   d_formals.push_back(formals);
@@ -1408,47 +1171,41 @@ DefineFunctionRecCommand::DefineFunctionRecCommand(
 }
 
 DefineFunctionRecCommand::DefineFunctionRecCommand(
-
-    const std::vector<api::Term>& funcs,
-    const std::vector<std::vector<api::Term>>& formals,
-    const std::vector<api::Term>& formulas,
-    bool global)
-    : d_funcs(funcs), d_formals(formals), d_formulas(formulas), d_global(global)
+    const std::vector<cvc5::Term>& funcs,
+    const std::vector<std::vector<cvc5::Term>>& formals,
+    const std::vector<cvc5::Term>& formulas)
+    : d_funcs(funcs), d_formals(formals), d_formulas(formulas)
 {
 }
 
-const std::vector<api::Term>& DefineFunctionRecCommand::getFunctions() const
+const std::vector<cvc5::Term>& DefineFunctionRecCommand::getFunctions() const
 {
   return d_funcs;
 }
 
-const std::vector<std::vector<api::Term>>&
+const std::vector<std::vector<cvc5::Term>>&
 DefineFunctionRecCommand::getFormals() const
 {
   return d_formals;
 }
 
-const std::vector<api::Term>& DefineFunctionRecCommand::getFormulas() const
+const std::vector<cvc5::Term>& DefineFunctionRecCommand::getFormulas() const
 {
   return d_formulas;
 }
 
-void DefineFunctionRecCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DefineFunctionRecCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    solver->defineFunsRec(d_funcs, d_formals, d_formulas, d_global);
+    bool global = sm->getGlobalDeclarations();
+    solver->defineFunsRec(d_funcs, d_formals, d_formulas, global);
     d_commandStatus = CommandSuccess::instance();
   }
   catch (exception& e)
   {
     d_commandStatus = new CommandFailure(e.what());
   }
-}
-
-Command* DefineFunctionRecCommand::clone() const
-{
-  return new DefineFunctionRecCommand(d_funcs, d_formals, d_formulas, d_global);
 }
 
 std::string DefineFunctionRecCommand::getCommandName() const
@@ -1456,40 +1213,32 @@ std::string DefineFunctionRecCommand::getCommandName() const
   return "define-fun-rec";
 }
 
-void DefineFunctionRecCommand::toStream(std::ostream& out,
-                                        int toDepth,
-                                        size_t dag,
-                                        Language language) const
+void DefineFunctionRecCommand::toStream(std::ostream& out) const
 {
   std::vector<std::vector<Node>> formals;
   formals.reserve(d_formals.size());
-  for (const std::vector<api::Term>& formal : d_formals)
+  for (const std::vector<cvc5::Term>& formal : d_formals)
   {
     formals.push_back(termVectorToNodes(formal));
   }
 
-  Printer::getPrinter(language)->toStreamCmdDefineFunctionRec(
+  Printer::getPrinter(out)->toStreamCmdDefineFunctionRec(
       out, termVectorToNodes(d_funcs), formals, termVectorToNodes(d_formulas));
 }
 /* -------------------------------------------------------------------------- */
 /* class DeclareHeapCommand                                                   */
 /* -------------------------------------------------------------------------- */
-DeclareHeapCommand::DeclareHeapCommand(api::Sort locSort, api::Sort dataSort)
+DeclareHeapCommand::DeclareHeapCommand(cvc5::Sort locSort, cvc5::Sort dataSort)
     : d_locSort(locSort), d_dataSort(dataSort)
 {
 }
 
-api::Sort DeclareHeapCommand::getLocationSort() const { return d_locSort; }
-api::Sort DeclareHeapCommand::getDataSort() const { return d_dataSort; }
+cvc5::Sort DeclareHeapCommand::getLocationSort() const { return d_locSort; }
+cvc5::Sort DeclareHeapCommand::getDataSort() const { return d_dataSort; }
 
-void DeclareHeapCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DeclareHeapCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
-  solver->declareSeparationHeap(d_locSort, d_dataSort);
-}
-
-Command* DeclareHeapCommand::clone() const
-{
-  return new DeclareHeapCommand(d_locSort, d_dataSort);
+  solver->declareSepHeap(d_locSort, d_dataSort);
 }
 
 std::string DeclareHeapCommand::getCommandName() const
@@ -1497,12 +1246,9 @@ std::string DeclareHeapCommand::getCommandName() const
   return "declare-heap";
 }
 
-void DeclareHeapCommand::toStream(std::ostream& out,
-                                  int toDepth,
-                                  size_t dag,
-                                  Language language) const
+void DeclareHeapCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDeclareHeap(
+  Printer::getPrinter(out)->toStreamCmdDeclareHeap(
       out, sortToTypeNode(d_locSort), sortToTypeNode(d_dataSort));
 }
 
@@ -1510,97 +1256,72 @@ void DeclareHeapCommand::toStream(std::ostream& out,
 /* class SimplifyCommand                                                      */
 /* -------------------------------------------------------------------------- */
 
-SimplifyCommand::SimplifyCommand(api::Term term) : d_term(term) {}
-api::Term SimplifyCommand::getTerm() const { return d_term; }
-void SimplifyCommand::invoke(api::Solver* solver, SymbolManager* sm)
+SimplifyCommand::SimplifyCommand(cvc5::Term term) : d_term(term) {}
+cvc5::Term SimplifyCommand::getTerm() const { return d_term; }
+void SimplifyCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     d_result = solver->simplify(d_term);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
-  }
   catch (exception& e)
   {
     d_commandStatus = new CommandFailure(e.what());
   }
 }
 
-api::Term SimplifyCommand::getResult() const { return d_result; }
-void SimplifyCommand::printResult(std::ostream& out, uint32_t verbosity) const
+cvc5::Term SimplifyCommand::getResult() const { return d_result; }
+void SimplifyCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result << endl;
-  }
-}
-
-Command* SimplifyCommand::clone() const
-{
-  SimplifyCommand* c = new SimplifyCommand(d_term);
-  c->d_result = d_result;
-  return c;
+  out << d_result << endl;
 }
 
 std::string SimplifyCommand::getCommandName() const { return "simplify"; }
 
-void SimplifyCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void SimplifyCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdSimplify(out, termToNode(d_term));
+  Printer::getPrinter(out)->toStreamCmdSimplify(out, termToNode(d_term));
 }
 
 /* -------------------------------------------------------------------------- */
 /* class GetValueCommand                                                      */
 /* -------------------------------------------------------------------------- */
 
-GetValueCommand::GetValueCommand(api::Term term) : d_terms()
+GetValueCommand::GetValueCommand(cvc5::Term term) : d_terms()
 {
   d_terms.push_back(term);
 }
 
-GetValueCommand::GetValueCommand(const std::vector<api::Term>& terms)
+GetValueCommand::GetValueCommand(const std::vector<cvc5::Term>& terms)
     : d_terms(terms)
 {
   PrettyCheckArgument(
       terms.size() >= 1, terms, "cannot get-value of an empty set of terms");
 }
 
-const std::vector<api::Term>& GetValueCommand::getTerms() const
+const std::vector<cvc5::Term>& GetValueCommand::getTerms() const
 {
   return d_terms;
 }
-void GetValueCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetValueCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    std::vector<api::Term> result = solver->getValue(d_terms);
+    std::vector<cvc5::Term> result = solver->getValue(d_terms);
     Assert(result.size() == d_terms.size());
     for (int i = 0, size = d_terms.size(); i < size; i++)
     {
-      api::Term request = d_terms[i];
-      api::Term value = result[i];
-      result[i] = solver->mkTerm(api::SEXPR, request, value);
+      cvc5::Term request = d_terms[i];
+      cvc5::Term value = result[i];
+      result[i] = solver->mkTerm(cvc5::SEXPR, {request, value});
     }
-    d_result = solver->mkTerm(api::SEXPR, result);
+    d_result = solver->mkTerm(cvc5::SEXPR, {result});
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -1608,36 +1329,20 @@ void GetValueCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Term GetValueCommand::getResult() const { return d_result; }
-void GetValueCommand::printResult(std::ostream& out, uint32_t verbosity) const
+cvc5::Term GetValueCommand::getResult() const { return d_result; }
+void GetValueCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    expr::ExprDag::Scope scope(out, false);
-    out << d_result << endl;
-  }
-}
-
-Command* GetValueCommand::clone() const
-{
-  GetValueCommand* c = new GetValueCommand(d_terms);
-  c->d_result = d_result;
-  return c;
+  options::ioutils::Scope scope(out);
+  options::ioutils::applyDagThresh(out, 0);
+  out << d_result << endl;
 }
 
 std::string GetValueCommand::getCommandName() const { return "get-value"; }
 
-void GetValueCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void GetValueCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetValue(
-      out, termVectorToNodes(d_terms));
+  Printer::getPrinter(out)->toStreamCmdGetValue(out,
+                                                termVectorToNodes(d_terms));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1645,40 +1350,36 @@ void GetValueCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetAssignmentCommand::GetAssignmentCommand() {}
-void GetAssignmentCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetAssignmentCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    std::map<api::Term, std::string> enames = sm->getExpressionNames();
-    std::vector<api::Term> terms;
+    std::map<cvc5::Term, std::string> enames = sm->getExpressionNames();
+    std::vector<cvc5::Term> terms;
     std::vector<std::string> names;
-    for (const std::pair<const api::Term, std::string>& e : enames)
+    for (const std::pair<const cvc5::Term, std::string>& e : enames)
     {
       terms.push_back(e.first);
       names.push_back(e.second);
     }
     // Must use vector version of getValue to ensure error is thrown regardless
     // of whether terms is empty.
-    std::vector<api::Term> values = solver->getValue(terms);
+    std::vector<cvc5::Term> values = solver->getValue(terms);
     Assert(values.size() == names.size());
-    std::vector<api::Term> sexprs;
+    std::vector<cvc5::Term> sexprs;
     for (size_t i = 0, nterms = terms.size(); i < nterms; i++)
     {
       // Treat the expression name as a variable name as opposed to a string
       // constant to avoid printing double quotes around the name.
-      api::Term name = solver->mkVar(solver->getBooleanSort(), names[i]);
-      sexprs.push_back(solver->mkTerm(api::SEXPR, name, values[i]));
+      cvc5::Term name = solver->mkVar(solver->getBooleanSort(), names[i]);
+      sexprs.push_back(solver->mkTerm(cvc5::SEXPR, {name, values[i]}));
     }
-    d_result = solver->mkTerm(api::SEXPR, sexprs);
+    d_result = solver->mkTerm(cvc5::SEXPR, sexprs);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -1686,25 +1387,10 @@ void GetAssignmentCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-api::Term GetAssignmentCommand::getResult() const { return d_result; }
-void GetAssignmentCommand::printResult(std::ostream& out,
-                                       uint32_t verbosity) const
+cvc5::Term GetAssignmentCommand::getResult() const { return d_result; }
+void GetAssignmentCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result << endl;
-  }
-}
-
-Command* GetAssignmentCommand::clone() const
-{
-  GetAssignmentCommand* c = new GetAssignmentCommand();
-  c->d_result = d_result;
-  return c;
+  out << d_result << endl;
 }
 
 std::string GetAssignmentCommand::getCommandName() const
@@ -1712,12 +1398,9 @@ std::string GetAssignmentCommand::getCommandName() const
   return "get-assignment";
 }
 
-void GetAssignmentCommand::toStream(std::ostream& out,
-                                    int toDepth,
-                                    size_t dag,
-                                    Language language) const
+void GetAssignmentCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetAssignment(out);
+  Printer::getPrinter(out)->toStreamCmdGetAssignment(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1725,22 +1408,18 @@ void GetAssignmentCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetModelCommand::GetModelCommand() {}
-void GetModelCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetModelCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    std::vector<api::Sort> declareSorts = sm->getModelDeclareSorts();
-    std::vector<api::Term> declareTerms = sm->getModelDeclareTerms();
+    std::vector<cvc5::Sort> declareSorts = sm->getModelDeclareSorts();
+    std::vector<cvc5::Term> declareTerms = sm->getModelDeclareTerms();
     d_result = solver->getModel(declareSorts, declareTerms);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -1748,54 +1427,32 @@ void GetModelCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetModelCommand::printResult(std::ostream& out, uint32_t verbosity) const
-{
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result;
-  }
-}
-
-Command* GetModelCommand::clone() const
-{
-  GetModelCommand* c = new GetModelCommand;
-  c->d_result = d_result;
-  return c;
-}
+void GetModelCommand::printResult(std::ostream& out) const { out << d_result; }
 
 std::string GetModelCommand::getCommandName() const { return "get-model"; }
 
-void GetModelCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void GetModelCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetModel(out);
+  Printer::getPrinter(out)->toStreamCmdGetModel(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class BlockModelCommand */
 /* -------------------------------------------------------------------------- */
 
-BlockModelCommand::BlockModelCommand() {}
-void BlockModelCommand::invoke(api::Solver* solver, SymbolManager* sm)
+BlockModelCommand::BlockModelCommand(modes::BlockModelsMode mode) : d_mode(mode)
+{
+}
+void BlockModelCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    solver->blockModel();
+    solver->blockModel(d_mode);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -1803,20 +1460,11 @@ void BlockModelCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* BlockModelCommand::clone() const
-{
-  BlockModelCommand* c = new BlockModelCommand();
-  return c;
-}
-
 std::string BlockModelCommand::getCommandName() const { return "block-model"; }
 
-void BlockModelCommand::toStream(std::ostream& out,
-                                 int toDepth,
-                                 size_t dag,
-                                 Language language) const
+void BlockModelCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdBlockModel(out);
+  Printer::getPrinter(out)->toStreamCmdBlockModel(out, d_mode);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1824,7 +1472,7 @@ void BlockModelCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 BlockModelValuesCommand::BlockModelValuesCommand(
-    const std::vector<api::Term>& terms)
+    const std::vector<cvc5::Term>& terms)
     : d_terms(terms)
 {
   PrettyCheckArgument(terms.size() >= 1,
@@ -1832,24 +1480,20 @@ BlockModelValuesCommand::BlockModelValuesCommand(
                       "cannot block-model-values of an empty set of terms");
 }
 
-const std::vector<api::Term>& BlockModelValuesCommand::getTerms() const
+const std::vector<cvc5::Term>& BlockModelValuesCommand::getTerms() const
 {
   return d_terms;
 }
-void BlockModelValuesCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void BlockModelValuesCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     solver->blockModelValues(d_terms);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
-  }
-  catch (UnsafeInterruptException& e)
-  {
-    d_commandStatus = new CommandInterrupted();
   }
   catch (exception& e)
   {
@@ -1857,23 +1501,14 @@ void BlockModelValuesCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* BlockModelValuesCommand::clone() const
-{
-  BlockModelValuesCommand* c = new BlockModelValuesCommand(d_terms);
-  return c;
-}
-
 std::string BlockModelValuesCommand::getCommandName() const
 {
   return "block-model-values";
 }
 
-void BlockModelValuesCommand::toStream(std::ostream& out,
-                                       int toDepth,
-                                       size_t dag,
-                                       Language language) const
+void BlockModelValuesCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdBlockModelValues(
+  Printer::getPrinter(out)->toStreamCmdBlockModelValues(
       out, termVectorToNodes(d_terms));
 }
 
@@ -1882,14 +1517,14 @@ void BlockModelValuesCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetProofCommand::GetProofCommand() {}
-void GetProofCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetProofCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     d_result = solver->getProof();
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
   }
@@ -1899,32 +1534,13 @@ void GetProofCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetProofCommand::printResult(std::ostream& out, uint32_t verbosity) const
-{
-  if (ok())
-  {
-    out << d_result;
-  }
-  else
-  {
-    this->Command::printResult(out, verbosity);
-  }
-}
-
-Command* GetProofCommand::clone() const
-{
-  GetProofCommand* c = new GetProofCommand();
-  return c;
-}
+void GetProofCommand::printResult(std::ostream& out) const { out << d_result; }
 
 std::string GetProofCommand::getCommandName() const { return "get-proof"; }
 
-void GetProofCommand::toStream(std::ostream& out,
-                               int toDepth,
-                               size_t dag,
-                               Language language) const
+void GetProofCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetProof(out);
+  Printer::getPrinter(out)->toStreamCmdGetProof(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1932,15 +1548,16 @@ void GetProofCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetInstantiationsCommand::GetInstantiationsCommand() : d_solver(nullptr) {}
-bool GetInstantiationsCommand::isEnabled(api::Solver* solver,
-                                         const api::Result& res)
+bool GetInstantiationsCommand::isEnabled(cvc5::Solver* solver,
+                                         const cvc5::Result& res)
 {
   return (res.isSat()
-          || (res.isSatUnknown()
-              && res.getUnknownExplanation() == api::Result::INCOMPLETE))
-         || res.isUnsat() || res.isEntailed();
+          || (res.isUnknown()
+              && res.getUnknownExplanation()
+                     == cvc5::UnknownExplanation::INCOMPLETE))
+         || res.isUnsat();
 }
-void GetInstantiationsCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetInstantiationsCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -1953,25 +1570,9 @@ void GetInstantiationsCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetInstantiationsCommand::printResult(std::ostream& out,
-                                           uint32_t verbosity) const
+void GetInstantiationsCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    d_solver->printInstantiations(out);
-  }
-}
-
-Command* GetInstantiationsCommand::clone() const
-{
-  GetInstantiationsCommand* c = new GetInstantiationsCommand();
-  // c->d_result = d_result;
-  c->d_solver = d_solver;
-  return c;
+  out << d_solver->getInstantiations();
 }
 
 std::string GetInstantiationsCommand::getCommandName() const
@@ -1979,50 +1580,50 @@ std::string GetInstantiationsCommand::getCommandName() const
   return "get-instantiations";
 }
 
-void GetInstantiationsCommand::toStream(std::ostream& out,
-                                        int toDepth,
-                                        size_t dag,
-                                        Language language) const
+void GetInstantiationsCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetInstantiations(out);
+  Printer::getPrinter(out)->toStreamCmdGetInstantiations(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class GetInterpolCommand                                                   */
 /* -------------------------------------------------------------------------- */
 
-GetInterpolCommand::GetInterpolCommand(const std::string& name, api::Term conj)
-    : d_name(name), d_conj(conj), d_resultStatus(false)
+GetInterpolantCommand::GetInterpolantCommand(const std::string& name,
+                                             Term conj)
+    : d_name(name), d_conj(conj), d_sygus_grammar(nullptr)
 {
 }
-GetInterpolCommand::GetInterpolCommand(const std::string& name,
-                                       api::Term conj,
-                                       api::Grammar* g)
-    : d_name(name), d_conj(conj), d_sygus_grammar(g), d_resultStatus(false)
+GetInterpolantCommand::GetInterpolantCommand(const std::string& name,
+                                             Term conj,
+                                             Grammar* g)
+    : d_name(name), d_conj(conj), d_sygus_grammar(g)
 {
 }
 
-api::Term GetInterpolCommand::getConjecture() const { return d_conj; }
+Term GetInterpolantCommand::getConjecture() const { return d_conj; }
 
-const api::Grammar* GetInterpolCommand::getGrammar() const
+const Grammar* GetInterpolantCommand::getGrammar() const
 {
   return d_sygus_grammar;
 }
 
-api::Term GetInterpolCommand::getResult() const { return d_result; }
+Term GetInterpolantCommand::getResult() const { return d_result; }
 
-void GetInterpolCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetInterpolantCommand::invoke(Solver* solver, SymbolManager* sm)
 {
   try
   {
+    // we must remember the name of the interpolant, in case
+    // get-interpolant-next is called later.
+    sm->setLastSynthName(d_name);
     if (d_sygus_grammar == nullptr)
     {
-      d_resultStatus = solver->getInterpolant(d_conj, d_result);
+      d_result = solver->getInterpolant(d_conj);
     }
     else
     {
-      d_resultStatus =
-          solver->getInterpolant(d_conj, *d_sygus_grammar, d_result);
+      d_result = solver->getInterpolant(d_conj, *d_sygus_grammar);
     }
     d_commandStatus = CommandSuccess::instance();
   }
@@ -2032,87 +1633,119 @@ void GetInterpolCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetInterpolCommand::printResult(std::ostream& out,
-                                     uint32_t verbosity) const
+void GetInterpolantCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
+  options::ioutils::Scope scope(out);
+  options::ioutils::applyDagThresh(out, 0);
+  if (!d_result.isNull())
   {
-    this->Command::printResult(out, verbosity);
+    out << "(define-fun " << d_name << " () Bool " << d_result << ")"
+        << std::endl;
   }
   else
   {
-    expr::ExprDag::Scope scope(out, false);
-    if (d_resultStatus)
-    {
-      out << "(define-fun " << d_name << " () Bool " << d_result << ")"
-          << std::endl;
-    }
-    else
-    {
-      out << "none" << std::endl;
-    }
+    out << "fail" << std::endl;
   }
 }
 
-Command* GetInterpolCommand::clone() const
+std::string GetInterpolantCommand::getCommandName() const
 {
-  GetInterpolCommand* c =
-      new GetInterpolCommand(d_name, d_conj, d_sygus_grammar);
-  c->d_result = d_result;
-  c->d_resultStatus = d_resultStatus;
-  return c;
+  return "get-interpolant";
 }
 
-std::string GetInterpolCommand::getCommandName() const
+void GetInterpolantCommand::toStream(std::ostream& out) const
 {
-  return "get-interpol";
-}
-
-void GetInterpolCommand::toStream(std::ostream& out,
-                                  int toDepth,
-                                  size_t dag,
-                                  Language language) const
-{
-  Printer::getPrinter(language)->toStreamCmdGetInterpol(
+  Printer::getPrinter(out)->toStreamCmdGetInterpol(
       out, d_name, termToNode(d_conj), grammarToTypeNode(d_sygus_grammar));
+}
+
+/* -------------------------------------------------------------------------- */
+/* class GetInterpolNextCommand */
+/* -------------------------------------------------------------------------- */
+
+GetInterpolantNextCommand::GetInterpolantNextCommand() {}
+
+Term GetInterpolantNextCommand::getResult() const { return d_result; }
+
+void GetInterpolantNextCommand::invoke(Solver* solver, SymbolManager* sm)
+{
+  try
+  {
+    // Get the name of the interpolant from the symbol manager
+    d_name = sm->getLastSynthName();
+    d_result = solver->getInterpolantNext();
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void GetInterpolantNextCommand::printResult(std::ostream& out) const
+{
+  options::ioutils::Scope scope(out);
+  options::ioutils::applyDagThresh(out, 0);
+  if (!d_result.isNull())
+  {
+    out << "(define-fun " << d_name << " () Bool " << d_result << ")"
+        << std::endl;
+  }
+  else
+  {
+    out << "fail" << std::endl;
+  }
+}
+
+std::string GetInterpolantNextCommand::getCommandName() const
+{
+  return "get-interpolant-next";
+}
+
+void GetInterpolantNextCommand::toStream(std::ostream& out) const
+{
+  Printer::getPrinter(out)->toStreamCmdGetInterpolNext(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class GetAbductCommand                                                     */
 /* -------------------------------------------------------------------------- */
 
-GetAbductCommand::GetAbductCommand(const std::string& name, api::Term conj)
-    : d_name(name), d_conj(conj), d_resultStatus(false)
+GetAbductCommand::GetAbductCommand(const std::string& name, cvc5::Term conj)
+    : d_name(name), d_conj(conj), d_sygus_grammar(nullptr)
 {
 }
 GetAbductCommand::GetAbductCommand(const std::string& name,
-                                   api::Term conj,
-                                   api::Grammar* g)
-    : d_name(name), d_conj(conj), d_sygus_grammar(g), d_resultStatus(false)
+                                   cvc5::Term conj,
+                                   cvc5::Grammar* g)
+    : d_name(name), d_conj(conj), d_sygus_grammar(g)
 {
 }
 
-api::Term GetAbductCommand::getConjecture() const { return d_conj; }
+cvc5::Term GetAbductCommand::getConjecture() const { return d_conj; }
 
-const api::Grammar* GetAbductCommand::getGrammar() const
+const cvc5::Grammar* GetAbductCommand::getGrammar() const
 {
   return d_sygus_grammar;
 }
 
 std::string GetAbductCommand::getAbductName() const { return d_name; }
-api::Term GetAbductCommand::getResult() const { return d_result; }
+cvc5::Term GetAbductCommand::getResult() const { return d_result; }
 
-void GetAbductCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetAbductCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
+    // we must remember the name of the abduct, in case get-abduct-next is
+    // called later.
+    sm->setLastSynthName(d_name);
     if (d_sygus_grammar == nullptr)
     {
-      d_resultStatus = solver->getAbduct(d_conj, d_result);
+      d_result = solver->getAbduct(d_conj);
     }
     else
     {
-      d_resultStatus = solver->getAbduct(d_conj, *d_sygus_grammar, d_result);
+      d_result = solver->getAbduct(d_conj, *d_sygus_grammar);
     }
     d_commandStatus = CommandSuccess::instance();
   }
@@ -2122,44 +1755,75 @@ void GetAbductCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetAbductCommand::printResult(std::ostream& out, uint32_t verbosity) const
+void GetAbductCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
+  options::ioutils::Scope scope(out);
+  options::ioutils::applyDagThresh(out, 0);
+  if (!d_result.isNull())
   {
-    this->Command::printResult(out, verbosity);
+    out << "(define-fun " << d_name << " () Bool " << d_result << ")"
+        << std::endl;
   }
   else
   {
-    expr::ExprDag::Scope scope(out, false);
-    if (d_resultStatus)
-    {
-      out << "(define-fun " << d_name << " () Bool " << d_result << ")"
-          << std::endl;
-    }
-    else
-    {
-      out << "none" << std::endl;
-    }
+    out << "fail" << std::endl;
   }
-}
-
-Command* GetAbductCommand::clone() const
-{
-  GetAbductCommand* c = new GetAbductCommand(d_name, d_conj, d_sygus_grammar);
-  c->d_result = d_result;
-  c->d_resultStatus = d_resultStatus;
-  return c;
 }
 
 std::string GetAbductCommand::getCommandName() const { return "get-abduct"; }
 
-void GetAbductCommand::toStream(std::ostream& out,
-                                int toDepth,
-                                size_t dag,
-                                Language language) const
+void GetAbductCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetAbduct(
+  Printer::getPrinter(out)->toStreamCmdGetAbduct(
       out, d_name, termToNode(d_conj), grammarToTypeNode(d_sygus_grammar));
+}
+
+/* -------------------------------------------------------------------------- */
+/* class GetAbductNextCommand */
+/* -------------------------------------------------------------------------- */
+
+GetAbductNextCommand::GetAbductNextCommand() {}
+
+cvc5::Term GetAbductNextCommand::getResult() const { return d_result; }
+
+void GetAbductNextCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
+{
+  try
+  {
+    // Get the name of the abduct from the symbol manager
+    d_name = sm->getLastSynthName();
+    d_result = solver->getAbductNext();
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void GetAbductNextCommand::printResult(std::ostream& out) const
+{
+  options::ioutils::Scope scope(out);
+  options::ioutils::applyDagThresh(out, 0);
+  if (!d_result.isNull())
+  {
+    out << "(define-fun " << d_name << " () Bool " << d_result << ")"
+        << std::endl;
+  }
+  else
+  {
+    out << "fail" << std::endl;
+  }
+}
+
+std::string GetAbductNextCommand::getCommandName() const
+{
+  return "get-abduct-next";
+}
+
+void GetAbductNextCommand::toStream(std::ostream& out) const
+{
+  Printer::getPrinter(out)->toStreamCmdGetAbductNext(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2171,14 +1835,14 @@ GetQuantifierEliminationCommand::GetQuantifierEliminationCommand()
 {
 }
 GetQuantifierEliminationCommand::GetQuantifierEliminationCommand(
-    const api::Term& term, bool doFull)
+    const cvc5::Term& term, bool doFull)
     : d_term(term), d_doFull(doFull)
 {
 }
 
-api::Term GetQuantifierEliminationCommand::getTerm() const { return d_term; }
+cvc5::Term GetQuantifierEliminationCommand::getTerm() const { return d_term; }
 bool GetQuantifierEliminationCommand::getDoFull() const { return d_doFull; }
-void GetQuantifierEliminationCommand::invoke(api::Solver* solver,
+void GetQuantifierEliminationCommand::invoke(cvc5::Solver* solver,
                                              SymbolManager* sm)
 {
   try
@@ -2199,29 +1863,13 @@ void GetQuantifierEliminationCommand::invoke(api::Solver* solver,
   }
 }
 
-api::Term GetQuantifierEliminationCommand::getResult() const
+cvc5::Term GetQuantifierEliminationCommand::getResult() const
 {
   return d_result;
 }
-void GetQuantifierEliminationCommand::printResult(std::ostream& out,
-                                                  uint32_t verbosity) const
+void GetQuantifierEliminationCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result << endl;
-  }
-}
-
-Command* GetQuantifierEliminationCommand::clone() const
-{
-  GetQuantifierEliminationCommand* c =
-      new GetQuantifierEliminationCommand(d_term, d_doFull);
-  c->d_result = d_result;
-  return c;
+  out << d_result << endl;
 }
 
 std::string GetQuantifierEliminationCommand::getCommandName() const
@@ -2229,13 +1877,10 @@ std::string GetQuantifierEliminationCommand::getCommandName() const
   return d_doFull ? "get-qe" : "get-qe-disjunct";
 }
 
-void GetQuantifierEliminationCommand::toStream(std::ostream& out,
-                                               int toDepth,
-                                               size_t dag,
-                                               Language language) const
+void GetQuantifierEliminationCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetQuantifierElimination(
-      out, termToNode(d_term));
+  Printer::getPrinter(out)->toStreamCmdGetQuantifierElimination(
+      out, termToNode(d_term), d_doFull);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2244,14 +1889,14 @@ void GetQuantifierEliminationCommand::toStream(std::ostream& out,
 
 GetUnsatAssumptionsCommand::GetUnsatAssumptionsCommand() {}
 
-void GetUnsatAssumptionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetUnsatAssumptionsCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     d_result = solver->getUnsatAssumptions();
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
   }
@@ -2261,29 +1906,14 @@ void GetUnsatAssumptionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-std::vector<api::Term> GetUnsatAssumptionsCommand::getResult() const
+std::vector<cvc5::Term> GetUnsatAssumptionsCommand::getResult() const
 {
   return d_result;
 }
 
-void GetUnsatAssumptionsCommand::printResult(std::ostream& out,
-                                             uint32_t verbosity) const
+void GetUnsatAssumptionsCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    container_to_stream(out, d_result, "(", ")\n", " ");
-  }
-}
-
-Command* GetUnsatAssumptionsCommand::clone() const
-{
-  GetUnsatAssumptionsCommand* c = new GetUnsatAssumptionsCommand;
-  c->d_result = d_result;
-  return c;
+  container_to_stream(out, d_result, "(", ")\n", " ");
 }
 
 std::string GetUnsatAssumptionsCommand::getCommandName() const
@@ -2291,29 +1921,27 @@ std::string GetUnsatAssumptionsCommand::getCommandName() const
   return "get-unsat-assumptions";
 }
 
-void GetUnsatAssumptionsCommand::toStream(std::ostream& out,
-                                          int toDepth,
-                                          size_t dag,
-                                          Language language) const
+void GetUnsatAssumptionsCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetUnsatAssumptions(out);
+  Printer::getPrinter(out)->toStreamCmdGetUnsatAssumptions(out);
 }
 
 /* -------------------------------------------------------------------------- */
 /* class GetUnsatCoreCommand                                                  */
 /* -------------------------------------------------------------------------- */
 
-GetUnsatCoreCommand::GetUnsatCoreCommand() : d_sm(nullptr) {}
-void GetUnsatCoreCommand::invoke(api::Solver* solver, SymbolManager* sm)
+GetUnsatCoreCommand::GetUnsatCoreCommand() : d_solver(nullptr), d_sm(nullptr) {}
+void GetUnsatCoreCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     d_sm = sm;
+    d_solver = solver;
     d_result = solver->getUnsatCore();
 
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
   }
@@ -2323,44 +1951,28 @@ void GetUnsatCoreCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetUnsatCoreCommand::printResult(std::ostream& out,
-                                      uint32_t verbosity) const
+void GetUnsatCoreCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
+  if (d_solver->getOption("print-unsat-cores-full") == "true")
   {
-    this->Command::printResult(out, verbosity);
+    // use the assertions
+    UnsatCore ucr(termVectorToNodes(d_result));
+    ucr.toStream(out);
   }
   else
   {
-    if (options::printUnsatCoresFull())
-    {
-      // use the assertions
-      UnsatCore ucr(termVectorToNodes(d_result));
-      ucr.toStream(out);
-    }
-    else
-    {
-      // otherwise, use the names
-      std::vector<std::string> names;
-      d_sm->getExpressionNames(d_result, names, true);
-      UnsatCore ucr(names);
-      ucr.toStream(out);
-    }
+    // otherwise, use the names
+    std::vector<std::string> names;
+    d_sm->getExpressionNames(d_result, names, true);
+    UnsatCore ucr(names);
+    ucr.toStream(out);
   }
 }
 
-const std::vector<api::Term>& GetUnsatCoreCommand::getUnsatCore() const
+const std::vector<cvc5::Term>& GetUnsatCoreCommand::getUnsatCore() const
 {
   // of course, this will be empty if the command hasn't been invoked yet
   return d_result;
-}
-
-Command* GetUnsatCoreCommand::clone() const
-{
-  GetUnsatCoreCommand* c = new GetUnsatCoreCommand;
-  c->d_sm = d_sm;
-  c->d_result = d_result;
-  return c;
 }
 
 std::string GetUnsatCoreCommand::getCommandName() const
@@ -2368,12 +1980,9 @@ std::string GetUnsatCoreCommand::getCommandName() const
   return "get-unsat-core";
 }
 
-void GetUnsatCoreCommand::toStream(std::ostream& out,
-                                   int toDepth,
-                                   size_t dag,
-                                   Language language) const
+void GetUnsatCoreCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetUnsatCore(out);
+  Printer::getPrinter(out)->toStreamCmdGetUnsatCore(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2381,7 +1990,7 @@ void GetUnsatCoreCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetDifficultyCommand::GetDifficultyCommand() : d_sm(nullptr) {}
-void GetDifficultyCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetDifficultyCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -2390,7 +1999,7 @@ void GetDifficultyCommand::invoke(api::Solver* solver, SymbolManager* sm)
 
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiRecoverableException& e)
   {
     d_commandStatus = new CommandRecoverableFailure(e.what());
   }
@@ -2400,47 +2009,31 @@ void GetDifficultyCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-void GetDifficultyCommand::printResult(std::ostream& out,
-                                       uint32_t verbosity) const
+void GetDifficultyCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
+  out << "(" << std::endl;
+  for (const std::pair<const cvc5::Term, cvc5::Term>& d : d_result)
   {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << "(" << std::endl;
-    for (const std::pair<const api::Term, api::Term>& d : d_result)
+    out << "(";
+    // use name if it has one
+    std::string name;
+    if (d_sm->getExpressionName(d.first, name, true))
     {
-      out << "(";
-      // use name if it has one
-      std::string name;
-      if (d_sm->getExpressionName(d.first, name, true))
-      {
-        out << name;
-      }
-      else
-      {
-        out << d.first;
-      }
-      out << " " << d.second << ")" << std::endl;
+      out << name;
     }
-    out << ")" << std::endl;
+    else
+    {
+      out << d.first;
+    }
+    out << " " << d.second << ")" << std::endl;
   }
+  out << ")" << std::endl;
 }
 
-const std::map<api::Term, api::Term>& GetDifficultyCommand::getDifficultyMap()
+const std::map<cvc5::Term, cvc5::Term>& GetDifficultyCommand::getDifficultyMap()
     const
 {
   return d_result;
-}
-
-Command* GetDifficultyCommand::clone() const
-{
-  GetDifficultyCommand* c = new GetDifficultyCommand;
-  c->d_sm = d_sm;
-  c->d_result = d_result;
-  return c;
 }
 
 std::string GetDifficultyCommand::getCommandName() const
@@ -2448,12 +2041,58 @@ std::string GetDifficultyCommand::getCommandName() const
   return "get-difficulty";
 }
 
-void GetDifficultyCommand::toStream(std::ostream& out,
-                                    int toDepth,
-                                    size_t dag,
-                                    Language language) const
+void GetDifficultyCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetDifficulty(out);
+  Printer::getPrinter(out)->toStreamCmdGetDifficulty(out);
+}
+
+/* -------------------------------------------------------------------------- */
+/* class GetLearnedLiteralsCommand */
+/* -------------------------------------------------------------------------- */
+
+GetLearnedLiteralsCommand::GetLearnedLiteralsCommand() {}
+void GetLearnedLiteralsCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
+{
+  try
+  {
+    d_result = solver->getLearnedLiterals();
+
+    d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.what());
+  }
+  catch (exception& e)
+  {
+    d_commandStatus = new CommandFailure(e.what());
+  }
+}
+
+void GetLearnedLiteralsCommand::printResult(std::ostream& out) const
+{
+  out << "(" << std::endl;
+  for (const cvc5::Term& lit : d_result)
+  {
+    out << lit << std::endl;
+  }
+  out << ")" << std::endl;
+}
+
+const std::vector<cvc5::Term>& GetLearnedLiteralsCommand::getLearnedLiterals()
+    const
+{
+  return d_result;
+}
+
+std::string GetLearnedLiteralsCommand::getCommandName() const
+{
+  return "get-learned-literals";
+}
+
+void GetLearnedLiteralsCommand::toStream(std::ostream& out) const
+{
+  Printer::getPrinter(out)->toStreamCmdGetLearnedLiterals(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2461,14 +2100,14 @@ void GetDifficultyCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 GetAssertionsCommand::GetAssertionsCommand() {}
-void GetAssertionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetAssertionsCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     stringstream ss;
-    const vector<api::Term> v = solver->getAssertions();
+    const vector<cvc5::Term> v = solver->getAssertions();
     ss << "(\n";
-    copy(v.begin(), v.end(), ostream_iterator<api::Term>(ss, "\n"));
+    copy(v.begin(), v.end(), ostream_iterator<cvc5::Term>(ss, "\n"));
     ss << ")\n";
     d_result = ss.str();
     d_commandStatus = CommandSuccess::instance();
@@ -2480,24 +2119,9 @@ void GetAssertionsCommand::invoke(api::Solver* solver, SymbolManager* sm)
 }
 
 std::string GetAssertionsCommand::getResult() const { return d_result; }
-void GetAssertionsCommand::printResult(std::ostream& out,
-                                       uint32_t verbosity) const
+void GetAssertionsCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else
-  {
-    out << d_result;
-  }
-}
-
-Command* GetAssertionsCommand::clone() const
-{
-  GetAssertionsCommand* c = new GetAssertionsCommand();
-  c->d_result = d_result;
-  return c;
+  out << d_result;
 }
 
 std::string GetAssertionsCommand::getCommandName() const
@@ -2505,12 +2129,9 @@ std::string GetAssertionsCommand::getCommandName() const
   return "get-assertions";
 }
 
-void GetAssertionsCommand::toStream(std::ostream& out,
-                                    int toDepth,
-                                    size_t dag,
-                                    Language language) const
+void GetAssertionsCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetAssertions(out);
+  Printer::getPrinter(out)->toStreamCmdGetAssertions(out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2523,7 +2144,7 @@ SetBenchmarkLogicCommand::SetBenchmarkLogicCommand(std::string logic)
 }
 
 std::string SetBenchmarkLogicCommand::getLogic() const { return d_logic; }
-void SetBenchmarkLogicCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SetBenchmarkLogicCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
@@ -2536,22 +2157,14 @@ void SetBenchmarkLogicCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* SetBenchmarkLogicCommand::clone() const
-{
-  return new SetBenchmarkLogicCommand(d_logic);
-}
-
 std::string SetBenchmarkLogicCommand::getCommandName() const
 {
   return "set-logic";
 }
 
-void SetBenchmarkLogicCommand::toStream(std::ostream& out,
-                                        int toDepth,
-                                        size_t dag,
-                                        Language language) const
+void SetBenchmarkLogicCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdSetBenchmarkLogic(out, d_logic);
+  Printer::getPrinter(out)->toStreamCmdSetBenchmarkLogic(out, d_logic);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2566,17 +2179,21 @@ SetInfoCommand::SetInfoCommand(const std::string& flag,
 
 const std::string& SetInfoCommand::getFlag() const { return d_flag; }
 const std::string& SetInfoCommand::getValue() const { return d_value; }
-void SetInfoCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SetInfoCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     solver->setInfo(d_flag, d_value);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException&)
+  catch (cvc5::CVC5ApiUnsupportedException&)
   {
     // As per SMT-LIB spec, silently accept unknown set-info keys
     d_commandStatus = CommandSuccess::instance();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.getMessage());
   }
   catch (exception& e)
   {
@@ -2584,19 +2201,11 @@ void SetInfoCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* SetInfoCommand::clone() const
-{
-  return new SetInfoCommand(d_flag, d_value);
-}
-
 std::string SetInfoCommand::getCommandName() const { return "set-info"; }
 
-void SetInfoCommand::toStream(std::ostream& out,
-                              int toDepth,
-                              size_t dag,
-                              Language language) const
+void SetInfoCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdSetInfo(out, d_flag, d_value);
+  Printer::getPrinter(out)->toStreamCmdSetInfo(out, d_flag, d_value);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2605,19 +2214,23 @@ void SetInfoCommand::toStream(std::ostream& out,
 
 GetInfoCommand::GetInfoCommand(std::string flag) : d_flag(flag) {}
 std::string GetInfoCommand::getFlag() const { return d_flag; }
-void GetInfoCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetInfoCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
-    std::vector<api::Term> v;
+    std::vector<cvc5::Term> v;
     v.push_back(solver->mkString(":" + d_flag));
     v.push_back(solver->mkString(solver->getInfo(d_flag)));
-    d_result = sexprToString(solver->mkTerm(api::SEXPR, v));
+    d_result = sexprToString(solver->mkTerm(cvc5::SEXPR, {v}));
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException& e)
+  catch (cvc5::CVC5ApiUnsupportedException&)
   {
-    d_commandStatus = new CommandRecoverableFailure(e.what());
+    d_commandStatus = new CommandUnsupported();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.getMessage());
   }
   catch (exception& e)
   {
@@ -2626,33 +2239,19 @@ void GetInfoCommand::invoke(api::Solver* solver, SymbolManager* sm)
 }
 
 std::string GetInfoCommand::getResult() const { return d_result; }
-void GetInfoCommand::printResult(std::ostream& out, uint32_t verbosity) const
+void GetInfoCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else if (d_result != "")
+  if (d_result != "")
   {
     out << d_result << endl;
   }
 }
 
-Command* GetInfoCommand::clone() const
-{
-  GetInfoCommand* c = new GetInfoCommand(d_flag);
-  c->d_result = d_result;
-  return c;
-}
-
 std::string GetInfoCommand::getCommandName() const { return "get-info"; }
 
-void GetInfoCommand::toStream(std::ostream& out,
-                              int toDepth,
-                              size_t dag,
-                              Language language) const
+void GetInfoCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetInfo(out, d_flag);
+  Printer::getPrinter(out)->toStreamCmdGetInfo(out, d_flag);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2667,16 +2266,20 @@ SetOptionCommand::SetOptionCommand(const std::string& flag,
 
 const std::string& SetOptionCommand::getFlag() const { return d_flag; }
 const std::string& SetOptionCommand::getValue() const { return d_value; }
-void SetOptionCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void SetOptionCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     solver->setOption(d_flag, d_value);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException&)
+  catch (cvc5::CVC5ApiUnsupportedException&)
   {
     d_commandStatus = new CommandUnsupported();
+  }
+  catch (cvc5::CVC5ApiRecoverableException& e)
+  {
+    d_commandStatus = new CommandRecoverableFailure(e.getMessage());
   }
   catch (exception& e)
   {
@@ -2684,19 +2287,11 @@ void SetOptionCommand::invoke(api::Solver* solver, SymbolManager* sm)
   }
 }
 
-Command* SetOptionCommand::clone() const
-{
-  return new SetOptionCommand(d_flag, d_value);
-}
-
 std::string SetOptionCommand::getCommandName() const { return "set-option"; }
 
-void SetOptionCommand::toStream(std::ostream& out,
-                                int toDepth,
-                                size_t dag,
-                                Language language) const
+void SetOptionCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdSetOption(out, d_flag, d_value);
+  Printer::getPrinter(out)->toStreamCmdSetOption(out, d_flag, d_value);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2705,14 +2300,14 @@ void SetOptionCommand::toStream(std::ostream& out,
 
 GetOptionCommand::GetOptionCommand(std::string flag) : d_flag(flag) {}
 std::string GetOptionCommand::getFlag() const { return d_flag; }
-void GetOptionCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void GetOptionCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   try
   {
     d_result = solver->getOption(d_flag);
     d_commandStatus = CommandSuccess::instance();
   }
-  catch (api::CVC5ApiRecoverableException&)
+  catch (cvc5::CVC5ApiUnsupportedException&)
   {
     d_commandStatus = new CommandUnsupported();
   }
@@ -2723,33 +2318,19 @@ void GetOptionCommand::invoke(api::Solver* solver, SymbolManager* sm)
 }
 
 std::string GetOptionCommand::getResult() const { return d_result; }
-void GetOptionCommand::printResult(std::ostream& out, uint32_t verbosity) const
+void GetOptionCommand::printResult(std::ostream& out) const
 {
-  if (!ok())
-  {
-    this->Command::printResult(out, verbosity);
-  }
-  else if (d_result != "")
+  if (d_result != "")
   {
     out << d_result << endl;
   }
 }
 
-Command* GetOptionCommand::clone() const
-{
-  GetOptionCommand* c = new GetOptionCommand(d_flag);
-  c->d_result = d_result;
-  return c;
-}
-
 std::string GetOptionCommand::getCommandName() const { return "get-option"; }
 
-void GetOptionCommand::toStream(std::ostream& out,
-                                int toDepth,
-                                size_t dag,
-                                Language language) const
+void GetOptionCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdGetOption(out, d_flag);
+  Printer::getPrinter(out)->toStreamCmdGetOption(out, d_flag);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2757,31 +2338,26 @@ void GetOptionCommand::toStream(std::ostream& out,
 /* -------------------------------------------------------------------------- */
 
 DatatypeDeclarationCommand::DatatypeDeclarationCommand(
-    const api::Sort& datatype)
+    const cvc5::Sort& datatype)
     : d_datatypes()
 {
   d_datatypes.push_back(datatype);
 }
 
 DatatypeDeclarationCommand::DatatypeDeclarationCommand(
-    const std::vector<api::Sort>& datatypes)
+    const std::vector<cvc5::Sort>& datatypes)
     : d_datatypes(datatypes)
 {
 }
 
-const std::vector<api::Sort>& DatatypeDeclarationCommand::getDatatypes() const
+const std::vector<cvc5::Sort>& DatatypeDeclarationCommand::getDatatypes() const
 {
   return d_datatypes;
 }
 
-void DatatypeDeclarationCommand::invoke(api::Solver* solver, SymbolManager* sm)
+void DatatypeDeclarationCommand::invoke(cvc5::Solver* solver, SymbolManager* sm)
 {
   d_commandStatus = CommandSuccess::instance();
-}
-
-Command* DatatypeDeclarationCommand::clone() const
-{
-  return new DatatypeDeclarationCommand(d_datatypes);
 }
 
 std::string DatatypeDeclarationCommand::getCommandName() const
@@ -2789,12 +2365,9 @@ std::string DatatypeDeclarationCommand::getCommandName() const
   return "declare-datatypes";
 }
 
-void DatatypeDeclarationCommand::toStream(std::ostream& out,
-                                          int toDepth,
-                                          size_t dag,
-                                          Language language) const
+void DatatypeDeclarationCommand::toStream(std::ostream& out) const
 {
-  Printer::getPrinter(language)->toStreamCmdDatatypeDeclaration(
+  Printer::getPrinter(out)->toStreamCmdDatatypeDeclaration(
       out, sortVectorToTypeNodes(d_datatypes));
 }
 

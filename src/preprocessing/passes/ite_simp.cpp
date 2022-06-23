@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Aina Niemetz, Tim King, Andrew Reynolds
+ *   Aina Niemetz, Andrew Reynolds, Tim King
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -22,17 +22,97 @@
 #include "preprocessing/assertion_pipeline.h"
 #include "preprocessing/preprocessing_pass_context.h"
 #include "smt/smt_statistics_registry.h"
-#include "smt_util/nary_builder.h"
 #include "theory/arith/arith_ite_utils.h"
 #include "theory/theory_engine.h"
 
 using namespace std;
-using namespace cvc5;
-using namespace cvc5::theory;
+using namespace cvc5::internal;
+using namespace cvc5::internal::theory;
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace preprocessing {
 namespace passes {
+
+Node mkAssocAnd(const std::vector<Node>& children)
+{
+  NodeManager* nm = NodeManager::currentNM();
+  if (children.size() == 0)
+  {
+    return nm->mkConst(true);
+  }
+  else if (children.size() == 1)
+  {
+    return children[0];
+  }
+  else
+  {
+    const uint32_t max = kind::metakind::getMaxArityForKind(kind::AND);
+    const uint32_t min = kind::metakind::getMinArityForKind(kind::AND);
+
+    Assert(min <= children.size());
+
+    unsigned int numChildren = children.size();
+    if (numChildren <= max)
+    {
+      return nm->mkNode(kind::AND, children);
+    }
+
+    typedef std::vector<Node>::const_iterator const_iterator;
+    const_iterator it = children.begin();
+    const_iterator end = children.end();
+
+    /* The new top-level children and the children of each sub node */
+    std::vector<Node> newChildren;
+    std::vector<Node> subChildren;
+
+    while (it != end && numChildren > max)
+    {
+      /* Grab the next max children and make a node for them. */
+      for (const_iterator next = it + max; it != next; ++it, --numChildren)
+      {
+        subChildren.push_back(*it);
+      }
+      Node subNode = nm->mkNode(kind::AND, subChildren);
+      newChildren.push_back(subNode);
+      subChildren.clear();
+    }
+
+    /* If there's children left, "top off" the Expr. */
+    if (numChildren > 0)
+    {
+      /* If the leftovers are too few, just copy them into newChildren;
+       * otherwise make a new sub-node  */
+      if (numChildren < min)
+      {
+        for (; it != end; ++it)
+        {
+          newChildren.push_back(*it);
+        }
+      }
+      else
+      {
+        for (; it != end; ++it)
+        {
+          subChildren.push_back(*it);
+        }
+        Node subNode = nm->mkNode(kind::AND, subChildren);
+        newChildren.push_back(subNode);
+      }
+    }
+
+    /* It's inconceivable we could have enough children for this to fail
+     * (more than 2^32, in most cases?). */
+    AlwaysAssert(newChildren.size() <= max)
+        << "Too many new children in mkAssociative";
+
+    /* It would be really weird if this happened (it would require
+     * min > 2, for one thing), but let's make sure. */
+    AlwaysAssert(newChildren.size() >= min)
+        << "Too few new children in mkAssociative";
+
+    return nm->mkNode(kind::AND, newChildren);
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 
@@ -71,7 +151,7 @@ void compressBeforeRealAssertions(AssertionPipeline* assertionsToPreprocess,
   assertionsToPreprocess->resize(before);
   size_t lastBeforeItes = assertionsToPreprocess->getRealAssertionsEnd() - 1;
   intoConjunction.push_back((*assertionsToPreprocess)[lastBeforeItes]);
-  Node newLast = cvc5::util::NaryBuilder::mkAssoc(kind::AND, intoConjunction);
+  Node newLast = mkAssocAnd(intoConjunction);
   assertionsToPreprocess->replace(lastBeforeItes, newLast);
   Assert(assertionsToPreprocess->size() == before);
 }
@@ -99,9 +179,9 @@ Node ITESimp::simpITE(util::ITEUtilities* ite_utils, TNode assertion)
 
     if (options().smt.simplifyWithCareEnabled)
     {
-      Chat() << "starting simplifyWithCare()" << endl;
+      verbose(2) << "starting simplifyWithCare()" << endl;
       Node postSimpWithCare = ite_utils->simplifyWithCare(res_rewritten);
-      Chat() << "ending simplifyWithCare()"
+      verbose(2) << "ending simplifyWithCare()"
              << " post simplifyWithCare()" << postSimpWithCare.getId() << endl;
       result = rewrite(postSimpWithCare);
     }
@@ -123,24 +203,6 @@ bool ITESimp::doneSimpITE(AssertionPipeline* assertionsToPreprocess)
     {
       result = d_iteUtilities.compress(assertionsToPreprocess);
     }
-
-    if (result)
-    {
-      // if false, don't bother to reclaim memory here.
-      NodeManager* nm = NodeManager::currentNM();
-      if (nm->poolSize() >= options().smt.zombieHuntThreshold)
-      {
-        Chat() << "..ite simplifier did quite a bit of work.. "
-               << nm->poolSize() << endl;
-        Chat() << "....node manager contains " << nm->poolSize()
-               << " nodes before cleanup" << endl;
-        d_iteUtilities.clear();
-        d_env.getRewriter()->clearCaches();
-        nm->reclaimZombiesUntil(options().smt.zombieHuntThreshold);
-        Chat() << "....node manager contains " << nm->poolSize()
-               << " nodes after cleanup" << endl;
-      }
-    }
   }
 
   // Do theory specific preprocessing passes
@@ -161,12 +223,12 @@ bool ITESimp::doneSimpITE(AssertionPipeline* assertionsToPreprocess)
         {
           anyItes = true;
           Node res = aiteu.reduceVariablesInItes(curr);
-          Debug("arith::ite::red") << "@ " << i << " ... " << curr << endl
+          Trace("arith::ite::red") << "@ " << i << " ... " << curr << endl
                                    << "   ->" << res << endl;
           if (curr != res)
           {
             Node more = aiteu.reduceConstantIteByGCD(res);
-            Debug("arith::ite::red") << "  gcd->" << more << endl;
+            Trace("arith::ite::red") << "  gcd->" << more << endl;
             Node morer = rewrite(more);
             assertionsToPreprocess->replace(i, morer);
           }
@@ -186,10 +248,10 @@ bool ITESimp::doneSimpITE(AssertionPipeline* assertionsToPreprocess)
             Node curr = (*assertionsToPreprocess)[i];
             Node next = rewrite(aiteu.applySubstitutions(curr));
             Node res = aiteu.reduceVariablesInItes(next);
-            Debug("arith::ite::red") << "@ " << i << " ... " << next << endl
+            Trace("arith::ite::red") << "@ " << i << " ... " << next << endl
                                      << "   ->" << res << endl;
             Node more = aiteu.reduceConstantIteByGCD(res);
-            Debug("arith::ite::red") << "  gcd->" << more << endl;
+            Trace("arith::ite::red") << "  gcd->" << more << endl;
             if (more != next)
             {
               anySuccess = true;
@@ -203,10 +265,10 @@ bool ITESimp::doneSimpITE(AssertionPipeline* assertionsToPreprocess)
             Node curr = (*assertionsToPreprocess)[i];
             Node next = rewrite(aiteu.applySubstitutions(curr));
             Node res = aiteu.reduceVariablesInItes(next);
-            Debug("arith::ite::red") << "@ " << i << " ... " << next << endl
+            Trace("arith::ite::red") << "@ " << i << " ... " << next << endl
                                      << "   ->" << res << endl;
             Node more = aiteu.reduceConstantIteByGCD(res);
-            Debug("arith::ite::red") << "  gcd->" << more << endl;
+            Trace("arith::ite::red") << "  gcd->" << more << endl;
             Node morer = rewrite(more);
             assertionsToPreprocess->replace(i, morer);
           }
@@ -256,4 +318,4 @@ PreprocessingPassResult ITESimp::applyInternal(
 
 }  // namespace passes
 }  // namespace preprocessing
-}  // namespace cvc5
+}  // namespace cvc5::internal

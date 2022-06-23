@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Morgan Deters, Aina Niemetz, Mathias Preiner
+ *   Aina Niemetz, Morgan Deters, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -29,7 +29,7 @@
 
 using namespace std;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 string Configuration::getName() { return CVC5_PACKAGE_NAME; }
 
@@ -39,10 +39,6 @@ bool Configuration::isDebugBuild() {
 
 bool Configuration::isTracingBuild() {
   return IS_TRACING_BUILD;
-}
-
-bool Configuration::isDumpingBuild() {
-  return IS_DUMPING_BUILD && !IS_MUZZLED_BUILD;
 }
 
 bool Configuration::isMuzzledBuild() {
@@ -73,11 +69,7 @@ bool Configuration::isCompetitionBuild() {
 
 bool Configuration::isStaticBuild()
 {
-#if defined(CVC5_STATIC_BUILD)
-  return true;
-#else
-  return false;
-#endif
+  return CVC5_STATIC_BUILD;
 }
 
 string Configuration::getPackageName() { return CVC5_PACKAGE_NAME; }
@@ -86,7 +78,7 @@ string Configuration::getVersionString() { return CVC5_FULL_VERSION; }
 
 std::string Configuration::copyright() {
   std::stringstream ss;
-  ss << "Copyright (c) 2009-2021 by the authors and their institutional\n"
+  ss << "Copyright (c) 2009-2022 by the authors and their institutional\n"
      << "affiliations listed at https://cvc5.github.io/people.html\n\n";
 
   if (Configuration::licenseIsGpl()) {
@@ -114,16 +106,10 @@ std::string Configuration::copyright() {
      << "  See https://github.com/arminbiere/cadical for copyright "
      << "information.\n\n";
 
-  if (Configuration::isBuiltWithAbc()
-      || Configuration::isBuiltWithCryptominisat()
+  if (Configuration::isBuiltWithCryptominisat()
       || Configuration::isBuiltWithKissat()
       || Configuration::isBuiltWithEditline())
   {
-    if (Configuration::isBuiltWithAbc()) {
-      ss << "  ABC - A System for Sequential Synthesis and Verification\n"
-         << "  See http://bitbucket.org/alanmi/abc for copyright and\n"
-         << "  licensing information.\n\n";
-    }
     if (Configuration::isBuiltWithCryptominisat())
     {
       ss << "  CryptoMiniSat - An Advanced SAT Solver\n"
@@ -168,7 +154,7 @@ std::string Configuration::copyright() {
       ss << "cvc5 is statically linked against these libraries. To recompile\n"
             "this version of cvc5 with different versions of these libraries\n"
             "follow the instructions on "
-            "https://github.com/cvc5/cvc5/blob/master/INSTALL.md\n\n";
+            "https://github.com/cvc5/cvc5/blob/main/INSTALL.md\n\n";
     }
   }
 
@@ -223,10 +209,6 @@ bool Configuration::isBuiltWithGlpk() {
   return IS_GLPK_BUILD;
 }
 
-bool Configuration::isBuiltWithAbc() {
-  return IS_ABC_BUILD;
-}
-
 bool Configuration::isBuiltWithCryptominisat() {
   return IS_CRYPTOMINISAT_BUILD;
 }
@@ -239,6 +221,7 @@ bool Configuration::isBuiltWithPoly()
 {
   return IS_POLY_BUILD;
 }
+bool Configuration::isBuiltWithCoCoA() { return IS_COCOA_BUILD; }
 
 const std::vector<std::string>& Configuration::getDebugTags()
 {
@@ -289,4 +272,4 @@ std::string Configuration::getCompiledDateTime() {
   return __DATE__ " " __TIME__;
 }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

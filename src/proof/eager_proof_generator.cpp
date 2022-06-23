@@ -4,7 +4,7 @@
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -19,7 +19,7 @@
 #include "proof/proof_node.h"
 #include "proof/proof_node_manager.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 EagerProofGenerator::EagerProofGenerator(ProofNodeManager* pnm,
                                          context::Context* c,
@@ -134,6 +134,18 @@ TrustNode EagerProofGenerator::mkTrustedRewrite(Node a,
   return TrustNode::mkTrustRewrite(a, b, this);
 }
 
+TrustNode EagerProofGenerator::mkTrustedRewrite(Node a,
+                                                Node b,
+                                                PfRule id,
+                                                const std::vector<Node>& args)
+{
+  Node eq = a.eqNode(b);
+  CDProof cdp(d_pnm);
+  cdp.addStep(eq, id, {}, args);
+  std::shared_ptr<ProofNode> pf = cdp.getProofFor(eq);
+  return mkTrustedRewrite(a, b, pf);
+}
+
 TrustNode EagerProofGenerator::mkTrustedPropagation(
     Node n, Node exp, std::shared_ptr<ProofNode> pf)
 {
@@ -154,4 +166,4 @@ TrustNode EagerProofGenerator::mkTrustNodeSplit(Node f)
 
 std::string EagerProofGenerator::identify() const { return d_name; }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

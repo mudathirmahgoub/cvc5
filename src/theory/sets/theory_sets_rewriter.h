@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Kshitij Bansal, Andrew Reynolds, Andres Noetzli
+ *   Kshitij Bansal, Mudathir Mohamed, Andrew Reynolds
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -20,7 +20,7 @@
 
 #include "theory/rewriter.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace sets {
 
@@ -74,10 +74,30 @@ private:
    * Returns true if elementTerm is in setTerm, where both terms are constants.
    */
   bool checkConstantMembership(TNode elementTerm, TNode setTerm);
+ /**
+  *  rewrites for n include:
+  *  - (set.map f (as set.empty (Set T1)) = (as set.empty (Set T2))
+  *  - (set.map f (set.singleton x)) = (set.singleton (apply f x))
+  *  - (set.map f (set.union A B)) =
+  *       (set.union (set.map f A) (set.map f B))
+  *  where f: T1 -> T2
+  */
+ RewriteResponse postRewriteMap(TNode n);
+
+ /**
+  *  rewrites for n include:
+  *  - (set.filter p (as set.empty (Set T)) = (as set.empty (Set T))
+  *  - (set.filter p (set.singleton x)) =
+  *       (ite (p x) (set.singleton x) (as set.empty (Set T)))
+  *  - (set.filter p (set.union A B)) =
+  *       (set.union (set.filter p A) (set.filter p B))
+  *  where p: T -> Bool
+  */
+ RewriteResponse postRewriteFilter(TNode n);
 }; /* class TheorySetsRewriter */
 
 }  // namespace sets
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__SETS__THEORY_SETS_REWRITER_H */

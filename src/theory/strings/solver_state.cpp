@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Tianyi Liang, Mathias Preiner
+ *   Andrew Reynolds, Gereon Kremer, Tianyi Liang
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -22,9 +22,9 @@
 
 using namespace std;
 using namespace cvc5::context;
-using namespace cvc5::kind;
+using namespace cvc5::internal::kind;
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace strings {
 
@@ -34,7 +34,7 @@ SolverState::SolverState(Env& env, Valuation& v)
       d_pendingConflictSet(env.getContext(), false),
       d_pendingConflict(InferenceId::UNKNOWN)
 {
-  d_zero = NodeManager::currentNM()->mkConst(Rational(0));
+  d_zero = NodeManager::currentNM()->mkConstInt(Rational(0));
   d_false = NodeManager::currentNM()->mkConst(false);
 }
 
@@ -77,7 +77,8 @@ TheoryModel* SolverState::getModel() { return d_valuation.getModel(); }
 Node SolverState::getLengthExp(Node t, std::vector<Node>& exp, Node te)
 {
   Assert(areEqual(t, te));
-  Node lt = utils::mkNLength(te);
+  Node lt = NodeManager::currentNM()->mkNode(STRING_LENGTH, t);
+  lt = rewrite(lt);
   if (hasTerm(lt))
   {
     // use own length if it exists, leads to shorter explanation
@@ -94,14 +95,13 @@ Node SolverState::getLengthExp(Node t, std::vector<Node>& exp, Node te)
   {
     lengthTerm = lengthTerm[0];
   }
-  Debug("strings") << "SolverState::getLengthTerm " << t << " is " << lengthTerm
+  Trace("strings") << "SolverState::getLengthTerm " << t << " is " << lengthTerm
                    << std::endl;
   if (te != lengthTerm)
   {
     exp.push_back(te.eqNode(lengthTerm));
   }
-  return Rewriter::rewrite(
-      NodeManager::currentNM()->mkNode(STRING_LENGTH, lengthTerm));
+  return rewrite(NodeManager::currentNM()->mkNode(STRING_LENGTH, lengthTerm));
 }
 
 Node SolverState::getLength(Node t, std::vector<Node>& exp)
@@ -117,7 +117,8 @@ Node SolverState::explainNonEmpty(Node s)
   {
     return s.eqNode(emp).negate();
   }
-  Node sLen = utils::mkNLength(s);
+  Node sLen = NodeManager::currentNM()->mkNode(STRING_LENGTH, s);
+  sLen = rewrite(sLen);
   if (areDisequal(sLen, d_zero))
   {
     return sLen.eqNode(d_zero).negate();
@@ -229,4 +230,4 @@ void SolverState::separateByLength(
 
 }  // namespace strings
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

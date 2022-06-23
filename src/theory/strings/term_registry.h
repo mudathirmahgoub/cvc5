@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Andres Noetzli, Tianyi Liang
+ *   Andrew Reynolds, Andres Noetzli, Mathias Preiner
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -31,8 +31,11 @@
 #include "theory/strings/solver_state.h"
 #include "theory/uf/equality_engine.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
+
+class Theory;
+
 namespace strings {
 
 class InferenceManager;
@@ -54,6 +57,7 @@ class TermRegistry : protected EnvObj
 
  public:
   TermRegistry(Env& env,
+               Theory& t,
                SolverState& s,
                SequencesStatistics& statistics,
                ProofNodeManager* pnm);
@@ -160,8 +164,8 @@ class TermRegistry : protected EnvObj
    * @return true if any seq.nth or seq.update terms have been preregistered
    */
   bool hasSeqUpdate() const;
-  /** is handled update */
-  bool isHandledUpdate(Node n);
+  /** is handled update or substring */
+  bool isHandledUpdateOrSubstr(Node n);
   /** get base */
   Node getUpdateBase(Node n);
   //---------------------------- end queries
@@ -213,7 +217,28 @@ class TermRegistry : protected EnvObj
    */
   void removeProxyEqs(Node n, std::vector<Node>& unproc) const;
   //---------------------------- end proxy variables
+  /**
+   * Returns the rewritten form of the string concatenation of n1 and n2.
+   */
+  Node mkNConcat(Node n1, Node n2) const;
+
+  /**
+   * Returns the rewritten form of the string concatenation of n1, n2 and n3.
+   */
+  Node mkNConcat(Node n1, Node n2, Node n3) const;
+
+  /**
+   * Returns the rewritten form of the concatentation from vector c of
+   * (string-like) type tn.
+   */
+  Node mkNConcat(const std::vector<Node>& c, TypeNode tn) const;
+
+  /** compute relevant terms of the theory of strings */
+  void getRelevantTermSet(std::set<Node>& termSet);
+
  private:
+  /** Reference to theory of strings, for computing relevant terms */
+  Theory& d_theory;
   /** Common constants */
   Node d_zero;
   Node d_one;
@@ -298,6 +323,6 @@ class TermRegistry : protected EnvObj
 
 }  // namespace strings
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__STRINGS__TERM_REGISTRY_H */

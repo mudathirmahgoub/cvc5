@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Andres Noetzli, Tim King
+ *   Aina Niemetz, Andrew Reynolds, Tim King
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -24,15 +24,12 @@
 #include "expr/node_manager.h"
 #include "options/options.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 class SolverEngine;
 class StatisticsRegistry;
 
 namespace smt {
-
-SolverEngine* currentSolverEngine();
-bool solverEngineInScope();
 
 /** get the current resource manager */
 ResourceManager* currentResourceManager();
@@ -56,6 +53,6 @@ class SolverEngineScope
 }; /* class SolverEngineScope */
 
 }  // namespace smt
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif /* CVC5__SMT__SMT_ENGINE_SCOPE_H */

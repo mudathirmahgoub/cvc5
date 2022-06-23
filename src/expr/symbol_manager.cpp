@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Aina Niemetz
+ *   Andrew Reynolds, Mathias Preiner, Andres Noetzli
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -28,10 +28,11 @@ namespace cvc5 {
 
 class SymbolManager::Implementation
 {
-  using TermStringMap = CDHashMap<api::Term, std::string, std::hash<api::Term>>;
-  using TermSet = CDHashSet<api::Term, std::hash<api::Term>>;
-  using SortList = CDList<api::Sort>;
-  using TermList = CDList<api::Term>;
+  using TermStringMap =
+      CDHashMap<cvc5::Term, std::string, std::hash<cvc5::Term>>;
+  using TermSet = CDHashSet<cvc5::Term, std::hash<cvc5::Term>>;
+  using SortList = CDList<cvc5::Sort>;
+  using TermList = CDList<cvc5::Term>;
 
  public:
   Implementation()
@@ -41,7 +42,8 @@ class SymbolManager::Implementation
         d_declareSorts(&d_context),
         d_declareTerms(&d_context),
         d_funToSynth(&d_context),
-        d_hasPushedScope(&d_context, false)
+        d_hasPushedScope(&d_context, false),
+        d_lastSynthName(&d_context)
   {
     // use an outermost push, to be able to clear all definitions
     d_context.push();
@@ -49,31 +51,32 @@ class SymbolManager::Implementation
 
   ~Implementation() { d_context.pop(); }
   /** set expression name */
-  NamingResult setExpressionName(api::Term t,
+  NamingResult setExpressionName(cvc5::Term t,
                                  const std::string& name,
                                  bool isAssertion = false);
   /** get expression name */
-  bool getExpressionName(api::Term t,
+  bool getExpressionName(cvc5::Term t,
                          std::string& name,
                          bool isAssertion = false) const;
   /** get expression names */
-  void getExpressionNames(const std::vector<api::Term>& ts,
+  void getExpressionNames(const std::vector<cvc5::Term>& ts,
                           std::vector<std::string>& names,
                           bool areAssertions = false) const;
   /** get expression names */
-  std::map<api::Term, std::string> getExpressionNames(bool areAssertions) const;
+  std::map<cvc5::Term, std::string> getExpressionNames(
+      bool areAssertions) const;
   /** get model declare sorts */
-  std::vector<api::Sort> getModelDeclareSorts() const;
+  std::vector<cvc5::Sort> getModelDeclareSorts() const;
   /** get model declare terms */
-  std::vector<api::Term> getModelDeclareTerms() const;
+  std::vector<cvc5::Term> getModelDeclareTerms() const;
   /** get functions to synthesize */
-  std::vector<api::Term> getFunctionsToSynthesize() const;
+  std::vector<cvc5::Term> getFunctionsToSynthesize() const;
   /** Add declared sort to the list of model declarations. */
-  void addModelDeclarationSort(api::Sort s);
+  void addModelDeclarationSort(cvc5::Sort s);
   /** Add declared term to the list of model declarations. */
-  void addModelDeclarationTerm(api::Term t);
+  void addModelDeclarationTerm(cvc5::Term t);
   /** Add function to the list of functions to synthesize. */
-  void addFunctionToSynthesize(api::Term t);
+  void addFunctionToSynthesize(cvc5::Term t);
   /** reset */
   void reset();
   /** reset assertions */
@@ -84,6 +87,10 @@ class SymbolManager::Implementation
   void popScope();
   /** Have we pushed a scope (e.g. let or quantifier) in the current context? */
   bool hasPushedScope() const;
+  /** Set the last abduct-to-synthesize had the given name. */
+  void setLastSynthName(const std::string& name);
+  /** Get the name of the last abduct-to-synthesize */
+  const std::string& getLastSynthName() const;
 
  private:
   /** The context manager for the scope maps. */
@@ -102,10 +109,12 @@ class SymbolManager::Implementation
    * Have we pushed a scope (e.g. a let or quantifier) in the current context?
    */
   CDO<bool> d_hasPushedScope;
+  /** The last abduct or interpolant to synthesize name */
+  CDO<std::string> d_lastSynthName;
 };
 
 NamingResult SymbolManager::Implementation::setExpressionName(
-    api::Term t, const std::string& name, bool isAssertion)
+    cvc5::Term t, const std::string& name, bool isAssertion)
 {
   Trace("sym-manager") << "SymbolManager: set expression name: " << t << " -> "
                        << name << ", isAssertion=" << isAssertion << std::endl;
@@ -128,7 +137,7 @@ NamingResult SymbolManager::Implementation::setExpressionName(
   return NamingResult::SUCCESS;
 }
 
-bool SymbolManager::Implementation::getExpressionName(api::Term t,
+bool SymbolManager::Implementation::getExpressionName(cvc5::Term t,
                                                       std::string& name,
                                                       bool isAssertion) const
 {
@@ -150,11 +159,11 @@ bool SymbolManager::Implementation::getExpressionName(api::Term t,
 }
 
 void SymbolManager::Implementation::getExpressionNames(
-    const std::vector<api::Term>& ts,
+    const std::vector<cvc5::Term>& ts,
     std::vector<std::string>& names,
     bool areAssertions) const
 {
-  for (const api::Term& t : ts)
+  for (const cvc5::Term& t : ts)
   {
     std::string name;
     if (getExpressionName(t, name, areAssertions))
@@ -164,16 +173,16 @@ void SymbolManager::Implementation::getExpressionNames(
   }
 }
 
-std::map<api::Term, std::string>
+std::map<cvc5::Term, std::string>
 SymbolManager::Implementation::getExpressionNames(bool areAssertions) const
 {
-  std::map<api::Term, std::string> emap;
+  std::map<cvc5::Term, std::string> emap;
   for (TermStringMap::const_iterator it = d_names.begin(),
                                      itend = d_names.end();
        it != itend;
        ++it)
   {
-    api::Term t = (*it).first;
+    cvc5::Term t = (*it).first;
     if (areAssertions && d_namedAsserts.find(t) == d_namedAsserts.end())
     {
       continue;
@@ -183,43 +192,43 @@ SymbolManager::Implementation::getExpressionNames(bool areAssertions) const
   return emap;
 }
 
-std::vector<api::Sort> SymbolManager::Implementation::getModelDeclareSorts()
+std::vector<cvc5::Sort> SymbolManager::Implementation::getModelDeclareSorts()
     const
 {
-  std::vector<api::Sort> declareSorts(d_declareSorts.begin(),
-                                      d_declareSorts.end());
+  std::vector<cvc5::Sort> declareSorts(d_declareSorts.begin(),
+                                       d_declareSorts.end());
   return declareSorts;
 }
 
-std::vector<api::Term> SymbolManager::Implementation::getModelDeclareTerms()
+std::vector<cvc5::Term> SymbolManager::Implementation::getModelDeclareTerms()
     const
 {
-  std::vector<api::Term> declareTerms(d_declareTerms.begin(),
-                                      d_declareTerms.end());
+  std::vector<cvc5::Term> declareTerms(d_declareTerms.begin(),
+                                       d_declareTerms.end());
   return declareTerms;
 }
 
-std::vector<api::Term> SymbolManager::Implementation::getFunctionsToSynthesize()
-    const
+std::vector<cvc5::Term>
+SymbolManager::Implementation::getFunctionsToSynthesize() const
 {
-  return std::vector<api::Term>(d_funToSynth.begin(), d_funToSynth.end());
+  return std::vector<cvc5::Term>(d_funToSynth.begin(), d_funToSynth.end());
 }
 
-void SymbolManager::Implementation::addModelDeclarationSort(api::Sort s)
+void SymbolManager::Implementation::addModelDeclarationSort(cvc5::Sort s)
 {
   Trace("sym-manager") << "SymbolManager: addModelDeclarationSort " << s
                        << std::endl;
   d_declareSorts.push_back(s);
 }
 
-void SymbolManager::Implementation::addModelDeclarationTerm(api::Term t)
+void SymbolManager::Implementation::addModelDeclarationTerm(cvc5::Term t)
 {
   Trace("sym-manager") << "SymbolManager: addModelDeclarationTerm " << t
                        << std::endl;
   d_declareTerms.push_back(t);
 }
 
-void SymbolManager::Implementation::addFunctionToSynthesize(api::Term f)
+void SymbolManager::Implementation::addFunctionToSynthesize(cvc5::Term f)
 {
   Trace("sym-manager") << "SymbolManager: addFunctionToSynthesize " << f
                        << std::endl;
@@ -244,7 +253,7 @@ void SymbolManager::Implementation::popScope()
   Trace("sym-manager") << "SymbolManager: popScope" << std::endl;
   if (d_context.getLevel() == 0)
   {
-    throw ScopeException();
+    throw internal::ScopeException();
   }
   d_context.pop();
   Trace("sym-manager-debug")
@@ -254,6 +263,16 @@ void SymbolManager::Implementation::popScope()
 bool SymbolManager::Implementation::hasPushedScope() const
 {
   return d_hasPushedScope.get();
+}
+
+void SymbolManager::Implementation::setLastSynthName(const std::string& name)
+{
+  d_lastSynthName = name;
+}
+
+const std::string& SymbolManager::Implementation::getLastSynthName() const
+{
+  return d_lastSynthName.get();
 }
 
 void SymbolManager::Implementation::reset()
@@ -280,7 +299,7 @@ void SymbolManager::Implementation::resetAssertions()
 
 // ---------------------------------------------- SymbolManager
 
-SymbolManager::SymbolManager(api::Solver* s)
+SymbolManager::SymbolManager(cvc5::Solver* s)
     : d_solver(s),
       d_implementation(new SymbolManager::Implementation()),
       d_globalDeclarations(false)
@@ -289,59 +308,62 @@ SymbolManager::SymbolManager(api::Solver* s)
 
 SymbolManager::~SymbolManager() {}
 
-SymbolTable* SymbolManager::getSymbolTable() { return &d_symtabAllocated; }
+internal::SymbolTable* SymbolManager::getSymbolTable()
+{
+  return &d_symtabAllocated;
+}
 
-NamingResult SymbolManager::setExpressionName(api::Term t,
+NamingResult SymbolManager::setExpressionName(cvc5::Term t,
                                               const std::string& name,
                                               bool isAssertion)
 {
   return d_implementation->setExpressionName(t, name, isAssertion);
 }
 
-bool SymbolManager::getExpressionName(api::Term t,
+bool SymbolManager::getExpressionName(cvc5::Term t,
                                       std::string& name,
                                       bool isAssertion) const
 {
   return d_implementation->getExpressionName(t, name, isAssertion);
 }
 
-void SymbolManager::getExpressionNames(const std::vector<api::Term>& ts,
+void SymbolManager::getExpressionNames(const std::vector<cvc5::Term>& ts,
                                        std::vector<std::string>& names,
                                        bool areAssertions) const
 {
   return d_implementation->getExpressionNames(ts, names, areAssertions);
 }
 
-std::map<api::Term, std::string> SymbolManager::getExpressionNames(
+std::map<cvc5::Term, std::string> SymbolManager::getExpressionNames(
     bool areAssertions) const
 {
   return d_implementation->getExpressionNames(areAssertions);
 }
-std::vector<api::Sort> SymbolManager::getModelDeclareSorts() const
+std::vector<cvc5::Sort> SymbolManager::getModelDeclareSorts() const
 {
   return d_implementation->getModelDeclareSorts();
 }
-std::vector<api::Term> SymbolManager::getModelDeclareTerms() const
+std::vector<cvc5::Term> SymbolManager::getModelDeclareTerms() const
 {
   return d_implementation->getModelDeclareTerms();
 }
 
-std::vector<api::Term> SymbolManager::getFunctionsToSynthesize() const
+std::vector<cvc5::Term> SymbolManager::getFunctionsToSynthesize() const
 {
   return d_implementation->getFunctionsToSynthesize();
 }
 
-void SymbolManager::addModelDeclarationSort(api::Sort s)
+void SymbolManager::addModelDeclarationSort(cvc5::Sort s)
 {
   d_implementation->addModelDeclarationSort(s);
 }
 
-void SymbolManager::addModelDeclarationTerm(api::Term t)
+void SymbolManager::addModelDeclarationTerm(cvc5::Term t)
 {
   d_implementation->addModelDeclarationTerm(t);
 }
 
-void SymbolManager::addFunctionToSynthesize(api::Term f)
+void SymbolManager::addFunctionToSynthesize(cvc5::Term f)
 {
   d_implementation->addFunctionToSynthesize(f);
 }
@@ -388,8 +410,19 @@ bool SymbolManager::getGlobalDeclarations() const
   return d_globalDeclarations;
 }
 
+void SymbolManager::setLastSynthName(const std::string& name)
+{
+  d_implementation->setLastSynthName(name);
+}
+
+const std::string& SymbolManager::getLastSynthName() const
+{
+  return d_implementation->getLastSynthName();
+}
+
 void SymbolManager::reset()
 {
+  // reset resets the symbol table even when global declarations are true
   d_symtabAllocated.reset();
   d_implementation->reset();
 }
@@ -397,7 +430,10 @@ void SymbolManager::reset()
 void SymbolManager::resetAssertions()
 {
   d_implementation->resetAssertions();
-  d_symtabAllocated.resetAssertions();
+  if (!d_globalDeclarations)
+  {
+    d_symtabAllocated.resetAssertions();
+  }
 }
 
 }  // namespace cvc5

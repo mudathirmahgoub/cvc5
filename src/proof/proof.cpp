@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Aina Niemetz
+ *   Andrew Reynolds, Mathias Preiner, Haniel Barbosa
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -19,9 +19,9 @@
 #include "proof/proof_node.h"
 #include "proof/proof_node_manager.h"
 
-using namespace cvc5::kind;
+using namespace cvc5::internal::kind;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 CDProof::CDProof(ProofNodeManager* pnm,
                  context::Context* c,
@@ -287,6 +287,24 @@ bool CDProof::addProof(std::shared_ptr<ProofNode> pn,
 {
   if (!doCopy)
   {
+    // If we are automatically managing symmetry, we strip off SYMM steps.
+    // This avoids cyclic proofs in cases where P and (SYMM P) are added as
+    // proofs to the same CDProof.
+    if (d_autoSymm)
+    {
+      std::vector<std::shared_ptr<ProofNode>> processed;
+      while (pn->getRule() == PfRule::SYMM)
+      {
+        pn = pn->getChildren()[0];
+        if (std::find(processed.begin(), processed.end(), pn)
+            != processed.end())
+        {
+          Unreachable() << "Cyclic proof encountered when cancelling symmetry "
+                           "steps during addProof";
+        }
+        processed.push_back(pn);
+      }
+    }
     // If we aren't doing a deep copy, we either store pn or link its top
     // node into the existing pointer
     Node curFact = pn->getResult();
@@ -390,6 +408,8 @@ bool CDProof::hasStep(Node fact)
   return false;
 }
 
+size_t CDProof::getNumProofNodes() const { return d_nodes.size(); }
+
 ProofNodeManager* CDProof::getManager() const { return d_manager; }
 
 bool CDProof::shouldOverwrite(ProofNode* pn, PfRule newId, CDPOverwrite opol)
@@ -465,4 +485,4 @@ Node CDProof::getSymmFact(TNode f)
 
 std::string CDProof::identify() const { return d_name; }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

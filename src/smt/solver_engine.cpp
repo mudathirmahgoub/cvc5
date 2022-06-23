@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Morgan Deters, Abdalrhman Mohamed
+ *   Andrew Reynolds, Aina Niemetz, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -22,6 +22,7 @@
 #include "decision/decision_engine.h"
 #include "expr/bound_var_manager.h"
 #include "expr/node.h"
+#include "expr/node_algorithm.h"
 #include "options/base_options.h"
 #include "options/expr_options.h"
 #include "options/language.h"
@@ -40,15 +41,12 @@
 #include "smt/abstract_values.h"
 #include "smt/assertions.h"
 #include "smt/check_models.h"
-#include "smt/dump.h"
-#include "smt/dump_manager.h"
 #include "smt/env.h"
 #include "smt/interpolation_solver.h"
 #include "smt/listeners.h"
 #include "smt/logic_exception.h"
 #include "smt/model_blocker.h"
 #include "smt/model_core_builder.h"
-#include "smt/node_command.h"
 #include "smt/preprocessor.h"
 #include "smt/proof_manager.h"
 #include "smt/quant_elim_solver.h"
@@ -60,6 +58,7 @@
 #include "smt/sygus_solver.h"
 #include "smt/unsat_core_manager.h"
 #include "theory/quantifiers/instantiation_list.h"
+#include "theory/quantifiers/oracle_engine.h"
 #include "theory/quantifiers/quantifiers_attributes.h"
 #include "theory/quantifiers_engine.h"
 #include "theory/rewriter.h"
@@ -76,21 +75,20 @@
 #include "base/configuration_private.h"
 
 using namespace std;
-using namespace cvc5::smt;
-using namespace cvc5::preprocessing;
-using namespace cvc5::prop;
+using namespace cvc5::internal::smt;
+using namespace cvc5::internal::preprocessing;
+using namespace cvc5::internal::prop;
 using namespace cvc5::context;
-using namespace cvc5::theory;
+using namespace cvc5::internal::theory;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 SolverEngine::SolverEngine(NodeManager* nm, const Options* optr)
     : d_env(new Env(nm, optr)),
       d_state(new SolverEngineState(*d_env.get(), *this)),
-      d_absValues(new AbstractValues(getNodeManager())),
+      d_absValues(new AbstractValues),
       d_asserts(new Assertions(*d_env.get(), *d_absValues.get())),
       d_routListener(new ResourceOutListener(*this)),
-      d_snmListener(new SmtNodeManagerListener(*getDumpManager(), d_outMgr)),
       d_smtSolver(nullptr),
       d_checkModels(nullptr),
       d_pfManager(nullptr),
@@ -101,7 +99,6 @@ SolverEngine::SolverEngine(NodeManager* nm, const Options* optr)
       d_quantElimSolver(nullptr),
       d_isInternalSubsolver(false),
       d_stats(nullptr),
-      d_outMgr(this),
       d_scope(nullptr)
 {
   // !!!!!!!!!!!!!!!!!!!!!! temporary hack: this makes the current SolverEngine
@@ -116,14 +113,12 @@ SolverEngine::SolverEngine(NodeManager* nm, const Options* optr)
   // hand, this hack breaks use cases where multiple SolverEngine objects are
   // created by the user.
   d_scope.reset(new SolverEngineScope(this));
-  // listen to node manager events
-  getNodeManager()->subscribeEvents(d_snmListener.get());
   // listen to resource out
   getResourceManager()->registerListener(d_routListener.get());
   // make statistics
   d_stats.reset(new SolverEngineStatistics());
   // make the SMT solver
-  d_smtSolver.reset(new SmtSolver(*d_env, *d_state, *d_absValues, *d_stats));
+  d_smtSolver.reset(new SmtSolver(*d_env, *d_absValues, *d_stats));
   // make the SyGuS solver
   d_sygusSolver.reset(new SygusSolver(*d_env.get(), *d_smtSolver));
   // make the quantifier elimination solver
@@ -146,11 +141,14 @@ Result SolverEngine::getStatusOfLastCommand() const
 {
   return d_state->getStatus();
 }
-context::UserContext* SolverEngine::getUserContext()
+UserContext* SolverEngine::getUserContext()
 {
   return d_env->getUserContext();
 }
-context::Context* SolverEngine::getContext() { return d_env->getContext(); }
+Context* SolverEngine::getContext()
+{
+  return d_env->getContext();
+}
 
 TheoryEngine* SolverEngine::getTheoryEngine()
 {
@@ -186,7 +184,7 @@ void SolverEngine::finishInit()
 
   // Call finish init on the set defaults module. This inializes the logic
   // and the best default options based on our heuristics.
-  SetDefaults sdefaults(d_isInternalSubsolver);
+  SetDefaults sdefaults(*d_env, d_isInternalSubsolver);
   sdefaults.setDefaults(d_env->d_logic, getOptions());
 
   if (d_env->getOptions().smt.produceProofs)
@@ -199,9 +197,9 @@ void SolverEngine::finishInit()
     // start the unsat core manager
     d_ucManager.reset(new UnsatCoreManager());
     // enable it in the assertions pipeline
-    d_asserts->setProofGenerator(pppg);
+    d_asserts->enableProofs(pppg);
     // enabled proofs in the preprocessor
-    d_smtSolver->getPreprocessor()->setProofGenerator(pppg);
+    d_smtSolver->getPreprocessor()->enableProofs(pppg);
   }
 
   Trace("smt-debug") << "SolverEngine::finishInit" << std::endl;
@@ -221,35 +219,12 @@ void SolverEngine::finishInit()
   // of context-dependent data structures
   d_state->setup();
 
-  Trace("smt-debug") << "Set up assertions..." << std::endl;
-  d_asserts->finishInit();
-
-  // dump out a set-logic command only when raw-benchmark is disabled to avoid
-  // dumping the command twice.
-  if (Dump.isOn("benchmark"))
-  {
-    LogicInfo everything;
-    everything.lock();
-    getPrinter().toStreamCmdSetInfo(
-        d_env->getDumpOut(),
-        "notes",
-        "cvc5 always dumps the most general, all-supported logic (below), as "
-        "some internals might require the use of a logic more general than "
-        "the input.");
-    getPrinter().toStreamCmdSetBenchmarkLogic(d_env->getDumpOut(),
-                                              everything.getLogicString());
-  }
-
-  // initialize the dump manager
-  getDumpManager()->finishInit();
-
   // subsolvers
   if (d_env->getOptions().smt.produceAbducts)
   {
     d_abductSolver.reset(new AbductionSolver(*d_env.get()));
   }
-  if (d_env->getOptions().smt.produceInterpols
-      != options::ProduceInterpols::NONE)
+  if (d_env->getOptions().smt.interpolants)
   {
     d_interpolSolver.reset(new InterpolationSolver(*d_env));
   }
@@ -268,9 +243,6 @@ void SolverEngine::finishInit()
 void SolverEngine::shutdown()
 {
   d_state->shutdown();
-
-  d_smtSolver->shutdown();
-
   d_env->shutdown();
 }
 
@@ -302,8 +274,6 @@ SolverEngine::~SolverEngine()
     d_smtSolver.reset(nullptr);
 
     d_stats.reset(nullptr);
-    getNodeManager()->unsubscribeEvents(d_snmListener.get());
-    d_snmListener.reset(nullptr);
     d_routListener.reset(nullptr);
     // destroy the state
     d_state.reset(nullptr);
@@ -312,7 +282,7 @@ SolverEngine::~SolverEngine()
   }
   catch (Exception& e)
   {
-    Warning() << "cvc5 threw an exception during cleanup." << endl << e << endl;
+    d_env->warning() << "cvc5 threw an exception during cleanup." << std::endl << e << std::endl;
   }
 }
 
@@ -374,39 +344,27 @@ void SolverEngine::setInfo(const std::string& key, const std::string& value)
 
   Trace("smt") << "SMT setInfo(" << key << ", " << value << ")" << endl;
 
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdSetInfo(d_env->getDumpOut(), key, value);
-  }
-
   if (key == "filename")
   {
-    d_env->d_options.driver.filename = value;
-    d_env->d_originalOptions->driver.filename = value;
+    d_env->d_options.writeDriver().filename = value;
     d_env->getStatisticsRegistry().registerValue<std::string>(
         "driver::filename", value);
   }
   else if (key == "smt-lib-version"
            && !getOptions().base.inputLanguageWasSetByUser)
   {
-    Language ilang = Language::LANG_SMTLIB_V2_6;
-
     if (value != "2" && value != "2.6")
     {
-      Warning() << "SMT-LIB version " << value
+      d_env->warning() << "SMT-LIB version " << value
                 << " unsupported, defaulting to language (and semantics of) "
                    "SMT-LIB 2.6\n";
     }
-    getOptions().base.inputLanguage = ilang;
+    getOptions().writeBase().inputLanguage = Language::LANG_SMTLIB_V2_6;
     // also update the output language
-    if (!getOptions().base.outputLanguageWasSetByUser)
+    if (!getOptions().printer.outputLanguageWasSetByUser)
     {
-      Language olang = ilang;
-      if (d_env->getOptions().base.outputLanguage != olang)
-      {
-        getOptions().base.outputLanguage = olang;
-        *d_env->getOptions().base.out << language::SetLanguage(olang);
-      }
+      setOption("output-language", "smtlib2.6");
+      getOptions().writePrinter().outputLanguageWasSetByUser = false;
     }
   }
   else if (key == "status")
@@ -461,7 +419,7 @@ std::string SolverEngine::getInfo(const std::string& key) const
   {
     // sat | unsat | unknown
     Result status = d_state->getStatus();
-    switch (status.asSatisfiabilityResult().isSat())
+    switch (status.getStatus())
     {
       case Result::SAT: return "sat";
       case Result::UNSAT: return "unsat";
@@ -478,7 +436,7 @@ std::string SolverEngine::getInfo(const std::string& key) const
     if (!status.isNull() && status.isUnknown())
     {
       std::stringstream ss;
-      ss << status.whyUnknown();
+      ss << status.getUnknownExplanation();
       std::string s = ss.str();
       transform(s.begin(), s.end(), s.begin(), ::tolower);
       return s;
@@ -541,7 +499,7 @@ void SolverEngine::debugCheckFunctionBody(Node formula,
   if (formals.size() > 0)
   {
     TypeNode rangeType = funcType.getRangeType();
-    if (!formulaType.isComparableTo(rangeType))
+    if (formulaType != rangeType)
     {
       stringstream ss;
       ss << "Type of defined function does not match its declaration\n"
@@ -554,7 +512,7 @@ void SolverEngine::debugCheckFunctionBody(Node formula,
   }
   else
   {
-    if (!formulaType.isComparableTo(funcType))
+    if (formulaType != funcType)
     {
       stringstream ss;
       ss << "Declared type of defined constant does not match its definition\n"
@@ -577,14 +535,6 @@ void SolverEngine::defineFunction(Node func,
   d_state->doPendingPops();
   Trace("smt") << "SMT defineFunction(" << func << ")" << endl;
   debugCheckFormals(formals, func);
-
-  stringstream ss;
-  ss << language::SetLanguage(
-      language::SetLanguage::getLanguage(Dump.getStream()))
-     << func;
-
-  DefineFunctionNodeCommand nc(ss.str(), func, formals, formula);
-  getDumpManager()->addToDump(nc, "declarations");
 
   // type check body
   debugCheckFunctionBody(formula, formals, func);
@@ -686,15 +636,6 @@ void SolverEngine::defineFunctionRec(Node func,
   defineFunctionsRec(funcs, formals_multi, formulas, global);
 }
 
-Result SolverEngine::quickCheck()
-{
-  Assert(d_state->isFullyInited());
-  Trace("smt") << "SMT quickCheck()" << endl;
-  const std::string& filename = d_env->getOptions().driver.filename;
-  return Result(
-      Result::ENTAILMENT_UNKNOWN, Result::REQUIRES_FULL_CHECK, filename);
-}
-
 TheoryModel* SolverEngine::getAvailableModel(const char* c) const
 {
   if (!d_env->getOptions().theory.assignFunctionValues)
@@ -732,6 +673,20 @@ TheoryModel* SolverEngine::getAvailableModel(const char* c) const
        << " since model is not available. Perhaps the most recent call to "
           "check-sat was interrupted?";
     throw RecoverableModalException(ss.str().c_str());
+  }
+  // compute the model core if necessary and not done so already
+  const Options& opts = d_env->getOptions();
+  if (opts.smt.modelCoresMode != options::ModelCoresMode::NONE
+      && !m->isUsingModelCore())
+  {
+    // If we enabled model cores, we compute a model core for m based on our
+    // (expanded) assertions using the model core builder utility. Notice that
+    // we get the assertions using the getAssertionsInternal, which does not
+    // impact whether we are in "sat" mode
+    std::vector<Node> asserts = getAssertionsInternal();
+    d_smtSolver->getPreprocessor()->expandDefinitions(asserts);
+    ModelCoreBuilder mcb(*d_env.get());
+    mcb.setModelCore(asserts, m, opts.smt.modelCoresMode);
   }
 
   return m;
@@ -792,130 +747,85 @@ Result SolverEngine::checkSat()
 
 Result SolverEngine::checkSat(const Node& assumption)
 {
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdCheckSatAssuming(d_env->getDumpOut(), {assumption});
-  }
+  ensureWellFormedTerm(assumption, "checkSat");
   std::vector<Node> assump;
   if (!assumption.isNull())
   {
     assump.push_back(assumption);
   }
-  return checkSatInternal(assump, false);
+  return checkSatInternal(assump);
 }
 
 Result SolverEngine::checkSat(const std::vector<Node>& assumptions)
 {
-  if (Dump.isOn("benchmark"))
-  {
-    if (assumptions.empty())
-    {
-      getPrinter().toStreamCmdCheckSat(d_env->getDumpOut());
-    }
-    else
-    {
-      getPrinter().toStreamCmdCheckSatAssuming(d_env->getDumpOut(),
-                                               assumptions);
-    }
-  }
-  return checkSatInternal(assumptions, false);
+  ensureWellFormedTerms(assumptions, "checkSat");
+  return checkSatInternal(assumptions);
 }
 
-Result SolverEngine::checkEntailed(const Node& node)
+Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
 {
-  if (Dump.isOn("benchmark"))
+  SolverEngineScope smts(this);
+  finishInit();
+
+  Trace("smt") << "SolverEngine::checkSat(" << assumptions << ")" << endl;
+  // update the state to indicate we are about to run a check-sat
+  bool hasAssumptions = !assumptions.empty();
+  d_state->notifyCheckSat(hasAssumptions);
+
+  // state should be fully ready now
+  Assert(d_state->isFullyReady());
+
+  // check the satisfiability with the solver object
+  Assertions& as = *d_asserts.get();
+  Result r = d_smtSolver->checkSatisfiability(as, assumptions);
+
+  // If the result is unknown, we may optionally do a "deep restart" where
+  // the members of the SMT solver are reconstructed and given the
+  // preprocessed input formulas (plus additional learned formulas). Notice
+  // that assumptions are pushed to the preprocessed input in the above call, so
+  // any additional satisfiability checks use an empty set of assumptions.
+  while (r.getStatus() == Result::UNKNOWN && deepRestart())
   {
-    getPrinter().toStreamCmdQuery(d_env->getDumpOut(), node);
+    Trace("smt") << "SolverEngine::checkSat after deep restart" << std::endl;
+    r = d_smtSolver->checkSatisfiability(as, {});
   }
-  return checkSatInternal(
-             node.isNull() ? std::vector<Node>() : std::vector<Node>{node},
-             true)
-      .asEntailmentResult();
-}
 
-Result SolverEngine::checkEntailed(const std::vector<Node>& nodes)
-{
-  return checkSatInternal(nodes, true).asEntailmentResult();
-}
+  Trace("smt") << "SolverEngine::checkSat(" << assumptions << ") => " << r
+               << endl;
+  // notify our state of the check-sat result
+  d_state->notifyCheckSatResult(hasAssumptions, r);
 
-Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions,
-                                      bool isEntailmentCheck)
-{
-  try
+  // Check that SAT results generate a model correctly.
+  if (d_env->getOptions().smt.checkModels)
   {
-    SolverEngineScope smts(this);
-    finishInit();
-
-    Trace("smt") << "SolverEngine::"
-                 << (isEntailmentCheck ? "checkEntailed" : "checkSat") << "("
-                 << assumptions << ")" << endl;
-    // check the satisfiability with the solver object
-    Result r = d_smtSolver->checkSatisfiability(
-        *d_asserts.get(), assumptions, isEntailmentCheck);
-
-    Trace("smt") << "SolverEngine::"
-                 << (isEntailmentCheck ? "query" : "checkSat") << "("
-                 << assumptions << ") => " << r << endl;
-
-    // Check that SAT results generate a model correctly.
-    if (d_env->getOptions().smt.checkModels)
+    if (r.getStatus() == Result::SAT)
     {
-      if (r.asSatisfiabilityResult().isSat() == Result::SAT)
-      {
-        checkModel();
-      }
+      checkModel();
     }
-    // Check that UNSAT results generate a proof correctly.
-    if (d_env->getOptions().smt.checkProofs
-        || d_env->getOptions().proof.proofCheck
-               == options::ProofCheckMode::EAGER)
-    {
-      if (r.asSatisfiabilityResult().isSat() == Result::UNSAT)
-      {
-        if ((d_env->getOptions().smt.checkProofs
-             || d_env->getOptions().proof.proofCheck
-                    == options::ProofCheckMode::EAGER)
-            && !d_env->getOptions().smt.produceProofs)
-        {
-          throw ModalException(
-              "Cannot check-proofs because proofs were disabled.");
-        }
-        checkProof();
-      }
-    }
-    // Check that UNSAT results generate an unsat core correctly.
-    if (d_env->getOptions().smt.checkUnsatCores)
-    {
-      if (r.asSatisfiabilityResult().isSat() == Result::UNSAT)
-      {
-        TimerStat::CodeTimer checkUnsatCoreTimer(d_stats->d_checkUnsatCoreTime);
-        checkUnsatCore();
-      }
-    }
-    if (d_env->getOptions().base.statisticsEveryQuery)
-    {
-      printStatisticsDiff();
-    }
-    return r;
   }
-  catch (UnsafeInterruptException& e)
+  // Check that UNSAT results generate a proof correctly.
+  if (d_env->getOptions().smt.checkProofs)
   {
-    AlwaysAssert(getResourceManager()->out());
-    // Notice that we do not notify the state of this result. If we wanted to
-    // make the solver resume a working state after an interupt, then we would
-    // implement a different callback and use it here, e.g.
-    // d_state.notifyCheckSatInterupt.
-    Result::UnknownExplanation why = getResourceManager()->outOfResources()
-                                         ? Result::RESOURCEOUT
-                                         : Result::TIMEOUT;
-
-    if (d_env->getOptions().base.statisticsEveryQuery)
+    if (r.getStatus() == Result::UNSAT)
     {
-      printStatisticsDiff();
+      checkProof();
     }
-    return Result(
-        Result::SAT_UNKNOWN, why, d_env->getOptions().driver.filename);
   }
+  // Check that UNSAT results generate an unsat core correctly.
+  if (d_env->getOptions().smt.checkUnsatCores)
+  {
+    if (r.getStatus() == Result::UNSAT)
+    {
+      TimerStat::CodeTimer checkUnsatCoreTimer(d_stats->d_checkUnsatCoreTime);
+      checkUnsatCore();
+    }
+  }
+
+  if (d_env->getOptions().base.statisticsEveryQuery)
+  {
+    printStatisticsDiff();
+  }
+  return r;
 }
 
 std::vector<Node> SolverEngine::getUnsatAssumptions(void)
@@ -935,10 +845,6 @@ std::vector<Node> SolverEngine::getUnsatAssumptions(void)
         "UNSAT/ENTAILED.");
   }
   finishInit();
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetUnsatAssumptions(d_env->getDumpOut());
-  }
   UnsatCore core = getUnsatCoreInternal();
   std::vector<Node> res;
   std::vector<Node>& assumps = d_asserts->getAssumptions();
@@ -952,20 +858,26 @@ std::vector<Node> SolverEngine::getUnsatAssumptions(void)
   return res;
 }
 
-Result SolverEngine::assertFormula(const Node& formula)
+void SolverEngine::assertFormula(const Node& formula)
 {
   SolverEngineScope smts(this);
   finishInit();
   d_state->doPendingPops();
+  ensureWellFormedTerm(formula, "assertFormula");
+  assertFormulaInternal(formula);
+}
 
+void SolverEngine::assertFormulaInternal(const Node& formula)
+{
+  // as an optimization we do not check whether formula is well-formed here, and
+  // defer this check for certain cases within the assertions module.
   Trace("smt") << "SolverEngine::assertFormula(" << formula << ")" << endl;
 
   // Substitute out any abstract values in ex
   Node n = d_absValues->substituteAbstractValues(formula);
 
   d_asserts->assertFormula(n);
-  return quickCheck().asEntailmentResult();
-} /* SolverEngine::assertFormula() */
+}
 
 /*
    --------------------------------------------------------------------------
@@ -1015,11 +927,19 @@ void SolverEngine::assertSygusInvConstraint(Node inv,
   d_sygusSolver->assertSygusInvConstraint(inv, pre, trans, post);
 }
 
-Result SolverEngine::checkSynth()
+SynthResult SolverEngine::checkSynth(bool isNext)
 {
   SolverEngineScope smts(this);
   finishInit();
-  return d_sygusSolver->checkSynth(*d_asserts);
+  if (isNext && d_state->getMode() != SmtMode::SYNTH)
+  {
+    throw RecoverableModalException(
+        "Cannot check-synth-next unless immediately preceded by a successful "
+        "call to check-synth(-next).");
+  }
+  SynthResult r = d_sygusSolver->checkSynth(*d_asserts, isNext);
+  d_state->notifyCheckSynthResult(r);
+  return r;
 }
 
 /*
@@ -1035,6 +955,53 @@ void SolverEngine::declarePool(const Node& p,
   finishInit();
   QuantifiersEngine* qe = getAvailableQuantifiersEngine("declareTermPool");
   qe->declarePool(p, initValue);
+}
+
+void SolverEngine::declareOracleFun(
+    Node var, std::function<std::vector<Node>(const std::vector<Node>&)> fn)
+{
+  finishInit();
+  d_state->doPendingPops();
+  QuantifiersEngine* qe = getAvailableQuantifiersEngine("declareOracleFun");
+  qe->declareOracleFun(var);
+  NodeManager* nm = NodeManager::currentNM();
+  std::vector<Node> inputs;
+  std::vector<Node> outputs;
+  TypeNode tn = var.getType();
+  Node app;
+  if (tn.isFunction())
+  {
+    const std::vector<TypeNode>& argTypes = tn.getArgTypes();
+    for (const TypeNode& t : argTypes)
+    {
+      inputs.push_back(nm->mkBoundVar(t));
+    }
+    outputs.push_back(nm->mkBoundVar(tn.getRangeType()));
+    std::vector<Node> appc;
+    appc.push_back(var);
+    appc.insert(appc.end(), inputs.begin(), inputs.end());
+    app = nm->mkNode(kind::APPLY_UF, appc);
+  }
+  else
+  {
+    outputs.push_back(nm->mkBoundVar(tn.getRangeType()));
+    app = var;
+  }
+  // makes equality assumption
+  Node assume = nm->mkNode(kind::EQUAL, app, outputs[0]);
+  // no constraints
+  Node constraint = nm->mkConst(true);
+  // make the oracle constant which carries the method implementation
+  Oracle oracle(fn);
+  Node o = NodeManager::currentNM()->mkOracle(oracle);
+  // set the attribute, which ensures we remember the method implementation for
+  // the oracle function
+  var.setAttribute(theory::OracleInterfaceAttribute(), o);
+  // define the oracle interface
+  Node q = quantifiers::OracleEngine::mkOracleInterface(
+      inputs, outputs, assume, constraint, o);
+  // assert it
+  assertFormula(q);
 }
 
 Node SolverEngine::simplify(const Node& ex)
@@ -1061,11 +1028,8 @@ Node SolverEngine::getValue(const Node& ex) const
 {
   SolverEngineScope smts(this);
 
+  ensureWellFormedTerm(ex, "get value");
   Trace("smt") << "SMT getValue(" << ex << ")" << endl;
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetValue(d_env->getDumpOut(), {ex});
-  }
   TypeNode expectedType = ex.getType();
 
   // Substitute out any abstract values in ex and expand
@@ -1093,16 +1057,17 @@ Node SolverEngine::getValue(const Node& ex) const
   Trace("smt") << "--- expected type " << expectedType << endl;
 
   // type-check the result we got
-  // Notice that lambdas have function type, which does not respect the subtype
-  // relation, so we ignore them here.
-  Assert(resultNode.isNull() || resultNode.getKind() == kind::LAMBDA
-         || resultNode.getType().isSubtypeOf(expectedType))
+  Assert(resultNode.isNull() || resultNode.getType() == expectedType)
       << "Run with -t smt for details.";
 
-  // Ensure it's a constant, or a lambda (for uninterpreted functions). This
-  // assertion only holds for models that do not have approximate values.
-  Assert(m->hasApproximations() || resultNode.getKind() == kind::LAMBDA
-         || resultNode.isConst());
+  // Ensure it's a value (constant or const-ish like real algebraic
+  // numbers), or a lambda (for uninterpreted functions). This assertion only
+  // holds for models that do not have approximate values.
+  if (!m->isValue(resultNode))
+  {
+    d_env->warning() << "Could not evaluate " << resultNode
+                     << " in getValue." << std::endl;
+  }
 
   if (d_env->getOptions().smt.abstractValues && resultNode.getType().isArray())
   {
@@ -1125,7 +1090,7 @@ std::vector<Node> SolverEngine::getValues(const std::vector<Node>& exprs) const
 
 std::vector<Node> SolverEngine::getModelDomainElements(TypeNode tn) const
 {
-  Assert(tn.isSort());
+  Assert(tn.isUninterpretedSort());
   TheoryModel* m = getAvailableModel("getModelDomainElements");
   return m->getDomainElements(tn);
 }
@@ -1141,18 +1106,6 @@ bool SolverEngine::isModelCoreSymbol(Node n)
     return true;
   }
   TheoryModel* tm = getAvailableModel("isModelCoreSymbol");
-  // compute the model core if not done so already
-  if (!tm->isUsingModelCore())
-  {
-    // If we enabled model cores, we compute a model core for m based on our
-    // (expanded) assertions using the model core builder utility. Notice that
-    // we get the assertions using the getAssertionsInternal, which does not
-    // impact whether we are in "sat" mode
-    std::vector<Node> asserts = getAssertionsInternal();
-    d_smtSolver->getPreprocessor()->expandDefinitions(asserts);
-    ModelCoreBuilder mcb(*d_env.get());
-    mcb.setModelCore(asserts, tm, opts.smt.modelCoresMode);
-  }
   return tm->isModelCoreSymbol(n);
 }
 
@@ -1201,46 +1154,33 @@ std::string SolverEngine::getModel(const std::vector<TypeNode>& declaredSorts,
   return ssm.str();
 }
 
-Result SolverEngine::blockModel()
+void SolverEngine::blockModel(modes::BlockModelsMode mode)
 {
   Trace("smt") << "SMT blockModel()" << endl;
   SolverEngineScope smts(this);
 
   finishInit();
 
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdBlockModel(d_env->getDumpOut());
-  }
-
   TheoryModel* m = getAvailableModel("block model");
-
-  if (d_env->getOptions().smt.blockModelsMode == options::BlockModelsMode::NONE)
-  {
-    std::stringstream ss;
-    ss << "Cannot block model when block-models is set to none.";
-    throw RecoverableModalException(ss.str().c_str());
-  }
 
   // get expanded assertions
   std::vector<Node> eassertsProc = getExpandedAssertions();
   ModelBlocker mb(*d_env.get());
-  Node eblocker = mb.getModelBlocker(
-      eassertsProc, m, d_env->getOptions().smt.blockModelsMode);
+  Node eblocker = mb.getModelBlocker(eassertsProc, m, mode);
   Trace("smt") << "Block formula: " << eblocker << std::endl;
-  return assertFormula(eblocker);
+  assertFormulaInternal(eblocker);
 }
 
-Result SolverEngine::blockModelValues(const std::vector<Node>& exprs)
+void SolverEngine::blockModelValues(const std::vector<Node>& exprs)
 {
   Trace("smt") << "SMT blockModelValues()" << endl;
   SolverEngineScope smts(this);
 
   finishInit();
 
-  if (Dump.isOn("benchmark"))
+  for (const Node& e : exprs)
   {
-    getPrinter().toStreamCmdBlockModelValues(d_env->getDumpOut(), exprs);
+    ensureWellFormedTerm(e, "block model values");
   }
 
   TheoryModel* m = getAvailableModel("block model values");
@@ -1250,8 +1190,8 @@ Result SolverEngine::blockModelValues(const std::vector<Node>& exprs)
   // we always do block model values mode here
   ModelBlocker mb(*d_env.get());
   Node eblocker = mb.getModelBlocker(
-      eassertsProc, m, options::BlockModelsMode::VALUES, exprs);
-  return assertFormula(eblocker);
+      eassertsProc, m, modes::BlockModelsMode::VALUES, exprs);
+  assertFormulaInternal(eblocker);
 }
 
 std::pair<Node, Node> SolverEngine::getSepHeapAndNilExpr(void)
@@ -1276,16 +1216,47 @@ std::pair<Node, Node> SolverEngine::getSepHeapAndNilExpr(void)
   return std::make_pair(heap, nil);
 }
 
-std::vector<Node> SolverEngine::getAssertionsInternal()
+std::vector<Node> SolverEngine::getAssertionsInternal() const
 {
   Assert(d_state->isFullyInited());
-  const context::CDList<Node>& al = d_asserts->getAssertionList();
+  const CDList<Node>& al = d_asserts->getAssertionList();
   std::vector<Node> res;
   for (const Node& n : al)
   {
     res.emplace_back(n);
   }
   return res;
+}
+
+const Options& SolverEngine::options() const { return d_env->getOptions(); }
+
+void SolverEngine::ensureWellFormedTerm(const Node& n,
+                                        const std::string& src) const
+{
+  if (Configuration::isAssertionBuild())
+  {
+    bool wasShadow = false;
+    if (expr::hasFreeOrShadowedVar(n, wasShadow))
+    {
+      std::string varType(wasShadow ? "shadowed" : "free");
+      std::stringstream se;
+      se << "Cannot process term with " << varType << " variable in " << src
+         << ".";
+      throw ModalException(se.str().c_str());
+    }
+  }
+}
+
+void SolverEngine::ensureWellFormedTerms(const std::vector<Node>& ns,
+                                         const std::string& src) const
+{
+  if (Configuration::isAssertionBuild())
+  {
+    for (const Node& n : ns)
+    {
+      ensureWellFormedTerm(n, src);
+    }
+  }
 }
 
 std::vector<Node> SolverEngine::getExpandedAssertions()
@@ -1299,29 +1270,50 @@ Env& SolverEngine::getEnv() { return *d_env.get(); }
 
 void SolverEngine::declareSepHeap(TypeNode locT, TypeNode dataT)
 {
+  if (d_state->isFullyInited())
+  {
+    throw ModalException(
+        "Cannot set logic in SolverEngine after the engine has "
+        "finished initializing.");
+  }
   if (!getLogicInfo().isTheoryEnabled(THEORY_SEP))
   {
     const char* msg =
         "Cannot declare heap if not using the separation logic theory.";
     throw RecoverableModalException(msg);
   }
-  SolverEngineScope smts(this);
-  finishInit();
-  TheoryEngine* te = getTheoryEngine();
-  te->declareSepHeap(locT, dataT);
+  TypeNode locT2, dataT2;
+  if (d_env->getSepHeapTypes(locT2, dataT2))
+  {
+    std::stringstream ss;
+    ss << "ERROR: cannot declare heap types for separation logic more than "
+          "once.  We are declaring heap of type ";
+    ss << locT << " -> " << dataT << ", but we already have ";
+    ss << locT2 << " -> " << dataT2;
+    throw LogicException(ss.str());
+  }
+  d_env->declareSepHeap(locT, dataT);
 }
 
 bool SolverEngine::getSepHeapTypes(TypeNode& locT, TypeNode& dataT)
 {
-  SolverEngineScope smts(this);
-  finishInit();
-  TheoryEngine* te = getTheoryEngine();
-  return te->getSepHeapTypes(locT, dataT);
+  return d_env->getSepHeapTypes(locT, dataT);
 }
 
 Node SolverEngine::getSepHeapExpr() { return getSepHeapAndNilExpr().first; }
 
 Node SolverEngine::getSepNilExpr() { return getSepHeapAndNilExpr().second; }
+
+std::vector<Node> SolverEngine::getLearnedLiterals()
+{
+  Trace("smt") << "SMT getLearnedLiterals()" << std::endl;
+  SolverEngineScope smts(this);
+  // note that the default mode for learned literals is via the prop engine,
+  // although other modes could use the preprocessor
+  PropEngine* pe = getPropEngine();
+  Assert(pe != nullptr);
+  return pe->getLearnedZeroLevelLiterals(modes::LearnedLitType::INPUT);
+}
 
 void SolverEngine::checkProof()
 {
@@ -1348,7 +1340,7 @@ StatisticsRegistry& SolverEngine::getStatisticsRegistry()
 
 UnsatCore SolverEngine::getUnsatCoreInternal()
 {
-  if (!d_env->getOptions().smt.unsatCores)
+  if (!d_env->getOptions().smt.produceUnsatCores)
   {
     throw ModalException(
         "Cannot get an unsat core when produce-unsat-cores or produce-proofs "
@@ -1365,7 +1357,7 @@ UnsatCore SolverEngine::getUnsatCoreInternal()
   Assert(pe != nullptr);
 
   std::shared_ptr<ProofNode> pepf;
-  if (options::unsatCoresMode() == options::UnsatCoresMode::ASSUMPTIONS)
+  if (options().smt.unsatCoresMode == options::UnsatCoresMode::ASSUMPTIONS)
   {
     pepf = pe->getRefutation();
   }
@@ -1377,7 +1369,7 @@ UnsatCore SolverEngine::getUnsatCoreInternal()
   std::shared_ptr<ProofNode> pfn = d_pfManager->getFinalProof(pepf, *d_asserts);
   std::vector<Node> core;
   d_ucManager->getUnsatCore(pfn, *d_asserts, core);
-  if (options::minimalUnsatCores())
+  if (options().smt.minimalUnsatCores)
   {
     core = reduceUnsatCore(core);
   }
@@ -1386,20 +1378,21 @@ UnsatCore SolverEngine::getUnsatCoreInternal()
 
 std::vector<Node> SolverEngine::reduceUnsatCore(const std::vector<Node>& core)
 {
-  Assert(options::unsatCores())
+  Assert(options().smt.produceUnsatCores)
       << "cannot reduce unsat core if unsat cores are turned off";
 
-  Notice() << "SolverEngine::reduceUnsatCore(): reducing unsat core" << endl;
+  d_env->verbose(1) << "SolverEngine::reduceUnsatCore(): reducing unsat core"
+                    << std::endl;
   std::unordered_set<Node> removed;
   for (const Node& skip : core)
   {
     std::unique_ptr<SolverEngine> coreChecker;
     initializeSubsolver(coreChecker, *d_env.get());
     coreChecker->setLogic(getLogicInfo());
-    coreChecker->getOptions().smt.checkUnsatCores = false;
+    coreChecker->getOptions().writeSmt().checkUnsatCores = false;
     // disable all proof options
-    coreChecker->getOptions().smt.produceProofs = false;
-    coreChecker->getOptions().smt.checkProofs = false;
+    coreChecker->getOptions().writeSmt().produceProofs = false;
+    coreChecker->getOptions().writeSmt().checkProofs = false;
 
     for (const Node& ucAssertion : core)
     {
@@ -1419,13 +1412,13 @@ std::vector<Node> SolverEngine::reduceUnsatCore(const std::vector<Node>& core)
       throw;
     }
 
-    if (r.asSatisfiabilityResult().isSat() == Result::UNSAT)
+    if (r.getStatus() == Result::UNSAT)
     {
       removed.insert(skip);
     }
-    else if (r.asSatisfiabilityResult().isUnknown())
+    else if (r.isUnknown())
     {
-      Warning()
+      d_env->warning()
           << "SolverEngine::reduceUnsatCore(): could not reduce unsat core "
              "due to "
              "unknown result.";
@@ -1453,35 +1446,30 @@ std::vector<Node> SolverEngine::reduceUnsatCore(const std::vector<Node>& core)
 
 void SolverEngine::checkUnsatCore()
 {
-  Assert(d_env->getOptions().smt.unsatCores)
+  Assert(d_env->getOptions().smt.produceUnsatCores)
       << "cannot check unsat core if unsat cores are turned off";
 
-  Notice() << "SolverEngine::checkUnsatCore(): generating unsat core" << endl;
+  d_env->verbose(1) << "SolverEngine::checkUnsatCore(): generating unsat core"
+                    << std::endl;
   UnsatCore core = getUnsatCore();
 
   // initialize the core checker
   std::unique_ptr<SolverEngine> coreChecker;
   initializeSubsolver(coreChecker, *d_env.get());
-  coreChecker->getOptions().smt.checkUnsatCores = false;
+  coreChecker->getOptions().writeSmt().checkUnsatCores = false;
   // disable all proof options
-  coreChecker->getOptions().smt.produceProofs = false;
-  coreChecker->getOptions().smt.checkProofs = false;
+  coreChecker->getOptions().writeSmt().produceProofs = false;
+  coreChecker->getOptions().writeSmt().checkProofs = false;
 
-  // set up separation logic heap if necessary
-  TypeNode sepLocType, sepDataType;
-  if (getSepHeapTypes(sepLocType, sepDataType))
-  {
-    coreChecker->declareSepHeap(sepLocType, sepDataType);
-  }
-
-  Notice() << "SolverEngine::checkUnsatCore(): pushing core assertions"
-           << std::endl;
+  d_env->verbose(1) << "SolverEngine::checkUnsatCore(): pushing core assertions"
+                    << std::endl;
   theory::TrustSubstitutionMap& tls = d_env->getTopLevelSubstitutions();
   for (UnsatCore::iterator i = core.begin(); i != core.end(); ++i)
   {
-    Node assertionAfterExpansion = tls.apply(*i, false);
-    Notice() << "SolverEngine::checkUnsatCore(): pushing core member " << *i
-             << ", expanded to " << assertionAfterExpansion << "\n";
+    Node assertionAfterExpansion = tls.apply(*i);
+    d_env->verbose(1) << "SolverEngine::checkUnsatCore(): pushing core member "
+                      << *i << ", expanded to " << assertionAfterExpansion
+                      << std::endl;
     coreChecker->assertFormula(assertionAfterExpansion);
   }
   Result r;
@@ -1493,14 +1481,15 @@ void SolverEngine::checkUnsatCore()
   {
     throw;
   }
-  Notice() << "SolverEngine::checkUnsatCore(): result is " << r << endl;
-  if (r.asSatisfiabilityResult().isUnknown())
+  d_env->verbose(1) << "SolverEngine::checkUnsatCore(): result is " << r
+                    << std::endl;
+  if (r.isUnknown())
   {
-    Warning() << "SolverEngine::checkUnsatCore(): could not check core result "
+    d_env->warning() << "SolverEngine::checkUnsatCore(): could not check core result "
                  "unknown."
               << std::endl;
   }
-  else if (r.asSatisfiabilityResult().isSat())
+  else if (r.getStatus() == Result::SAT)
   {
     InternalError()
         << "SolverEngine::checkUnsatCore(): produced core was satisfiable.";
@@ -1509,20 +1498,18 @@ void SolverEngine::checkUnsatCore()
 
 void SolverEngine::checkModel(bool hardFailure)
 {
-  const context::CDList<Node>& al = d_asserts->getAssertionList();
-  // --check-model implies --produce-assertions, which enables the
-  // assertion list, so we should be ok.
-  Assert(d_env->getOptions().smt.produceAssertions)
-      << "don't have an assertion list to check in SolverEngine::checkModel()";
+  const CDList<Node>& al = d_asserts->getAssertionList();
+  // we always enable the assertion list, so it is able to be checked
 
   TimerStat::CodeTimer checkModelTimer(d_stats->d_checkModelTime);
 
-  Notice() << "SolverEngine::checkModel(): generating model" << endl;
+  d_env->verbose(1) << "SolverEngine::checkModel(): generating model"
+                    << std::endl;
   TheoryModel* m = getAvailableModel("check model");
   Assert(m != nullptr);
 
   // check the model with the theory engine for debugging
-  if (options::debugCheckModels())
+  if (options().smt.debugCheckModels)
   {
     TheoryEngine* te = getTheoryEngine();
     Assert(te != nullptr);
@@ -1539,10 +1526,6 @@ UnsatCore SolverEngine::getUnsatCore()
   Trace("smt") << "SMT getUnsatCore()" << std::endl;
   SolverEngineScope smts(this);
   finishInit();
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetUnsatCore(d_env->getDumpOut());
-  }
   return getUnsatCoreInternal();
 }
 
@@ -1564,10 +1547,6 @@ std::string SolverEngine::getProof()
   Trace("smt") << "SMT getProof()\n";
   SolverEngineScope smts(this);
   finishInit();
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetProof(d_env->getDumpOut());
-  }
   if (!d_env->getOptions().smt.produceProofs)
   {
     throw ModalException("Cannot get a proof when proof option is off.");
@@ -1618,15 +1597,13 @@ void SolverEngine::printInstantiations(std::ostream& out)
 
   // Second, extract and print the instantiations
   std::map<Node, InstantiationList> rinsts;
-  if (d_env->getOptions().smt.produceProofs
-      && (!d_env->getOptions().smt.unsatCores
-          || d_env->getOptions().smt.unsatCoresMode
-                 == options::UnsatCoresMode::FULL_PROOF)
+  if ((d_env->getOptions().smt.produceProofs
+       && d_env->getOptions().smt.proofMode == options::ProofMode::FULL)
       && getSmtMode() == SmtMode::UNSAT)
   {
     // minimize instantiations based on proof manager
-    getRelevantInstantiationTermVectors(rinsts,
-                                        options::dumpInstantiationsDebug());
+    getRelevantInstantiationTermVectors(
+        rinsts, options().driver.dumpInstantiationsDebug);
   }
   else
   {
@@ -1699,59 +1676,85 @@ bool SolverEngine::getSynthSolutions(std::map<Node, Node>& solMap)
   return d_sygusSolver->getSynthSolutions(solMap);
 }
 
-Node SolverEngine::getQuantifierElimination(Node q, bool doFull, bool strict)
+bool SolverEngine::getSubsolverSynthSolutions(std::map<Node, Node>& solMap)
 {
   SolverEngineScope smts(this);
   finishInit();
-  const LogicInfo& logic = getLogicInfo();
-  if (!logic.isPure(THEORY_ARITH) && strict)
-  {
-    Warning() << "Unexpected logic for quantifier elimination " << logic
-              << endl;
-  }
+  return d_sygusSolver->getSubsolverSynthSolutions(solMap);
+}
+
+Node SolverEngine::getQuantifierElimination(Node q, bool doFull)
+{
+  SolverEngineScope smts(this);
+  finishInit();
   return d_quantElimSolver->getQuantifierElimination(
       *d_asserts, q, doFull, d_isInternalSubsolver);
 }
 
-bool SolverEngine::getInterpol(const Node& conj,
-                               const TypeNode& grammarType,
-                               Node& interpol)
+Node SolverEngine::getInterpolant(const Node& conj, const TypeNode& grammarType)
 {
   SolverEngineScope smts(this);
   finishInit();
   std::vector<Node> axioms = getExpandedAssertions();
+  Node interpol;
   bool success =
-      d_interpolSolver->getInterpol(axioms, conj, grammarType, interpol);
-  // notify the state of whether the get-interpol call was successfuly, which
+      d_interpolSolver->getInterpolant(axioms, conj, grammarType, interpol);
+  // notify the state of whether the get-interpolant call was successfuly, which
   // impacts the SMT mode.
   d_state->notifyGetInterpol(success);
-  return success;
+  Assert(success == !interpol.isNull());
+  return interpol;
 }
 
-bool SolverEngine::getInterpol(const Node& conj, Node& interpol)
+Node SolverEngine::getInterpolantNext()
 {
-  TypeNode grammarType;
-  return getInterpol(conj, grammarType, interpol);
+  SolverEngineScope smts(this);
+  finishInit();
+  if (d_state->getMode() != SmtMode::INTERPOL)
+  {
+    throw RecoverableModalException(
+        "Cannot get-interpolant-next unless immediately preceded by a "
+        "successful "
+        "call to get-interpolant(-next).");
+  }
+  Node interpol;
+  bool success = d_interpolSolver->getInterpolantNext(interpol);
+  // notify the state of whether the get-interpolantant-next call was successful
+  d_state->notifyGetInterpol(success);
+  Assert(success == !interpol.isNull());
+  return interpol;
 }
 
-bool SolverEngine::getAbduct(const Node& conj,
-                             const TypeNode& grammarType,
-                             Node& abd)
+Node SolverEngine::getAbduct(const Node& conj, const TypeNode& grammarType)
 {
   SolverEngineScope smts(this);
   finishInit();
   std::vector<Node> axioms = getExpandedAssertions();
+  Node abd;
   bool success = d_abductSolver->getAbduct(axioms, conj, grammarType, abd);
-  // notify the state of whether the get-abduct call was successfuly, which
+  // notify the state of whether the get-abduct call was successful, which
   // impacts the SMT mode.
   d_state->notifyGetAbduct(success);
-  return success;
+  Assert(success == !abd.isNull());
+  return abd;
 }
 
-bool SolverEngine::getAbduct(const Node& conj, Node& abd)
+Node SolverEngine::getAbductNext()
 {
-  TypeNode grammarType;
-  return getAbduct(conj, grammarType, abd);
+  SolverEngineScope smts(this);
+  finishInit();
+  if (d_state->getMode() != SmtMode::ABDUCT)
+  {
+    throw RecoverableModalException(
+        "Cannot get-abduct-next unless immediately preceded by a successful "
+        "call to get-abduct(-next).");
+  }
+  Node abd;
+  bool success = d_abductSolver->getAbductNext(abd);
+  // notify the state of whether the get-abduct-next call was successful
+  d_state->notifyGetAbduct(success);
+  Assert(success == !abd.isNull());
+  return abd;
 }
 
 void SolverEngine::getInstantiatedQuantifiedFormulas(std::vector<Node>& qs)
@@ -1776,18 +1779,8 @@ std::vector<Node> SolverEngine::getAssertions()
   SolverEngineScope smts(this);
   finishInit();
   d_state->doPendingPops();
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetAssertions(d_env->getDumpOut());
-  }
   Trace("smt") << "SMT getAssertions()" << endl;
-  if (!d_env->getOptions().smt.produceAssertions)
-  {
-    const char* msg =
-        "Cannot query the current assertion list when not in "
-        "produce-assertions mode.";
-    throw ModalException(msg);
-  }
+  // note we always enable assertions, so it is available here
   return getAssertionsInternal();
 }
 
@@ -1796,10 +1789,6 @@ void SolverEngine::getDifficultyMap(std::map<Node, Node>& dmap)
   Trace("smt") << "SMT getDifficultyMap()\n";
   SolverEngineScope smts(this);
   finishInit();
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetDifficulty(d_env->getDumpOut());
-  }
   if (!d_env->getOptions().smt.produceDifficulty)
   {
     throw ModalException(
@@ -1821,10 +1810,6 @@ void SolverEngine::push()
   d_state->doPendingPops();
   Trace("smt") << "SMT push()" << endl;
   d_smtSolver->processAssertions(*d_asserts);
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdPush(d_env->getDumpOut());
-  }
   d_state->userPush();
 }
 
@@ -1833,10 +1818,6 @@ void SolverEngine::pop()
   SolverEngineScope smts(this);
   finishInit();
   Trace("smt") << "SMT pop()" << endl;
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdPop(d_env->getDumpOut());
-  }
   d_state->userPop();
 
   // Clear out assertion queues etc., in case anything is still in there
@@ -1860,24 +1841,51 @@ void SolverEngine::resetAssertions()
     // (see solver execution modes in the SMT-LIB standard)
     Assert(getContext()->getLevel() == 0);
     Assert(getUserContext()->getLevel() == 0);
-    getDumpManager()->resetAssertions();
     return;
   }
 
   Trace("smt") << "SMT resetAssertions()" << endl;
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdResetAssertions(d_env->getDumpOut());
-  }
 
   d_asserts->clearCurrent();
   d_state->notifyResetAssertions();
-  getDumpManager()->resetAssertions();
   // push the state to maintain global context around everything
   d_state->setup();
 
   // reset SmtSolver, which will construct a new prop engine
   d_smtSolver->resetAssertions();
+}
+
+bool SolverEngine::deepRestart()
+{
+  SolverEngineScope smts(this);
+  if (options().smt.deepRestartMode == options::DeepRestartMode::NONE)
+  {
+    // deep restarts not enabled
+    return false;
+  }
+  Trace("smt") << "SMT deepRestart()" << endl;
+
+  Assert(d_state->isFullyInited());
+
+  // get the zero-level learned literals now, before resetting the context
+  std::vector<Node> zll =
+      getPropEngine()->getLearnedZeroLevelLiteralsForRestart();
+
+  if (zll.empty())
+  {
+    // not worthwhile to restart if we didn't learn anything
+    Trace("deep-restart") << "No learned literals" << std::endl;
+    return false;
+  }
+
+  d_asserts->clearCurrent();
+  d_state->notifyResetAssertions();
+  // deep restart the SMT solver, which reconstructs the theory engine and
+  // prop engine.
+  d_smtSolver->deepRestart(*d_asserts.get(), zll);
+  // push the state to maintain global context around everything
+  d_state->setup();
+  return true;
 }
 
 void SolverEngine::interrupt()
@@ -1893,16 +1901,16 @@ void SolverEngine::setResourceLimit(uint64_t units, bool cumulative)
 {
   if (cumulative)
   {
-    d_env->d_options.base.cumulativeResourceLimit = units;
+    d_env->d_options.writeBase().cumulativeResourceLimit = units;
   }
   else
   {
-    d_env->d_options.base.perCallResourceLimit = units;
+    d_env->d_options.writeBase().perCallResourceLimit = units;
   }
 }
 void SolverEngine::setTimeLimit(uint64_t millis)
 {
-  d_env->d_options.base.perCallMillisecondLimit = millis;
+  d_env->d_options.writeBase().perCallMillisecondLimit = millis;
 }
 
 unsigned long SolverEngine::getResourceUsage() const
@@ -1939,39 +1947,7 @@ void SolverEngine::printStatisticsDiff() const
 void SolverEngine::setOption(const std::string& key, const std::string& value)
 {
   Trace("smt") << "SMT setOption(" << key << ", " << value << ")" << endl;
-
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdSetOption(d_env->getDumpOut(), key, value);
-  }
-
-  if (key == "command-verbosity")
-  {
-    size_t fstIndex = value.find(" ");
-    size_t sndIndex = value.find(" ", fstIndex + 1);
-    if (sndIndex == std::string::npos)
-    {
-      string c = value.substr(1, fstIndex - 1);
-      int v =
-          std::stoi(value.substr(fstIndex + 1, value.length() - fstIndex - 1));
-      if (v < 0 || v > 2)
-      {
-        throw OptionException("command-verbosity must be 0, 1, or 2");
-      }
-      d_commandVerbosity[c] = v;
-      return;
-    }
-    throw OptionException(
-        "command-verbosity value must be a tuple (command-name integer)");
-  }
-
-  if (value.find(" ") != std::string::npos)
-  {
-    throw OptionException("bad value for :" + key);
-  }
-
-  std::string optionarg = value;
-  options::set(getOptions(), key, optionarg);
+  options::set(getOptions(), key, value);
 }
 
 void SolverEngine::setIsInternalSubsolver() { d_isInternalSubsolver = true; }
@@ -1980,62 +1956,7 @@ bool SolverEngine::isInternalSubsolver() const { return d_isInternalSubsolver; }
 
 std::string SolverEngine::getOption(const std::string& key) const
 {
-  NodeManager* nm = d_env->getNodeManager();
-
   Trace("smt") << "SMT getOption(" << key << ")" << endl;
-
-  if (key.find("command-verbosity:") == 0)
-  {
-    auto it =
-        d_commandVerbosity.find(key.substr(std::strlen("command-verbosity:")));
-    if (it != d_commandVerbosity.end())
-    {
-      return std::to_string(it->second);
-    }
-    it = d_commandVerbosity.find("*");
-    if (it != d_commandVerbosity.end())
-    {
-      return std::to_string(it->second);
-    }
-    return "2";
-  }
-
-  if (Dump.isOn("benchmark"))
-  {
-    getPrinter().toStreamCmdGetOption(d_env->getDumpOut(), key);
-  }
-
-  if (key == "command-verbosity")
-  {
-    vector<Node> result;
-    Node defaultVerbosity;
-    for (const auto& verb : d_commandVerbosity)
-    {
-      // treat the command name as a variable name as opposed to a string
-      // constant to avoid printing double quotes around the name
-      Node name = nm->mkBoundVar(verb.first, nm->integerType());
-      Node value = nm->mkConst(Rational(verb.second));
-      if (verb.first == "*")
-      {
-        // put the default at the end of the SExpr
-        defaultVerbosity = nm->mkNode(Kind::SEXPR, name, value);
-      }
-      else
-      {
-        result.push_back(nm->mkNode(Kind::SEXPR, name, value));
-      }
-    }
-    // ensure the default is always listed
-    if (defaultVerbosity.isNull())
-    {
-      defaultVerbosity = nm->mkNode(Kind::SEXPR,
-                                    nm->mkBoundVar("*", nm->integerType()),
-                                    nm->mkConst(Rational(2)));
-    }
-    result.push_back(defaultVerbosity);
-    return nm->mkNode(Kind::SEXPR, result).toString();
-  }
-
   return options::get(getOptions(), key);
 }
 
@@ -2048,12 +1969,6 @@ ResourceManager* SolverEngine::getResourceManager() const
   return d_env->getResourceManager();
 }
 
-DumpManager* SolverEngine::getDumpManager() { return d_env->getDumpManager(); }
-
-const Printer& SolverEngine::getPrinter() const { return d_env->getPrinter(); }
-
-OutputManager& SolverEngine::getOutputManager() { return d_outMgr; }
-
 theory::Rewriter* SolverEngine::getRewriter() { return d_env->getRewriter(); }
 
-}  // namespace cvc5
+}  // namespace cvc5::internal

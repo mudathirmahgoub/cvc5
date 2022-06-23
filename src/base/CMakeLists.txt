@@ -1,10 +1,10 @@
 ###############################################################################
 # Top contributors (to current version):
-#   Mathias Preiner, Aina Niemetz, Gereon Kremer
+#   Mathias Preiner, Gereon Kremer, Andrew V. Jones
 #
 # This file is part of the cvc5 project.
 #
-# Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+# Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
 # in the top-level source directory and their institutional affiliations.
 # All rights reserved.  See the file COPYING in the top-level source
 # directory for licensing information.
@@ -48,7 +48,6 @@ file(GLOB_RECURSE source_files
      ${PROJECT_SOURCE_DIR}/src/*.cc
      ${PROJECT_SOURCE_DIR}/src/*.h
      ${PROJECT_SOURCE_DIR}/src/*.g)
-string(REPLACE ";" " " source_files_list "${source_files}")
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Debug_tags.h

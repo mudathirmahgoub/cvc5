@@ -4,7 +4,7 @@
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -12,6 +12,12 @@
  *
  * A multiprecision integer constant; wraps a CLN multiprecision integer.
  */
+
+#include <cln/input.h>
+#include <cln/integer_io.h>
+#include <cln/modinteger.h>
+
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -26,7 +32,7 @@
 
 using namespace std;
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 signed int Integer::s_fastSignedIntMin = -(1 << 29);
 signed int Integer::s_fastSignedIntMax = (1 << 29) - 1;
@@ -477,16 +483,6 @@ unsigned int Integer::getUnsignedInt() const
   return cln::cl_I_to_uint(d_value);
 }
 
-bool Integer::fitsSignedLong() const
-{
-  return d_value <= s_signedLongMax && d_value >= s_signedLongMin;
-}
-
-bool Integer::fitsUnsignedLong() const
-{
-  return sgn() >= 0 && d_value <= s_unsignedLongMax;
-}
-
 long Integer::getLong() const
 {
   // ensure there isn't overflow
@@ -509,6 +505,53 @@ unsigned long Integer::getUnsignedLong() const
                 this,
                 "Overflow detected in Integer::getUnsignedLong()");
   return cln::cl_I_to_ulong(d_value);
+}
+
+int64_t Integer::getSigned64() const
+{
+  if constexpr (sizeof(int64_t) == sizeof(signed long int))
+  {
+    return getLong();
+  }
+  else
+  {
+    if (std::numeric_limits<long>::min() <= d_value
+        && d_value <= std::numeric_limits<long>::max())
+    {
+      return getLong();
+    }
+    // ensure there isn't overflow
+    CheckArgument(d_value <= std::numeric_limits<int64_t>::max(),
+                  this,
+                  "Overflow detected in Integer::getSigned64()");
+    CheckArgument(d_value >= std::numeric_limits<int64_t>::min(),
+                  this,
+                  "Overflow detected in Integer::getSigned64()");
+    return std::stoll(toString());
+  }
+}
+uint64_t Integer::getUnsigned64() const
+{
+  if constexpr (sizeof(uint64_t) == sizeof(unsigned long int))
+  {
+    return getUnsignedLong();
+  }
+  else
+  {
+    if (std::numeric_limits<unsigned long>::min() <= d_value
+        && d_value <= std::numeric_limits<unsigned long>::max())
+    {
+      return getUnsignedLong();
+    }
+    // ensure there isn't overflow
+    CheckArgument(d_value <= std::numeric_limits<uint64_t>::max(),
+                  this,
+                  "Overflow detected in Integer::getSigned64()");
+    CheckArgument(d_value >= std::numeric_limits<uint64_t>::min(),
+                  this,
+                  "Overflow detected in Integer::getSigned64()");
+    return std::stoull(toString());
+  }
 }
 
 size_t Integer::hash() const { return equal_hashcode(d_value); }
@@ -566,4 +609,4 @@ std::ostream& operator<<(std::ostream& os, const Integer& n)
 {
   return os << n.toString();
 }
-}  // namespace cvc5
+}  // namespace cvc5::internal

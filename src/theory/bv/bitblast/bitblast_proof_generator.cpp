@@ -4,7 +4,7 @@
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -17,13 +17,14 @@
 #include "proof/conv_proof_generator.h"
 #include "theory/rewriter.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace bv {
 
-BitblastProofGenerator::BitblastProofGenerator(ProofNodeManager* pnm,
+BitblastProofGenerator::BitblastProofGenerator(Env& env,
+                                               ProofNodeManager* pnm,
                                                TConvProofGenerator* tcpg)
-    : d_pnm(pnm), d_tcpg(tcpg)
+    : EnvObj(env), d_pnm(pnm), d_tcpg(tcpg)
 {
 }
 
@@ -78,7 +79,7 @@ std::shared_ptr<ProofNode> BitblastProofGenerator::getProofFor(Node eq)
      * sub-terms and recording these bit-blast steps in the conversion proof.
      */
 
-    Node rwt = Rewriter::rewrite(t);
+    Node rwt = rewrite(t);
 
     std::vector<Node> transSteps;
 
@@ -94,7 +95,7 @@ std::shared_ptr<ProofNode> BitblastProofGenerator::getProofFor(Node eq)
     transSteps.push_back(rwt.eqNode(bbt));
 
     // Record post-rewrite of bit-blasted term.
-    Node rwbbt = Rewriter::rewrite(bbt);
+    Node rwbbt = rewrite(bbt);
     if (bbt != rwbbt)
     {
       cdp.addStep(bbt.eqNode(rwbbt), PfRule::REWRITE, {}, {bbt});
@@ -120,4 +121,4 @@ void BitblastProofGenerator::addBitblastStep(TNode t, TNode bbt, TNode eq)
 
 }  // namespace bv
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

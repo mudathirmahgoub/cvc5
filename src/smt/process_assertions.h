@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Gereon Kremer, Morgan Deters
+ *   Andrew Reynolds, Morgan Deters, Aina Niemetz
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -22,15 +22,14 @@
 
 #include "context/cdlist.h"
 #include "expr/node.h"
+#include "preprocessing/preprocessing_pass.h"
 #include "smt/env_obj.h"
 #include "util/resource_manager.h"
 
-namespace cvc5 {
+namespace cvc5::internal {
 
 namespace preprocessing {
 class AssertionPipeline;
-class PreprocessingPass;
-class PreprocessingPassContext;
 }
 
 namespace smt {
@@ -111,10 +110,17 @@ class ProcessAssertions : protected EnvObj
    * Dump assertions. Print the current assertion list to the dump
    * assertions:`key` if it is enabled.
    */
-  void dumpAssertions(const char* key, Assertions& as);
+  void dumpAssertions(const std::string& key, Assertions& as);
+  /**
+   * Dump assertions to stream os using the print benchmark utility.
+   */
+  void dumpAssertionsToStream(std::ostream& os, Assertions& as);
+  /** apply pass */
+  preprocessing::PreprocessingPassResult applyPass(const std::string& pass,
+                                                   Assertions& as);
 };
 
 }  // namespace smt
-}  // namespace cvc5
+}  // namespace cvc5::internal
 
 #endif

@@ -1,10 +1,10 @@
 /******************************************************************************
  * Top contributors (to current version):
- *   Andrew Reynolds, Morgan Deters, Mathias Preiner
+ *   Andrew Reynolds, Morgan Deters, Gereon Kremer
  *
  * This file is part of the cvc5 project.
  *
- * Copyright (c) 2009-2021 by the authors listed in the file AUTHORS
+ * Copyright (c) 2009-2022 by the authors listed in the file AUTHORS
  * in the top-level source directory and their institutional affiliations.
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
@@ -24,10 +24,10 @@
 #include "theory/quantifiers/quantifiers_state.h"
 #include "util/random.h"
 
-using namespace cvc5::kind;
-using namespace cvc5::theory::quantifiers::inst;
+using namespace cvc5::internal::kind;
+using namespace cvc5::internal::theory::quantifiers::inst;
 
-namespace cvc5 {
+namespace cvc5::internal {
 namespace theory {
 namespace quantifiers {
 
@@ -153,10 +153,9 @@ InstStrategyStatus InstStrategyAutoGenTriggers::process(Node f,
         && d_auto_gen_trigger[1][f].empty() && !QuantAttributes::hasPattern(f))
     {
       Trace("trigger-warn") << "Could not find trigger for " << f << std::endl;
-      if (d_env.isOutputOn(options::OutputTag::TRIGGER))
+      if (isOutputOn(OutputTag::TRIGGER))
       {
-        d_env.getOutput(options::OutputTag::TRIGGER)
-            << "(no-trigger " << f << ")" << std::endl;
+        output(OutputTag::TRIGGER) << "(no-trigger " << f << ")" << std::endl;
       }
     }
   }
@@ -281,14 +280,14 @@ void InstStrategyAutoGenTriggers::generateTriggers( Node f ){
       // sort based on # occurrences (this will cause Trigger to select rarer
       // symbols)
       std::sort(patTerms.begin(), patTerms.end(), sqfs);
-      if (Debug.isOn("relevant-trigger"))
+      if (TraceIsOn("relevant-trigger"))
       {
-        Debug("relevant-trigger") << "Terms based on relevance: " << std::endl;
+        Trace("relevant-trigger") << "Terms based on relevance: " << std::endl;
         for (const Node& p : patTerms)
         {
-          Debug("relevant-trigger")
+          Trace("relevant-trigger")
               << "   " << p << " from " << d_pat_to_mpat[p] << " (";
-          Debug("relevant-trigger") << d_quant_rel->getNumQuantifiersForSymbol(
+          Trace("relevant-trigger") << d_quant_rel->getNumQuantifiersForSymbol(
                                            d_pat_to_mpat[p].getOperator())
                                     << ")" << std::endl;
         }
@@ -415,14 +414,15 @@ bool InstStrategyAutoGenTriggers::generatePatternTerms(Node f)
   if (patTermsF.empty())
   {
     Node bd = d_qreg.getInstConstantBody(f);
-    PatternTermSelector pts(f, d_tr_strategy, d_user_no_gen[f], true);
+    PatternTermSelector pts(
+        d_env.getOptions(), f, d_tr_strategy, d_user_no_gen[f], true);
     pts.collect(bd, patTermsF, tinfo);
     if (ntrivTriggers)
     {
       sortTriggers st;
       std::sort(patTermsF.begin(), patTermsF.end(), st);
     }
-    if (Trace.isOn("auto-gen-trigger-debug"))
+    if (TraceIsOn("auto-gen-trigger-debug"))
     {
       Trace("auto-gen-trigger-debug")
           << "Collected pat terms for " << bd
@@ -588,7 +588,7 @@ bool InstStrategyAutoGenTriggers::generatePatternTerms(Node f)
   }
   // tinfo not used below this point
   d_made_multi_trigger[f] = false;
-  if (Trace.isOn("auto-gen-trigger"))
+  if (TraceIsOn("auto-gen-trigger"))
   {
     Trace("auto-gen-trigger")
         << "Single trigger pool for " << f << " : " << std::endl;
@@ -711,4 +711,4 @@ void InstStrategyAutoGenTriggers::addUserNoPattern( Node q, Node pat ) {
 
 }  // namespace quantifiers
 }  // namespace theory
-}  // namespace cvc5
+}  // namespace cvc5::internal

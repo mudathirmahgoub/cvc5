@@ -55,27 +55,6 @@ class TestParserWhiteParser : public TestInternal
     d_solver.reset(nullptr);
   }
 
-  /* Set up declaration context for expr inputs */
-  void setupContext(Parser& parser)
-  {
-    /* a, b, c: BOOLEAN */
-    parser.bindVar("a", d_solver.get()->getBooleanSort());
-    parser.bindVar("b", d_solver.get()->getBooleanSort());
-    parser.bindVar("c", d_solver.get()->getBooleanSort());
-    /* t, u, v: TYPE */
-    cvc5::Sort t = parser.mkSort("t");
-    cvc5::Sort u = parser.mkSort("u");
-    cvc5::Sort v = parser.mkSort("v");
-    /* f : t->u; g: u->v; h: v->t; */
-    parser.bindVar("f", d_solver.get()->mkFunctionSort({t}, u));
-    parser.bindVar("g", d_solver.get()->mkFunctionSort({u}, v));
-    parser.bindVar("h", d_solver.get()->mkFunctionSort({v}, t));
-    /* x:t; y:u; z:v; */
-    parser.bindVar("x", t);
-    parser.bindVar("y", u);
-    parser.bindVar("z", v);
-  }
-
   std::string d_lang;
   std::unique_ptr<cvc5::Solver> d_solver;
   std::unique_ptr<SymbolManager> d_symman;

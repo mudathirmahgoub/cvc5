@@ -383,7 +383,7 @@ class SymbolTable::Implementation
   cvc5::Term getOverloadedFunctionForTypes(
       const std::string& name, const std::vector<cvc5::Sort>& argTypes) const;
   //------------------------ end operator overloading
- private:
+
   /** The context manager for the scope maps. */
   Context d_context;
 

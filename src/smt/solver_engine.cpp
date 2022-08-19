@@ -726,7 +726,6 @@ Result SolverEngine::checkSat()
 
 Result SolverEngine::checkSat(const Node& assumption)
 {
-  ensureWellFormedTerm(assumption, "checkSat");
   std::vector<Node> assump;
   if (!assumption.isNull())
   {
@@ -737,12 +736,12 @@ Result SolverEngine::checkSat(const Node& assumption)
 
 Result SolverEngine::checkSat(const std::vector<Node>& assumptions)
 {
-  ensureWellFormedTerms(assumptions, "checkSat");
   return checkSatInternal(assumptions);
 }
 
 Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
 {
+  ensureWellFormedTerms(assumptions, "checkSat");
   finishInit();
 
   Trace("smt") << "SolverEngine::checkSat(" << assumptions << ")" << endl;
@@ -803,7 +802,10 @@ Result SolverEngine::checkSatInternal(const std::vector<Node>& assumptions)
   {
     printStatisticsDiff();
   }
-  return r;
+
+  // set the filename on the result
+  const std::string& filename = d_env->getOptions().driver.filename;
+  return Result(r, filename);
 }
 
 std::vector<Node> SolverEngine::getUnsatAssumptions(void)
@@ -1592,7 +1594,11 @@ std::string SolverEngine::getProof(modes::ProofComponent c)
     }
   }
   // print all proofs
-  ss << "(" << std::endl;
+  // we currently only print outermost parentheses if the format is NONE
+  if (mode == options::ProofFormatMode::NONE)
+  {
+    ss << "(" << std::endl;
+  }
   for (std::shared_ptr<ProofNode>& p : ps)
   {
     if (commentProves)
@@ -1606,7 +1612,10 @@ std::string SolverEngine::getProof(modes::ProofComponent c)
       ss << ":proves " << p->getResult() << ")" << std::endl;
     }
   }
-  ss << ")" << std::endl;
+  if (mode == options::ProofFormatMode::NONE)
+  {
+    ss << ")" << std::endl;
+  }
   return ss.str();
 }
 

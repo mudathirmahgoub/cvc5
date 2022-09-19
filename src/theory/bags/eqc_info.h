@@ -50,7 +50,7 @@ class EqcInfo
    * corresponding to a conflict that holds in the current context.
    * TODO: why do we need the parameter t here.
    */
-  Node addBoundConst(Node t, Node c, bool isLowerBound);
+  bool addBoundConst(Node t, Node c, bool isLowerBound, Node & conflict);
 
   /** the bounded term */
   // TODO: delete this field if it is not absolutely necessary

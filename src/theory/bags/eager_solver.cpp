@@ -37,27 +37,29 @@ void EagerSolver::eqNotifyNewClass(TNode t)
   Kind k = t.getKind();
   NodeManager* nm = NodeManager::currentNM();
   Node zero = nm->mkConstInt(Rational(0));
+  Node null;
   if (t.getType().isInteger())
   {
     EqcInfo* ei = d_state.getOrMakeEqcInfo(t, true);
     if (t.isConst())
     {
       // the constant is its bounds
-      ei->addBoundConst(t, t, true);
-      ei->addBoundConst(t, t, false);
+
+      ei->addBoundConst(t, t, true, null);
+      ei->addBoundConst(t, t, false, null);
     }
     if (k == BAG_COUNT)
     {
       // initial lower bound is zero, and upper bound is null (i.e., infinity)
-      ei->addBoundConst(t, nm->mkConstInt(Rational(0)), true);
+      ei->addBoundConst(t, nm->mkConstInt(Rational(0)), true, null);
       Node bag = t[1];
       Kind bagKind = bag.getKind();
       switch (bagKind)
       {
         case BAG_EMPTY:
         {  // the constant is its bounds
-          ei->addBoundConst(t, zero, true);
-          ei->addBoundConst(t, zero, false);
+          ei->addBoundConst(t, zero, true, null);
+          ei->addBoundConst(t, zero, false, null);
           break;
         }
         case BAG_MAKE:
@@ -65,8 +67,8 @@ void EagerSolver::eqNotifyNewClass(TNode t)
           if (bag[1].isConst())
           {
             // (bag x c) implies c is both the lower and the upper bound
-            ei->addBoundConst(t, bag[1], true);
-            ei->addBoundConst(t, bag[1], false);
+            ei->addBoundConst(t, bag[1], true, null);
+            ei->addBoundConst(t, bag[1], false, null);
           }
           break;
         }
@@ -84,23 +86,27 @@ void EagerSolver::eqNotifyMerge(EqcInfo* e1, TNode t1, EqcInfo* e2, TNode t2)
   Assert(e2 != nullptr);
   if (t1.getType().isInteger())
   {
-    e1->addBoundConst(t1, e2->d_firstBound, true);
-    e1->addBoundConst(t1, e2->d_secondBound, false);
-    e2->addBoundConst(t2, e1->d_firstBound, true);
-    e2->addBoundConst(t2, e1->d_secondBound, false);
-    propagateBounds(t1);
-    propagateBounds(t2);
-
+    bool boundsChanged = false;
+    Node conflict;
+    boundsChanged |= e1->addBoundConst(t1, e2->d_firstBound, true, conflict);
+    boundsChanged |= e1->addBoundConst(t1, e2->d_secondBound, false, conflict);
+    boundsChanged |= e2->addBoundConst(t2, e1->d_firstBound, true, conflict);
+    boundsChanged |= e2->addBoundConst(t2, e1->d_secondBound, false, conflict);
+    if (boundsChanged)
+    {
+      propagateBounds(t1, e1);
+      propagateBounds(t2, e2);
+    }
     Trace("bags-notify") << *e1 << std::endl;
     Trace("bags-notify") << *e2 << std::endl;
   }
 }
 
-void EagerSolver::propagateBounds(Node t1)
+void EagerSolver::propagateBounds(Node t, EqcInfo* e)
 {
-  if (t1.getKind() == BAG_COUNT)
+  if (t.getKind() == BAG_COUNT)
   {
-    Node bag = t1[1];
+    Node bag = t[1];
     Node bagRep = d_state.getRepresentative(bag);
     eq::EqClassIterator it =
         eq::EqClassIterator(bagRep, d_state.getEqualityEngine());

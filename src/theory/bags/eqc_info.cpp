@@ -31,11 +31,11 @@ EqcInfo::EqcInfo(context::Context* c, Node eqc)
   Assert(!eqc.isNull());
 }
 
-Node EqcInfo::addBoundConst(Node t, Node c, bool isLowerBound)
+bool EqcInfo::addBoundConst(Node t, Node c, bool isLowerBound, Node& conflict)
 {
   if (c.isNull())
   {
-    return Node::null();
+    return false;
   }
 
   Rational cRational = c.getConst<Rational>();
@@ -53,7 +53,8 @@ Node EqcInfo::addBoundConst(Node t, Node c, bool isLowerBound)
       // current upper bound, or the new upper bound is strictly smaller than
       // the current lower bound
       // TODO: construct an explanation for the conflict.
-      return nm->mkConst(false);
+      conflict = nm->mkConst(false);
+      return false;
     }
   }
 
@@ -62,24 +63,24 @@ Node EqcInfo::addBoundConst(Node t, Node c, bool isLowerBound)
     if (isLowerBound)
     {
       d_firstBound = c;
+      return true;
     }
-    else
-    {
-      d_secondBound = c;
-    }
-    return Node::null();
+    d_secondBound = c;
+    return true;
   }
   // only update the bound if it tightens the interval
   Rational previousRational = previousBound.getConst<Rational>();
   if (isLowerBound && previousRational < cRational)
   {
     d_firstBound = c;
+    return true;
   }
   if (!isLowerBound && previousRational > cRational)
   {
     d_secondBound = c;
+    return true;
   }
-  return Node::null();
+  return false;
 }
 
 std::ostream& operator<<(std::ostream& out, const EqcInfo& ei)

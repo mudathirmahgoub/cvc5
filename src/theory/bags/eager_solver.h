@@ -55,7 +55,7 @@ class EagerSolver : protected EnvObj
   bool checkForMergeConflict(Node a, Node b, EqcInfo* ea, EqcInfo* eb);
   /** add arithmetic bound, return true if in conflict */
   bool addArithmeticBound(EqcInfo* e, Node t, bool isLower);
-  void propagateBounds(Node n);
+  void propagateBounds(Node n, EqcInfo* e);
   /** get bound for length term or regular expression membership */
   Node getBoundForLength(Node t, bool isLower) const;
   /** Reference to the solver state */

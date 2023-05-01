@@ -122,6 +122,16 @@ std::vector<Node> SygusSolver::getSygusAssumptions() const
   return listToVector(d_sygusAssumps);
 }
 
+std::vector<Node> SygusSolver::getSygusVariables() const
+{
+  return listToVector(d_sygusVars);
+}
+
+std::vector<Node> SygusSolver::getSygusFunctionSymbols() const
+{
+  return listToVector(d_sygusFunSymbols);
+}
+
 void SygusSolver::assertSygusInvConstraint(Node inv,
                                            Node pre,
                                            Node trans,

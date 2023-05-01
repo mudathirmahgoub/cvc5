@@ -7842,6 +7842,26 @@ std::vector<Term> Solver::getSygusAssumptions() const
   CVC5_API_TRY_CATCH_END;
 }
 
+std::vector<Term> Solver::getSygusVariables() const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  std::vector<internal::Node> variables = d_slv->getSygusVariables();
+  return Term::nodeVectorToTerms(d_nm, variables);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+std::vector<Term> Solver::getSygusFunctionSymbols() const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  std::vector<internal::Node> symbols = d_slv->getSygusFunctionSymbols();
+  return Term::nodeVectorToTerms(d_nm, symbols);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 void Solver::addSygusInvConstraint(Term inv,
                                    Term pre,
                                    Term trans,

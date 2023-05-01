@@ -107,6 +107,12 @@ class SygusSolver : protected EnvObj
   /** @return sygus assumptions .*/
   std::vector<Node> getSygusAssumptions() const;
 
+  /** @return sygus variables .*/
+  std::vector<Node> getSygusVariables() const;
+
+  /** @return sygus function symbols .*/
+  std::vector<Node> getSygusFunctionSymbols() const;
+
   /**
    * Add an invariant constraint.
    *

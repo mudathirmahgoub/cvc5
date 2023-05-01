@@ -2761,6 +2761,30 @@ TEST_F(TestApiBlackSolver, getSygusConstraints)
   ASSERT_EQ(d_solver.getSygusConstraints(), constraints);
 }
 
+TEST_F(TestApiBlackSolver, getSygusVariables)
+{
+  d_solver.setOption("sygus", "true");
+  Sort boolSort = d_solver.getBooleanSort();
+  Sort intSort = d_solver.getIntegerSort();
+  Sort funSort = d_solver.mkFunctionSort({intSort}, boolSort);
+
+  Term x = d_solver.declareSygusVar("x", boolSort);
+  Term y = d_solver.declareSygusVar("y", intSort);
+  Term f = d_solver.declareSygusVar(std::string("f"), funSort);
+  std::vector<Term> variables{x, y, f};
+  ASSERT_EQ(d_solver.getSygusVariables(), variables);
+}
+
+TEST_F(TestApiBlackSolver, getSygusFunctionSymbols)
+{
+  d_solver.setOption("sygus", "true");
+  Sort boolSort = d_solver.getBooleanSort();
+  Term x = d_solver.declareSygusVar("x", boolSort);
+  Term f = d_solver.synthFun("f", {x}, boolSort);
+  std::vector<Term> symbols{f};
+  ASSERT_EQ(d_solver.getSygusFunctionSymbols(), symbols);
+}
+
 TEST_F(TestApiBlackSolver, addSygusAssume)
 {
   d_solver.setOption("sygus", "true");

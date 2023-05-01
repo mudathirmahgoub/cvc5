@@ -5015,6 +5015,20 @@ class CVC5_EXPORT Solver
   std::vector<Term> getSygusAssumptions() const;
 
   /**
+   * Get the list of sygus variables.
+   *
+   * @return The list of sygus variables.
+   */
+  std::vector<Term> getSygusVariables() const;
+
+  /**
+   * Get the list of sygus assumptions.
+   *
+   * @return The list of sygus assumptions.
+   */
+  std::vector<Term> getSygusFunctionSymbols() const;
+
+  /**
    * Add a set of Sygus constraints to the current state that correspond to an
    * invariant synthesis problem.
    *

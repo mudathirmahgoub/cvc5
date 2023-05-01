@@ -245,6 +245,8 @@ cdef extern from "api/cpp/cvc5.h" namespace "cvc5":
         vector[Term] getSygusConstraints() except +
         void addSygusAssume(Term term) except +
         vector[Term] getSygusAssumptions() except +
+        vector[Term] getSygusVariables() except +
+        vector[Term] getSygusFunctionSymbols() except +
         void addSygusInvConstraint(Term inv_f, Term pre_f, Term trans_f, Term post_f) except +
         Term synthFun(const string& symbol, const vector[Term]& bound_vars, Sort sort) except +
         Term synthFun(const string& symbol, const vector[Term]& bound_vars, Sort sort, Grammar grammar) except +

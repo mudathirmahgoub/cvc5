@@ -1839,6 +1839,30 @@ cdef class Solver:
             assumptions.append(term)
         return assumptions
 
+    def getSygusVariables(self):
+        """
+            Get the list of sygus variables.
+            :return: The list of sygus variables.
+        """
+        variables = []
+        for a in self.csolver.getSygusVariables():
+            term = Term(self)
+            term.cterm = a
+            variables.append(term)
+        return variables
+
+    def getSygusFunctionSymbols(self):
+        """
+            Get the list of sygus function symbols.
+            :return: The list of sygus function sybmols.
+        """
+        symbols = []
+        for a in self.csolver.getSygusFunctionSymbols():
+            term = Term(self)
+            term.cterm = a
+            symbols.append(term)
+        return symbols
+
     def addSygusInvConstraint(self, Term inv_f, Term pre_f, Term trans_f, Term post_f):
         """
             Add a set of SyGuS constraints to the current state that correspond

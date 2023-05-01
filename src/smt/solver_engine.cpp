@@ -874,6 +874,18 @@ std::vector<Node> SolverEngine::getSygusAssumptions()
   return d_sygusSolver->getSygusAssumptions();
 }
 
+std::vector<Node> SolverEngine::getSygusVariables()
+{
+  finishInit();
+  return d_sygusSolver->getSygusVariables();
+}
+
+std::vector<Node> SolverEngine::getSygusFunctionSymbols()
+{
+  finishInit();
+  return d_sygusSolver->getSygusFunctionSymbols();
+}
+
 void SolverEngine::assertSygusInvConstraint(Node inv,
                                             Node pre,
                                             Node trans,

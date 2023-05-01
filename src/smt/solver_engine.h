@@ -395,6 +395,12 @@ class CVC5_EXPORT SolverEngine
   /** @return sygus assumptions .*/
   std::vector<Node> getSygusAssumptions();
 
+  /** @return sygus variables .*/
+  std::vector<Node> getSygusVariables();
+
+  /** @return sygus function symbols .*/
+  std::vector<Node> getSygusFunctionSymbols();
+
   /**
    * Add an invariant constraint.
    *

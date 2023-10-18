@@ -27,7 +27,7 @@
 #include "base/check.h"
 #include "base/output.h"
 #include "expr/kind.h"
-#include "include/cvc5_parser.h"
+#include <cvc5/cvc5_parser.h>
 #include "parser/commands.h"
 
 using namespace std;

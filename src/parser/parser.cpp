@@ -19,8 +19,9 @@
 #include "base/output.h"
 #include "parser/commands.h"
 #include "parser/lexer.h"
-#include "parser/parser_exception.h"
+#include <cvc5/cvc5_parser.h>
 #include "parser/smt2/smt2_parser.h"
+
 
 namespace cvc5 {
 namespace parser {

@@ -720,6 +720,8 @@ libcvc5_add_sources(
   theory/fp/theory_fp_utils.h
   theory/fp/theory_fp_utils.cpp
   theory/fp/type_enumerator.h
+  theory/nullables/theory_nullables.cpp
+  theory/nullables/theory_nullables.h  
   theory/interrupted.h
   theory/incomplete_id.cpp
   theory/incomplete_id.h
@@ -1358,6 +1360,7 @@ set(KINDS_FILES
   ${PROJECT_SOURCE_DIR}/src/theory/bv/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/ff/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/fp/kinds
+  ${PROJECT_SOURCE_DIR}/src/theory/nullables/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/arrays/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/datatypes/kinds
   ${PROJECT_SOURCE_DIR}/src/theory/sep/kinds

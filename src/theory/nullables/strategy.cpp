@@ -13,7 +13,7 @@
  * Implementation of the strategy of the theory of bags.
  */
 
-#include "theory/bags/strategy.h"
+#include "theory/nullables/strategy.h"
 
 namespace cvc5::internal {
 namespace theory {

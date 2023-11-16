@@ -13,9 +13,9 @@
  * Implementation of the inference manager for the theory of bags.
  */
 
-#include "theory/bags/inference_manager.h"
+#include "theory/nullables/inference_manager.h"
 
-#include "theory/bags/solver_state.h"
+#include "theory/nullables/solver_state.h"
 
 using namespace std;
 using namespace cvc5::internal::kind;

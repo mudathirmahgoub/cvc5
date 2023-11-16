@@ -13,13 +13,13 @@
  * Nullables theory.
  */
 
-#include "theory/bags/theory_bags.h"
+#include "theory/nullables/theory_bags.h"
 
 #include "expr/emptybag.h"
 #include "expr/skolem_manager.h"
 #include "proof/proof_checker.h"
 #include "smt/logic_exception.h"
-#include "theory/bags/bags_utils.h"
+#include "theory/nullables/bags_utils.h"
 #include "theory/quantifiers/fmf/bounded_integers.h"
 #include "theory/rewriter.h"
 #include "theory/theory_model.h"

@@ -18,17 +18,11 @@
 #ifndef CVC5__THEORY__BAGS__THEORY_BAGS_H
 #define CVC5__THEORY__BAGS__THEORY_BAGS_H
 
-#include "theory/nullables/bag_reduction.h"
-#include "theory/nullables/bag_solver.h"
-#include "theory/nullables/bags_rewriter.h"
-#include "theory/nullables/bags_statistics.h"
-#include "theory/nullables/card_solver.h"
-#include "theory/nullables/inference_generator.h"
+#include "theory/care_pair_argument_callback.h"
 #include "theory/nullables/inference_manager.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/strategy.h"
 #include "theory/nullables/term_registry.h"
-#include "theory/care_pair_argument_callback.h"
 #include "theory/theory.h"
 #include "theory/theory_eq_notify.h"
 
@@ -39,7 +33,8 @@ namespace nullables {
 class TheoryNullables : public Theory
 {
  public:
-  /** Constructs a new instance of TheoryNullables w.r.t. the provided contexts. */
+  /** Constructs a new instance of TheoryNullables w.r.t. the provided contexts.
+   */
   TheoryNullables(Env& env, OutputChannel& out, Valuation valuation);
   ~TheoryNullables() override;
 
@@ -96,7 +91,8 @@ class TheoryNullables : public Theory
   class NotifyClass : public TheoryEqNotifyClass
   {
    public:
-    NotifyClass(TheoryNullables& theory, TheoryInferenceManager& inferenceManager)
+    NotifyClass(TheoryNullables& theory,
+                TheoryInferenceManager& inferenceManager)
 
         : TheoryEqNotifyClass(inferenceManager), d_theory(theory)
     {
@@ -146,7 +142,7 @@ class TheoryNullables : public Theory
   void eqNotifyDisequal(TNode t1, TNode t2, TNode reason);
 }; /* class TheoryNullables */
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal
 

@@ -13,11 +13,11 @@
  * Implementation of bags term registry object.
  */
 
-#include "theory/bags/term_registry.h"
+#include "theory/nullables/term_registry.h"
 
 #include "expr/emptyset.h"
-#include "theory/bags/inference_manager.h"
-#include "theory/bags/solver_state.h"
+#include "theory/nullables/inference_manager.h"
+#include "theory/nullables/solver_state.h"
 
 using namespace std;
 using namespace cvc5::internal::kind;

@@ -13,7 +13,7 @@
  * Implementation of bags state object.
  */
 
-#include "theory/bags/solver_state.h"
+#include "theory/nullables/solver_state.h"
 
 #include "expr/attribute.h"
 #include "expr/bound_var_manager.h"

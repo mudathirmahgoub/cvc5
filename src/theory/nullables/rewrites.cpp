@@ -13,7 +13,7 @@
  * Implementation of inference information utility.
  */
 
-#include "theory/bags/rewrites.h"
+#include "theory/nullables/rewrites.h"
 
 #include <iostream>
 

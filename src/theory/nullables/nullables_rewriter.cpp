@@ -10,13 +10,13 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Bags theory rewriter.
+ * Nullables theory rewriter.
  */
 
-#include "theory/bags/bags_rewriter.h"
+#include "theory/nullables/nullables_rewriter.h"
 
-#include "expr/emptybag.h"
-#include "theory/bags/bags_utils.h"
+#include "expr/emptynullable.h"
+#include "theory/nullables/nullables_utils.h"
 #include "theory/rewriter.h"
 #include "util/rational.h"
 #include "util/statistics_registry.h"
@@ -25,24 +25,24 @@ using namespace cvc5::internal::kind;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
-BagsRewriteResponse::BagsRewriteResponse()
+NullablesRewriteResponse::NullablesRewriteResponse()
     : d_node(Node::null()), d_rewrite(Rewrite::NONE)
 {
 }
 
-BagsRewriteResponse::BagsRewriteResponse(Node n, Rewrite rewrite)
+NullablesRewriteResponse::NullablesRewriteResponse(Node n, Rewrite rewrite)
     : d_node(n), d_rewrite(rewrite)
 {
 }
 
-BagsRewriteResponse::BagsRewriteResponse(const BagsRewriteResponse& r)
+NullablesRewriteResponse::NullablesRewriteResponse(const NullablesRewriteResponse& r)
     : d_node(r.d_node), d_rewrite(r.d_rewrite)
 {
 }
 
-BagsRewriter::BagsRewriter(Rewriter* r, HistogramStat<Rewrite>* statistics)
+NullablesRewriter::NullablesRewriter(Rewriter* r, HistogramStat<Rewrite>* statistics)
     : d_rewriter(r), d_statistics(statistics)
 {
   d_nm = NodeManager::currentNM();
@@ -50,61 +50,61 @@ BagsRewriter::BagsRewriter(Rewriter* r, HistogramStat<Rewrite>* statistics)
   d_one = d_nm->mkConstInt(Rational(1));
 }
 
-RewriteResponse BagsRewriter::postRewrite(TNode n)
+RewriteResponse NullablesRewriter::postRewrite(TNode n)
 {
-  BagsRewriteResponse response;
+  NullablesRewriteResponse response;
   if (n.isConst())
   {
     // no need to rewrite n if it is already in a normal form
-    response = BagsRewriteResponse(n, Rewrite::NONE);
+    response = NullablesRewriteResponse(n, Rewrite::NONE);
   }
   else if (n.getKind() == Kind::EQUAL)
   {
     response = postRewriteEqual(n);
   }
-  else if (n.getKind() == Kind::BAG_CHOOSE)
+  else if (n.getKind() == Kind::NULLABLE_CHOOSE)
   {
     response = rewriteChoose(n);
   }
-  else if (BagsUtils::areChildrenConstants(n))
+  else if (NullablesUtils::areChildrenConstants(n))
   {
-    Node value = BagsUtils::evaluate(d_rewriter, n);
-    response = BagsRewriteResponse(value, Rewrite::CONSTANT_EVALUATION);
+    Node value = NullablesUtils::evaluate(d_rewriter, n);
+    response = NullablesRewriteResponse(value, Rewrite::CONSTANT_EVALUATION);
   }
   else
   {
     Kind k = n.getKind();
     switch (k)
     {
-      case Kind::BAG_MAKE: response = rewriteMakeBag(n); break;
-      case Kind::BAG_COUNT: response = rewriteBagCount(n); break;
-      case Kind::BAG_DUPLICATE_REMOVAL:
+      case Kind::NULLABLE_MAKE: response = rewriteMakeNullable(n); break;
+      case Kind::NULLABLE_COUNT: response = rewriteNullableCount(n); break;
+      case Kind::NULLABLE_DUPLICATE_REMOVAL:
         response = rewriteDuplicateRemoval(n);
         break;
-      case Kind::BAG_UNION_MAX: response = rewriteUnionMax(n); break;
-      case Kind::BAG_UNION_DISJOINT: response = rewriteUnionDisjoint(n); break;
-      case Kind::BAG_INTER_MIN: response = rewriteIntersectionMin(n); break;
-      case Kind::BAG_DIFFERENCE_SUBTRACT:
+      case Kind::NULLABLE_UNION_MAX: response = rewriteUnionMax(n); break;
+      case Kind::NULLABLE_UNION_DISJOINT: response = rewriteUnionDisjoint(n); break;
+      case Kind::NULLABLE_INTER_MIN: response = rewriteIntersectionMin(n); break;
+      case Kind::NULLABLE_DIFFERENCE_SUBTRACT:
         response = rewriteDifferenceSubtract(n);
         break;
-      case Kind::BAG_DIFFERENCE_REMOVE:
+      case Kind::NULLABLE_DIFFERENCE_REMOVE:
         response = rewriteDifferenceRemove(n);
         break;
-      case Kind::BAG_CARD: response = rewriteCard(n); break;
-      case Kind::BAG_IS_SINGLETON: response = rewriteIsSingleton(n); break;
-      case Kind::BAG_FROM_SET: response = rewriteFromSet(n); break;
-      case Kind::BAG_TO_SET: response = rewriteToSet(n); break;
-      case Kind::BAG_MAP: response = postRewriteMap(n); break;
-      case Kind::BAG_FILTER: response = postRewriteFilter(n); break;
-      case Kind::BAG_FOLD: response = postRewriteFold(n); break;
-      case Kind::BAG_PARTITION: response = postRewritePartition(n); break;
+      case Kind::NULLABLE_CARD: response = rewriteCard(n); break;
+      case Kind::NULLABLE_IS_SINGLETON: response = rewriteIsSingleton(n); break;
+      case Kind::NULLABLE_FROM_SET: response = rewriteFromSet(n); break;
+      case Kind::NULLABLE_TO_SET: response = rewriteToSet(n); break;
+      case Kind::NULLABLE_MAP: response = postRewriteMap(n); break;
+      case Kind::NULLABLE_FILTER: response = postRewriteFilter(n); break;
+      case Kind::NULLABLE_FOLD: response = postRewriteFold(n); break;
+      case Kind::NULLABLE_PARTITION: response = postRewritePartition(n); break;
       case Kind::TABLE_PRODUCT: response = postRewriteProduct(n); break;
       case Kind::TABLE_AGGREGATE: response = postRewriteAggregate(n); break;
-      default: response = BagsRewriteResponse(n, Rewrite::NONE); break;
+      default: response = NullablesRewriteResponse(n, Rewrite::NONE); break;
     }
   }
 
-  Trace("bags-rewrite") << "postRewrite " << n << " to " << response.d_node
+  Trace("nullables-rewrite") << "postRewrite " << n << " to " << response.d_node
                         << " by " << response.d_rewrite << "." << std::endl;
 
   if (d_statistics != nullptr)
@@ -118,19 +118,19 @@ RewriteResponse BagsRewriter::postRewrite(TNode n)
   return RewriteResponse(RewriteStatus::REWRITE_DONE, n);
 }
 
-RewriteResponse BagsRewriter::preRewrite(TNode n)
+RewriteResponse NullablesRewriter::preRewrite(TNode n)
 {
-  BagsRewriteResponse response;
+  NullablesRewriteResponse response;
   Kind k = n.getKind();
   switch (k)
   {
     case Kind::EQUAL: response = preRewriteEqual(n); break;
-    case Kind::BAG_SUBBAG: response = rewriteSubBag(n); break;
-    case Kind::BAG_MEMBER: response = rewriteMember(n); break;
-    default: response = BagsRewriteResponse(n, Rewrite::NONE);
+    case Kind::NULLABLE_SUBNULLABLE: response = rewriteSubNullable(n); break;
+    case Kind::NULLABLE_MEMBER: response = rewriteMember(n); break;
+    default: response = NullablesRewriteResponse(n, Rewrite::NONE);
   }
 
-  Trace("bags-rewrite") << "preRewrite " << n << " to " << response.d_node
+  Trace("nullables-rewrite") << "preRewrite " << n << " to " << response.d_node
                         << " by " << response.d_rewrite << "." << std::endl;
 
   if (d_statistics != nullptr)
@@ -144,404 +144,404 @@ RewriteResponse BagsRewriter::preRewrite(TNode n)
   return RewriteResponse(RewriteStatus::REWRITE_DONE, n);
 }
 
-BagsRewriteResponse BagsRewriter::preRewriteEqual(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::preRewriteEqual(const TNode& n) const
 {
   Assert(n.getKind() == Kind::EQUAL);
   if (n[0] == n[1])
   {
-    // (= A A) = true where A is a bag
-    return BagsRewriteResponse(d_nm->mkConst(true), Rewrite::IDENTICAL_NODES);
+    // (= A A) = true where A is a nullable
+    return NullablesRewriteResponse(d_nm->mkConst(true), Rewrite::IDENTICAL_NODES);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteSubBag(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteSubNullable(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_SUBBAG);
+  Assert(n.getKind() == Kind::NULLABLE_SUBNULLABLE);
 
-  // (bag.subbag A B) = ((bag.difference_subtract A B) == bag.empty)
-  Node emptybag = d_nm->mkConst(EmptyBag(n[0].getType()));
-  Node subtract = d_nm->mkNode(Kind::BAG_DIFFERENCE_SUBTRACT, n[0], n[1]);
-  Node equal = subtract.eqNode(emptybag);
-  return BagsRewriteResponse(equal, Rewrite::SUB_BAG);
+  // (nullable.subnullable A B) = ((nullable.difference_subtract A B) == nullable.empty)
+  Node emptynullable = d_nm->mkConst(EmptyNullable(n[0].getType()));
+  Node subtract = d_nm->mkNode(Kind::NULLABLE_DIFFERENCE_SUBTRACT, n[0], n[1]);
+  Node equal = subtract.eqNode(emptynullable);
+  return NullablesRewriteResponse(equal, Rewrite::SUB_NULLABLE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteMember(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteMember(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_MEMBER);
+  Assert(n.getKind() == Kind::NULLABLE_MEMBER);
 
-  // - (bag.member x A) = (>= (bag.count x A) 1)
-  Node count = d_nm->mkNode(Kind::BAG_COUNT, n[0], n[1]);
+  // - (nullable.member x A) = (>= (nullable.count x A) 1)
+  Node count = d_nm->mkNode(Kind::NULLABLE_COUNT, n[0], n[1]);
   Node geq = d_nm->mkNode(Kind::GEQ, count, d_one);
-  return BagsRewriteResponse(geq, Rewrite::MEMBER);
+  return NullablesRewriteResponse(geq, Rewrite::MEMBER);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteMakeBag(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteMakeNullable(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_MAKE);
-  // return bag.empty for negative or zero multiplicity
+  Assert(n.getKind() == Kind::NULLABLE_MAKE);
+  // return nullable.empty for negative or zero multiplicity
   if (n[1].isConst() && n[1].getConst<Rational>().sgn() != 1)
   {
-    // (bag x c) = bag.empty where c <= 0
-    Node emptybag = d_nm->mkConst(EmptyBag(n.getType()));
-    return BagsRewriteResponse(emptybag, Rewrite::BAG_MAKE_COUNT_NEGATIVE);
+    // (nullable x c) = nullable.empty where c <= 0
+    Node emptynullable = d_nm->mkConst(EmptyNullable(n.getType()));
+    return NullablesRewriteResponse(emptynullable, Rewrite::NULLABLE_MAKE_COUNT_NEGATIVE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteNullableCount(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_COUNT);
-  if (n[1].isConst() && n[1].getKind() == Kind::BAG_EMPTY)
+  Assert(n.getKind() == Kind::NULLABLE_COUNT);
+  if (n[1].isConst() && n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.count x bag.empty) = 0
-    return BagsRewriteResponse(d_zero, Rewrite::COUNT_EMPTY);
+    // (nullable.count x nullable.empty) = 0
+    return NullablesRewriteResponse(d_zero, Rewrite::COUNT_EMPTY);
   }
-  if (n[1].getKind() == Kind::BAG_MAKE && n[0] == n[1][0] && n[1][1].isConst()
+  if (n[1].getKind() == Kind::NULLABLE_MAKE && n[0] == n[1][0] && n[1][1].isConst()
       && n[1][1].getConst<Rational>() > Rational(0))
   {
-    // (bag.count x (bag x c)) = c, c > 0 is a constant
+    // (nullable.count x (nullable x c)) = c, c > 0 is a constant
     Node c = n[1][1];
-    return BagsRewriteResponse(c, Rewrite::COUNT_BAG_MAKE);
+    return NullablesRewriteResponse(c, Rewrite::COUNT_NULLABLE_MAKE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteDuplicateRemoval(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteDuplicateRemoval(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_DUPLICATE_REMOVAL);
-  if (n[0].getKind() == Kind::BAG_MAKE && n[0][1].isConst()
+  Assert(n.getKind() == Kind::NULLABLE_DUPLICATE_REMOVAL);
+  if (n[0].getKind() == Kind::NULLABLE_MAKE && n[0][1].isConst()
       && n[0][1].getConst<Rational>().sgn() == 1)
   {
-    // (bag.duplicate_removal (bag x n)) = (bag x 1)
+    // (nullable.duplicate_removal (nullable x n)) = (nullable x 1)
     //  where n is a positive constant
-    Node bag = d_nm->mkNode(Kind::BAG_MAKE, n[0][0], d_one);
-    return BagsRewriteResponse(bag, Rewrite::DUPLICATE_REMOVAL_BAG_MAKE);
+    Node nullable = d_nm->mkNode(Kind::NULLABLE_MAKE, n[0][0], d_one);
+    return NullablesRewriteResponse(nullable, Rewrite::DUPLICATE_REMOVAL_NULLABLE_MAKE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteUnionMax(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteUnionMax(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_UNION_MAX);
-  if (n[1].getKind() == Kind::BAG_EMPTY || n[0] == n[1])
+  Assert(n.getKind() == Kind::NULLABLE_UNION_MAX);
+  if (n[1].getKind() == Kind::NULLABLE_EMPTY || n[0] == n[1])
   {
-    // (bag.union_max A A) = A
-    // (bag.union_max A bag.empty) = A
-    return BagsRewriteResponse(n[0], Rewrite::UNION_MAX_SAME_OR_EMPTY);
+    // (nullable.union_max A A) = A
+    // (nullable.union_max A nullable.empty) = A
+    return NullablesRewriteResponse(n[0], Rewrite::UNION_MAX_SAME_OR_EMPTY);
   }
-  if (n[0].getKind() == Kind::BAG_EMPTY)
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.union_max bag.empty A) = A
-    return BagsRewriteResponse(n[1], Rewrite::UNION_MAX_EMPTY);
+    // (nullable.union_max nullable.empty A) = A
+    return NullablesRewriteResponse(n[1], Rewrite::UNION_MAX_EMPTY);
   }
 
-  if ((n[1].getKind() == Kind::BAG_UNION_MAX
-       || n[1].getKind() == Kind::BAG_UNION_DISJOINT)
+  if ((n[1].getKind() == Kind::NULLABLE_UNION_MAX
+       || n[1].getKind() == Kind::NULLABLE_UNION_DISJOINT)
       && (n[0] == n[1][0] || n[0] == n[1][1]))
   {
-    // (bag.union_max A (bag.union_max A B)) = (bag.union_max A B)
-    // (bag.union_max A (bag.union_max B A)) = (bag.union_max B A)
-    // (bag.union_max A (bag.union_disjoint A B)) = (bag.union_disjoint A B)
-    // (bag.union_max A (bag.union_disjoint B A)) = (bag.union_disjoint B A)
-    return BagsRewriteResponse(n[1], Rewrite::UNION_MAX_UNION_LEFT);
+    // (nullable.union_max A (nullable.union_max A B)) = (nullable.union_max A B)
+    // (nullable.union_max A (nullable.union_max B A)) = (nullable.union_max B A)
+    // (nullable.union_max A (nullable.union_disjoint A B)) = (nullable.union_disjoint A B)
+    // (nullable.union_max A (nullable.union_disjoint B A)) = (nullable.union_disjoint B A)
+    return NullablesRewriteResponse(n[1], Rewrite::UNION_MAX_UNION_LEFT);
   }
 
-  if ((n[0].getKind() == Kind::BAG_UNION_MAX
-       || n[0].getKind() == Kind::BAG_UNION_DISJOINT)
+  if ((n[0].getKind() == Kind::NULLABLE_UNION_MAX
+       || n[0].getKind() == Kind::NULLABLE_UNION_DISJOINT)
       && (n[0][0] == n[1] || n[0][1] == n[1]))
   {
-    // (bag.union_max (bag.union_max A B) A)) = (bag.union_max A B)
-    // (bag.union_max (bag.union_max B A) A)) = (bag.union_max B A)
-    // (bag.union_max (bag.union_disjoint A B) A)) = (bag.union_disjoint A B)
-    // (bag.union_max (bag.union_disjoint B A) A)) = (bag.union_disjoint B A)
-    return BagsRewriteResponse(n[0], Rewrite::UNION_MAX_UNION_RIGHT);
+    // (nullable.union_max (nullable.union_max A B) A)) = (nullable.union_max A B)
+    // (nullable.union_max (nullable.union_max B A) A)) = (nullable.union_max B A)
+    // (nullable.union_max (nullable.union_disjoint A B) A)) = (nullable.union_disjoint A B)
+    // (nullable.union_max (nullable.union_disjoint B A) A)) = (nullable.union_disjoint B A)
+    return NullablesRewriteResponse(n[0], Rewrite::UNION_MAX_UNION_RIGHT);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteUnionDisjoint(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteUnionDisjoint(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_UNION_DISJOINT);
-  if (n[1].getKind() == Kind::BAG_EMPTY)
+  Assert(n.getKind() == Kind::NULLABLE_UNION_DISJOINT);
+  if (n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.union_disjoint A bag.empty) = A
-    return BagsRewriteResponse(n[0], Rewrite::UNION_DISJOINT_EMPTY_RIGHT);
+    // (nullable.union_disjoint A nullable.empty) = A
+    return NullablesRewriteResponse(n[0], Rewrite::UNION_DISJOINT_EMPTY_RIGHT);
   }
-  if (n[0].getKind() == Kind::BAG_EMPTY)
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.union_disjoint bag.empty A) = A
-    return BagsRewriteResponse(n[1], Rewrite::UNION_DISJOINT_EMPTY_LEFT);
+    // (nullable.union_disjoint nullable.empty A) = A
+    return NullablesRewriteResponse(n[1], Rewrite::UNION_DISJOINT_EMPTY_LEFT);
   }
-  if ((n[0].getKind() == Kind::BAG_UNION_MAX
-       && n[1].getKind() == Kind::BAG_INTER_MIN)
-      || (n[1].getKind() == Kind::BAG_UNION_MAX
-          && n[0].getKind() == Kind::BAG_INTER_MIN))
+  if ((n[0].getKind() == Kind::NULLABLE_UNION_MAX
+       && n[1].getKind() == Kind::NULLABLE_INTER_MIN)
+      || (n[1].getKind() == Kind::NULLABLE_UNION_MAX
+          && n[0].getKind() == Kind::NULLABLE_INTER_MIN))
 
   {
-    // (bag.union_disjoint (bag.union_max A B) (bag.inter_min A B)) =
-    //         (bag.union_disjoint A B) // sum(a,b) = max(a,b) + min(a,b)
-    // check if the operands of bag.union_max and bag.inter_min are the
+    // (nullable.union_disjoint (nullable.union_max A B) (nullable.inter_min A B)) =
+    //         (nullable.union_disjoint A B) // sum(a,b) = max(a,b) + min(a,b)
+    // check if the operands of nullable.union_max and nullable.inter_min are the
     // same
     std::set<Node> left(n[0].begin(), n[0].end());
     std::set<Node> right(n[1].begin(), n[1].end());
     if (left == right)
     {
-      Node rewritten = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, n[0][0], n[0][1]);
-      return BagsRewriteResponse(rewritten, Rewrite::UNION_DISJOINT_MAX_MIN);
+      Node rewritten = d_nm->mkNode(Kind::NULLABLE_UNION_DISJOINT, n[0][0], n[0][1]);
+      return NullablesRewriteResponse(rewritten, Rewrite::UNION_DISJOINT_MAX_MIN);
     }
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteIntersectionMin(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteIntersectionMin(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_INTER_MIN);
-  if (n[0].getKind() == Kind::BAG_EMPTY)
+  Assert(n.getKind() == Kind::NULLABLE_INTER_MIN);
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.inter_min bag.empty A) = bag.empty
-    return BagsRewriteResponse(n[0], Rewrite::INTERSECTION_EMPTY_LEFT);
+    // (nullable.inter_min nullable.empty A) = nullable.empty
+    return NullablesRewriteResponse(n[0], Rewrite::INTERSECTION_EMPTY_LEFT);
   }
-  if (n[1].getKind() == Kind::BAG_EMPTY)
+  if (n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.inter_min A bag.empty) = bag.empty
-    return BagsRewriteResponse(n[1], Rewrite::INTERSECTION_EMPTY_RIGHT);
+    // (nullable.inter_min A nullable.empty) = nullable.empty
+    return NullablesRewriteResponse(n[1], Rewrite::INTERSECTION_EMPTY_RIGHT);
   }
   if (n[0] == n[1])
   {
-    // (bag.inter_min A A) = A
-    return BagsRewriteResponse(n[0], Rewrite::INTERSECTION_SAME);
+    // (nullable.inter_min A A) = A
+    return NullablesRewriteResponse(n[0], Rewrite::INTERSECTION_SAME);
   }
-  if (n[1].getKind() == Kind::BAG_UNION_DISJOINT
-      || n[1].getKind() == Kind::BAG_UNION_MAX)
+  if (n[1].getKind() == Kind::NULLABLE_UNION_DISJOINT
+      || n[1].getKind() == Kind::NULLABLE_UNION_MAX)
   {
     if (n[0] == n[1][0] || n[0] == n[1][1])
     {
-      // (bag.inter_min A (bag.union_disjoint A B)) = A
-      // (bag.inter_min A (bag.union_disjoint B A)) = A
-      // (bag.inter_min A (bag.union_max A B)) = A
-      // (bag.inter_min A (bag.union_max B A)) = A
-      return BagsRewriteResponse(n[0], Rewrite::INTERSECTION_SHARED_LEFT);
+      // (nullable.inter_min A (nullable.union_disjoint A B)) = A
+      // (nullable.inter_min A (nullable.union_disjoint B A)) = A
+      // (nullable.inter_min A (nullable.union_max A B)) = A
+      // (nullable.inter_min A (nullable.union_max B A)) = A
+      return NullablesRewriteResponse(n[0], Rewrite::INTERSECTION_SHARED_LEFT);
     }
   }
 
-  if (n[0].getKind() == Kind::BAG_UNION_DISJOINT
-      || n[0].getKind() == Kind::BAG_UNION_MAX)
+  if (n[0].getKind() == Kind::NULLABLE_UNION_DISJOINT
+      || n[0].getKind() == Kind::NULLABLE_UNION_MAX)
   {
     if (n[1] == n[0][0] || n[1] == n[0][1])
     {
-      // (bag.inter_min (bag.union_disjoint A B) A) = A
-      // (bag.inter_min (bag.union_disjoint B A) A) = A
-      // (bag.inter_min (bag.union_max A B) A) = A
-      // (bag.inter_min (bag.union_max B A) A) = A
-      return BagsRewriteResponse(n[1], Rewrite::INTERSECTION_SHARED_RIGHT);
+      // (nullable.inter_min (nullable.union_disjoint A B) A) = A
+      // (nullable.inter_min (nullable.union_disjoint B A) A) = A
+      // (nullable.inter_min (nullable.union_max A B) A) = A
+      // (nullable.inter_min (nullable.union_max B A) A) = A
+      return NullablesRewriteResponse(n[1], Rewrite::INTERSECTION_SHARED_RIGHT);
     }
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteDifferenceSubtract(
+NullablesRewriteResponse NullablesRewriter::rewriteDifferenceSubtract(
     const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_DIFFERENCE_SUBTRACT);
-  if (n[0].getKind() == Kind::BAG_EMPTY || n[1].getKind() == Kind::BAG_EMPTY)
+  Assert(n.getKind() == Kind::NULLABLE_DIFFERENCE_SUBTRACT);
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY || n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.difference_subtract A bag.empty) = A
-    // (bag.difference_subtract bag.empty A) = bag.empty
-    return BagsRewriteResponse(n[0], Rewrite::SUBTRACT_RETURN_LEFT);
+    // (nullable.difference_subtract A nullable.empty) = A
+    // (nullable.difference_subtract nullable.empty A) = nullable.empty
+    return NullablesRewriteResponse(n[0], Rewrite::SUBTRACT_RETURN_LEFT);
   }
   if (n[0] == n[1])
   {
-    // (bag.difference_subtract A A) = bag.empty
-    Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-    return BagsRewriteResponse(emptyBag, Rewrite::SUBTRACT_SAME);
+    // (nullable.difference_subtract A A) = nullable.empty
+    Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+    return NullablesRewriteResponse(emptyNullable, Rewrite::SUBTRACT_SAME);
   }
 
-  if (n[0].getKind() == Kind::BAG_UNION_DISJOINT)
+  if (n[0].getKind() == Kind::NULLABLE_UNION_DISJOINT)
   {
     if (n[1] == n[0][0])
     {
-      // (bag.difference_subtract (bag.union_disjoint A B) A) = B
-      return BagsRewriteResponse(n[0][1],
+      // (nullable.difference_subtract (nullable.union_disjoint A B) A) = B
+      return NullablesRewriteResponse(n[0][1],
                                  Rewrite::SUBTRACT_DISJOINT_SHARED_LEFT);
     }
     if (n[1] == n[0][1])
     {
-      // (bag.difference_subtract (bag.union_disjoint B A) A) = B
-      return BagsRewriteResponse(n[0][0],
+      // (nullable.difference_subtract (nullable.union_disjoint B A) A) = B
+      return NullablesRewriteResponse(n[0][0],
                                  Rewrite::SUBTRACT_DISJOINT_SHARED_RIGHT);
     }
   }
 
-  if (n[1].getKind() == Kind::BAG_UNION_DISJOINT
-      || n[1].getKind() == Kind::BAG_UNION_MAX)
+  if (n[1].getKind() == Kind::NULLABLE_UNION_DISJOINT
+      || n[1].getKind() == Kind::NULLABLE_UNION_MAX)
   {
     if (n[0] == n[1][0] || n[0] == n[1][1])
     {
-      // (bag.difference_subtract A (bag.union_disjoint A B)) = bag.empty
-      // (bag.difference_subtract A (bag.union_disjoint B A)) = bag.empty
-      // (bag.difference_subtract A (bag.union_max A B)) = bag.empty
-      // (bag.difference_subtract A (bag.union_max B A)) = bag.empty
-      Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-      return BagsRewriteResponse(emptyBag, Rewrite::SUBTRACT_FROM_UNION);
+      // (nullable.difference_subtract A (nullable.union_disjoint A B)) = nullable.empty
+      // (nullable.difference_subtract A (nullable.union_disjoint B A)) = nullable.empty
+      // (nullable.difference_subtract A (nullable.union_max A B)) = nullable.empty
+      // (nullable.difference_subtract A (nullable.union_max B A)) = nullable.empty
+      Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+      return NullablesRewriteResponse(emptyNullable, Rewrite::SUBTRACT_FROM_UNION);
     }
   }
 
-  if (n[0].getKind() == Kind::BAG_INTER_MIN)
+  if (n[0].getKind() == Kind::NULLABLE_INTER_MIN)
   {
     if (n[1] == n[0][0] || n[1] == n[0][1])
     {
-      // (bag.difference_subtract (bag.inter_min A B) A) = bag.empty
-      // (bag.difference_subtract (bag.inter_min B A) A) = bag.empty
-      Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-      return BagsRewriteResponse(emptyBag, Rewrite::SUBTRACT_MIN);
+      // (nullable.difference_subtract (nullable.inter_min A B) A) = nullable.empty
+      // (nullable.difference_subtract (nullable.inter_min B A) A) = nullable.empty
+      Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+      return NullablesRewriteResponse(emptyNullable, Rewrite::SUBTRACT_MIN);
     }
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteDifferenceRemove(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteDifferenceRemove(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_DIFFERENCE_REMOVE);
+  Assert(n.getKind() == Kind::NULLABLE_DIFFERENCE_REMOVE);
 
-  if (n[0].getKind() == Kind::BAG_EMPTY || n[1].getKind() == Kind::BAG_EMPTY)
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY || n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    // (bag.difference_remove A bag.empty) = A
-    // (bag.difference_remove bag.empty B) = bag.empty
-    return BagsRewriteResponse(n[0], Rewrite::REMOVE_RETURN_LEFT);
+    // (nullable.difference_remove A nullable.empty) = A
+    // (nullable.difference_remove nullable.empty B) = nullable.empty
+    return NullablesRewriteResponse(n[0], Rewrite::REMOVE_RETURN_LEFT);
   }
 
   if (n[0] == n[1])
   {
-    // (bag.difference_remove A A) = bag.empty
-    Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-    return BagsRewriteResponse(emptyBag, Rewrite::REMOVE_SAME);
+    // (nullable.difference_remove A A) = nullable.empty
+    Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+    return NullablesRewriteResponse(emptyNullable, Rewrite::REMOVE_SAME);
   }
 
-  if (n[1].getKind() == Kind::BAG_UNION_DISJOINT
-      || n[1].getKind() == Kind::BAG_UNION_MAX)
+  if (n[1].getKind() == Kind::NULLABLE_UNION_DISJOINT
+      || n[1].getKind() == Kind::NULLABLE_UNION_MAX)
   {
     if (n[0] == n[1][0] || n[0] == n[1][1])
     {
-      // (bag.difference_remove A (bag.union_disjoint A B)) = bag.empty
-      // (bag.difference_remove A (bag.union_disjoint B A)) = bag.empty
-      // (bag.difference_remove A (bag.union_max A B)) = bag.empty
-      // (bag.difference_remove A (bag.union_max B A)) = bag.empty
-      Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-      return BagsRewriteResponse(emptyBag, Rewrite::REMOVE_FROM_UNION);
+      // (nullable.difference_remove A (nullable.union_disjoint A B)) = nullable.empty
+      // (nullable.difference_remove A (nullable.union_disjoint B A)) = nullable.empty
+      // (nullable.difference_remove A (nullable.union_max A B)) = nullable.empty
+      // (nullable.difference_remove A (nullable.union_max B A)) = nullable.empty
+      Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+      return NullablesRewriteResponse(emptyNullable, Rewrite::REMOVE_FROM_UNION);
     }
   }
 
-  if (n[0].getKind() == Kind::BAG_INTER_MIN)
+  if (n[0].getKind() == Kind::NULLABLE_INTER_MIN)
   {
     if (n[1] == n[0][0] || n[1] == n[0][1])
     {
-      // (bag.difference_remove (bag.inter_min A B) A) = bag.empty
-      // (bag.difference_remove (bag.inter_min B A) A) = bag.empty
-      Node emptyBag = d_nm->mkConst(EmptyBag(n.getType()));
-      return BagsRewriteResponse(emptyBag, Rewrite::REMOVE_MIN);
+      // (nullable.difference_remove (nullable.inter_min A B) A) = nullable.empty
+      // (nullable.difference_remove (nullable.inter_min B A) A) = nullable.empty
+      Node emptyNullable = d_nm->mkConst(EmptyNullable(n.getType()));
+      return NullablesRewriteResponse(emptyNullable, Rewrite::REMOVE_MIN);
     }
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteChoose(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteChoose(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_CHOOSE);
-  if (n[0].getKind() == Kind::BAG_MAKE && n[0][1].isConst()
+  Assert(n.getKind() == Kind::NULLABLE_CHOOSE);
+  if (n[0].getKind() == Kind::NULLABLE_MAKE && n[0][1].isConst()
       && n[0][1].getConst<Rational>() > 0)
   {
-    // (bag.choose (bag x c)) = x where c is a constant > 0
-    return BagsRewriteResponse(n[0][0], Rewrite::CHOOSE_BAG_MAKE);
+    // (nullable.choose (nullable x c)) = x where c is a constant > 0
+    return NullablesRewriteResponse(n[0][0], Rewrite::CHOOSE_NULLABLE_MAKE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteCard(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteCard(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_CARD);
-  if (n[0].getKind() == Kind::BAG_MAKE && n[0][1].isConst())
+  Assert(n.getKind() == Kind::NULLABLE_CARD);
+  if (n[0].getKind() == Kind::NULLABLE_MAKE && n[0][1].isConst())
   {
-    // (bag.card (bag x c)) = c where c is a constant > 0
-    return BagsRewriteResponse(n[0][1], Rewrite::CARD_BAG_MAKE);
+    // (nullable.card (nullable x c)) = c where c is a constant > 0
+    return NullablesRewriteResponse(n[0][1], Rewrite::CARD_NULLABLE_MAKE);
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteIsSingleton(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteIsSingleton(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_IS_SINGLETON);
-  if (n[0].getKind() == Kind::BAG_MAKE)
+  Assert(n.getKind() == Kind::NULLABLE_IS_SINGLETON);
+  if (n[0].getKind() == Kind::NULLABLE_MAKE)
   {
-    // (bag.is_singleton (bag x c)) = (c == 1)
+    // (nullable.is_singleton (nullable x c)) = (c == 1)
     Node equal = n[0][1].eqNode(d_one);
-    return BagsRewriteResponse(equal, Rewrite::IS_SINGLETON_BAG_MAKE);
+    return NullablesRewriteResponse(equal, Rewrite::IS_SINGLETON_NULLABLE_MAKE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteFromSet(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteFromSet(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_FROM_SET);
+  Assert(n.getKind() == Kind::NULLABLE_FROM_SET);
   if (n[0].getKind() == Kind::SET_SINGLETON)
   {
-    // (bag.from_set (set.singleton x)) = (bag x 1)
-    Node bag = d_nm->mkNode(Kind::BAG_MAKE, n[0][0], d_one);
-    return BagsRewriteResponse(bag, Rewrite::FROM_SINGLETON);
+    // (nullable.from_set (set.singleton x)) = (nullable x 1)
+    Node nullable = d_nm->mkNode(Kind::NULLABLE_MAKE, n[0][0], d_one);
+    return NullablesRewriteResponse(nullable, Rewrite::FROM_SINGLETON);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::rewriteToSet(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::rewriteToSet(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_TO_SET);
-  if (n[0].getKind() == Kind::BAG_MAKE && n[0][1].isConst()
+  Assert(n.getKind() == Kind::NULLABLE_TO_SET);
+  if (n[0].getKind() == Kind::NULLABLE_MAKE && n[0][1].isConst()
       && n[0][1].getConst<Rational>().sgn() == 1)
   {
-    // (bag.to_set (bag x n)) = (set.singleton x)
-    // where n is a positive constant and T is the type of the bag's elements
+    // (nullable.to_set (nullable x n)) = (set.singleton x)
+    // where n is a positive constant and T is the type of the nullable's elements
     Node set = d_nm->mkNode(Kind::SET_SINGLETON, n[0][0]);
-    return BagsRewriteResponse(set, Rewrite::TO_SINGLETON);
+    return NullablesRewriteResponse(set, Rewrite::TO_SINGLETON);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteEqual(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteEqual(const TNode& n) const
 {
   Assert(n.getKind() == Kind::EQUAL);
   if (n[0] == n[1])
   {
     Node ret = d_nm->mkConst(true);
-    return BagsRewriteResponse(ret, Rewrite::EQ_REFL);
+    return NullablesRewriteResponse(ret, Rewrite::EQ_REFL);
   }
 
   if (n[0].isConst() && n[1].isConst())
   {
     Node ret = d_nm->mkConst(false);
-    return BagsRewriteResponse(ret, Rewrite::EQ_CONST_FALSE);
+    return NullablesRewriteResponse(ret, Rewrite::EQ_CONST_FALSE);
   }
 
   // standard ordering
   if (n[0] > n[1])
   {
     Node ret = d_nm->mkNode(Kind::EQUAL, n[1], n[0]);
-    return BagsRewriteResponse(ret, Rewrite::EQ_SYM);
+    return NullablesRewriteResponse(ret, Rewrite::EQ_SYM);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteMap(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_MAP);
+  Assert(n.getKind() == Kind::NULLABLE_MAP);
   if (n[1].isConst())
   {
-    // (bag.map f (as bag.empty (Bag T1)) = (as bag.empty (Bag T2))
-    // (bag.map f (bag "a" 3)) = (bag (f "a") 3)
-    std::map<Node, Rational> elements = BagsUtils::getBagElements(n[1]);
+    // (nullable.map f (as nullable.empty (Nullable T1)) = (as nullable.empty (Nullable T2))
+    // (nullable.map f (nullable "a" 3)) = (nullable (f "a") 3)
+    std::map<Node, Rational> elements = NullablesUtils::getNullableElements(n[1]);
     std::map<Node, Rational> mappedElements;
     std::map<Node, Rational>::iterator it = elements.begin();
     while (it != elements.end())
@@ -550,160 +550,160 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       mappedElements[mappedElement] = it->second;
       ++it;
     }
-    TypeNode t = d_nm->mkBagType(n[0].getType().getRangeType());
-    Node ret = BagsUtils::constructConstantBagFromElements(t, mappedElements);
-    return BagsRewriteResponse(ret, Rewrite::MAP_CONST);
+    TypeNode t = d_nm->mkNullableType(n[0].getType().getRangeType());
+    Node ret = NullablesUtils::constructConstantNullableFromElements(t, mappedElements);
+    return NullablesRewriteResponse(ret, Rewrite::MAP_CONST);
   }
   Kind k = n[1].getKind();
   switch (k)
   {
-    case Kind::BAG_MAKE:
+    case Kind::NULLABLE_MAKE:
     {
-      // (bag.map f (bag x y)) = (bag (apply f x) y)
+      // (nullable.map f (nullable x y)) = (nullable (apply f x) y)
       Node mappedElement = d_nm->mkNode(Kind::APPLY_UF, n[0], n[1][0]);
-      Node ret = d_nm->mkNode(Kind::BAG_MAKE, mappedElement, n[1][1]);
-      return BagsRewriteResponse(ret, Rewrite::MAP_BAG_MAKE);
+      Node ret = d_nm->mkNode(Kind::NULLABLE_MAKE, mappedElement, n[1][1]);
+      return NullablesRewriteResponse(ret, Rewrite::MAP_NULLABLE_MAKE);
     }
 
-    case Kind::BAG_UNION_DISJOINT:
+    case Kind::NULLABLE_UNION_DISJOINT:
     {
-      // (bag.map f (bag.union_disjoint A B)) =
-      //    (bag.union_disjoint (bag.map f A) (bag.map f B))
-      Node a = d_nm->mkNode(Kind::BAG_MAP, n[0], n[1][0]);
-      Node b = d_nm->mkNode(Kind::BAG_MAP, n[0], n[1][1]);
-      Node ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b);
-      return BagsRewriteResponse(ret, Rewrite::MAP_UNION_DISJOINT);
+      // (nullable.map f (nullable.union_disjoint A B)) =
+      //    (nullable.union_disjoint (nullable.map f A) (nullable.map f B))
+      Node a = d_nm->mkNode(Kind::NULLABLE_MAP, n[0], n[1][0]);
+      Node b = d_nm->mkNode(Kind::NULLABLE_MAP, n[0], n[1][1]);
+      Node ret = d_nm->mkNode(Kind::NULLABLE_UNION_DISJOINT, a, b);
+      return NullablesRewriteResponse(ret, Rewrite::MAP_UNION_DISJOINT);
     }
 
-    default: return BagsRewriteResponse(n, Rewrite::NONE);
+    default: return NullablesRewriteResponse(n, Rewrite::NONE);
   }
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteFilter(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_FILTER);
+  Assert(n.getKind() == Kind::NULLABLE_FILTER);
   Node P = n[0];
   Node A = n[1];
   TypeNode t = A.getType();
   if (A.isConst())
   {
-    // (bag.filter p (as bag.empty (Bag T)) = (as bag.empty (Bag T))
-    // (bag.filter p (bag "a" 3) ((bag "b" 2))) =
-    //   (bag.union_disjoint
-    //     (ite (p "a") (bag "a" 3) (as bag.empty (Bag T)))
-    //     (ite (p "b") (bag "b" 2) (as bag.empty (Bag T)))
+    // (nullable.filter p (as nullable.empty (Nullable T)) = (as nullable.empty (Nullable T))
+    // (nullable.filter p (nullable "a" 3) ((nullable "b" 2))) =
+    //   (nullable.union_disjoint
+    //     (ite (p "a") (nullable "a" 3) (as nullable.empty (Nullable T)))
+    //     (ite (p "b") (nullable "b" 2) (as nullable.empty (Nullable T)))
 
-    Node ret = BagsUtils::evaluateBagFilter(n);
-    return BagsRewriteResponse(ret, Rewrite::FILTER_CONST);
+    Node ret = NullablesUtils::evaluateNullableFilter(n);
+    return NullablesRewriteResponse(ret, Rewrite::FILTER_CONST);
   }
   Kind k = A.getKind();
   switch (k)
   {
-    case Kind::BAG_MAKE:
+    case Kind::NULLABLE_MAKE:
     {
-      // (bag.filter p (bag x y)) = (ite (p x) (bag x y) (as bag.empty (Bag T)))
-      Node empty = d_nm->mkConst(EmptyBag(t));
+      // (nullable.filter p (nullable x y)) = (ite (p x) (nullable x y) (as nullable.empty (Nullable T)))
+      Node empty = d_nm->mkConst(EmptyNullable(t));
       Node pOfe = d_nm->mkNode(Kind::APPLY_UF, P, A[0]);
       Node ret = d_nm->mkNode(Kind::ITE, pOfe, A, empty);
-      return BagsRewriteResponse(ret, Rewrite::FILTER_BAG_MAKE);
+      return NullablesRewriteResponse(ret, Rewrite::FILTER_NULLABLE_MAKE);
     }
 
-    case Kind::BAG_UNION_DISJOINT:
+    case Kind::NULLABLE_UNION_DISJOINT:
     {
-      // (bag.filter p (bag.union_disjoint A B)) =
-      //    (bag.union_disjoint (bag.filter p A) (bag.filter p B))
-      Node a = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][0]);
-      Node b = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][1]);
-      Node ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b);
-      return BagsRewriteResponse(ret, Rewrite::FILTER_UNION_DISJOINT);
+      // (nullable.filter p (nullable.union_disjoint A B)) =
+      //    (nullable.union_disjoint (nullable.filter p A) (nullable.filter p B))
+      Node a = d_nm->mkNode(Kind::NULLABLE_FILTER, n[0], n[1][0]);
+      Node b = d_nm->mkNode(Kind::NULLABLE_FILTER, n[0], n[1][1]);
+      Node ret = d_nm->mkNode(Kind::NULLABLE_UNION_DISJOINT, a, b);
+      return NullablesRewriteResponse(ret, Rewrite::FILTER_UNION_DISJOINT);
     }
 
-    default: return BagsRewriteResponse(n, Rewrite::NONE);
+    default: return NullablesRewriteResponse(n, Rewrite::NONE);
   }
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteFold(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_FOLD);
+  Assert(n.getKind() == Kind::NULLABLE_FOLD);
   Node f = n[0];
   Node t = n[1];
-  Node bag = n[2];
-  if (bag.isConst())
+  Node nullable = n[2];
+  if (nullable.isConst())
   {
-    Node value = BagsUtils::evaluateBagFold(n);
-    return BagsRewriteResponse(value, Rewrite::FOLD_CONST);
+    Node value = NullablesUtils::evaluateNullableFold(n);
+    return NullablesRewriteResponse(value, Rewrite::FOLD_CONST);
   }
-  Kind k = bag.getKind();
+  Kind k = nullable.getKind();
   switch (k)
   {
-    case Kind::BAG_MAKE:
+    case Kind::NULLABLE_MAKE:
     {
-      if (bag[1].isConst() && bag[1].getConst<Rational>() > Rational(0))
+      if (nullable[1].isConst() && nullable[1].getConst<Rational>() > Rational(0))
       {
-        // (bag.fold f t (bag x n)) = (f t ... (f t (f t x))) n times, n > 0
-        Node value = BagsUtils::evaluateBagFold(n);
-        return BagsRewriteResponse(value, Rewrite::FOLD_BAG);
+        // (nullable.fold f t (nullable x n)) = (f t ... (f t (f t x))) n times, n > 0
+        Node value = NullablesUtils::evaluateNullableFold(n);
+        return NullablesRewriteResponse(value, Rewrite::FOLD_NULLABLE);
       }
       break;
     }
-    case Kind::BAG_UNION_DISJOINT:
+    case Kind::NULLABLE_UNION_DISJOINT:
     {
-      // (bag.fold f t (bag.union_disjoint A B)) =
-      //       (bag.fold f (bag.fold f t A) B) where A < B to break symmetry
-      Node A = bag[0] < bag[1] ? bag[0] : bag[1];
-      Node B = bag[0] < bag[1] ? bag[1] : bag[0];
-      Node foldA = d_nm->mkNode(Kind::BAG_FOLD, f, t, A);
-      Node fold = d_nm->mkNode(Kind::BAG_FOLD, f, foldA, B);
-      return BagsRewriteResponse(fold, Rewrite::FOLD_UNION_DISJOINT);
+      // (nullable.fold f t (nullable.union_disjoint A B)) =
+      //       (nullable.fold f (nullable.fold f t A) B) where A < B to break symmetry
+      Node A = nullable[0] < nullable[1] ? nullable[0] : nullable[1];
+      Node B = nullable[0] < nullable[1] ? nullable[1] : nullable[0];
+      Node foldA = d_nm->mkNode(Kind::NULLABLE_FOLD, f, t, A);
+      Node fold = d_nm->mkNode(Kind::NULLABLE_FOLD, f, foldA, B);
+      return NullablesRewriteResponse(fold, Rewrite::FOLD_UNION_DISJOINT);
     }
-    default: return BagsRewriteResponse(n, Rewrite::NONE);
+    default: return NullablesRewriteResponse(n, Rewrite::NONE);
   }
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::postRewritePartition(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewritePartition(const TNode& n) const
 {
-  Assert(n.getKind() == Kind::BAG_PARTITION);
+  Assert(n.getKind() == Kind::NULLABLE_PARTITION);
   if (n[1].isConst())
   {
-    Node ret = BagsUtils::evaluateBagPartition(d_rewriter, n);
+    Node ret = NullablesUtils::evaluateNullablePartition(d_rewriter, n);
     if (ret != n)
     {
-      return BagsRewriteResponse(ret, Rewrite::PARTITION_CONST);
+      return NullablesRewriteResponse(ret, Rewrite::PARTITION_CONST);
     }
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteAggregate(const TNode& n) const
 {
   Assert(n.getKind() == Kind::TABLE_AGGREGATE);
   if (n[1].isConst() && n[2].isConst())
   {
-    Node ret = BagsUtils::evaluateTableAggregate(d_rewriter, n);
+    Node ret = NullablesUtils::evaluateTableAggregate(d_rewriter, n);
     if (ret != n)
     {
-      return BagsRewriteResponse(ret, Rewrite::AGGREGATE_CONST);
+      return NullablesRewriteResponse(ret, Rewrite::AGGREGATE_CONST);
     }
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-BagsRewriteResponse BagsRewriter::postRewriteProduct(const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteProduct(const TNode& n) const
 {
   Assert(n.getKind() == Kind::TABLE_PRODUCT);
   TypeNode tableType = n.getType();
-  Node empty = d_nm->mkConst(EmptyBag(tableType));
-  if (n[0].getKind() == Kind::BAG_EMPTY || n[1].getKind() == Kind::BAG_EMPTY)
+  Node empty = d_nm->mkConst(EmptyNullable(tableType));
+  if (n[0].getKind() == Kind::NULLABLE_EMPTY || n[1].getKind() == Kind::NULLABLE_EMPTY)
   {
-    return BagsRewriteResponse(empty, Rewrite::PRODUCT_EMPTY);
+    return NullablesRewriteResponse(empty, Rewrite::PRODUCT_EMPTY);
   }
 
-  return BagsRewriteResponse(n, Rewrite::NONE);
+  return NullablesRewriteResponse(n, Rewrite::NONE);
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

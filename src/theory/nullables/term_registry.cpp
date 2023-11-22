@@ -10,7 +10,7 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Implementation of bags term registry object.
+ * Implementation of nullables term registry object.
  */
 
 #include "theory/nullables/term_registry.h"
@@ -24,7 +24,7 @@ using namespace cvc5::internal::kind;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 TermRegistry::TermRegistry(Env& env, SolverState& state, InferenceManager& im)
     : EnvObj(env),
@@ -34,18 +34,18 @@ TermRegistry::TermRegistry(Env& env, SolverState& state, InferenceManager& im)
 {
 }
 
-Node TermRegistry::getEmptyBag(TypeNode tn)
+Node TermRegistry::getEmptyNullable(TypeNode tn)
 {
-  std::map<TypeNode, Node>::iterator it = d_emptybag.find(tn);
-  if (it != d_emptybag.end())
+  std::map<TypeNode, Node>::iterator it = d_emptynullable.find(tn);
+  if (it != d_emptynullable.end())
   {
     return it->second;
   }
   Node n = NodeManager::currentNM()->mkConst(EmptySet(tn));
-  d_emptybag[tn] = n;
+  d_emptynullable[tn] = n;
   return n;
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

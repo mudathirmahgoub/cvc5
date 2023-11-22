@@ -10,7 +10,7 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Implementation of the inference manager for the theory of bags.
+ * Implementation of the inference manager for the theory of nullables.
  */
 
 #include "theory/nullables/inference_manager.h"
@@ -22,10 +22,10 @@ using namespace cvc5::internal::kind;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 InferenceManager::InferenceManager(Env& env, Theory& t, SolverState& s)
-    : InferenceManagerBuffered(env, t, s, "theory::bags::"), d_state(s)
+    : InferenceManagerBuffered(env, t, s, "theory::nullables::"), d_state(s)
 {
   d_true = NodeManager::currentNM()->mkConst(true);
   d_false = NodeManager::currentNM()->mkConst(false);
@@ -45,6 +45,6 @@ void InferenceManager::doPending()
   doPendingPhaseRequirements();
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

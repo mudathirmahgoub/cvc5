@@ -18,9 +18,9 @@
 #include "expr/attribute.h"
 #include "expr/bound_var_manager.h"
 #include "expr/dtype_cons.h"
-#include "expr/emptybag.h"
+#include "expr/emptynullable.h"
 #include "expr/skolem_manager.h"
-#include "theory/nullables/bags_utils.h"
+#include "theory/nullables/nullables_utils.h"
 #include "theory/nullables/inference_manager.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/datatypes/project_op.h"
@@ -34,7 +34,7 @@ using namespace cvc5::internal::theory::datatypes;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 InferenceGenerator::InferenceGenerator(SolverState* state, InferenceManager* im)
     : d_state(state), d_im(im)
@@ -48,34 +48,34 @@ InferenceGenerator::InferenceGenerator(SolverState* state, InferenceManager* im)
 
 void InferenceGenerator::registerCountTerm(Node n)
 {
-  Assert(n.getKind() == Kind::BAG_COUNT);
+  Assert(n.getKind() == Kind::NULLABLE_COUNT);
   Node element = d_state->getRepresentative(n[0]);
-  Node bag = d_state->getRepresentative(n[1]);
-  Node count = d_nm->mkNode(Kind::BAG_COUNT, element, bag);
+  Node nullable = d_state->getRepresentative(n[1]);
+  Node count = d_nm->mkNode(Kind::NULLABLE_COUNT, element, nullable);
   Node skolem = registerAndAssertSkolemLemma(count);
-  d_state->registerCountTerm(bag, element, skolem);
+  d_state->registerCountTerm(nullable, element, skolem);
 }
 
 void InferenceGenerator::registerCardinalityTerm(Node n)
 {
-  Assert(n.getKind() == Kind::BAG_CARD);
-  Node bag = d_state->getRepresentative(n[0]);
-  Node cardTerm = d_nm->mkNode(Kind::BAG_CARD, bag);
+  Assert(n.getKind() == Kind::NULLABLE_CARD);
+  Node nullable = d_state->getRepresentative(n[0]);
+  Node cardTerm = d_nm->mkNode(Kind::NULLABLE_CARD, nullable);
   Node skolem = registerAndAssertSkolemLemma(cardTerm);
   d_state->registerCardinalityTerm(cardTerm, skolem);
-  Node premise = n[0].eqNode(bag);
+  Node premise = n[0].eqNode(nullable);
   Node conclusion = skolem.eqNode(n);
   Node lemma = premise.notNode().orNode(conclusion);
-  d_im->addPendingLemma(lemma, InferenceId::BAGS_SKOLEM);
+  d_im->addPendingLemma(lemma, InferenceId::NULLABLES_SKOLEM);
 }
 
 InferInfo InferenceGenerator::nonNegativeCount(Node n, Node e)
 {
-  Assert(n.getType().isBag());
-  Assert(e.getType() == n.getType().getBagElementType());
+  Assert(n.getType().isNullable());
+  Assert(e.getType() == n.getType().getNullableElementType());
 
-  InferInfo inferInfo(d_im, InferenceId::BAGS_NON_NEGATIVE_COUNT);
-  Node count = d_nm->mkNode(Kind::BAG_COUNT, e, n);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_NON_NEGATIVE_COUNT);
+  Node count = d_nm->mkNode(Kind::NULLABLE_COUNT, e, n);
   Node gte = d_nm->mkNode(Kind::GEQ, count, d_zero);
   inferInfo.d_conclusion = gte;
   return inferInfo;
@@ -83,24 +83,24 @@ InferInfo InferenceGenerator::nonNegativeCount(Node n, Node e)
 
 InferInfo InferenceGenerator::nonNegativeCardinality(Node n)
 {
-  InferInfo inferInfo(d_im, InferenceId::BAGS_NON_NEGATIVE_COUNT);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_NON_NEGATIVE_COUNT);
   Node gte = d_nm->mkNode(Kind::GEQ, n, d_zero);
   inferInfo.d_conclusion = gte;
   return inferInfo;
 }
 
-InferInfo InferenceGenerator::bagMake(Node n)
+InferInfo InferenceGenerator::nullableMake(Node n)
 {
-  Assert(n.getKind() == Kind::BAG_MAKE);
+  Assert(n.getKind() == Kind::NULLABLE_MAKE);
   /*
    * (or
-   *   (and (<  c 1) (= (bag x c) (as bag.empty (Bag E))))
-   *   (and (>= c 1) (not (= (bag x c) (as bag.empty (Bag E))))
+   *   (and (<  c 1) (= (nullable x c) (as nullable.empty (Nullable E))))
+   *   (and (>= c 1) (not (= (nullable x c) (as nullable.empty (Nullable E))))
    */
   Node x = n[0];
   Node c = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_BAG_MAKE_SPLIT);
-  Node empty = d_nm->mkConst(EmptyBag(n.getType()));
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_NULLABLE_MAKE_SPLIT);
+  Node empty = d_nm->mkConst(EmptyNullable(n.getType()));
   Node equal = d_nm->mkNode(Kind::EQUAL, n, empty);
   Node geq = d_nm->mkNode(Kind::GEQ, c, d_one);
   Node isEmpty = geq.notNode().andNode(equal);
@@ -110,19 +110,19 @@ InferInfo InferenceGenerator::bagMake(Node n)
   return inferInfo;
 }
 
-InferInfo InferenceGenerator::bagMake(Node n, Node e)
+InferInfo InferenceGenerator::nullableMake(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_MAKE);
-  Assert(e.getType() == n.getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_MAKE);
+  Assert(e.getType() == n.getType().getNullableElementType());
 
   /*
    * (ite (and (= e x) (>= c 1))
-   *   (= (bag.count e skolem) c)
-   *   (= (bag.count e skolem) 0))
+   *   (= (nullable.count e skolem) c)
+   *   (= (nullable.count e skolem) 0))
    */
   Node x = n[0];
   Node c = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_BAG_MAKE);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_NULLABLE_MAKE);
   Node same = d_nm->mkNode(Kind::EQUAL, e, x);
   Node geq = d_nm->mkNode(Kind::GEQ, c, d_one);
   Node andNode = same.andNode(geq);
@@ -137,7 +137,7 @@ InferInfo InferenceGenerator::bagMake(Node n, Node e)
 
 /**
  * A bound variable corresponding to the universally quantified integer
- * variable used to range over the distinct elements in a bag, used
+ * variable used to range over the distinct elements in a nullable, used
  * for axiomatizing the behavior of some term.
  */
 struct FirstIndexVarAttributeId
@@ -147,7 +147,7 @@ typedef expr::Attribute<FirstIndexVarAttributeId, Node> FirstIndexVarAttribute;
 
 /**
  * A bound variable corresponding to the universally quantified integer
- * variable used to range over the distinct elements in a bag, used
+ * variable used to range over the distinct elements in a nullable, used
  * for axiomatizing the behavior of some term.
  */
 struct SecondIndexVarAttributeId
@@ -156,13 +156,13 @@ struct SecondIndexVarAttributeId
 typedef expr::Attribute<SecondIndexVarAttributeId, Node>
     SecondIndexVarAttribute;
 
-InferInfo InferenceGenerator::bagDisequality(Node equality, Node witness)
+InferInfo InferenceGenerator::nullableDisequality(Node equality, Node witness)
 {
-  Assert(equality.getKind() == Kind::EQUAL && equality[0].getType().isBag());
+  Assert(equality.getKind() == Kind::EQUAL && equality[0].getType().isNullable());
   Node A = equality[0];
   Node B = equality[1];
 
-  InferInfo inferInfo(d_im, InferenceId::BAGS_DISEQUALITY);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_DISEQUALITY);
 
   Node countA = getMultiplicityTerm(witness, A);
   Node countB = getMultiplicityTerm(witness, B);
@@ -178,18 +178,18 @@ Node InferenceGenerator::registerAndAssertSkolemLemma(Node& n)
 {
   Node skolem = d_sm->mkPurifySkolem(n);
   Node lemma = n.eqNode(skolem);
-  d_im->addPendingLemma(lemma, InferenceId::BAGS_SKOLEM);
-  Trace("bags-skolems") << "bags-skolems:  " << skolem << " = " << n
+  d_im->addPendingLemma(lemma, InferenceId::NULLABLES_SKOLEM);
+  Trace("nullables-skolems") << "nullables-skolems:  " << skolem << " = " << n
                         << std::endl;
   return skolem;
 }
 
 InferInfo InferenceGenerator::empty(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_EMPTY);
-  Assert(e.getType() == n.getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_EMPTY);
+  Assert(e.getType() == n.getType().getNullableElementType());
 
-  InferInfo inferInfo(d_im, InferenceId::BAGS_EMPTY);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_EMPTY);
   Node skolem = registerAndAssertSkolemLemma(n);
   Node count = getMultiplicityTerm(e, skolem);
 
@@ -200,12 +200,12 @@ InferInfo InferenceGenerator::empty(Node n, Node e)
 
 InferInfo InferenceGenerator::unionDisjoint(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_UNION_DISJOINT && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_UNION_DISJOINT && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_UNION_DISJOINT);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_UNION_DISJOINT);
 
   Node countA = getMultiplicityTerm(e, A);
   Node countB = getMultiplicityTerm(e, B);
@@ -222,12 +222,12 @@ InferInfo InferenceGenerator::unionDisjoint(Node n, Node e)
 
 InferInfo InferenceGenerator::unionMax(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_UNION_MAX && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_UNION_MAX && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_UNION_MAX);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_UNION_MAX);
 
   Node countA = getMultiplicityTerm(e, A);
   Node countB = getMultiplicityTerm(e, B);
@@ -245,12 +245,12 @@ InferInfo InferenceGenerator::unionMax(Node n, Node e)
 
 InferInfo InferenceGenerator::intersection(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_INTER_MIN && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_INTER_MIN && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_INTERSECTION_MIN);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_INTERSECTION_MIN);
 
   Node countA = getMultiplicityTerm(e, A);
   Node countB = getMultiplicityTerm(e, B);
@@ -266,13 +266,13 @@ InferInfo InferenceGenerator::intersection(Node n, Node e)
 
 InferInfo InferenceGenerator::differenceSubtract(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_DIFFERENCE_SUBTRACT
-         && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_DIFFERENCE_SUBTRACT
+         && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_DIFFERENCE_SUBTRACT);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_DIFFERENCE_SUBTRACT);
 
   Node countA = getMultiplicityTerm(e, A);
   Node countB = getMultiplicityTerm(e, B);
@@ -289,12 +289,12 @@ InferInfo InferenceGenerator::differenceSubtract(Node n, Node e)
 
 InferInfo InferenceGenerator::differenceRemove(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_DIFFERENCE_REMOVE && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_DIFFERENCE_REMOVE && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_DIFFERENCE_REMOVE);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_DIFFERENCE_REMOVE);
 
   Node countA = getMultiplicityTerm(e, A);
   Node countB = getMultiplicityTerm(e, B);
@@ -311,11 +311,11 @@ InferInfo InferenceGenerator::differenceRemove(Node n, Node e)
 
 InferInfo InferenceGenerator::duplicateRemoval(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_DUPLICATE_REMOVAL && n[0].getType().isBag());
-  Assert(e.getType() == n[0].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_DUPLICATE_REMOVAL && n[0].getType().isNullable());
+  Assert(e.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_DUPLICATE_REMOVAL);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_DUPLICATE_REMOVAL);
 
   Node countA = getMultiplicityTerm(e, A);
   Node skolem = registerAndAssertSkolemLemma(n);
@@ -331,27 +331,27 @@ InferInfo InferenceGenerator::duplicateRemoval(Node n, Node e)
 InferInfo InferenceGenerator::cardEmpty(const std::pair<Node, Node>& pair,
                                         Node n)
 {
-  Assert(pair.first.getKind() == Kind::BAG_CARD);
-  Assert(n.getKind() == Kind::BAG_EMPTY
+  Assert(pair.first.getKind() == Kind::NULLABLE_CARD);
+  Assert(n.getKind() == Kind::NULLABLE_EMPTY
          && n.getType() == pair.first[0].getType());
-  InferInfo inferInfo(d_im, InferenceId::BAGS_CARD_EMPTY);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_CARD_EMPTY);
   Node premise = pair.first[0].eqNode(n);
   Node conclusion = pair.second.eqNode(d_zero);
   inferInfo.d_conclusion = premise.eqNode(conclusion);
   return inferInfo;
 }
 
-InferInfo InferenceGenerator::cardBagMake(const std::pair<Node, Node>& pair,
+InferInfo InferenceGenerator::cardNullableMake(const std::pair<Node, Node>& pair,
                                           Node n)
 {
-  Assert(pair.first.getKind() == Kind::BAG_CARD);
-  Assert(n.getKind() == Kind::BAG_MAKE
+  Assert(pair.first.getKind() == Kind::NULLABLE_CARD);
+  Assert(n.getKind() == Kind::NULLABLE_MAKE
          && n.getType() == pair.first[0].getType());
   //(=>
-  //  (and (= A (bag x c)) (>= 0 c))
-  //  (= (bag.card A) c))
+  //  (and (= A (nullable x c)) (>= 0 c))
+  //  (= (nullable.card A) c))
   Node c = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_CARD);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_CARD);
   Node nonNegative = d_nm->mkNode(Kind::GEQ, c, d_zero);
   Node premise = pair.first[0].eqNode(n).andNode(nonNegative);
   Node conclusion = pair.second.eqNode(c);
@@ -364,32 +364,32 @@ InferInfo InferenceGenerator::cardUnionDisjoint(
 {
   Assert(premise.getType().isBoolean());
   Assert(!children.empty());
-  InferInfo inferInfo(d_im, InferenceId::BAGS_CARD);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_CARD);
 
   std::vector<Node>::const_iterator it = children.cbegin();
   Node child = *it;
-  d_state->registerBag(child);
+  d_state->registerNullable(child);
   Node unionDisjoints = child;
-  Node card = d_nm->mkNode(Kind::BAG_CARD, child);
+  Node card = d_nm->mkNode(Kind::NULLABLE_CARD, child);
   std::vector<Node> lemmas;
   Node sum = registerAndAssertSkolemLemma(card);
   ++it;
   while (it != children.end())
   {
     child = *it;
-    d_state->registerBag(child);
+    d_state->registerNullable(child);
     unionDisjoints =
-        d_nm->mkNode(Kind::BAG_UNION_DISJOINT, unionDisjoints, child);
-    card = d_nm->mkNode(Kind::BAG_CARD, child);
+        d_nm->mkNode(Kind::NULLABLE_UNION_DISJOINT, unionDisjoints, child);
+    card = d_nm->mkNode(Kind::NULLABLE_CARD, child);
     Node skolem = registerAndAssertSkolemLemma(card);
     sum = d_nm->mkNode(Kind::ADD, sum, skolem);
     ++it;
   }
-  Node parentCard = d_nm->mkNode(Kind::BAG_CARD, parent);
+  Node parentCard = d_nm->mkNode(Kind::NULLABLE_CARD, parent);
   Node parentSkolem = registerAndAssertSkolemLemma(parentCard);
 
-  Node bags = parent.eqNode(unionDisjoints);
-  lemmas.push_back(bags);
+  Node nullables = parent.eqNode(unionDisjoints);
+  lemmas.push_back(nullables);
   Node cards = parentSkolem.eqNode(sum);
   lemmas.push_back(cards);
   Node conclusion = d_nm->mkNode(Kind::AND, lemmas);
@@ -397,20 +397,20 @@ InferInfo InferenceGenerator::cardUnionDisjoint(
   return inferInfo;
 }
 
-Node InferenceGenerator::getMultiplicityTerm(Node element, Node bag)
+Node InferenceGenerator::getMultiplicityTerm(Node element, Node nullable)
 {
-  Node count = d_nm->mkNode(Kind::BAG_COUNT, element, bag);
+  Node count = d_nm->mkNode(Kind::NULLABLE_COUNT, element, nullable);
   return count;
 }
 
 std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_MAP && n[1].getType().isBag());
+  Assert(n.getKind() == Kind::NULLABLE_MAP && n[1].getType().isNullable());
   Assert(n[0].getType().isFunction()
          && n[0].getType().getArgTypes().size() == 1);
   Assert(e.getType() == n[0].getType().getRangeType());
 
-  InferInfo inferInfo(d_im, InferenceId::BAGS_MAP_DOWN);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_MAP_DOWN);
 
   Node f = n[0];
   Node A = n[1];
@@ -418,12 +418,12 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
   TypeNode domainType = f.getType().getArgTypes()[0];
   TypeNode ufType = d_nm->mkFunctionType(d_nm->integerType(), domainType);
   Node uf =
-      d_sm->mkSkolemFunction(SkolemFunId::BAGS_MAP_PREIMAGE, ufType, {n, e});
+      d_sm->mkSkolemFunction(SkolemFunId::NULLABLES_MAP_PREIMAGE, ufType, {n, e});
 
   // declare uninterpreted function sum: Int -> Int
   TypeNode sumType =
       d_nm->mkFunctionType(d_nm->integerType(), d_nm->integerType());
-  Node sum = d_sm->mkSkolemFunction(SkolemFunId::BAGS_MAP_SUM, sumType, {n, e});
+  Node sum = d_sm->mkSkolemFunction(SkolemFunId::NULLABLES_MAP_SUM, sumType, {n, e});
 
   // (= (sum 0) 0)
   Node sum_zero = d_nm->mkNode(Kind::APPLY_UF, sum, d_zero);
@@ -431,9 +431,9 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
 
   // guess the size of the preimage of e
   Node preImageSize = d_sm->mkSkolemFunction(
-      SkolemFunId::BAGS_MAP_PREIMAGE_SIZE, d_nm->integerType(), {n, e});
+      SkolemFunId::NULLABLES_MAP_PREIMAGE_SIZE, d_nm->integerType(), {n, e});
 
-  // (= (sum preImageSize) (bag.count e skolem))
+  // (= (sum preImageSize) (nullable.count e skolem))
   Node mapSkolem = registerAndAssertSkolemLemma(n);
   Node countE = getMultiplicityTerm(e, mapSkolem);
   Node totalSum = d_nm->mkNode(Kind::APPLY_UF, sum, preImageSize);
@@ -441,7 +441,7 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
 
   // (forall ((i Int))
   //        (let ((uf_i (uf i)))
-  //          (let ((count_uf_i (bag.count uf_i A)))
+  //          (let ((count_uf_i (nullable.count uf_i A)))
   //            (=>
   //             (and (>= i 1) (<= i preImageSize))
   //             (and
@@ -473,8 +473,8 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
   Node sum_i = d_nm->mkNode(Kind::APPLY_UF, sum, i);
   Node sum_iPlusOne = d_nm->mkNode(Kind::APPLY_UF, sum, iPlusOne);
   Node sum_iMinusOne = d_nm->mkNode(Kind::APPLY_UF, sum, iMinusOne);
-  Node count_iMinusOne = d_nm->mkNode(Kind::BAG_COUNT, uf_iMinusOne, A);
-  Node count_uf_i = d_nm->mkNode(Kind::BAG_COUNT, uf_i, A);
+  Node count_iMinusOne = d_nm->mkNode(Kind::NULLABLE_COUNT, uf_iMinusOne, A);
+  Node count_uf_i = d_nm->mkNode(Kind::NULLABLE_COUNT, uf_i, A);
   Node inductiveCase = d_nm->mkNode(
       Kind::EQUAL, sum_i, d_nm->mkNode(Kind::ADD, sum_iMinusOne, count_uf_i));
   Node f_iEqualE = d_nm->mkNode(Kind::EQUAL, f_uf_i, e);
@@ -498,7 +498,7 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
       Kind::AND, {baseCase, totalSumEqualCountE, forAll_i, preImageGTE_zero});
   inferInfo.d_conclusion = conclusion;
 
-  Trace("bags::InferenceGenerator::mapDown")
+  Trace("nullables::InferenceGenerator::mapDown")
       << "conclusion: " << inferInfo.d_conclusion << std::endl;
   return std::tuple(inferInfo, uf, preImageSize);
 }
@@ -506,11 +506,11 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
 InferInfo InferenceGenerator::mapUp(
     Node n, Node uf, Node preImageSize, Node y, Node x)
 {
-  Assert(n.getKind() == Kind::BAG_MAP && n[1].getType().isBag());
+  Assert(n.getKind() == Kind::NULLABLE_MAP && n[1].getType().isNullable());
   Assert(n[0].getType().isFunction()
          && n[0].getType().getArgTypes().size() == 1);
 
-  InferInfo inferInfo(d_im, InferenceId::BAGS_MAP_UP);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_MAP_UP);
   Node f = n[0];
   Node A = n[1];
 
@@ -519,7 +519,7 @@ InferInfo InferenceGenerator::mapUp(
   Node notEqual =
       d_nm->mkNode(Kind::EQUAL, d_nm->mkNode(Kind::APPLY_UF, f, x), y).negate();
 
-  Node k = d_sm->mkSkolemFunction(SkolemFunId::BAGS_MAP_PREIMAGE_INDEX,
+  Node k = d_sm->mkSkolemFunction(SkolemFunId::NULLABLES_MAP_PREIMAGE_INDEX,
                                   d_nm->integerType(),
                                   {n, uf, preImageSize, y, x});
   Node inRange = d_nm->mkNode(Kind::AND,
@@ -531,19 +531,19 @@ InferInfo InferenceGenerator::mapUp(
   Node orNode = d_nm->mkNode(Kind::OR, notEqual, andNode);
   Node implies = d_nm->mkNode(Kind::IMPLIES, xInA, orNode);
   inferInfo.d_conclusion = implies;
-  Trace("bags::InferenceGenerator::mapUpwards")
+  Trace("nullables::InferenceGenerator::mapUpwards")
       << "conclusion: " << inferInfo.d_conclusion << std::endl;
   return inferInfo;
 }
 
 InferInfo InferenceGenerator::filterDown(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_FILTER && n[1].getType().isBag());
-  Assert(e.getType() == n[1].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_FILTER && n[1].getType().isNullable());
+  Assert(e.getType() == n[1].getType().getNullableElementType());
 
   Node P = n[0];
   Node A = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_FILTER_DOWN);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_FILTER_DOWN);
 
   Node countA = getMultiplicityTerm(e, A);
   Node skolem = registerAndAssertSkolemLemma(n);
@@ -560,12 +560,12 @@ InferInfo InferenceGenerator::filterDown(Node n, Node e)
 
 InferInfo InferenceGenerator::filterUp(Node n, Node e)
 {
-  Assert(n.getKind() == Kind::BAG_FILTER && n[1].getType().isBag());
-  Assert(e.getType() == n[1].getType().getBagElementType());
+  Assert(n.getKind() == Kind::NULLABLE_FILTER && n[1].getType().isNullable());
+  Assert(e.getType() == n[1].getType().getNullableElementType());
 
   Node P = n[0];
   Node A = n[1];
-  InferInfo inferInfo(d_im, InferenceId::BAGS_FILTER_UP);
+  InferInfo inferInfo(d_im, InferenceId::NULLABLES_FILTER_UP);
 
   Node countA = getMultiplicityTerm(e, A);
   Node skolem = registerAndAssertSkolemLemma(n);
@@ -587,7 +587,7 @@ InferInfo InferenceGenerator::productUp(Node n, Node e1, Node e2)
   Assert(n.getKind() == Kind::TABLE_PRODUCT);
   Node A = n[0];
   Node B = n[1];
-  Node tuple = BagsUtils::constructProductTuple(n, e1, e2);
+  Node tuple = NullablesUtils::constructProductTuple(n, e1, e2);
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_PRODUCT_UP);
 
@@ -609,15 +609,15 @@ InferInfo InferenceGenerator::productUp(Node n, Node e1, Node e2)
 InferInfo InferenceGenerator::productDown(Node n, Node e)
 {
   Assert(n.getKind() == Kind::TABLE_PRODUCT);
-  Assert(e.getType() == n.getType().getBagElementType());
+  Assert(e.getType() == n.getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
 
-  TypeNode tupleBType = B.getType().getBagElementType();
-  TypeNode tupleAType = A.getType().getBagElementType();
+  TypeNode tupleBType = B.getType().getNullableElementType();
+  TypeNode tupleAType = A.getType().getNullableElementType();
   size_t tupleALength = tupleAType.getTupleLength();
-  size_t productTupleLength = n.getType().getBagElementType().getTupleLength();
+  size_t productTupleLength = n.getType().getNullableElementType().getTupleLength();
 
   std::vector<Node> elements = TupleUtils::getTupleElements(e);
   Node a = TupleUtils::constructTupleFromElements(
@@ -645,7 +645,7 @@ InferInfo InferenceGenerator::joinUp(Node n, Node e1, Node e2)
   Assert(n.getKind() == Kind::TABLE_JOIN);
   Node A = n[0];
   Node B = n[1];
-  Node tuple = BagsUtils::constructProductTuple(n, e1, e2);
+  Node tuple = NullablesUtils::constructProductTuple(n, e1, e2);
 
   std::vector<Node> aElements = TupleUtils::getTupleElements(e1);
   std::vector<Node> bElements = TupleUtils::getTupleElements(e2);
@@ -679,15 +679,15 @@ InferInfo InferenceGenerator::joinUp(Node n, Node e1, Node e2)
 InferInfo InferenceGenerator::joinDown(Node n, Node e)
 {
   Assert(n.getKind() == Kind::TABLE_JOIN);
-  Assert(e.getType() == n.getType().getBagElementType());
+  Assert(e.getType() == n.getType().getNullableElementType());
 
   Node A = n[0];
   Node B = n[1];
 
-  TypeNode tupleBType = B.getType().getBagElementType();
-  TypeNode tupleAType = A.getType().getBagElementType();
+  TypeNode tupleBType = B.getType().getNullableElementType();
+  TypeNode tupleAType = A.getType().getNullableElementType();
   size_t tupleALength = tupleAType.getTupleLength();
-  size_t productTupleLength = n.getType().getBagElementType().getTupleLength();
+  size_t productTupleLength = n.getType().getNullableElementType().getTupleLength();
 
   std::vector<Node> elements = TupleUtils::getTupleElements(e);
   Node a = TupleUtils::constructTupleFromElements(
@@ -725,14 +725,14 @@ InferInfo InferenceGenerator::groupNotEmpty(Node n)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
 
-  TypeNode bagType = n.getType();
+  TypeNode nullableType = n.getType();
   Node A = n[0];
-  Node emptyPart = d_nm->mkConst(EmptyBag(A.getType()));
+  Node emptyPart = d_nm->mkConst(EmptyNullable(A.getType()));
   Node skolem = registerAndAssertSkolemLemma(n);
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_NOT_EMPTY);
   Node A_isEmpty = A.eqNode(emptyPart);
   inferInfo.d_premises.push_back(A_isEmpty);
-  Node singleton = d_nm->mkNode(Kind::BAG_MAKE, emptyPart, d_one);
+  Node singleton = d_nm->mkNode(Kind::NULLABLE_MAKE, emptyPart, d_one);
   Node groupIsSingleton = skolem.eqNode(singleton);
 
   inferInfo.d_conclusion = groupIsSingleton;
@@ -742,10 +742,10 @@ InferInfo InferenceGenerator::groupNotEmpty(Node n)
 InferInfo InferenceGenerator::groupUp1(Node n, Node x, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(x.getType() == n[0].getType().getBagElementType());
+  Assert(x.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
+  TypeNode nullableType = A.getType();
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_UP1);
   Node count_x_A = getMultiplicityTerm(x, A);
@@ -762,7 +762,7 @@ InferInfo InferenceGenerator::groupUp1(Node n, Node x, Node part)
   Node count_part_x = getMultiplicityTerm(part_x, skolem);
   Node part_x_member = d_nm->mkNode(Kind::EQUAL, count_part_x, d_one);
 
-  Node emptyPart = d_nm->mkConst(EmptyBag(bagType));
+  Node emptyPart = d_nm->mkConst(EmptyNullable(nullableType));
   Node count_emptyPart = getMultiplicityTerm(emptyPart, skolem);
   Node emptyPart_not_member = count_emptyPart.eqNode(d_zero);
 
@@ -774,10 +774,10 @@ InferInfo InferenceGenerator::groupUp1(Node n, Node x, Node part)
 InferInfo InferenceGenerator::groupUp2(Node n, Node x, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(x.getType() == n[0].getType().getBagElementType());
+  Assert(x.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
+  TypeNode nullableType = A.getType();
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_UP2);
   Node count_x_A = getMultiplicityTerm(x, A);
@@ -786,7 +786,7 @@ InferInfo InferenceGenerator::groupUp2(Node n, Node x, Node part)
 
   Node part_x = d_nm->mkNode(Kind::APPLY_UF, part, x);
   part_x = registerAndAssertSkolemLemma(part_x);
-  Node part_x_is_empty = part_x.eqNode(d_nm->mkConst(EmptyBag(bagType)));
+  Node part_x_is_empty = part_x.eqNode(d_nm->mkConst(EmptyNullable(nullableType)));
   inferInfo.d_conclusion = part_x_is_empty;
   return inferInfo;
 }
@@ -794,11 +794,11 @@ InferInfo InferenceGenerator::groupUp2(Node n, Node x, Node part)
 InferInfo InferenceGenerator::groupDown(Node n, Node B, Node x, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(B.getType() == n.getType().getBagElementType());
-  Assert(x.getType() == n[0].getType().getBagElementType());
+  Assert(B.getType() == n.getType().getNullableElementType());
+  Assert(x.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
+  TypeNode nullableType = A.getType();
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_DOWN);
   Node count_x_B = getMultiplicityTerm(x, B);
@@ -820,11 +820,11 @@ InferInfo InferenceGenerator::groupDown(Node n, Node B, Node x, Node part)
 InferInfo InferenceGenerator::groupPartCount(Node n, Node B, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(B.getType() == n.getType().getBagElementType());
+  Assert(B.getType() == n.getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
-  Node empty = d_nm->mkConst(EmptyBag(bagType));
+  TypeNode nullableType = A.getType();
+  Node empty = d_nm->mkConst(EmptyNullable(nullableType));
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_PART_COUNT);
 
@@ -835,7 +835,7 @@ InferInfo InferenceGenerator::groupPartCount(Node n, Node B, Node part)
   inferInfo.d_premises.push_back(A_notEmpty);
 
   Node x = d_sm->mkSkolemFunction(SkolemFunId::TABLES_GROUP_PART_ELEMENT,
-                                  bagType.getBagElementType(),
+                                  nullableType.getNullableElementType(),
                                   {n, B});
   d_state->registerPartElementSkolem(n, x);
   Node part_x = d_nm->mkNode(Kind::APPLY_UF, part, x);
@@ -860,12 +860,12 @@ InferInfo InferenceGenerator::groupSameProjection(
     Node n, Node B, Node x, Node y, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(B.getType() == n.getType().getBagElementType());
-  Assert(x.getType() == n[0].getType().getBagElementType());
-  Assert(y.getType() == n[0].getType().getBagElementType());
+  Assert(B.getType() == n.getType().getNullableElementType());
+  Assert(x.getType() == n[0].getType().getNullableElementType());
+  Assert(y.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
+  TypeNode nullableType = A.getType();
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_SAME_PROJECTION);
   Node count_x_B = getMultiplicityTerm(x, B);
@@ -901,12 +901,12 @@ InferInfo InferenceGenerator::groupSamePart(
     Node n, Node B, Node x, Node y, Node part)
 {
   Assert(n.getKind() == Kind::TABLE_GROUP);
-  Assert(B.getType() == n.getType().getBagElementType());
-  Assert(x.getType() == n[0].getType().getBagElementType());
-  Assert(y.getType() == n[0].getType().getBagElementType());
+  Assert(B.getType() == n.getType().getNullableElementType());
+  Assert(x.getType() == n[0].getType().getNullableElementType());
+  Assert(y.getType() == n[0].getType().getNullableElementType());
 
   Node A = n[0];
-  TypeNode bagType = A.getType();
+  TypeNode nullableType = A.getType();
 
   InferInfo inferInfo(d_im, InferenceId::TABLES_GROUP_SAME_PART);
   Node count_x_B = getMultiplicityTerm(x, B);
@@ -946,7 +946,7 @@ Node InferenceGenerator::defineSkolemPartFunction(Node n)
   Assert(n.getKind() == Kind::TABLE_GROUP);
   Node A = n[0];
   TypeNode tableType = A.getType();
-  TypeNode elementType = tableType.getBagElementType();
+  TypeNode elementType = tableType.getNullableElementType();
 
   // declare an uninterpreted function part: T -> (Table T)
   TypeNode partType = d_nm->mkFunctionType(elementType, tableType);
@@ -955,6 +955,6 @@ Node InferenceGenerator::defineSkolemPartFunction(Node n)
   return part;
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

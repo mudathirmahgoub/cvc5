@@ -10,78 +10,27 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Type for rewrites for bags.
+ * Type for rewrites for nullables.
  */
 
 #include "cvc5_private.h"
 
-#ifndef CVC5__THEORY__BAGS__REWRITES_H
-#define CVC5__THEORY__BAGS__REWRITES_H
+#ifndef CVC5__THEORY__NULLABLES__REWRITES_H
+#define CVC5__THEORY__NULLABLES__REWRITES_H
 
 #include <iosfwd>
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
-/** Types of rewrites used by bags
+/** Types of rewrites used by nullables
  *
  * This rewrites are documented where they are used in the rewriter.
  */
 enum class Rewrite : uint32_t
 {
   NONE,  // no rewrite happened
-  AGGREGATE_CONST,
-  BAG_MAKE_COUNT_NEGATIVE,
-  CARD_DISJOINT,
-  CARD_BAG_MAKE,
-  CHOOSE_BAG_MAKE,
-  CONSTANT_EVALUATION,
-  COUNT_EMPTY,
-  COUNT_BAG_MAKE,
-  DUPLICATE_REMOVAL_BAG_MAKE,
-  EQ_CONST_FALSE,
-  EQ_REFL,
-  EQ_SYM,
-  FILTER_CONST,
-  FILTER_BAG_MAKE,
-  FILTER_UNION_DISJOINT,
-  FROM_SINGLETON,
-  FOLD_BAG,
-  FOLD_CONST,
-  FOLD_UNION_DISJOINT,
-  IDENTICAL_NODES,
-  INTERSECTION_EMPTY_LEFT,
-  INTERSECTION_EMPTY_RIGHT,
-  INTERSECTION_SAME,
-  INTERSECTION_SHARED_LEFT,
-  INTERSECTION_SHARED_RIGHT,
-  IS_SINGLETON_BAG_MAKE,
-  MAP_CONST,
-  MAP_BAG_MAKE,
-  MAP_UNION_DISJOINT,
-  MEMBER,
-  PARTITION_CONST,
-  PRODUCT_EMPTY,
-  REMOVE_FROM_UNION,
-  REMOVE_MIN,
-  REMOVE_RETURN_LEFT,
-  REMOVE_SAME,
-  SUB_BAG,
-  SUBTRACT_DISJOINT_SHARED_LEFT,
-  SUBTRACT_DISJOINT_SHARED_RIGHT,
-  SUBTRACT_FROM_UNION,
-  SUBTRACT_MIN,
-  SUBTRACT_RETURN_LEFT,
-  SUBTRACT_SAME,
-  TO_SINGLETON,
-  UNION_DISJOINT_EMPTY_LEFT,
-  UNION_DISJOINT_EMPTY_RIGHT,
-  UNION_DISJOINT_MAX_MIN,
-  UNION_MAX_EMPTY,
-  UNION_MAX_SAME_OR_EMPTY,
-  UNION_MAX_UNION_LEFT,
-  UNION_MAX_UNION_RIGHT
 };
 
 /**
@@ -104,8 +53,8 @@ const char* toString(Rewrite r);
  */
 std::ostream& operator<<(std::ostream& out, Rewrite r);
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal
 
-#endif /* CVC5__THEORY__BAGS__REWRITES_H */
+#endif /* CVC5__THEORY__NULLABLES__REWRITES_H */

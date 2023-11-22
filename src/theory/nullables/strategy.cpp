@@ -10,14 +10,14 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Implementation of the strategy of the theory of bags.
+ * Implementation of the strategy of the theory of nullables.
  */
 
 #include "theory/nullables/strategy.h"
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 std::ostream& operator<<(std::ostream& out, InferStep s)
 {
@@ -25,7 +25,7 @@ std::ostream& operator<<(std::ostream& out, InferStep s)
   {
     case BREAK: out << "break"; break;
     case CHECK_INIT: out << "check_init"; break;
-    case CHECK_BAG_MAKE: out << "check_bag_make"; break;
+    case CHECK_NULLABLE_MAKE: out << "check_nullable_make"; break;
     case CHECK_BASIC_OPERATIONS: out << "CHECK_BASIC_OPERATIONS"; break;
     case CHECK_CARDINALITY_CONSTRAINTS:
       out << "CHECK_CARDINALITY_CONSTRAINTS";
@@ -87,7 +87,7 @@ void Strategy::initializeStrategy()
     step_begin[Theory::EFFORT_FULL] = 0;
     // add the inference steps
     addStrategyStep(CHECK_INIT);
-    addStrategyStep(CHECK_BAG_MAKE);
+    addStrategyStep(CHECK_NULLABLE_MAKE);
     addStrategyStep(CHECK_BASIC_OPERATIONS);
     addStrategyStep(CHECK_QUANTIFIED_OPERATIONS);
     addStrategyStep(CHECK_CARDINALITY_CONSTRAINTS);
@@ -105,6 +105,6 @@ void Strategy::initializeStrategy()
   }
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

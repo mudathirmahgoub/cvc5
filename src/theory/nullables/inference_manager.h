@@ -10,28 +10,28 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * The inference manager for the theory of bags.
+ * The inference manager for the theory of nullables.
  */
 
 #include "cvc5_private.h"
 
-#ifndef CVC5__THEORY__BAGS__INFERENCE_MANAGER_H
-#define CVC5__THEORY__BAGS__INFERENCE_MANAGER_H
+#ifndef CVC5__THEORY__NULLABLES__INFERENCE_MANAGER_H
+#define CVC5__THEORY__NULLABLES__INFERENCE_MANAGER_H
 
 #include "theory/inference_manager_buffered.h"
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 class SolverState;
 
 /** Inference manager
  *
- * This class manages inferences produced by the theory of bags. It manages
+ * This class manages inferences produced by the theory of nullables. It manages
  * whether inferences are processed as external lemmas on the output channel
- * of theory of bags or internally as literals asserted to the equality engine
- * of theory of bags. The latter literals are referred to as "facts".
+ * of theory of nullables or internally as literals asserted to the equality engine
+ * of theory of nullables. The latter literals are referred to as "facts".
  */
 class InferenceManager : public InferenceManagerBuffered
 {
@@ -55,15 +55,15 @@ class InferenceManager : public InferenceManagerBuffered
   Node d_true;
   Node d_false;
   /**
-   * Reference to the state object for the theory of bags. We store the
+   * Reference to the state object for the theory of nullables. We store the
    * (derived) state here, since it has additional methods required in this
    * class.
    */
   SolverState& d_state;
 };
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal
 
-#endif /* CVC5__THEORY__BAGS__INFERENCE_MANAGER_H */
+#endif /* CVC5__THEORY__NULLABLES__INFERENCE_MANAGER_H */

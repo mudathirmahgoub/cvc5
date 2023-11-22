@@ -10,7 +10,7 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Implementation of bags state object.
+ * Implementation of nullables state object.
  */
 
 #include "theory/nullables/solver_state.h"
@@ -25,7 +25,7 @@ using namespace cvc5::internal::kind;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 SolverState::SolverState(Env& env, Valuation val)
     : TheoryState(env, val), d_partElementSkolems(env.getUserContext())
@@ -35,23 +35,23 @@ SolverState::SolverState(Env& env, Valuation val)
   d_nm = NodeManager::currentNM();
 }
 
-void SolverState::registerBag(TNode n)
+void SolverState::registerNullable(TNode n)
 {
-  Assert(n.getType().isBag());
-  d_bags.insert(n);
+  Assert(n.getType().isNullable());
+  d_nullables.insert(n);
 }
 
-void SolverState::registerCountTerm(Node bag, Node element, Node skolem)
+void SolverState::registerCountTerm(Node nullable, Node element, Node skolem)
 {
-  Assert(bag.getType().isBag() && bag == getRepresentative(bag));
-  Assert(element.getType() == bag.getType().getBagElementType()
+  Assert(nullable.getType().isNullable() && nullable == getRepresentative(nullable));
+  Assert(element.getType() == nullable.getType().getNullableElementType()
          && element == getRepresentative(element));
   Assert(skolem.isVar() && skolem.getType().isInteger());
   std::pair<Node, Node> pair = std::make_pair(element, skolem);
-  if (std::find(d_bagElements[bag].begin(), d_bagElements[bag].end(), pair)
-      == d_bagElements[bag].end())
+  if (std::find(d_nullableElements[nullable].begin(), d_nullableElements[nullable].end(), pair)
+      == d_nullableElements[nullable].end())
   {
-    d_bagElements[bag].push_back(pair);
+    d_nullableElements[nullable].push_back(pair);
   }
 }
 
@@ -64,22 +64,22 @@ void SolverState::registerGroupTerm(Node n)
 
 void SolverState::registerCardinalityTerm(Node n, Node skolem)
 {
-  Assert(n.getKind() == Kind::BAG_CARD);
+  Assert(n.getKind() == Kind::NULLABLE_CARD);
   Assert(skolem.isVar());
   d_cardTerms[n] = skolem;
 }
 
 Node SolverState::getCardinalitySkolem(Node n)
 {
-  Assert(n.getKind() == Kind::BAG_CARD);
-  Node bag = getRepresentative(n[0]);
-  Node cardTerm = d_nm->mkNode(Kind::BAG_CARD, bag);
+  Assert(n.getKind() == Kind::NULLABLE_CARD);
+  Node nullable = getRepresentative(n[0]);
+  Node cardTerm = d_nm->mkNode(Kind::NULLABLE_CARD, nullable);
   return d_cardTerms[cardTerm];
 }
 
 bool SolverState::hasCardinalityTerms() const { return !d_cardTerms.empty(); }
 
-const std::set<Node>& SolverState::getBags() { return d_bags; }
+const std::set<Node>& SolverState::getNullables() { return d_nullables; }
 
 const std::map<Node, Node>& SolverState::getCardinalityTerms()
 {
@@ -88,9 +88,9 @@ const std::map<Node, Node>& SolverState::getCardinalityTerms()
 
 std::set<Node> SolverState::getElements(Node B)
 {
-  Node bag = getRepresentative(B);
+  Node nullable = getRepresentative(B);
   std::set<Node> elements;
-  std::vector<std::pair<Node, Node>> pairs = d_bagElements[bag];
+  std::vector<std::pair<Node, Node>> pairs = d_nullableElements[nullable];
   for (std::pair<Node, Node> pair : pairs)
   {
     elements.insert(pair.first);
@@ -101,33 +101,33 @@ std::set<Node> SolverState::getElements(Node B)
 const std::vector<std::pair<Node, Node>>& SolverState::getElementCountPairs(
     Node n)
 {
-  Node bag = getRepresentative(n);
-  return d_bagElements[bag];
+  Node nullable = getRepresentative(n);
+  return d_nullableElements[nullable];
 }
 
-struct BagsDeqAttributeId
+struct NullablesDeqAttributeId
 {
 };
-typedef expr::Attribute<BagsDeqAttributeId, Node> BagsDeqAttribute;
+typedef expr::Attribute<NullablesDeqAttributeId, Node> NullablesDeqAttribute;
 
-void SolverState::collectDisequalBagTerms()
+void SolverState::collectDisequalNullableTerms()
 {
   eq::EqClassIterator it = eq::EqClassIterator(d_false, d_ee);
   while (!it.isFinished())
   {
     Node n = (*it);
-    if (n.getKind() == Kind::EQUAL && n[0].getType().isBag())
+    if (n.getKind() == Kind::EQUAL && n[0].getType().isNullable())
     {
-      Trace("bags-eqc") << "Disequal terms: " << n << std::endl;
+      Trace("nullables-eqc") << "Disequal terms: " << n << std::endl;
       Node A = getRepresentative(n[0]);
       Node B = getRepresentative(n[1]);
       Node equal = A <= B ? A.eqNode(B) : B.eqNode(A);
       if (d_deq.find(equal) == d_deq.end())
       {
-        TypeNode elementType = A.getType().getBagElementType();
+        TypeNode elementType = A.getType().getNullableElementType();
         SkolemManager* sm = d_nm->getSkolemManager();
         Node skolem = sm->mkSkolemFunction(
-            SkolemFunId::BAGS_DEQ_DIFF, elementType, {A, B});
+            SkolemFunId::NULLABLES_DEQ_DIFF, elementType, {A, B});
         d_deq[equal] = skolem;
       }
     }
@@ -135,12 +135,12 @@ void SolverState::collectDisequalBagTerms()
   }
 }
 
-const std::map<Node, Node>& SolverState::getDisequalBagTerms() { return d_deq; }
+const std::map<Node, Node>& SolverState::getDisequalNullableTerms() { return d_deq; }
 
 void SolverState::registerPartElementSkolem(Node group, Node skolemElement)
 {
   Assert(group.getKind() == Kind::TABLE_GROUP);
-  Assert(skolemElement.getType() == group[0].getType().getBagElementType());
+  Assert(skolemElement.getType() == group[0].getType().getNullableElementType());
   d_partElementSkolems[group].get()->insert(skolemElement);
 }
 
@@ -153,12 +153,12 @@ std::shared_ptr<context::CDHashSet<Node>> SolverState::getPartElementSkolems(
 
 void SolverState::reset()
 {
-  d_bagElements.clear();
-  d_bags.clear();
+  d_nullableElements.clear();
+  d_nullables.clear();
   d_deq.clear();
   d_cardTerms.clear();
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

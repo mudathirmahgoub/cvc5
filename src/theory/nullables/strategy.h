@@ -10,13 +10,13 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Strategy of the theory of bags.
+ * Strategy of the theory of nullables.
  */
 
 #include "cvc5_private.h"
 
-#ifndef CVC5__THEORY__BAGS__STRATEGY_H
-#define CVC5__THEORY__BAGS__STRATEGY_H
+#ifndef CVC5__THEORY__NULLABLES__STRATEGY_H
+#define CVC5__THEORY__NULLABLES__STRATEGY_H
 
 #include <map>
 #include <vector>
@@ -25,11 +25,11 @@
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 /** inference steps
  *
- * Corresponds to a step in the overall strategy of the bags solver. For
+ * Corresponds to a step in the overall strategy of the nullables solver. For
  * details on the individual steps, see documentation on the inference schemas
  * within Strategy.
  */
@@ -39,8 +39,8 @@ enum InferStep
   BREAK,
   // check initial
   CHECK_INIT,
-  // check bag operator
-  CHECK_BAG_MAKE,
+  // check nullable operator
+  CHECK_NULLABLE_MAKE,
   // check basic operations without quantifiers
   CHECK_BASIC_OPERATIONS,
   // check operations with quantifiers
@@ -51,10 +51,10 @@ enum InferStep
 std::ostream& operator<<(std::ostream& out, InferStep i);
 
 /**
- * The strategy of theory of bags.
+ * The strategy of theory of nullables.
  *
  * This stores a sequence of the above enum that indicates the calls to
- * runInferStep to make on the theory of bags, given by parent.
+ * runInferStep to make on the theory of nullables, given by parent.
  */
 class Strategy
 {
@@ -94,8 +94,8 @@ class Strategy
   std::map<Theory::Effort, std::pair<size_t, size_t> > d_strat_steps;
 }; /* class Strategy */
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal
 
-#endif /* CVC5__THEORY__BAGS__STRATEGY_H */
+#endif /* CVC5__THEORY__NULLABLES__STRATEGY_H */

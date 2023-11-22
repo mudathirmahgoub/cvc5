@@ -19,7 +19,7 @@
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 const char* toString(Rewrite r)
 {
@@ -27,23 +27,23 @@ const char* toString(Rewrite r)
   {
     case Rewrite::NONE: return "NONE";
     case Rewrite::AGGREGATE_CONST: return "AGGREGATE_CONST";
-    case Rewrite::BAG_MAKE_COUNT_NEGATIVE: return "BAG_MAKE_COUNT_NEGATIVE";
+    case Rewrite::NULLABLE_MAKE_COUNT_NEGATIVE: return "NULLABLE_MAKE_COUNT_NEGATIVE";
     case Rewrite::CARD_DISJOINT: return "CARD_DISJOINT";
-    case Rewrite::CARD_BAG_MAKE: return "CARD_BAG_MAKE";
-    case Rewrite::CHOOSE_BAG_MAKE: return "CHOOSE_BAG_MAKE";
+    case Rewrite::CARD_NULLABLE_MAKE: return "CARD_NULLABLE_MAKE";
+    case Rewrite::CHOOSE_NULLABLE_MAKE: return "CHOOSE_NULLABLE_MAKE";
     case Rewrite::CONSTANT_EVALUATION: return "CONSTANT_EVALUATION";
     case Rewrite::COUNT_EMPTY: return "COUNT_EMPTY";
-    case Rewrite::COUNT_BAG_MAKE: return "COUNT_BAG_MAKE";
-    case Rewrite::DUPLICATE_REMOVAL_BAG_MAKE:
-      return "DUPLICATE_REMOVAL_BAG_MAKE";
+    case Rewrite::COUNT_NULLABLE_MAKE: return "COUNT_NULLABLE_MAKE";
+    case Rewrite::DUPLICATE_REMOVAL_NULLABLE_MAKE:
+      return "DUPLICATE_REMOVAL_NULLABLE_MAKE";
     case Rewrite::EQ_CONST_FALSE: return "EQ_CONST_FALSE";
     case Rewrite::EQ_REFL: return "EQ_REFL";
     case Rewrite::EQ_SYM: return "EQ_SYM";
     case Rewrite::FILTER_CONST: return "FILTER_CONST";
-    case Rewrite::FILTER_BAG_MAKE: return "FILTER_BAG_MAKE";
+    case Rewrite::FILTER_NULLABLE_MAKE: return "FILTER_NULLABLE_MAKE";
     case Rewrite::FILTER_UNION_DISJOINT: return "FILTER_UNION_DISJOINT";
     case Rewrite::FROM_SINGLETON: return "FROM_SINGLETON";
-    case Rewrite::FOLD_BAG: return "FOLD_BAG";
+    case Rewrite::FOLD_NULLABLE: return "FOLD_NULLABLE";
     case Rewrite::FOLD_CONST: return "FOLD_CONST";
     case Rewrite::FOLD_UNION_DISJOINT: return "FOLD_UNION_DISJOINT";
     case Rewrite::IDENTICAL_NODES: return "IDENTICAL_NODES";
@@ -52,9 +52,9 @@ const char* toString(Rewrite r)
     case Rewrite::INTERSECTION_SAME: return "INTERSECTION_SAME";
     case Rewrite::INTERSECTION_SHARED_LEFT: return "INTERSECTION_SHARED_LEFT";
     case Rewrite::INTERSECTION_SHARED_RIGHT: return "INTERSECTION_SHARED_RIGHT";
-    case Rewrite::IS_SINGLETON_BAG_MAKE: return "IS_SINGLETON_BAG_MAKE";
+    case Rewrite::IS_SINGLETON_NULLABLE_MAKE: return "IS_SINGLETON_NULLABLE_MAKE";
     case Rewrite::MAP_CONST: return "MAP_CONST";
-    case Rewrite::MAP_BAG_MAKE: return "MAP_BAG_MAKE";
+    case Rewrite::MAP_NULLABLE_MAKE: return "MAP_NULLABLE_MAKE";
     case Rewrite::MAP_UNION_DISJOINT: return "MAP_UNION_DISJOINT";
     case Rewrite::MEMBER: return "MEMBER";
     case Rewrite::PARTITION_CONST: return "PARTITION_CONST";
@@ -63,7 +63,7 @@ const char* toString(Rewrite r)
     case Rewrite::REMOVE_MIN: return "REMOVE_MIN";
     case Rewrite::REMOVE_RETURN_LEFT: return "REMOVE_RETURN_LEFT";
     case Rewrite::REMOVE_SAME: return "REMOVE_SAME";
-    case Rewrite::SUB_BAG: return "SUB_BAG";
+    case Rewrite::SUB_NULLABLE: return "SUB_NULLABLE";
     case Rewrite::SUBTRACT_DISJOINT_SHARED_LEFT:
       return "SUBTRACT_DISJOINT_SHARED_LEFT";
     case Rewrite::SUBTRACT_DISJOINT_SHARED_RIGHT:
@@ -92,6 +92,6 @@ std::ostream& operator<<(std::ostream& out, Rewrite r)
   return out;
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

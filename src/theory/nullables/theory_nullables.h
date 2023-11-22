@@ -15,11 +15,11 @@
 
 #include "cvc5_private.h"
 
-#ifndef CVC5__THEORY__BAGS__THEORY_BAGS_H
-#define CVC5__THEORY__BAGS__THEORY_BAGS_H
+#ifndef CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
+#define CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
 
 #include "theory/care_pair_argument_callback.h"
-#include "theory/nullables/inference_manager.h"
+#include "theory/nullables/nullables_statistics.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/strategy.h"
 #include "theory/nullables/term_registry.h"
@@ -56,13 +56,13 @@ class TheoryNullables : public Theory
   //--------------------------------- end initialization
 
   /**
-   * initialize bag and count terms
+   * initialize nullable and count terms
    */
   void initialize();
   /**
-   * collect bags' representatives and all count terms.
+   * collect nullables' representatives and all count terms.
    */
-  void collectBagsAndCountTerms();
+  void collectNullablesAndCountTerms();
 
   //--------------------------------- standard check
   /** Post-check, called after the fact queue of the theory is processed. */
@@ -75,7 +75,7 @@ class TheoryNullables : public Theory
                           const std::set<Node>& termSet) override;
   TrustNode explain(TNode) override;
   Node getCandidateModelValue(TNode) override;
-  std::string identify() const override { return "THEORY_BAGS"; }
+  std::string identify() const override { return "THEORY_NULLABLES"; }
   void preRegisterTerm(TNode n) override;
   void presolve() override;
   void computeCareGraph() override;
@@ -105,28 +105,26 @@ class TheoryNullables : public Theory
     TheoryNullables& d_theory;
   };
 
-  /** expand the definition of the bag.choose operator */
+  /** expand the definition of the nullable.choose operator */
   TrustNode expandChooseOperator(const Node& node,
                                  std::vector<SkolemLemma>& lems);
 
-  /** The state of the bags solver at full effort */
+  /** The state of the nullables solver at full effort */
   SolverState d_state;
   /** The inference manager */
   InferenceManager d_im;
-  /** The inference generator */
-  InferenceGenerator d_ig;
   /** Instance of the above class */
   NotifyClass d_notify;
-  /** Statistics for the theory of bags. */
-  BagsStatistics d_statistics;
+  /** Statistics for the theory of nullables. */
+  NullablesStatistics d_statistics;
   /** The theory rewriter for this theory. */
-  BagsRewriter d_rewriter;
+  NullablesRewriter d_rewriter;
   /** The term registry for this theory */
   TermRegistry d_termReg;
-  /** the main solver for bags */
-  BagSolver d_solver;
+  /** the main solver for nullables */
+  NullableSolver d_solver;
 
-  /** the main solver for bags */
+  /** the main solver for nullables */
   CardSolver d_cardSolver;
 
   /** The care pair argument callback, used for theory combination */
@@ -146,4 +144,4 @@ class TheoryNullables : public Theory
 }  // namespace theory
 }  // namespace cvc5::internal
 
-#endif /* CVC5__THEORY__BAGS__THEORY_BAGS_H */
+#endif /* CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H */

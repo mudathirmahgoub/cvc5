@@ -10,13 +10,13 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Bags state object.
+ * Nullables state object.
  */
 
 #include "cvc5_private.h"
 
-#ifndef CVC5__THEORY__BAGS__TERM_REGISTRY_H
-#define CVC5__THEORY__BAGS__TERM_REGISTRY_H
+#ifndef CVC5__THEORY__NULLABLES__TERM_REGISTRY_H
+#define CVC5__THEORY__NULLABLES__TERM_REGISTRY_H
 
 #include <map>
 
@@ -26,14 +26,14 @@
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
 class InferenceManager;
 class SolverState;
 
 /**
  * Term registry, the purpose of this class is to maintain a database of
- * commonly used terms, and mappings from bags to their "proxy variables".
+ * commonly used terms, and mappings from nullables to their "proxy variables".
  */
 class TermRegistry : protected EnvObj
 {
@@ -43,24 +43,24 @@ class TermRegistry : protected EnvObj
   TermRegistry(Env& env, SolverState& state, InferenceManager& im);
 
   /**
-   * Returns the existing empty bag for type tn
+   * Returns the existing empty nullable for type tn
    * or creates a new one and returns it.
    **/
-  Node getEmptyBag(TypeNode tn);
+  Node getEmptyNullable(TypeNode tn);
 
  private:
   /** The inference manager */
   InferenceManager& d_im;
-  /** Map from bag terms to their proxy variables */
+  /** Map from nullable terms to their proxy variables */
   NodeMap d_proxy;
   /** Backwards map of above */
   NodeMap d_proxy_to_term;
-  /** Map from types to empty bag of that type */
-  std::map<TypeNode, Node> d_emptybag;
+  /** Map from types to empty nullable of that type */
+  std::map<TypeNode, Node> d_emptynullable;
 }; /* class Term */
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal
 
-#endif /* CVC5__THEORY__BAGS__TERM_REGISTRY_H */
+#endif /* CVC5__THEORY__NULLABLES__TERM_REGISTRY_H */

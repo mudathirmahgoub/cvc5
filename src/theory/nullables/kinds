@@ -45,7 +45,7 @@ constant NULLABLE_LIFT_OP \
 
 parameterized NULLABLE_LIFT VARIABLE 1: "application of lift operator; first parameter is the lift operator, remaining ones are its arguments"
 
-typerule NULLABLE_NOTHING           ::cvc5::internal::theory::bags::NothingTypeRule
+typerule NULLABLE_NOTHING           ::cvc5::internal::theory::nullables::NothingTypeRule
 typerule NULLABLE_LIFT_OP           "SimpleTypeRule<RBuiltinOperator>"
 typerule NULLABLE_LIFT              ::cvc5::internal::theory::nullables::NullableLiftTypeRule
 

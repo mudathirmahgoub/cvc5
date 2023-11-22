@@ -13,13 +13,11 @@
  * Nullables theory.
  */
 
-#include "theory/nullables/theory_bags.h"
+#include "theory/nullables/theory_nullables.h"
 
-#include "expr/emptybag.h"
 #include "expr/skolem_manager.h"
 #include "proof/proof_checker.h"
 #include "smt/logic_exception.h"
-#include "theory/nullables/bags_utils.h"
 #include "theory/quantifiers/fmf/bounded_integers.h"
 #include "theory/rewriter.h"
 #include "theory/theory_model.h"
@@ -29,19 +27,19 @@ using namespace cvc5::internal::kind;
 
 namespace cvc5::internal {
 namespace theory {
-namespace bags {
+namespace nullables {
 
-TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
-    : Theory(THEORY_BAGS, env, out, valuation),
+TheoryNullables::TheoryNullables(Env& env,
+                                 OutputChannel& out,
+                                 Valuation valuation)
+    : Theory(THEORY_NULLABLES, env, out, valuation),
       d_state(env, valuation),
       d_im(env, *this, d_state),
-      d_ig(&d_state, &d_im),
       d_notify(*this, d_im),
       d_statistics(statisticsRegistry()),
       d_rewriter(env.getRewriter(), &d_statistics.d_rewrites),
       d_termReg(env, d_state, d_im),
-      d_solver(env, d_state, d_im, d_termReg),
-      d_cardSolver(env, d_state, d_im),
+      d_solver(env, d_state, d_im, d_termReg),      
       d_cpacb(*this)
 {
   // use the official theory state and inference manager objects
@@ -49,135 +47,69 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
   d_inferManager = &d_im;
 }
 
-TheoryBags::~TheoryBags() {}
+TheoryNullables::~TheoryNullables() {}
 
-TheoryRewriter* TheoryBags::getTheoryRewriter() { return &d_rewriter; }
+TheoryRewriter* TheoryNullables::getTheoryRewriter() { return &d_rewriter; }
 
-ProofRuleChecker* TheoryBags::getProofChecker() { return nullptr; }
+ProofRuleChecker* TheoryNullables::getProofChecker() { return nullptr; }
 
-bool TheoryBags::needsEqualityEngine(EeSetupInfo& esi)
+bool TheoryNullables::needsEqualityEngine(EeSetupInfo& esi)
 {
   esi.d_notify = &d_notify;
-  esi.d_name = "theory::bags::ee";
+  esi.d_name = "theory::nullables::ee";
   return true;
 }
 
-void TheoryBags::finishInit()
+void TheoryNullables::finishInit()
 {
   Assert(d_equalityEngine != nullptr);
 
   d_valuation.setUnevaluatedKind(Kind::WITNESS);
 
   // functions we are doing congruence over
-  d_equalityEngine->addFunctionKind(Kind::BAG_UNION_MAX);
-  d_equalityEngine->addFunctionKind(Kind::BAG_UNION_DISJOINT);
-  d_equalityEngine->addFunctionKind(Kind::BAG_INTER_MIN);
-  d_equalityEngine->addFunctionKind(Kind::BAG_DIFFERENCE_SUBTRACT);
-  d_equalityEngine->addFunctionKind(Kind::BAG_DIFFERENCE_REMOVE);
-  d_equalityEngine->addFunctionKind(Kind::BAG_COUNT);
-  d_equalityEngine->addFunctionKind(Kind::BAG_DUPLICATE_REMOVAL);
-  d_equalityEngine->addFunctionKind(Kind::BAG_MAKE);
-  d_equalityEngine->addFunctionKind(Kind::BAG_CARD);
-  d_equalityEngine->addFunctionKind(Kind::BAG_FROM_SET);
-  d_equalityEngine->addFunctionKind(Kind::BAG_TO_SET);
-  d_equalityEngine->addFunctionKind(Kind::BAG_PARTITION);
-  d_equalityEngine->addFunctionKind(Kind::TABLE_PRODUCT);
-  d_equalityEngine->addFunctionKind(Kind::TABLE_PROJECT);
-  d_equalityEngine->addFunctionKind(Kind::TABLE_AGGREGATE);
-  d_equalityEngine->addFunctionKind(Kind::TABLE_JOIN);
-  d_equalityEngine->addFunctionKind(Kind::TABLE_GROUP);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_LIFT);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_LIFT_OP);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_NOTHING);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_TYPE);
+  
 }
 
-TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
+TrustNode TheoryNullables::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
 {
-  Trace("bags-ppr") << "TheoryBags::ppRewrite " << atom << std::endl;
+  Trace("nullables-ppr") << "TheoryNullables::ppRewrite " << atom << std::endl;
 
   switch (atom.getKind())
-  {
-    case Kind::BAG_CHOOSE: return expandChooseOperator(atom, lems);
-    case Kind::BAG_FOLD:
+  {    
     {
-      std::vector<Node> asserts;
-      Node ret = BagReduction::reduceFoldOperator(atom, asserts);
-      NodeManager* nm = NodeManager::currentNM();
-      Node andNode = nm->mkNode(Kind::AND, asserts);
-      d_im.lemma(andNode, InferenceId::BAGS_FOLD);
-      Trace("bags::ppr") << "reduce(" << atom << ") = " << ret
-                         << " such that:" << std::endl
-                         << andNode << std::endl;
-      return TrustNode::mkTrustRewrite(atom, ret, nullptr);
-    }
-    case Kind::TABLE_AGGREGATE:
-    {
-      Node ret = BagReduction::reduceAggregateOperator(atom);
-      Trace("bags::ppr") << "reduce(" << atom << ") = " << ret << std::endl;
-      return TrustNode::mkTrustRewrite(atom, ret, nullptr);
-    }
-    case Kind::TABLE_PROJECT:
-    {
-      Node ret = BagReduction::reduceProjectOperator(atom);
-      Trace("bags::ppr") << "reduce(" << atom << ") = " << ret << std::endl;
+      Node ret = NullableReduction::reduceProjectOperator(atom);
+      Trace("nullables::ppr")
+          << "reduce(" << atom << ") = " << ret << std::endl;
       return TrustNode::mkTrustRewrite(atom, ret, nullptr);
     }
     default: return TrustNode::null();
   }
 }
 
-TrustNode TheoryBags::expandChooseOperator(const Node& node,
-                                           std::vector<SkolemLemma>& lems)
-{
-  Assert(node.getKind() == Kind::BAG_CHOOSE);
-
-  // (bag.choose A) is eliminated to k, with lemma
-  // (and (= k (uf A)) (or (= A (as bag.empty (Bag E))) (>= (bag.count k A) 1)))
-  // where uf: (Bag E) -> E is a skolem function, and E is the type of elements
-  // of A
-
-  NodeManager* nm = NodeManager::currentNM();
-  SkolemManager* sm = nm->getSkolemManager();
-  Node x = sm->mkPurifySkolem(node);
-  Node A = node[0];
-  TypeNode bagType = A.getType();
-  TypeNode ufType = nm->mkFunctionType(bagType, bagType.getBagElementType());
-  // a Null node is used here to get a unique skolem function per bag type
-  Node uf = sm->mkSkolemFunction(SkolemFunId::BAGS_CHOOSE, ufType, Node());
-  Node ufA = NodeManager::currentNM()->mkNode(Kind::APPLY_UF, uf, A);
-
-  Node equal = x.eqNode(ufA);
-  Node emptyBag = nm->mkConst(EmptyBag(bagType));
-  Node isEmpty = A.eqNode(emptyBag);
-  Node count = nm->mkNode(Kind::BAG_COUNT, x, A);
-  Node one = nm->mkConstInt(Rational(1));
-  Node geqOne = nm->mkNode(Kind::GEQ, count, one);
-  Node lem =
-      nm->mkNode(Kind::AND, equal, nm->mkNode(Kind::OR, isEmpty, geqOne));
-  TrustNode tlem = TrustNode::mkTrustLemma(lem, nullptr);
-  lems.push_back(SkolemLemma(tlem, x));
-  Trace("TheoryBags::ppRewrite")
-      << "ppRewrite(" << node << ") = " << x << std::endl;
-  return TrustNode::mkTrustRewrite(node, x, nullptr);
-}
-
-void TheoryBags::initialize()
+void TheoryNullables::initialize()
 {
   d_state.reset();
   d_opMap.clear();
-  d_state.collectDisequalBagTerms();
-  collectBagsAndCountTerms();
+  d_state.collectDisequalNullableTerms();
+  collectNullablesTerms();
 }
 
-void TheoryBags::collectBagsAndCountTerms()
+void TheoryNullables::collectNullablesTerms()
 {
   eq::EqualityEngine* ee = d_state.getEqualityEngine();
   eq::EqClassesIterator repIt = eq::EqClassesIterator(ee);
   while (!repIt.isFinished())
   {
     Node eqc = (*repIt);
-    Trace("bags-eqc") << "Eqc [ " << eqc << " ] = { ";
+    Trace("nullables-eqc") << "Eqc [ " << eqc << " ] = { ";
 
-    if (eqc.getType().isBag())
+    if (eqc.getType().isNullable())
     {
-      d_state.registerBag(eqc);
+      d_state.registerNullable(eqc);
     }
 
     eq::EqClassIterator it = eq::EqClassIterator(eqc, ee);
@@ -185,22 +117,22 @@ void TheoryBags::collectBagsAndCountTerms()
     {
       Node n = (*it);
       d_opMap[n.getKind()].push_back(n);
-      Trace("bags-eqc") << (*it) << " ";
+      Trace("nullables-eqc") << (*it) << " ";
       Kind k = n.getKind();
-      if (k == Kind::BAG_MAKE)
+      if (k == Kind::NULLABLE_MAKE)
       {
-        // for terms (bag x c) we need to store x by registering the count term
-        // (bag.count x (bag x c))
+        // for terms (nullable x c) we need to store x by registering the count
+        // term (nullable.count x (nullable x c))
         NodeManager* nm = NodeManager::currentNM();
-        Node count = nm->mkNode(Kind::BAG_COUNT, n[0], n);
+        Node count = nm->mkNode(Kind::NULLABLE_COUNT, n[0], n);
         d_ig.registerCountTerm(count);
       }
-      if (k == Kind::BAG_COUNT)
+      if (k == Kind::NULLABLE_COUNT)
       {
         // this takes care of all count terms in each equivalent class
         d_ig.registerCountTerm(n);
       }
-      if (k == Kind::BAG_CARD)
+      if (k == Kind::NULLABLE_CARD)
       {
         d_ig.registerCardinalityTerm(n);
       }
@@ -210,29 +142,30 @@ void TheoryBags::collectBagsAndCountTerms()
       }
       ++it;
     }
-    Trace("bags-eqc") << " } " << std::endl;
+    Trace("nullables-eqc") << " } " << std::endl;
     ++repIt;
   }
 }
 
-void TheoryBags::postCheck(Effort effort)
+void TheoryNullables::postCheck(Effort effort)
 {
   d_im.doPendingFacts();
   Assert(d_strat.isStrategyInit());
   if (!d_state.isInConflict() && !d_valuation.needCheck()
       && d_strat.hasStrategyEffort(effort))
   {
-    Trace("bags::TheoryBags::postCheck") << "effort: " << effort << std::endl;
+    Trace("nullables::TheoryNullables::postCheck")
+        << "effort: " << effort << std::endl;
 
     // TODO issue #78: add ++(d_statistics.d_checkRuns);
     bool sentLemma = false;
     bool hadPending = false;
-    Trace("bags-check") << "Full effort check..." << std::endl;
+    Trace("nullables-check") << "Full effort check..." << std::endl;
     do
     {
       d_im.reset();
       // TODO issue #78: add ++(d_statistics.d_strategyRuns);
-      Trace("bags-check") << "  * Run strategy..." << std::endl;
+      Trace("nullables-check") << "  * Run strategy..." << std::endl;
       initialize();
       d_cardSolver.reset();
       runStrategy(effort);
@@ -249,34 +182,35 @@ void TheoryBags::postCheck(Effort effort)
       // (2) unsuccessfully processed pending lemmas.
       // In either case, we repeat the strategy if we are not in conflict.
       sentLemma = d_im.hasSentLemma();
-      if (TraceIsOn("bags-check"))
+      if (TraceIsOn("nullables-check"))
       {
-        Trace("bags-check") << "  ...finish run strategy: ";
-        Trace("bags-check") << (hadPending ? "hadPending " : "");
-        Trace("bags-check") << (sentLemma ? "sentLemma " : "");
-        Trace("bags-check") << (d_state.isInConflict() ? "conflict " : "");
+        Trace("nullables-check") << "  ...finish run strategy: ";
+        Trace("nullables-check") << (hadPending ? "hadPending " : "");
+        Trace("nullables-check") << (sentLemma ? "sentLemma " : "");
+        Trace("nullables-check") << (d_state.isInConflict() ? "conflict " : "");
         if (!hadPending && !sentLemma && !d_state.isInConflict())
         {
-          Trace("bags-check") << "(none)";
+          Trace("nullables-check") << "(none)";
         }
-        Trace("bags-check") << std::endl;
+        Trace("nullables-check") << std::endl;
       }
       // repeat if we did not add a lemma or conflict, and we had pending
       // facts or lemmas.
     } while (!d_state.isInConflict() && !sentLemma && hadPending);
   }
-  Trace("bags-check") << "Theory of bags, done check : " << effort << std::endl;
+  Trace("nullables-check") << "Theory of nullables, done check : " << effort
+                           << std::endl;
   Assert(!d_im.hasPendingFact());
   Assert(!d_im.hasPendingLemma());
 }
 
-void TheoryBags::runStrategy(Theory::Effort e)
+void TheoryNullables::runStrategy(Theory::Effort e)
 {
   std::vector<std::pair<InferStep, size_t>>::iterator it = d_strat.stepBegin(e);
   std::vector<std::pair<InferStep, size_t>>::iterator stepEnd =
       d_strat.stepEnd(e);
 
-  Trace("bags-process") << "----check, next round---" << std::endl;
+  Trace("nullables-process") << "----check, next round---" << std::endl;
   while (it != stepEnd)
   {
     InferStep curr = it->first;
@@ -296,75 +230,77 @@ void TheoryBags::runStrategy(Theory::Effort e)
     }
     ++it;
   }
-  Trace("bags-process") << "----finished round---" << std::endl;
+  Trace("nullables-process") << "----finished round---" << std::endl;
 }
 
 /** run the given inference step */
-bool TheoryBags::runInferStep(InferStep s, int effort)
+bool TheoryNullables::runInferStep(InferStep s, int effort)
 {
-  Trace("bags-process") << "Run " << s;
+  Trace("nullables-process") << "Run " << s;
   if (effort > 0)
   {
-    Trace("bags-process") << ", effort = " << effort;
+    Trace("nullables-process") << ", effort = " << effort;
   }
-  Trace("bags-process") << "..." << std::endl;
+  Trace("nullables-process") << "..." << std::endl;
   switch (s)
   {
     case CHECK_INIT: break;
-    case CHECK_BAG_MAKE:
+    case CHECK_NULLABLE_MAKE:
     {
-      if (d_solver.checkBagMake())
+      if (d_solver.checkNullableMake())
       {
         return true;
       }
       break;
     }
     case CHECK_BASIC_OPERATIONS: d_solver.checkBasicOperations(); break;
-    case CHECK_QUANTIFIED_OPERATIONS: d_solver.checkQuantifiedOperations(); break;
+    case CHECK_QUANTIFIED_OPERATIONS:
+      d_solver.checkQuantifiedOperations();
+      break;
     case CHECK_CARDINALITY_CONSTRAINTS:
       d_cardSolver.checkCardinalityGraph();
       break;
     default: Unreachable(); break;
   }
-  Trace("bags-process") << "Done " << s
-                        << ", addedFact = " << d_im.hasPendingFact()
-                        << ", addedLemma = " << d_im.hasPendingLemma()
-                        << ", conflict = " << d_state.isInConflict()
-                        << std::endl;
+  Trace("nullables-process")
+      << "Done " << s << ", addedFact = " << d_im.hasPendingFact()
+      << ", addedLemma = " << d_im.hasPendingLemma()
+      << ", conflict = " << d_state.isInConflict() << std::endl;
   return false;
 }
 
-void TheoryBags::notifyFact(TNode atom,
-                            bool polarity,
-                            TNode fact,
-                            bool isInternal)
+void TheoryNullables::notifyFact(TNode atom,
+                                 bool polarity,
+                                 TNode fact,
+                                 bool isInternal)
 {
 }
 
-bool TheoryBags::collectModelValues(TheoryModel* m,
-                                    const std::set<Node>& termSet)
+bool TheoryNullables::collectModelValues(TheoryModel* m,
+                                         const std::set<Node>& termSet)
 {
-  Trace("bags-model") << "TheoryBags : Collect model values" << std::endl;
+  Trace("nullables-model") << "TheoryNullables : Collect model values"
+                           << std::endl;
 
-  Trace("bags-model") << "Term set: " << termSet << std::endl;
+  Trace("nullables-model") << "Term set: " << termSet << std::endl;
 
-  // a map from bag representatives to their constructed values
-  std::map<Node, Node> processedBags;
+  // a map from nullable representatives to their constructed values
+  std::map<Node, Node> processedNullables;
 
-  // get the relevant bag equivalence classes
+  // get the relevant nullable equivalence classes
   for (const Node& n : termSet)
   {
     TypeNode tn = n.getType();
-    if (!tn.isBag())
+    if (!tn.isNullable())
     {
-      // we are only concerned here about bag terms
+      // we are only concerned here about nullable terms
       continue;
     }
     Node r = d_state.getRepresentative(n);
 
-    if (processedBags.find(r) != processedBags.end())
+    if (processedNullables.find(r) != processedNullables.end())
     {
-      // skip bags whose representatives are already processed
+      // skip nullables whose representatives are already processed
       continue;
     }
 
@@ -388,21 +324,23 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
       Node value = m->getRepresentative(countSkolem);
       elementReps[key] = value;
     }
-    Node constructedBag = BagsUtils::constructBagFromElements(tn, elementReps);
-    constructedBag = rewrite(constructedBag);
+    Node constructedNullable =
+        NullablesUtils::constructNullableFromElements(tn, elementReps);
+    constructedNullable = rewrite(constructedNullable);
     NodeManager* nm = NodeManager::currentNM();
     if (d_state.hasCardinalityTerms())
     {
       if (d_cardSolver.isLeaf(n))
       {
-        Node constructedBagCard =
-            rewrite(nm->mkNode(Kind::BAG_CARD, constructedBag));
-        Trace("bags-model")
-            << "constructed bag cardinality: " << constructedBagCard
+        Node constructedNullableCard =
+            rewrite(nm->mkNode(Kind::NULLABLE_CARD, constructedNullable));
+        Trace("nullables-model")
+            << "constructed nullable cardinality: " << constructedNullableCard
             << std::endl;
-        Node rCard = nm->mkNode(Kind::BAG_CARD, r);
+        Node rCard = nm->mkNode(Kind::NULLABLE_CARD, r);
         Node rCardSkolem = d_state.getCardinalitySkolem(rCard);
-        Trace("bags-model") << "rCardSkolem : " << rCardSkolem << std::endl;
+        Trace("nullables-model")
+            << "rCardSkolem : " << rCardSkolem << std::endl;
         if (!rCardSkolem.isNull())
         {
           Node rCardModelValue = m->getRepresentative(rCardSkolem);
@@ -411,27 +349,28 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
             const Rational& rCardRational =
                 rCardModelValue.getConst<Rational>();
             const Rational& constructedRational =
-                constructedBagCard.getConst<Rational>();
-            Trace("bags-model")
+                constructedNullableCard.getConst<Rational>();
+            Trace("nullables-model")
                 << "constructedRational : " << constructedRational << std::endl;
-            Trace("bags-model")
+            Trace("nullables-model")
                 << "rCardRational : " << rCardRational << std::endl;
             Assert(constructedRational <= rCardRational);
-            TypeNode elementType = r.getType().getBagElementType();
+            TypeNode elementType = r.getType().getNullableElementType();
             if (constructedRational < rCardRational
                 && !d_env.isFiniteType(elementType))
             {
               Node newElement =
                   nm->getSkolemManager()->mkDummySkolem("slack", elementType);
-              Trace("bags-model")
+              Trace("nullables-model")
                   << "newElement is " << newElement << std::endl;
               Rational difference = rCardRational - constructedRational;
               Node multiplicity = nm->mkConstInt(difference);
-              Node slackBag =
-                  nm->mkNode(Kind::BAG_MAKE, newElement, multiplicity);
-              constructedBag = nm->mkNode(
-                  Kind::BAG_UNION_DISJOINT, constructedBag, slackBag);
-              constructedBag = rewrite(constructedBag);
+              Node slackNullable =
+                  nm->mkNode(Kind::NULLABLE_MAKE, newElement, multiplicity);
+              constructedNullable = nm->mkNode(Kind::NULLABLE_UNION_DISJOINT,
+                                               constructedNullable,
+                                               slackNullable);
+              constructedNullable = rewrite(constructedNullable);
             }
           }
         }
@@ -440,35 +379,40 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
       {
         std::vector<Node> children = d_cardSolver.getChildren(n);
         Assert(!children.empty());
-        constructedBag = nm->mkConst(EmptyBag(r.getType()));
+        constructedNullable = nm->mkConst(EmptyNullable(r.getType()));
         for (Node child : children)
         {
-          Trace("bags-model")
-              << "child bag for " << n << " is: " << child << std::endl;
-          constructedBag =
-              nm->mkNode(Kind::BAG_UNION_DISJOINT, child, constructedBag);
+          Trace("nullables-model")
+              << "child nullable for " << n << " is: " << child << std::endl;
+          constructedNullable = nm->mkNode(
+              Kind::NULLABLE_UNION_DISJOINT, child, constructedNullable);
         }
-        constructedBag = rewrite(constructedBag);
-        Trace("bags-model") << "constructed bag for " << n
-                            << " is: " << constructedBag << std::endl;
+        constructedNullable = rewrite(constructedNullable);
+        Trace("nullables-model") << "constructed nullable for " << n
+                                 << " is: " << constructedNullable << std::endl;
       }
     }
-    m->assertEquality(constructedBag, n, true);
-    m->assertSkeleton(constructedBag);
-    processedBags[r] = constructedBag;
+    m->assertEquality(constructedNullable, n, true);
+    m->assertSkeleton(constructedNullable);
+    processedNullables[r] = constructedNullable;
   }
 
-  Trace("bags-model") << "processedBags:  " << processedBags << std::endl;
+  Trace("nullables-model") << "processedNullables:  " << processedNullables
+                           << std::endl;
   return true;
 }
 
-TrustNode TheoryBags::explain(TNode node) { return d_im.explainLit(node); }
+TrustNode TheoryNullables::explain(TNode node) { return d_im.explainLit(node); }
 
-Node TheoryBags::getCandidateModelValue(TNode node) { return Node::null(); }
-
-void TheoryBags::preRegisterTerm(TNode n)
+Node TheoryNullables::getCandidateModelValue(TNode node)
 {
-  Trace("bags") << "TheoryBags::preRegisterTerm(" << n << ")" << std::endl;
+  return Node::null();
+}
+
+void TheoryNullables::preRegisterTerm(TNode n)
+{
+  Trace("nullables") << "TheoryNullables::preRegisterTerm(" << n << ")"
+                     << std::endl;
   switch (n.getKind())
   {
     case Kind::EQUAL:
@@ -477,10 +421,10 @@ void TheoryBags::preRegisterTerm(TNode n)
       d_state.addEqualityEngineTriggerPredicate(n);
     }
     break;
-    case Kind::BAG_FROM_SET:
-    case Kind::BAG_TO_SET:
-    case Kind::BAG_IS_SINGLETON:
-    case Kind::BAG_PARTITION:
+    case Kind::NULLABLE_FROM_SET:
+    case Kind::NULLABLE_TO_SET:
+    case Kind::NULLABLE_IS_SINGLETON:
+    case Kind::NULLABLE_PARTITION:
     {
       std::stringstream ss;
       ss << "Term of kind " << n.getKind() << " is not supported yet";
@@ -490,84 +434,87 @@ void TheoryBags::preRegisterTerm(TNode n)
   }
 }
 
-void TheoryBags::presolve()
+void TheoryNullables::presolve()
 {
-  Trace("bags-presolve") << "Started presolve" << std::endl;
+  Trace("nullables-presolve") << "Started presolve" << std::endl;
   d_strat.initializeStrategy();
-  Trace("bags-presolve") << "Finished presolve" << std::endl;
+  Trace("nullables-presolve") << "Finished presolve" << std::endl;
 }
 
 /**************************** eq::NotifyClass *****************************/
 
-void TheoryBags::eqNotifyNewClass(TNode n) {}
+void TheoryNullables::eqNotifyNewClass(TNode n) {}
 
-void TheoryBags::eqNotifyMerge(TNode n1, TNode n2) {}
+void TheoryNullables::eqNotifyMerge(TNode n1, TNode n2) {}
 
-void TheoryBags::eqNotifyDisequal(TNode n1, TNode n2, TNode reason) {}
+void TheoryNullables::eqNotifyDisequal(TNode n1, TNode n2, TNode reason) {}
 
-void TheoryBags::NotifyClass::eqNotifyNewClass(TNode n)
+void TheoryNullables::NotifyClass::eqNotifyNewClass(TNode n)
 {
-  Trace("bags-eq") << "[bags-eq] eqNotifyNewClass:"
-                   << " n = " << n << std::endl;
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyNewClass:"
+                        << " n = " << n << std::endl;
   d_theory.eqNotifyNewClass(n);
 }
 
-void TheoryBags::NotifyClass::eqNotifyMerge(TNode n1, TNode n2)
+void TheoryNullables::NotifyClass::eqNotifyMerge(TNode n1, TNode n2)
 {
-  Trace("bags-eq") << "[bags-eq] eqNotifyMerge:"
-                   << " n1 = " << n1 << " n2 = " << n2 << std::endl;
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyMerge:"
+                        << " n1 = " << n1 << " n2 = " << n2 << std::endl;
   d_theory.eqNotifyMerge(n1, n2);
 }
 
-void TheoryBags::NotifyClass::eqNotifyDisequal(TNode n1, TNode n2, TNode reason)
+void TheoryNullables::NotifyClass::eqNotifyDisequal(TNode n1,
+                                                    TNode n2,
+                                                    TNode reason)
 {
-  Trace("bags-eq") << "[bags-eq] eqNotifyDisequal:"
-                   << " n1 = " << n1 << " n2 = " << n2 << " reason = " << reason
-                   << std::endl;
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyDisequal:"
+                        << " n1 = " << n1 << " n2 = " << n2
+                        << " reason = " << reason << std::endl;
   d_theory.eqNotifyDisequal(n1, n2, reason);
 }
 
-bool TheoryBags::isCareArg(Node n, unsigned a)
+bool TheoryNullables::isCareArg(Node n, unsigned a)
 {
-  if (d_equalityEngine->isTriggerTerm(n[a], THEORY_BAGS))
+  if (d_equalityEngine->isTriggerTerm(n[a], THEORY_NULLABLES))
   {
     return true;
   }
-  else if ((n.getKind() == Kind::BAG_COUNT || n.getKind() == Kind::BAG_MAKE)
-           && a == 0 && n[0].getType().isBag())
+  else if ((n.getKind() == Kind::NULLABLE_COUNT
+            || n.getKind() == Kind::NULLABLE_MAKE)
+           && a == 0 && n[0].getType().isNullable())
   {
-    // when the elements themselves are bags
+    // when the elements themselves are nullables
     return true;
   }
   return false;
 }
 
-void TheoryBags::computeCareGraph()
+void TheoryNullables::computeCareGraph()
 {
-  Trace("bags-cg") << "Compute graph for bags" << std::endl;
+  Trace("nullables-cg") << "Compute graph for nullables" << std::endl;
   for (const std::pair<const Kind, std::vector<Node>>& it : d_opMap)
   {
     Kind k = it.first;
-    if (k == Kind::BAG_MAKE || k == Kind::BAG_COUNT)
+    if (k == Kind::NULLABLE_MAKE || k == Kind::NULLABLE_COUNT)
     {
-      Trace("bags-cg") << "kind: " << k << ", size = " << it.second.size()
-                       << std::endl;
+      Trace("nullables-cg")
+          << "kind: " << k << ", size = " << it.second.size() << std::endl;
       std::map<TypeNode, TNodeTrie> index;
       unsigned arity = 0;
       // populate indices
       for (TNode n : it.second)
       {
-        Trace("bags-cg") << "computing n:  " << n << std::endl;
+        Trace("nullables-cg") << "computing n:  " << n << std::endl;
         Assert(d_equalityEngine->hasTerm(n));
         TypeNode tn;
-        if (k == Kind::BAG_MAKE)
+        if (k == Kind::NULLABLE_MAKE)
         {
-          tn = n.getType().getBagElementType();
+          tn = n.getType().getNullableElementType();
         }
         else
         {
-          Assert(k == Kind::BAG_COUNT);
-          tn = n[1].getType().getBagElementType();
+          Assert(k == Kind::NULLABLE_COUNT);
+          tn = n[1].getType().getNullableElementType();
         }
         std::vector<TNode> childrenReps;
         bool hasCareArg = false;
@@ -581,14 +528,14 @@ void TheoryBags::computeCareGraph()
         }
         if (hasCareArg)
         {
-          Trace("bags-cg") << "addTerm(" << n << ", " << childrenReps << ")"
-                           << std::endl;
+          Trace("nullables-cg")
+              << "addTerm(" << n << ", " << childrenReps << ")" << std::endl;
           index[tn].addTerm(n, childrenReps);
           arity = childrenReps.size();
         }
         else
         {
-          Trace("bags-cg") << "......skip." << std::endl;
+          Trace("nullables-cg") << "......skip." << std::endl;
         }
       }
       if (arity > 0)
@@ -596,21 +543,21 @@ void TheoryBags::computeCareGraph()
         // for each index
         for (std::pair<const TypeNode, TNodeTrie>& tt : index)
         {
-          Trace("bags-cg") << "Process index " << tt.first << "..."
-                           << std::endl;
+          Trace("nullables-cg")
+              << "Process index " << tt.first << "..." << std::endl;
           nodeTriePathPairProcess(&tt.second, arity, d_cpacb);
         }
       }
-      Trace("bags-cg") << "...done" << std::endl;
+      Trace("nullables-cg") << "...done" << std::endl;
     }
   }
 }
 
-void TheoryBags::processCarePairArgs(TNode a, TNode b)
+void TheoryNullables::processCarePairArgs(TNode a, TNode b)
 {
   // we care about the equality or disequality between x, y
-  // when (bag.count x A) = (bag.count y A)
-  if (a.getKind() != Kind::BAG_COUNT && d_state.areEqual(a, b))
+  // when (nullable.count x A) = (nullable.count y A)
+  if (a.getKind() != Kind::NULLABLE_COUNT && d_state.areEqual(a, b))
   {
     return;
   }
@@ -625,21 +572,22 @@ void TheoryBags::processCarePairArgs(TNode a, TNode b)
     {
       if (isCareArg(a, i) && isCareArg(b, i))
       {
-        // splitting on bags (necessary for handling bag of bags properly)
-        if (x.getType().isBag())
+        // splitting on nullables (necessary for handling nullable of nullables
+        // properly)
+        if (x.getType().isNullable())
         {
-          Assert(y.getType().isBag());
-          Trace("bags-cg-lemma")
+          Assert(y.getType().isNullable());
+          Trace("nullables-cg-lemma")
               << "Should split on : " << x << "==" << y << std::endl;
           Node equal = x.eqNode(y);
           Node lemma = equal.orNode(equal.notNode());
-          d_im.lemma(lemma, InferenceId::BAGS_CG_SPLIT);
+          d_im.lemma(lemma, InferenceId::NULLABLES_CG_SPLIT);
         }
       }
     }
   }
 }
 
-}  // namespace bags
+}  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

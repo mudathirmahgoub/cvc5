@@ -720,6 +720,8 @@ libcvc5_add_sources(
   theory/fp/theory_fp_utils.h
   theory/fp/theory_fp_utils.cpp
   theory/fp/type_enumerator.h
+  theory/nullables/null.cpp
+  theory/nullables/null.h
   theory/nullables/theory_nullables.cpp
   theory/nullables/theory_nullables.h  
   theory/interrupted.h

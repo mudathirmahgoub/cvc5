@@ -15,13 +15,13 @@
 
 #include "cvc5_public.h"
 
-#ifndef CVC5__PROJECT_OP_H
-#define CVC5__PROJECT_OP_H
+#ifndef CVC5__LIFTOP_H
+#define CVC5__LIFTOP_H
 
 #include <ostream>
 #include <vector>
 
-namespace cvc5::nullables {
+namespace cvc5::internal {
 
 class TypeNode;
 
@@ -53,6 +53,6 @@ struct LiftOpHashFunction
   size_t operator()(const LiftOp& op) const;
 }; /* struct LiftOpHashFunction */
 
-}  // namespace cvc5::nullables
+}  // namespace cvc5::internal
 
-#endif /* CVC5__PROJECT_OP_H */
+#endif /* CVC5__LIFTOP_H */

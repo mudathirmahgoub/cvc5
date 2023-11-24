@@ -455,6 +455,9 @@ class NodeManager
   /** Make the type of bags with the given parameterization */
   TypeNode mkBagType(TypeNode elementType);
 
+  /** Make the type of nullables with the given parameterization */
+  TypeNode mkNullableType(TypeNode elementType);
+
   /** Make the type of sequences with the given parameterization */
   TypeNode mkSequenceType(TypeNode elementType);
 

@@ -827,6 +827,18 @@ void Smt2State::setLogic(std::string name)
     addDatatypesOperators();
   }
 
+  if (d_logic.isTheoryEnabled(internal::theory::THEORY_DATATYPES))
+  {
+    // the Boolean sort is a placeholder here since we don't have type info
+    // without type annotation
+    Sort btype = d_solver->getBooleanSort();
+    defineVar("nullable.null",
+              d_solver->mkNullNullable(d_solver->mkNullableSort(btype)));
+
+    addOperator(Kind::NULLABLE_VALUE, "nullable.value");
+    addOperator(Kind::NULLABLE_LIFT, "nullable.lift");
+  }
+
   if (d_logic.isTheoryEnabled(internal::theory::THEORY_SETS))
   {
     // the Boolean sort is a placeholder here since we don't have type info
@@ -1577,6 +1589,14 @@ Sort Smt2State::getParametricSort(const std::string& name,
       parseError("Illegal bag type.");
     }
     t = d_solver->mkBagSort(args[0]);
+  }
+  else if (name == "Nullable" && isTheoryEnabled(internal::theory::THEORY_NULLABLES))
+  {
+    if (args.size() != 1)
+    {
+      parseError("Illegal nullable type.");
+    }
+    t = d_solver->mkNullableSort(args[0]);    
   }
   else if (name == "Seq" && !strictModeEnabled()
            && isTheoryEnabled(internal::theory::THEORY_STRINGS))

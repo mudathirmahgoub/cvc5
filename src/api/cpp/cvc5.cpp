@@ -72,6 +72,7 @@
 #include "theory/arith/nl/poly_conversion.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/logic_info.h"
+#include "theory/nullables/null.h"
 #include "theory/theory_model.h"
 #include "util/bitvector.h"
 #include "util/divisible.h"
@@ -1586,6 +1587,15 @@ bool Sort::isBag() const
   CVC5_API_TRY_CATCH_BEGIN;
   //////// all checks before this line
   return d_type->isBag();
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+bool Sort::isNullable() const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  return d_type->isNullable();
   ////////
   CVC5_API_TRY_CATCH_END;
 }
@@ -5759,6 +5769,16 @@ Sort Solver::mkBagSort(const Sort& elemSort) const
   CVC5_API_TRY_CATCH_END;
 }
 
+Sort Solver::mkNullableSort(const Sort& elemSort) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_SOLVER_CHECK_SORT(elemSort);
+  //////// all checks before this line
+  return Sort(d_nm, d_nm->mkNullableType(*elemSort.d_type));
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 Sort Solver::mkSequenceSort(const Sort& elemSort) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
@@ -5981,6 +6001,18 @@ Term Solver::mkEmptyBag(const Sort& sort) const
       << "bag sort associated with the node manager of this solver object";
   //////// all checks before this line
   return Solver::mkValHelper(d_nm, internal::EmptyBag(*sort.d_type));
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
+Term Solver::mkNullNullable(const Sort& sort) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_ARG_CHECK_EXPECTED(sort.isNullable(), sort) << "null sort or nullable sort";
+  CVC5_API_ARG_CHECK_EXPECTED(d_nm == sort.d_nm, sort)
+      << "nullable sort associated with the node manager of this solver object";
+  //////// all checks before this line
+  return Solver::mkValHelper(d_nm, internal::Null(*sort.d_type));
   ////////
   CVC5_API_TRY_CATCH_END;
 }

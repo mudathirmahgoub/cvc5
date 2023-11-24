@@ -1110,6 +1110,12 @@ std::string Smt2Printer::smtKindString(Kind k)
     case Kind::TUPLE_TYPE: return "Tuple";
     case Kind::TUPLE_PROJECT: return "tuple.project";
 
+    // nullable theory
+    case Kind::NULLABLE_TYPE: return "Nullable";
+    case Kind::NULLABLE_NULL: return "nullable.null";
+    case Kind::NULLABLE_VALUE: return "nullable.value";
+    case Kind::NULLABLE_LIFT: return "nullable.lift";
+
     // set theory
     case Kind::SET_EMPTY: return "set.empty";
     case Kind::SET_UNIVERSE: return "set.universe";

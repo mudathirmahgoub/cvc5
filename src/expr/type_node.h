@@ -474,6 +474,9 @@ class CVC5_EXPORT TypeNode
   /** Is this a Bag type? */
   bool isBag() const;
 
+  /** Is this a Nullable type? */
+  bool isNullable() const;
+
   /** Is this a Sequence type? */
   bool isSequence() const;
 

@@ -592,6 +592,12 @@ class CVC5_EXPORT Sort
    * @return True if the sort is a Bag sort.
    */
   bool isBag() const;
+  
+  /**
+   * Determine if this is a Nullable sort.
+   * @return True if the sort is a Nullable sort.
+   */
+  bool isNullable() const;
 
   /**
    * Determine if this is a Sequence sort.
@@ -3566,6 +3572,13 @@ class CVC5_EXPORT Solver
   Sort mkBagSort(const Sort& elemSort) const;
 
   /**
+   * Create a nullable sort.
+   * @param elemSort The sort of the nullable element.
+   * @return The nullable sort.
+   */
+  Sort mkNullableSort(const Sort& elemSort) const;
+
+  /**
    * Create a sequence sort.
    * @param elemSort The sort of the sequence elements.
    * @return The sequence sort.
@@ -3812,6 +3825,13 @@ class CVC5_EXPORT Solver
    * @return The empty bag constant.
    */
   Term mkEmptyBag(const Sort& sort) const;
+
+  /**
+   * Create a constant representing an null of the given sort.
+   * @param sort The sort of the Nullable element.
+   * @return The null constant.
+   */
+  Term mkNullNullable(const Sort& sort) const;
 
   /**
    * Create a separation logic empty term.

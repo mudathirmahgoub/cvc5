@@ -2950,6 +2950,27 @@ enum ENUM(Kind) : int32_t
    */
   EVALUE(TUPLE_PROJECT),
 
+ /* Nullables ------------------------------------------------------------- */
+
+  /**
+   * Nullable
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` DatatypeConstructor Term (see DatatypeConstructor::getTerm() const)
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - Solver::mkTerm(Kind, const std::vector<Term>&) const
+   *   - Solver::mkTerm(const Op&, const std::vector<Term>&) const
+   *
+   * - Create Op of this kind with:
+   *
+   *   - Solver::mkOp(Kind, const std::vector<uint32_t>&) const
+   */
+  EVALUE(NULLABLE_VALUE),
+  EVALUE(NULLABLE_LIFT),
+
   /* Separation Logic ------------------------------------------------------ */
 
   /**

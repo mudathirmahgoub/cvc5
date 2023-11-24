@@ -577,6 +577,13 @@ TypeNode NodeManager::mkBagType(TypeNode elementType)
   return mkTypeNode(Kind::BAG_TYPE, elementType);
 }
 
+TypeNode NodeManager::mkNullableType(TypeNode elementType)
+{
+  Assert(!elementType.isNull()) << "unexpected NULL element type";
+  Trace("nullables") << "making nullable type " << elementType << std::endl;
+  return mkTypeNode(Kind::NULLABLE_TYPE, elementType);
+}
+
 TypeNode NodeManager::mkSequenceType(TypeNode elementType)
 {
   Assert(!elementType.isNull()) << "unexpected NULL element type";

@@ -691,6 +691,14 @@ TypeNode TypeNode::getBagElementType() const
   return (*this)[0];
 }
 
+bool TypeNode::isNullable() const { return getKind() == Kind::NULLABLE_TYPE; }
+
+TypeNode TypeNode::getNullableElementType() const
+{
+  Assert(isNullable());
+  return (*this)[0];
+}
+
 bool TypeNode::isBitVector(unsigned size) const
 {
   return (getKind() == Kind::BITVECTOR_TYPE

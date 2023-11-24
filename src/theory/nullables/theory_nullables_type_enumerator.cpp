@@ -15,8 +15,7 @@
 
 #include "theory/nullables/theory_nullables_type_enumerator.h"
 
-#include "expr/emptynullable.h"
-#include "theory/nullables/nullables_utils.h"
+#include "theory/nullables/null.h"
 #include "theory_nullables_type_enumerator.h"
 #include "util/rational.h"
 
@@ -32,7 +31,7 @@ NullableEnumerator::NullableEnumerator(TypeNode type,
       d_nodeManager(NodeManager::currentNM()),
       d_elementTypeEnumerator(type.getNullableElementType(), tep)
 {
-  d_currentNullable = d_nodeManager->mkConst(EmptyNullable(type));
+  d_currentNullable = d_nodeManager->mkConst(Null(type));
   d_element = *d_elementTypeEnumerator;
 }
 

@@ -43,9 +43,12 @@ constant NULLABLE_LIFT_OP \
   "theory/nullables/lift_op.h" \
   "operator for NULLABLE_LIFT_OP; payload is an instance of the cvc5::nullable::LiftOp class"
 
+operator NULLABLE_VALUE 2 "constructs a nullable from one element"
+
 parameterized NULLABLE_LIFT NULLABLE_LIFT_OP 1: "application of lift operator; first parameter is the lift operator, remaining ones are its arguments"
 
 typerule NULLABLE_NULL           ::cvc5::internal::theory::nullables::NullTypeRule
+typerule NULLABLE_VALUE           ::cvc5::internal::theory::nullables::ValueTypeRule
 typerule NULLABLE_LIFT_OP        "SimpleTypeRule<RBuiltinOperator>"
 typerule NULLABLE_LIFT           ::cvc5::internal::theory::nullables::NullableLiftTypeRule
 

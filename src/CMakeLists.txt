@@ -721,7 +721,11 @@ libcvc5_add_sources(
   theory/fp/theory_fp_utils.cpp
   theory/fp/type_enumerator.h
   theory/nullables/null.cpp
-  theory/nullables/null.h
+  theory/nullables/null.h  
+  theory/nullables/theory_nullables_type_enumerator.cpp
+  theory/nullables/theory_nullables_type_enumerator.h 
+  theory/nullables/theory_nullables_type_rules.cpp
+  theory/nullables/theory_nullables_type_rules.h 
   theory/nullables/theory_nullables.cpp
   theory/nullables/theory_nullables.h  
   theory/interrupted.h

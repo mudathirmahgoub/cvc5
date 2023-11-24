@@ -507,6 +507,9 @@ class CVC5_EXPORT TypeNode
   /** Get the element type (for bag types) */
   TypeNode getBagElementType() const;
 
+  /** Get the nullable type (for nullable types)*/    
+  TypeNode getNullableElementType() const;
+
   /** Get the element type (for sequence types) */
   TypeNode getSequenceElementType() const;
 

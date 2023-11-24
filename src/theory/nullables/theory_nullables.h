@@ -18,6 +18,7 @@
 #ifndef CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
 #define CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
 
+#include "theory/nullables/nullables_rewriter.h"
 #include "theory/nullables/nullables_statistics.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/strategy.h"
@@ -50,6 +51,10 @@ class TheoryNullables : public Theory
    * etc..)
    */
   std::string identify() const override;
+
+ private:
+  /** The theory rewriter for this theory. */
+  NullablesRewriter d_rewriter;
 }; /* class TheoryNullables */
 
 }  // namespace nullables

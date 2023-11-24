@@ -45,12 +45,12 @@ class NullablesRewriter : public TheoryRewriter
   NullablesRewriter(Rewriter* r, HistogramStat<Rewrite>* statistics = nullptr);
 
   /**
-   * postRewrite nodes with kinds: . See the
-   * rewrite rules for these kinds below.
+   * postRewrite nodes with kinds:
+   * See the rewrite rules for these kinds below.
    */
   RewriteResponse postRewrite(TNode n) override;
   /**
-   * preRewrite nodes with kinds: EQUAL, NULLABLE_SUBNULLABLE, NULLABLE_MEMBER.
+   * preRewrite nodes with kinds:
    * See the rewrite rules for these kinds below.
    */
   RewriteResponse preRewrite(TNode n) override;
@@ -61,25 +61,20 @@ class NullablesRewriter : public TheoryRewriter
    * - (= A A) = true where A is a nullable
    */
   NullablesRewriteResponse preRewriteEqual(const TNode& n) const;
-
-  /**
-   * rewrites for n include:
-   * - (nullable.count x nullable.empty) = 0
-   * - (nullable.count x (nullable x c)) = (ite (>= c 1) c 0)
-   * - otherwise = n
-   */
-  NullablesRewriteResponse rewriteNullableCount(const TNode& n) const;
+  NullablesRewriteResponse postRewriteEqual(const TNode& n) const;
 
  private:
-  /** Reference to the rewriter statistics. */
+  /** Reference to node manager. */
   NodeManager* d_nm;
   Node d_zero;
   Node d_one;
+
   /**
    * Pointer to the rewriter. NOTE this is a cyclic dependency, and should
    * be removed.
    */
   Rewriter* d_rewriter;
+
   /** Reference to the rewriter statistics. */
   HistogramStat<Rewrite>* d_statistics;
 }; /* class TheoryNullablesRewriter */

@@ -30,7 +30,11 @@ namespace nullables {
  */
 enum class Rewrite : uint32_t
 {
-  NONE,  // no rewrite happened
+  NONE,             // no rewrite happened
+  IDENTICAL_NODES,  // identical nodes
+  EQ_REFL,
+  EQ_CONST_FALSE,
+  EQ_SYM
 };
 
 /**

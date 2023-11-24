@@ -32,11 +32,16 @@ namespace nullables {
 TheoryNullables::TheoryNullables(Env& env,
                                  OutputChannel& out,
                                  Valuation valuation)
-    : Theory(THEORY_NULLABLES, env, out, valuation)
+    : Theory(THEORY_NULLABLES, env, out, valuation),
+      d_rewriter(env.getRewriter(), nullptr)
 {
 }
 
 TheoryNullables::~TheoryNullables() {}
+
+TheoryRewriter* TheoryNullables::getTheoryRewriter() { return &d_rewriter; }
+
+ProofRuleChecker* TheoryNullables::getProofChecker() { return nullptr; }
 
 std::string TheoryNullables::identify() const { return "THEORY_NULLABLES"; }
 

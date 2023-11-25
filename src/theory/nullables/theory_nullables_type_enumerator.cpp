@@ -28,17 +28,19 @@ namespace nullables {
 NullableEnumerator::NullableEnumerator(TypeNode type,
                                        TypeEnumeratorProperties* tep)
     : TypeEnumeratorBase<NullableEnumerator>(type),
-      d_nodeManager(NodeManager::currentNM()),
-      d_elementTypeEnumerator(type.getNullableElementType(), tep)
+      d_nm(NodeManager::currentNM()),
+      d_elementTypeEnumerator(type.getNullableElementType(), tep),
+      d_null(d_nm->mkConst(Null(type)))
 {
-  d_currentNullable = d_nodeManager->mkConst(Null(type));
+  d_currentNullable = d_null;
   d_element = *d_elementTypeEnumerator;
 }
 
 NullableEnumerator::NullableEnumerator(const NullableEnumerator& enumerator)
     : TypeEnumeratorBase<NullableEnumerator>(enumerator.getType()),
-      d_nodeManager(enumerator.d_nodeManager),
+      d_nm(enumerator.d_nm),
       d_elementTypeEnumerator(enumerator.d_elementTypeEnumerator),
+      d_null(enumerator.d_null),
       d_currentNullable(enumerator.d_currentNullable),
       d_element(enumerator.d_element)
 {
@@ -55,12 +57,25 @@ Node NullableEnumerator::operator*()
   return d_currentNullable;
 }
 
-NullableEnumerator& NullableEnumerator::operator++() { return *this; }
+NullableEnumerator& NullableEnumerator::operator++()
+{
+  // construct the nullable using the current element
+  d_currentNullable = d_nm->mkNode(Kind::NULLABLE_VALUE, d_element);
+  // prepare the element for the next nullable
+  d_elementTypeEnumerator++;
+  d_element = *d_elementTypeEnumerator;
+  Assert(d_currentNullable.isConst());
+  Trace("nullable-type-enum")
+      << "NullableEnumerator::operator++ d_currentNullable = "
+      << d_currentNullable << std::endl;
+  return *this;
+}
 
 bool NullableEnumerator::isFinished()
 {
-  // nullables sequence is infinite and it never ends
-  return false;
+  // current runnable value is the same as next runnable value
+  return (d_currentNullable.getKind() == Kind::NULLABLE_VALUE)
+         && (d_currentNullable[0] == d_element);
 }
 
 }  // namespace nullables

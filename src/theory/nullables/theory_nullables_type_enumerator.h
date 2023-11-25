@@ -44,12 +44,14 @@ class NullableEnumerator : public TypeEnumeratorBase<NullableEnumerator>
 
  private:
   /** a pointer to the node manager */
-  NodeManager* d_nodeManager;
-  /** an enumerator for the set of pairs of element type x integer type */
+  NodeManager* d_nm;
+  /** an enumerator for the element type */
   TypeEnumerator d_elementTypeEnumerator;
-  /** the current set returned by the set enumerator */
+  /** constant null for this type enumerator */
+  Node d_null;
+  /** the current nullable value */
   Node d_currentNullable;
-  /** the first value returned by the element type enumerator*/
+  /** stores the next element value for this nullable if exists */
   Node d_element;
 }; /* class NullableEnumerator */
 

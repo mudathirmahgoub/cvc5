@@ -52,6 +52,14 @@ class TheoryNullables : public Theory
    */
   std::string identify() const override;
 
+  /**
+   * Collect model values, after equality information is added to the model.
+   * The argument termSet is the set of relevant terms returned by
+   * computeRelevantTerms.
+   */
+  virtual bool collectModelValues(TheoryModel* m,
+                                  const std::set<Node>& termSet);
+
  private:
   /** The theory rewriter for this theory. */
   NullablesRewriter d_rewriter;

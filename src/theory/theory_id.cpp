@@ -43,6 +43,7 @@ std::string toString(TheoryId theoryId)
     case THEORY_FF: return "THEORY_FF"; break;
     case THEORY_FP: return "THEORY_FP"; break;
     case THEORY_ARRAYS: return "THEORY_ARRAYS"; break;
+    case THEORY_NULLABLES: return "THEORY_NULLABLES";break;
     case THEORY_DATATYPES: return "THEORY_DATATYPES"; break;
     case THEORY_SAT_SOLVER: return "THEORY_SAT_SOLVER"; break;
     case THEORY_SEP: return "THEORY_SEP"; break;

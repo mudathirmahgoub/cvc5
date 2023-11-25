@@ -63,6 +63,8 @@ class TheoryNullables : public Theory
  private:
   /** The theory rewriter for this theory. */
   NullablesRewriter d_rewriter;
+  /** The state at full effort */
+  SolverState d_state;
 }; /* class TheoryNullables */
 
 }  // namespace nullables

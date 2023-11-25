@@ -33,7 +33,8 @@ TheoryNullables::TheoryNullables(Env& env,
                                  OutputChannel& out,
                                  Valuation valuation)
     : Theory(THEORY_NULLABLES, env, out, valuation),
-      d_rewriter(env.getRewriter(), nullptr)
+      d_rewriter(env.getRewriter(), nullptr),
+      d_state(env, valuation)
 {
 }
 

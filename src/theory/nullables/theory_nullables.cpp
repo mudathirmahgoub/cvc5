@@ -36,6 +36,7 @@ TheoryNullables::TheoryNullables(Env& env,
       d_rewriter(env.getRewriter(), nullptr),
       d_state(env, valuation)
 {
+  d_theoryState = &d_state;
 }
 
 TheoryNullables::~TheoryNullables() {}
@@ -45,6 +46,13 @@ TheoryRewriter* TheoryNullables::getTheoryRewriter() { return &d_rewriter; }
 ProofRuleChecker* TheoryNullables::getProofChecker() { return nullptr; }
 
 std::string TheoryNullables::identify() const { return "THEORY_NULLABLES"; }
+
+bool TheoryNullables::needsEqualityEngine(EeSetupInfo& esi)
+{
+  // esi.d_notify = &d_notify;
+  esi.d_name = "theory::nullables::ee";
+  return true;
+}
 
 bool TheoryNullables::collectModelValues(TheoryModel* m,
                                          const std::set<Node>& termSet)
@@ -76,6 +84,20 @@ bool TheoryNullables::collectModelValues(TheoryModel* m,
   Trace("nullables-model") << "processedNullables:  " << processedNullables
                            << std::endl;
   return true;
+}
+
+void TheoryNullables::finishInit()
+{
+  Assert(d_equalityEngine != nullptr);
+
+  // functions we are doing congruence over
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_NULL);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_VALUE);
+}
+
+void TheoryNullables::postCheck(Effort level)
+{
+  std::cout << " I am here" << std::endl;
 }
 
 }  // namespace nullables

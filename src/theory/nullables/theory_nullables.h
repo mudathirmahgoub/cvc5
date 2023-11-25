@@ -53,12 +53,35 @@ class TheoryNullables : public Theory
   std::string identify() const override;
 
   /**
+   * Returns true if this theory needs an equality engine for checking
+   * satisfiability.
+   *
+   * If this method returns true, then the equality engine manager will
+   * initialize its equality engine field via setEqualityEngine above during
+   * TheoryEngine::finishInit, prior to calling finishInit for this theory.
+   *
+   * Additionally, if this method returns true, then this method is required
+   * to update the argument esi with instructions for initializing and setting
+   * up notifications from its equality engine, which is commonly done with a
+   * notifications class (eq::EqualityEngineNotify).
+   */
+  bool needsEqualityEngine(EeSetupInfo& esi) override;
+
+  /** finish initialization */
+  void finishInit() override;
+
+  /**
    * Collect model values, after equality information is added to the model.
    * The argument termSet is the set of relevant terms returned by
    * computeRelevantTerms.
    */
-  virtual bool collectModelValues(TheoryModel* m,
-                                  const std::set<Node>& termSet);
+  bool collectModelValues(TheoryModel* m,
+                          const std::set<Node>& termSet) override;
+
+  /**
+   * Post-check, called after the fact queue of the theory is processed.
+   */
+  void postCheck(Effort level = EFFORT_FULL) override;
 
  private:
   /** The theory rewriter for this theory. */

@@ -34,7 +34,7 @@ using namespace std;
 
 namespace cvc5::internal {
 
-TypeNode TypeNode::s_null( &expr::NodeValue::null() );
+TypeNode TypeNode::s_null(&expr::NodeValue::null());
 
 TypeNode TypeNode::substitute(
     const TypeNode& type,
@@ -43,7 +43,8 @@ TypeNode TypeNode::substitute(
 {
   // in cache?
   std::unordered_map<TypeNode, TypeNode>::const_iterator i = cache.find(*this);
-  if(i != cache.end()) {
+  if (i != cache.end())
+  {
     return (*i).second;
   }
   else if (*this == type)
@@ -58,7 +59,8 @@ TypeNode TypeNode::substitute(
 
   // otherwise compute
   NodeBuilder nb(getKind());
-  if(getMetaKind() == kind::metakind::PARAMETERIZED) {
+  if (getMetaKind() == kind::metakind::PARAMETERIZED)
+  {
     // push the operator
     nb << TypeNode(d_nv->d_children[0]);
   }
@@ -80,7 +82,8 @@ TypeNode TypeNode::substitute(
   return tn;
 }
 
-Cardinality TypeNode::getCardinality() const {
+Cardinality TypeNode::getCardinality() const
+{
   return kind::getCardinality(*this);
 }
 
@@ -139,6 +142,12 @@ CardinalityClass TypeNode::getCardinalityClass()
       }
       // else, array types whose element type is INFINITE, ONE, or
       // INTERPRETED_ONE have the same cardinality class as their range.
+    }
+    else if (isNullable())
+    {
+      // the cardinality class of a nullable type is the cardinality class of
+      // the type of its element
+      ret = getNullableElementType().getCardinalityClass();
     }
     else if (isSet())
     {
@@ -414,7 +423,8 @@ TypeNode TypeNode::getSequenceElementType() const
   return (*this)[0];
 }
 
-std::vector<TypeNode> TypeNode::getArgTypes() const {
+std::vector<TypeNode> TypeNode::getArgTypes() const
+{
   vector<TypeNode> args;
   if (isDatatypeTester())
   {
@@ -451,12 +461,14 @@ bool TypeNode::isRecord() const
   return (getKind() == Kind::DATATYPE_TYPE && getDType().isRecord());
 }
 
-size_t TypeNode::getTupleLength() const {
+size_t TypeNode::getTupleLength() const
+{
   Assert(isTuple());
   return getNumChildren();
 }
 
-vector<TypeNode> TypeNode::getTupleTypes() const {
+vector<TypeNode> TypeNode::getTupleTypes() const
+{
   Assert(isTuple());
   std::vector<TypeNode> args;
   for (uint32_t i = 0, i_end = getNumChildren(); i < i_end; ++i)
@@ -467,7 +479,8 @@ vector<TypeNode> TypeNode::getTupleTypes() const {
 }
 
 /** Is this an instantiated datatype type */
-bool TypeNode::isInstantiatedDatatype() const {
+bool TypeNode::isInstantiatedDatatype() const
+{
   Kind k = getKind();
   if (k == Kind::DATATYPE_TYPE || k == Kind::TUPLE_TYPE)
   {
@@ -540,10 +553,7 @@ bool TypeNode::isUnresolvedDatatype() const
   return getAttribute(expr::UnresolvedDatatypeAttr());
 }
 
-bool TypeNode::hasName() const
-{
-  return hasAttribute(expr::VarNameAttr());
-}
+bool TypeNode::hasName() const { return hasAttribute(expr::VarNameAttr()); }
 
 std::string TypeNode::getName() const
 {
@@ -672,7 +682,8 @@ bool TypeNode::isMaybeKind(Kind k) const
   return false;
 }
 
-std::string TypeNode::toString() const {
+std::string TypeNode::toString() const
+{
   std::stringstream ss;
   toStream(ss);
   return ss.str();
@@ -745,7 +756,8 @@ TypeNode TypeNode::getRangeType() const
 
 namespace std {
 
-size_t hash<cvc5::internal::TypeNode>::operator()(const cvc5::internal::TypeNode& tn) const
+size_t hash<cvc5::internal::TypeNode>::operator()(
+    const cvc5::internal::TypeNode& tn) const
 {
   return tn.getId();
 }

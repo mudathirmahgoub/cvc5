@@ -18,6 +18,7 @@
 #ifndef CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
 #define CVC5__THEORY__NULLABLES__THEORY_NULLABLES_H
 
+#include "theory/inference_manager_buffered.h"
 #include "theory/nullables/nullables_rewriter.h"
 #include "theory/nullables/nullables_statistics.h"
 #include "theory/nullables/solver_state.h"
@@ -88,6 +89,8 @@ class TheoryNullables : public Theory
   NullablesRewriter d_rewriter;
   /** The state at full effort */
   SolverState d_state;
+  /** The inference manager */
+  InferenceManagerBuffered d_im;
 }; /* class TheoryNullables */
 
 }  // namespace nullables

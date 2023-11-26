@@ -34,9 +34,11 @@ TheoryNullables::TheoryNullables(Env& env,
                                  Valuation valuation)
     : Theory(THEORY_NULLABLES, env, out, valuation),
       d_rewriter(env.getRewriter(), nullptr),
-      d_state(env, valuation)
+      d_state(env, valuation),
+      d_im(env, *this, d_state, "theory::nullables::")
 {
   d_theoryState = &d_state;
+  d_inferManager = &d_im;
 }
 
 TheoryNullables::~TheoryNullables() {}

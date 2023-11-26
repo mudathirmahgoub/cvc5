@@ -296,6 +296,10 @@ const static std::unordered_map<Kind, std::pair<internal::Kind, std::string>>
         KIND_ENUM(Kind::STORE, internal::Kind::STORE),
         KIND_ENUM(Kind::CONST_ARRAY, internal::Kind::STORE_ALL),
         KIND_ENUM(Kind::EQ_RANGE, internal::Kind::EQ_RANGE),
+        /* Nullables -------------------------------------------------------- */
+        KIND_ENUM(Kind::NULLABLE_VALUE, internal::Kind::NULLABLE_VALUE),
+        KIND_ENUM(Kind::NULLABLE_LIFT, internal::Kind::NULLABLE_LIFT),
+        KIND_ENUM(Kind::NULLABLE_NULL, internal::Kind::NULLABLE_NULL),
         /* Datatypes -------------------------------------------------------- */
         KIND_ENUM(Kind::APPLY_SELECTOR, internal::Kind::APPLY_SELECTOR),
         KIND_ENUM(Kind::APPLY_CONSTRUCTOR, internal::Kind::APPLY_CONSTRUCTOR),
@@ -688,6 +692,10 @@ const static std::unordered_map<internal::Kind,
         {internal::Kind::SELECT, Kind::SELECT},
         {internal::Kind::STORE, Kind::STORE},
         {internal::Kind::STORE_ALL, Kind::CONST_ARRAY},
+        /* Nullables -------------------------------------------------------- */
+        {internal::Kind::NULLABLE_VALUE, Kind::NULLABLE_VALUE},
+        {internal::Kind::NULLABLE_LIFT, Kind::NULLABLE_LIFT},
+        {internal::Kind::NULLABLE_NULL, Kind::NULLABLE_NULL},
         /* Datatypes ------------------------------------------------------- */
         {internal::Kind::APPLY_SELECTOR, Kind::APPLY_SELECTOR},
         {internal::Kind::APPLY_CONSTRUCTOR, Kind::APPLY_CONSTRUCTOR},

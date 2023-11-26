@@ -2970,6 +2970,7 @@ enum ENUM(Kind) : int32_t
    */
   EVALUE(NULLABLE_VALUE),
   EVALUE(NULLABLE_LIFT),
+  EVALUE(NULLABLE_NULL),
 
   /* Separation Logic ------------------------------------------------------ */
 

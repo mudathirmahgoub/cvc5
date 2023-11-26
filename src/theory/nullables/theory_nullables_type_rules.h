@@ -50,6 +50,7 @@ struct ValueTypeRule
                               TNode n,
                               bool check,
                               std::ostream* errOut);
+  static bool computeIsConst(NodeManager* nodeManager, TNode n);
 }; /* struct ValueTypeRule */
 
 /**

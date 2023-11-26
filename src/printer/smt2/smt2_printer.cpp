@@ -374,6 +374,13 @@ bool Smt2Printer::toStreamBase(std::ostream& out,
       toStreamType(out, n.getConst<EmptyBag>().getType());
       out << ")";
       break;
+    case Kind::NULLABLE_NULL:
+    {
+      out << "(as nullable.null ";
+      toStreamType(out, n.getConst<EmptyBag>().getType());
+      out << ")";
+      break;
+    }
     case Kind::BITVECTOR_EXTRACT_OP:
     {
       BitVectorExtract p = n.getConst<BitVectorExtract>();

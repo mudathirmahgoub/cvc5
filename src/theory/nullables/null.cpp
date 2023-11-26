@@ -23,7 +23,7 @@ namespace cvc5::internal {
 
 std::ostream& operator<<(std::ostream& out, const Null& asa)
 {
-  return out << "null(" << asa.getType() << ')';
+  return out << "null(" << asa.getType() << ")";
 }
 
 size_t NullHashFunction::operator()(const Null& es) const

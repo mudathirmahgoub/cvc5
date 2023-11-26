@@ -43,6 +43,28 @@ TypeNode NullTypeRule::computeType(NodeManager* nodeManager,
   Null null = n.getConst<Null>();
   return null.getType();
 }
+
+TypeNode ValueTypeRule::preComputeType(NodeManager* nm, TNode n)
+{
+  return TypeNode::null();
+}
+TypeNode ValueTypeRule::computeType(NodeManager* nm,
+                                    TNode n,
+                                    bool check,
+                                    std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::NULLABLE_VALUE);
+  TypeNode elementType = n[0].getType(check);
+  return nm->mkNullableType(elementType);
+}
+
+bool ValueTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
+{
+  Assert(n.getKind() == Kind::NULLABLE_VALUE);
+  // for a nullable to be constant, its element should be constant
+  return n[0].isConst();
+}
+
 }  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

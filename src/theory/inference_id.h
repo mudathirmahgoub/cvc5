@@ -241,6 +241,11 @@ enum class InferenceId
   BV_EXTF_COLLAPSE,
   // ---------------------------------- end bitvector theory
 
+  // ---------------------------------- nullables theory
+  NULLABLES_INJECT,
+  NULLABLES_CLASH,
+  // ---------------------------------- end nullables theory
+
   // ---------------------------------- datatypes theory
   // (= k t) for fresh k
   DATATYPES_PURIFY,

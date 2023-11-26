@@ -20,6 +20,7 @@
 
 #include "theory/inference_manager_buffered.h"
 #include "theory/nullables/nullables_rewriter.h"
+#include "theory/nullables/nullables_solver.h"
 #include "theory/nullables/nullables_statistics.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/strategy.h"
@@ -91,6 +92,8 @@ class TheoryNullables : public Theory
   SolverState d_state;
   /** The inference manager */
   InferenceManagerBuffered d_im;
+  /** the main solver for nullables */
+  NullablesSolver d_solver;
 }; /* class TheoryNullables */
 
 }  // namespace nullables

@@ -35,7 +35,8 @@ TheoryNullables::TheoryNullables(Env& env,
     : Theory(THEORY_NULLABLES, env, out, valuation),
       d_rewriter(env.getRewriter(), nullptr),
       d_state(env, valuation),
-      d_im(env, *this, d_state, "theory::nullables::")
+      d_im(env, *this, d_state, "theory::nullables::"),
+      d_solver(env, d_state, d_im)
 {
   d_theoryState = &d_state;
   d_inferManager = &d_im;
@@ -76,8 +77,7 @@ bool TheoryNullables::collectModelValues(TheoryModel* m,
       // we are only concerned here about nullable terms
       continue;
     }
-
-    NodeManager* nm = NodeManager::currentNM();
+    
     Node constructedNullable = n;
     m->assertEquality(constructedNullable, n, true);
     m->assertSkeleton(constructedNullable);
@@ -99,7 +99,58 @@ void TheoryNullables::finishInit()
 
 void TheoryNullables::postCheck(Effort level)
 {
-  std::cout << " I am here" << std::endl;
+  d_im.doPendingFacts();
+  // Assert(d_strat.isStrategyInit());
+  if (!d_state.isInConflict() && !d_valuation.needCheck())
+  //&& d_strat.hasStrategyEffort(effort))
+  {
+    Trace("nullables::TheoryNullables::postCheck")
+        << "effort: " << level << std::endl;
+
+    bool sentLemma = false;
+    bool hadPending = false;
+    Trace("nullables-check") << "Full effort check..." << std::endl;
+    do
+    {
+      d_im.reset();
+      // TODO issue #78: add ++(d_statistics.d_strategyRuns);
+      Trace("nullables-check") << "  * Run strategy..." << std::endl;
+      // d_state.reset();
+      //  runStrategy(effort);
+      d_solver.checkBasicOperations();
+      // remember if we had pending facts or lemmas
+      hadPending = d_im.hasPending();
+      // Send the facts *and* the lemmas. We send lemmas regardless of whether
+      // we send facts since some lemmas cannot be dropped. Other lemmas are
+      // otherwise avoided by aborting the strategy when a fact is ready.
+      d_im.doPendingFacts();
+      d_im.doPendingLemmas();
+      // Did we successfully send a lemma? Notice that if hasPending = true
+      // and sentLemma = false, then the above call may have:
+      // (1) had no pending lemmas, but successfully processed pending facts,
+      // (2) unsuccessfully processed pending lemmas.
+      // In either case, we repeat the strategy if we are not in conflict.
+      sentLemma = d_im.hasSentLemma();
+      if (TraceIsOn("nullables-check"))
+      {
+        Trace("nullables-check") << "  ...finish run strategy: ";
+        Trace("nullables-check") << (hadPending ? "hadPending " : "");
+        Trace("nullables-check") << (sentLemma ? "sentLemma " : "");
+        Trace("nullables-check") << (d_state.isInConflict() ? "conflict " : "");
+        if (!hadPending && !sentLemma && !d_state.isInConflict())
+        {
+          Trace("nullables-check") << "(none)";
+        }
+        Trace("nullables-check") << std::endl;
+      }
+      // repeat if we did not add a lemma or conflict, and we had pending
+      // facts or lemmas.
+    } while (!d_state.isInConflict() && !sentLemma && hadPending);
+  }
+  Trace("nullables-check") << "Theory of nullables, done check : " << level
+                           << std::endl;
+  Assert(!d_im.hasPendingFact());
+  Assert(!d_im.hasPendingLemma());
 }
 
 }  // namespace nullables

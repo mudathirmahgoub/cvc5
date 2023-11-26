@@ -39,14 +39,10 @@ enum InferStep
   BREAK,
   // check initial
   CHECK_INIT,
-  // check nullable operator
-  CHECK_NULLABLE_MAKE,
   // check basic operations without quantifiers
   CHECK_BASIC_OPERATIONS,
-  // check operations with quantifiers
-  CHECK_QUANTIFIED_OPERATIONS,
-  // check cardinality constraints
-  CHECK_CARDINALITY_CONSTRAINTS
+  // check split
+  CHECK_SPLIT
 };
 std::ostream& operator<<(std::ostream& out, InferStep i);
 

@@ -728,6 +728,8 @@ libcvc5_add_sources(
   theory/nullables/nullables_solver.h
   theory/nullables/solver_state.cpp
   theory/nullables/solver_state.h
+  theory/nullables/strategy.cpp
+  theory/nullables/strategy.h
   theory/nullables/theory_nullables_type_enumerator.cpp
   theory/nullables/theory_nullables_type_enumerator.h 
   theory/nullables/theory_nullables_type_rules.cpp

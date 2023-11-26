@@ -50,6 +50,7 @@ enum class SkolemFunId
    * is between -pi and pi
    */
   TRANSCENDENTAL_PURIFY_ARG,
+  NULLABLES_SPLIT,
   /** a shared selector */
   SHARED_SELECTOR,
   /**

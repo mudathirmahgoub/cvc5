@@ -15,7 +15,9 @@
 
 #include "theory/nullables/nullables_solver.h"
 
+#include "expr/skolem_manager.h"
 #include "theory/nullables/inference_manager.h"
+#include "theory/nullables/null.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/term_registry.h"
 #include "theory/uf/equality_engine_iterator.h"
@@ -90,6 +92,44 @@ void NullablesSolver::checkBasicOperations()
   }
 }
 
+bool NullablesSolver::checkSplit()
+{
+  // get the relevant term set, currently all nullable equivalence classes
+  // in the equality engine
+  eq::EqClassesIterator repIt =
+      eq::EqClassesIterator(d_state.getEqualityEngine());
+  while (!repIt.isFinished())
+  {
+    Node eqc = (*repIt);
+    ++repIt;
+    if (!eqc.getType().isNullable())
+    {
+      // we only care about nullable terms
+      continue;
+    }
+    if (isNullOrValue(eqc))
+    {
+      // ignore terms that are equal to nullable.null or nullable.value
+      continue;
+    }
+    // we need to split
+    NodeManager* nm = NodeManager::currentNM();
+    SkolemManager* sm = nm->getSkolemManager();
+    TypeNode type = eqc.getType();
+    Node null = nm->mkConst(Null(type));
+
+    Node skolem = sm->mkSkolemFunction(
+        SkolemFunId::NULLABLES_SPLIT, type.getNullableElementType(), {eqc});
+    Node value = nm->mkNode(Kind::NULLABLE_VALUE, skolem);
+    Node equalNull = eqc.eqNode(null);
+    Node equalValue = eqc.eqNode(value);
+    Node lemma = equalNull.orNode(equalValue);
+    d_im->addPendingLemma(lemma, InferenceId::NULLABLES_SPLIT);
+    return true;
+  }
+  return false;
+}
+
 void NullablesSolver::checkValue(const Node& n1, eq::EqClassIterator it)
 {
   Assert(n1.getKind() == Kind::NULLABLE_VALUE);
@@ -133,6 +173,23 @@ void NullablesSolver::checkNull(const Node& n1, eq::EqClassIterator it)
       d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
     }
   } while (!it.isFinished());
+}
+
+bool NullablesSolver::isNullOrValue(Node eqc)
+{
+  eq::EqClassIterator it =
+      eq::EqClassIterator(eqc, d_state.getEqualityEngine());
+  while (!it.isFinished())
+  {
+    Node n = *it;
+    ++it;
+    if (n.getKind() == Kind::NULLABLE_NULL
+        || n.getKind() == Kind::NULLABLE_VALUE)
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace nullables

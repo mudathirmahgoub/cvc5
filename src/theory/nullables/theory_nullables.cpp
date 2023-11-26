@@ -40,6 +40,8 @@ TheoryNullables::TheoryNullables(Env& env,
 {
   d_theoryState = &d_state;
   d_inferManager = &d_im;
+  d_true = NodeManager::currentNM()->mkConst(true);
+  d_false = NodeManager::currentNM()->mkConst(false);
 }
 
 TheoryNullables::~TheoryNullables() {}
@@ -77,7 +79,7 @@ bool TheoryNullables::collectModelValues(TheoryModel* m,
       // we are only concerned here about nullable terms
       continue;
     }
-    
+
     Node constructedNullable = n;
     m->assertEquality(constructedNullable, n, true);
     m->assertSkeleton(constructedNullable);
@@ -97,12 +99,19 @@ void TheoryNullables::finishInit()
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_VALUE);
 }
 
+void TheoryNullables::presolve()
+{
+  Trace("nullables-presolve") << "Started presolve" << std::endl;
+  d_strat.initializeStrategy();
+  Trace("nullables-presolve") << "Finished presolve" << std::endl;
+}
+
 void TheoryNullables::postCheck(Effort level)
 {
   d_im.doPendingFacts();
-  // Assert(d_strat.isStrategyInit());
-  if (!d_state.isInConflict() && !d_valuation.needCheck())
-  //&& d_strat.hasStrategyEffort(effort))
+  Assert(d_strat.isStrategyInit());
+  if (!d_state.isInConflict() && !d_valuation.needCheck()
+      && d_strat.hasStrategyEffort(level))
   {
     Trace("nullables::TheoryNullables::postCheck")
         << "effort: " << level << std::endl;
@@ -113,10 +122,9 @@ void TheoryNullables::postCheck(Effort level)
     do
     {
       d_im.reset();
-      // TODO issue #78: add ++(d_statistics.d_strategyRuns);
       Trace("nullables-check") << "  * Run strategy..." << std::endl;
       // d_state.reset();
-      //  runStrategy(effort);
+      runStrategy(level);
       d_solver.checkBasicOperations();
       // remember if we had pending facts or lemmas
       hadPending = d_im.hasPending();
@@ -151,6 +159,103 @@ void TheoryNullables::postCheck(Effort level)
                            << std::endl;
   Assert(!d_im.hasPendingFact());
   Assert(!d_im.hasPendingLemma());
+}
+
+bool TheoryNullables::checkModelLastCall()
+{
+  std::vector<Node> assertions;
+  for (Theory::assertions_iterator it = facts_begin(); it != facts_end(); ++it)
+  {
+    const Assertion& assertion = *it;
+    Node lit = assertion.d_assertion;
+    assertions.push_back(lit);
+  }
+  std::vector<Node> unsatAssertions;
+  Trace("nullables-cm") << "Checking " << assertions.size() << " assertions..."
+                        << std::endl;
+  TheoryModel* m = d_valuation.getModel();
+  for (const Node& a : assertions)
+  {
+    Node av = m->getValue(a);
+    Trace("nullables-cm-debug") << "M[" << a << "] = " << av << std::endl;
+    if (av == d_true)
+    {
+      continue;
+    }
+    Trace("nullables-cm") << "** M[" << a << "] = " << av << std::endl;
+    unsatAssertions.push_back(a);
+  }
+  Trace("nullables-cm") << "...not satisfied " << unsatAssertions.size()
+                        << " / " << assertions.size() << std::endl;
+  for (TNode n : d_sharedTerms)
+  {
+    Node value = m->getValue(n);
+    Node rep = m->getRepresentative(n);
+    if (value != rep)
+    {
+      return false;
+    }
+  }
+  return unsatAssertions.empty();
+}
+
+void TheoryNullables::runStrategy(Theory::Effort e)
+{
+  std::vector<std::pair<InferStep, size_t>>::iterator it = d_strat.stepBegin(e);
+  std::vector<std::pair<InferStep, size_t>>::iterator stepEnd =
+      d_strat.stepEnd(e);
+
+  Trace("nullables-process") << "----check, next round---" << std::endl;
+  while (it != stepEnd)
+  {
+    InferStep curr = it->first;
+    if (curr == BREAK)
+    {
+      if (d_state.isInConflict() || d_im.hasPending())
+      {
+        break;
+      }
+    }
+    else
+    {
+      if (runInferStep(curr, it->second) || d_state.isInConflict())
+      {
+        break;
+      }
+    }
+    ++it;
+  }
+  Trace("nullables-process") << "----finished round---" << std::endl;
+}
+
+/** run the given inference step */
+bool TheoryNullables::runInferStep(InferStep s, int effort)
+{
+  Trace("nullables-process") << "Run " << s;
+  if (effort > 0)
+  {
+    Trace("nullables-process") << ", effort = " << effort;
+  }
+  Trace("nullables-process") << "..." << std::endl;
+  switch (s)
+  {
+    case CHECK_INIT: break;
+    case CHECK_BASIC_OPERATIONS: d_solver.checkBasicOperations(); break;
+    case CHECK_SPLIT:
+    {
+      if (d_solver.checkSplit())
+      {
+        return true;
+      }
+      break;
+    }
+    default: Unreachable(); break;
+  }
+  Trace("nullables-process")
+      << "Done " << s << ", addedFact = " << d_im.hasPendingFact()
+      << ", addedLemma = " << d_im.hasPendingLemma()
+      << ", conflict = " << d_state.isInConflict() << std::endl;
+  return false;
 }
 
 }  // namespace nullables

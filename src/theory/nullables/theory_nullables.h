@@ -80,12 +80,21 @@ class TheoryNullables : public Theory
   bool collectModelValues(TheoryModel* m,
                           const std::set<Node>& termSet) override;
 
+  void presolve() override;
+
   /**
    * Post-check, called after the fact queue of the theory is processed.
    */
   void postCheck(Effort level = EFFORT_FULL) override;
 
+  bool checkModelLastCall();
+  void runStrategy(Theory::Effort e);
+  /** run the given inference step */
+  bool runInferStep(InferStep s, int effort);
+
  private:
+  Node d_true;
+  Node d_false;
   /** The theory rewriter for this theory. */
   NullablesRewriter d_rewriter;
   /** The state at full effort */
@@ -94,6 +103,8 @@ class TheoryNullables : public Theory
   InferenceManagerBuffered d_im;
   /** the main solver for nullables */
   NullablesSolver d_solver;
+  /** The representation of the strategy */
+  Strategy d_strat;
 }; /* class TheoryNullables */
 
 }  // namespace nullables

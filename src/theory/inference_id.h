@@ -244,6 +244,7 @@ enum class InferenceId
   // ---------------------------------- nullables theory
   NULLABLES_INJECT,
   NULLABLES_CLASH,
+  NULLABLES_SPLIT,
   // ---------------------------------- end nullables theory
 
   // ---------------------------------- datatypes theory

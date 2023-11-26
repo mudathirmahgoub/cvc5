@@ -44,6 +44,9 @@ class NullablesSolver : protected EnvObj
    */
   void checkBasicOperations();
 
+  bool checkSplit();
+  bool isNullOrValue(Node eqc);
+
  private:
   /**
    * Apply inference rules:

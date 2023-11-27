@@ -18,6 +18,9 @@
 #ifndef CVC5__THEORY__NULLABLES__THEORY_SOLVER_STATE_H
 #define CVC5__THEORY__NULLABLES__THEORY_SOLVER_STATE_H
 
+#include <map>
+#include <vector>
+
 #include "theory/theory_state.h"
 
 namespace cvc5::internal {
@@ -41,7 +44,7 @@ class SolverState : public TheoryState
    * This function is valid after the current solver is initialized during
    * postCheck. See SolverState::initialize and NullableSolver::postCheck
    */
-  const std::set<Node>& getNullables();
+  const std::map<Node, std::vector<Node>>& getNullables() const;
 
   /** clear all nullables data structures */
   void reset();
@@ -53,7 +56,7 @@ class SolverState : public TheoryState
   /** node manager for this solver state */
   NodeManager* d_nm;
   /** collection of nullable representatives */
-  std::set<Node> d_nullables;
+  std::map<Node, std::vector<Node>> d_nullables;
 }; /* class SolverState */
 
 }  // namespace nullables

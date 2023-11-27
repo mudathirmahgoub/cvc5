@@ -13,6 +13,8 @@
  * Solver for the theory of nullables.
  */
 
+#include <vector>
+
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
 #include "cvc5_private.h"
@@ -43,7 +45,7 @@ class NullablesSolver : protected EnvObj
    * apply inference rules for basic nullable operators
    */
   void checkBasicOperations();
-
+  void checkDisequalities();
   bool checkSplit();
   bool isNullOrValue(Node eqc);
 
@@ -61,7 +63,9 @@ class NullablesSolver : protected EnvObj
    *     false
    *   )
    */
-  void checkValue(const Node& n1, eq::EqClassIterator it);
+  void checkValue(const Node& n1,
+                  std::vector<Node>::const_iterator it,
+                  std::vector<Node>::const_iterator end);
   /**
    * Apply clash rule:
    * (=>
@@ -69,7 +73,9 @@ class NullablesSolver : protected EnvObj
    *   false
    * )
    */
-  void checkNull(const Node& n1, eq::EqClassIterator it);
+  void checkNull(const Node& n1,
+                 std::vector<Node>::const_iterator it,
+                 std::vector<Node>::const_iterator end);
 
   /** The solver state object */
   SolverState& d_state;

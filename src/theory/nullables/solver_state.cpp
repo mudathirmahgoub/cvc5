@@ -15,6 +15,9 @@
 
 #include "theory/nullables/solver_state.h"
 
+#include "theory/uf/equality_engine.h"
+#include "theory/uf/equality_engine_iterator.h"
+
 using namespace std;
 using namespace cvc5::internal::kind;
 
@@ -29,15 +32,36 @@ SolverState::SolverState(Env& env, Valuation val) : TheoryState(env, val)
   d_nm = NodeManager::currentNM();
 }
 
-void SolverState::registerNullable(TNode n)
+const std::map<Node, std::vector<Node>>& SolverState::getNullables() const
 {
-  Assert(n.getType().isNullable());
-  d_nullables.insert(n);
+  return d_nullables;
 }
 
-const std::set<Node>& SolverState::getNullables() { return d_nullables; }
-
-void SolverState::reset() { d_nullables.clear(); }
+void SolverState::reset()
+{
+  d_nullables.clear();
+  eq::EqualityEngine* ee = getEqualityEngine();  
+  eq::EqClassesIterator repIt = eq::EqClassesIterator(ee);
+  while (!repIt.isFinished())
+  {
+    Node eqc = (*repIt);
+    repIt++;
+    if (!eqc.getType().isNullable())
+    {
+      // we only care about nullable terms
+      continue;
+    }
+    d_nullables[eqc] = std::vector<Node>();
+    d_nullables[eqc].push_back(eqc);
+    eq::EqClassIterator it = eq::EqClassIterator(eqc, getEqualityEngine());
+    while (!it.isFinished())
+    {
+      Node n = (*it);
+      it++;
+      d_nullables[eqc].push_back(n);
+    }
+  }
+}
 
 }  // namespace nullables
 }  // namespace theory

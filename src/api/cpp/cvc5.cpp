@@ -298,6 +298,7 @@ const static std::unordered_map<Kind, std::pair<internal::Kind, std::string>>
         KIND_ENUM(Kind::EQ_RANGE, internal::Kind::EQ_RANGE),
         /* Nullables -------------------------------------------------------- */
         KIND_ENUM(Kind::NULLABLE_VALUE, internal::Kind::NULLABLE_VALUE),
+        KIND_ENUM(Kind::NULLABLE_SELECT, internal::Kind::NULLABLE_SELECT),
         KIND_ENUM(Kind::NULLABLE_LIFT, internal::Kind::NULLABLE_LIFT),
         KIND_ENUM(Kind::NULLABLE_NULL, internal::Kind::NULLABLE_NULL),
         /* Datatypes -------------------------------------------------------- */
@@ -694,6 +695,7 @@ const static std::unordered_map<internal::Kind,
         {internal::Kind::STORE_ALL, Kind::CONST_ARRAY},
         /* Nullables -------------------------------------------------------- */
         {internal::Kind::NULLABLE_VALUE, Kind::NULLABLE_VALUE},
+        {internal::Kind::NULLABLE_SELECT, Kind::NULLABLE_SELECT},
         {internal::Kind::NULLABLE_LIFT, Kind::NULLABLE_LIFT},
         {internal::Kind::NULLABLE_NULL, Kind::NULLABLE_NULL},
         /* Datatypes ------------------------------------------------------- */

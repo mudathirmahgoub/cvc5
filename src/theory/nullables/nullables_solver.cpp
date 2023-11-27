@@ -20,6 +20,7 @@
 #include "theory/nullables/null.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/term_registry.h"
+#include "theory/uf/equality_engine.h"
 #include "theory/uf/equality_engine_iterator.h"
 #include "util/rational.h"
 
@@ -46,28 +47,16 @@ NullablesSolver::~NullablesSolver() {}
 
 void NullablesSolver::checkBasicOperations()
 {
-  // checkDisequalNullablesTerms();
-
-  eq::EqualityEngine* ee = d_state.getEqualityEngine();
-  eq::EqClassesIterator repIt = eq::EqClassesIterator(ee);
-  while (!repIt.isFinished())
+  for (const auto& pair : d_state.getNullables())
   {
-    Node eqc = (*repIt);
-    repIt++;
-    if (!eqc.getType().isNullable())
-    {
-      // we only care about nullable terms
-      continue;
-    }
-    Trace("nullables-eqc") << "eqc: " << eqc << std::endl;
-    // iterate through all nullables terms in each equivalent class
-    eq::EqClassIterator it =
-        eq::EqClassIterator(eqc, d_state.getEqualityEngine());
-    while (!it.isFinished())
+    Node eqc = pair.first;
+    auto it = pair.second.cbegin();
+    auto end = pair.second.cend();
+    while (it != end)
     {
       Node n = (*it);
       it++;
-      if (it.isFinished())
+      if (it == end)
       {
         continue;
       }
@@ -76,14 +65,14 @@ void NullablesSolver::checkBasicOperations()
       {
         case Kind::NULLABLE_VALUE:
         {
-          eq::EqClassIterator it2 = it;
-          checkValue(n, it2);
+          auto it2 = it;
+          checkValue(n, it2, end);
           break;
         }
         case Kind::NULLABLE_NULL:
         {
-          eq::EqClassIterator it2 = it;
-          checkNull(n, it2);
+          auto it2 = it;
+          checkNull(n, it2, end);
           break;
         }
         default: break;
@@ -130,13 +119,51 @@ bool NullablesSolver::checkSplit()
   return false;
 }
 
-void NullablesSolver::checkValue(const Node& n1, eq::EqClassIterator it)
+void NullablesSolver::checkDisequalities()
+{
+  const auto& nullables = d_state.getNullables();
+  auto i = nullables.cbegin();
+  while (i != nullables.cend())
+  {
+    auto j = i;
+    ++j;
+    while (j != nullables.cend())
+    {
+      if (d_state.areDisequal(i->first, j->first))
+      {
+        // check if we in the case (nullable.value a) != (nullable.value b)
+        for (const auto& x : i->second)
+        {
+          if (x.getKind() != Kind::NULLABLE_VALUE)
+          {
+            continue;
+          }
+          for (const auto& y : j->second)
+          {
+            if (y.getKind() != Kind::NULLABLE_VALUE)
+            {
+              continue;
+            }
+            Node lemma =
+                x.eqNode(y).notNode().impNode(x[0].eqNode(y[0]).notNode());
+            d_im->addPendingLemma(lemma, InferenceId::NULLABLES_DISEQUAL);
+          }
+        }
+      }
+      ++j;
+    }
+    ++i;
+  }
+}
+
+void NullablesSolver::checkValue(const Node& n1,
+                                 std::vector<Node>::const_iterator it,
+                                 std::vector<Node>::const_iterator end)
 {
   Assert(n1.getKind() == Kind::NULLABLE_VALUE);
   do
   {
     Node n2 = *it;
-    Trace("nullables-eqc") << "n2: " << n2 << std::endl;
     it++;
     if (n2.getKind() == Kind::NULLABLE_VALUE)
     {
@@ -154,16 +181,17 @@ void NullablesSolver::checkValue(const Node& n1, eq::EqClassIterator it)
       Node lemma = premise.notNode().orNode(conclusion);
       d_im->addPendingLemma(lemma, InferenceId::NULLABLES_CLASH);
     }
-  } while (!it.isFinished());
+  } while (it != end);
 }
 
-void NullablesSolver::checkNull(const Node& n1, eq::EqClassIterator it)
+void NullablesSolver::checkNull(const Node& n1,
+                                std::vector<Node>::const_iterator it,
+                                std::vector<Node>::const_iterator end)
 {
   Assert(n1.getKind() == Kind::NULLABLE_NULL);
   do
   {
     Node n2 = *it;
-    Trace("nullables-eqc") << "n2: " << n2 << std::endl;
     it++;
     if (n2.getKind() == Kind::NULLABLE_VALUE)
     {
@@ -172,7 +200,7 @@ void NullablesSolver::checkNull(const Node& n1, eq::EqClassIterator it)
       Node lemma = premise.notNode().orNode(conclusion);
       d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
     }
-  } while (!it.isFinished());
+  } while (it != end);
 }
 
 bool NullablesSolver::isNullOrValue(Node eqc)

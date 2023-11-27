@@ -97,6 +97,7 @@ void TheoryNullables::finishInit()
   // functions we are doing congruence over
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_NULL);
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_VALUE);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_SELECT);
 }
 
 void TheoryNullables::presolve()
@@ -122,10 +123,9 @@ void TheoryNullables::postCheck(Effort level)
     do
     {
       d_im.reset();
+      d_state.reset();
       Trace("nullables-check") << "  * Run strategy..." << std::endl;
-      // d_state.reset();
       runStrategy(level);
-      d_solver.checkBasicOperations();
       // remember if we had pending facts or lemmas
       hadPending = d_im.hasPending();
       // Send the facts *and* the lemmas. We send lemmas regardless of whether
@@ -159,6 +159,20 @@ void TheoryNullables::postCheck(Effort level)
                            << std::endl;
   Assert(!d_im.hasPendingFact());
   Assert(!d_im.hasPendingLemma());
+  std::vector<Node> assertions;
+  for (Theory::assertions_iterator it = facts_begin(); it != facts_end(); ++it)
+  {
+    const Assertion& assertion = *it;
+    Node lit = assertion.d_assertion;
+    assertions.push_back(lit);
+  }
+  std::vector<Node> unsatAssertions;
+  Trace("nullables-cm") << "Checking " << assertions.size() << " assertions..."
+                        << std::endl;
+  for (const Node& a : assertions)
+  {
+    Trace("nullables-cm-debug") << a << std::endl;
+  }
 }
 
 bool TheoryNullables::checkModelLastCall()
@@ -240,7 +254,10 @@ bool TheoryNullables::runInferStep(InferStep s, int effort)
   switch (s)
   {
     case CHECK_INIT: break;
-    case CHECK_BASIC_OPERATIONS: d_solver.checkBasicOperations(); break;
+    case CHECK_BASIC_OPERATIONS:
+      d_solver.checkBasicOperations();
+      d_solver.checkDisequalities();
+      break;
     case CHECK_SPLIT:
     {
       if (d_solver.checkSplit())

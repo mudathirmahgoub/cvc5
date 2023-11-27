@@ -54,6 +54,18 @@ struct ValueTypeRule
 }; /* struct ValueTypeRule */
 
 /**
+ *
+ */
+struct SelectTypeRule
+{
+  static TypeNode preComputeType(NodeManager* nm, TNode n);
+  static TypeNode computeType(NodeManager* nodeManager,
+                              TNode n,
+                              bool check,
+                              std::ostream* errOut);
+}; /* struct SelectTypeRule */
+
+/**
  */
 struct NullableLiftTypeRule
 {

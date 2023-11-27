@@ -2969,6 +2969,7 @@ enum ENUM(Kind) : int32_t
    *   - Solver::mkOp(Kind, const std::vector<uint32_t>&) const
    */
   EVALUE(NULLABLE_VALUE),
+  EVALUE(NULLABLE_SELECT),
   EVALUE(NULLABLE_LIFT),
   EVALUE(NULLABLE_NULL),
 

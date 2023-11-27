@@ -85,10 +85,8 @@ void Strategy::initializeStrategy()
     // add the inference steps
     addStrategyStep(CHECK_INIT);
     addStrategyStep(CHECK_BASIC_OPERATIONS);
-    step_end[Theory::EFFORT_FULL] = d_infer_steps.size() - 1;
-    step_begin[Theory::EFFORT_LAST_CALL] = d_infer_steps.size();
     addStrategyStep(CHECK_SPLIT);
-    step_end[Theory::EFFORT_LAST_CALL] = d_infer_steps.size() - 1;
+    step_end[Theory::EFFORT_FULL] = d_infer_steps.size() - 1;
 
     // set the beginning/ending ranges
     for (const std::pair<const Theory::Effort, unsigned>& it_begin : step_begin)

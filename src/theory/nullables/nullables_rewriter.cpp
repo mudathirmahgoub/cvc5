@@ -62,6 +62,10 @@ RewriteResponse NullablesRewriter::postRewrite(TNode n)
   {
     response = postRewriteEqual(n);
   }
+  else if (n.getKind() == Kind::NULLABLE_SELECT)
+  {
+    response = postRewriteSelect(n);
+  }
   else
   {
     response = NullablesRewriteResponse(n, Rewrite::NONE);
@@ -141,6 +145,17 @@ NullablesRewriteResponse NullablesRewriter::preRewriteEqual(
     // (= A A) = true where A is a nullable
     return NullablesRewriteResponse(d_nm->mkConst(true),
                                     Rewrite::IDENTICAL_NODES);
+  }
+  return NullablesRewriteResponse(n, Rewrite::NONE);
+}
+
+NullablesRewriteResponse NullablesRewriter::postRewriteSelect(
+    const TNode& n) const
+{
+  Assert(n.getKind() == Kind::NULLABLE_SELECT);
+  if (n[0].getKind() == Kind::NULLABLE_VALUE)
+  {
+    return NullablesRewriteResponse(n[0][0], Rewrite::IDENTICAL_NODES);
   }
   return NullablesRewriteResponse(n, Rewrite::NONE);
 }

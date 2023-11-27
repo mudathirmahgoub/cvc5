@@ -58,6 +58,30 @@ TypeNode ValueTypeRule::computeType(NodeManager* nm,
   return nm->mkNullableType(elementType);
 }
 
+TypeNode SelectTypeRule::preComputeType(NodeManager* nm, TNode n)
+{
+  return TypeNode::null();
+}
+
+TypeNode SelectTypeRule::computeType(NodeManager* nm,
+                                     TNode n,
+                                     bool check,
+                                     std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::NULLABLE_SELECT);
+  TypeNode nullableType = n[0].getType(check);
+  if (check)
+  {
+    if (!nullableType.isNullable())
+    {
+      throw TypeCheckingExceptionPrivate(n,
+                                         "NULLABLE_SELECT operator expects a "
+                                         "nullable, a non-nullable is found");
+    }
+  }
+  return nullableType.getNullableElementType();
+}
+
 bool ValueTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
 {
   Assert(n.getKind() == Kind::NULLABLE_VALUE);

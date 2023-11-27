@@ -37,23 +37,39 @@ const std::map<Node, std::vector<Node>>& SolverState::getNullables() const
   return d_nullables;
 }
 
+const std::set<Node>& SolverState::getSelectTerms() const
+{
+  return d_selectTerms;
+}
+
 void SolverState::reset()
 {
   d_nullables.clear();
-  eq::EqualityEngine* ee = getEqualityEngine();  
+  eq::EqualityEngine* ee = getEqualityEngine();
   eq::EqClassesIterator repIt = eq::EqClassesIterator(ee);
   while (!repIt.isFinished())
   {
     Node eqc = (*repIt);
     repIt++;
-    if (!eqc.getType().isNullable())
+    if (eqc.getKind() == Kind::NULLABLE_SELECT)
     {
-      // we only care about nullable terms
+      d_selectTerms.insert(eqc);
       continue;
     }
+    eq::EqClassIterator it = eq::EqClassIterator(eqc, getEqualityEngine());
+    while (!it.isFinished())
+    {
+      Node n = (*it);
+      it++;
+      if (n.getKind() == Kind::NULLABLE_SELECT)
+      {
+        d_selectTerms.insert(n);
+      }
+    }
+    continue;
+
     d_nullables[eqc] = std::vector<Node>();
     d_nullables[eqc].push_back(eqc);
-    eq::EqClassIterator it = eq::EqClassIterator(eqc, getEqualityEngine());
     while (!it.isFinished())
     {
       Node n = (*it);

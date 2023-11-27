@@ -255,9 +255,12 @@ bool TheoryNullables::runInferStep(InferStep s, int effort)
   {
     case CHECK_INIT: break;
     case CHECK_BASIC_OPERATIONS:
+    {
       d_solver.checkBasicOperations();
+      d_solver.checkSelect();
       d_solver.checkDisequalities();
       break;
+    }
     case CHECK_SPLIT:
     {
       if (d_solver.checkSplit())

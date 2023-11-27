@@ -46,6 +46,7 @@ class NullablesSolver : protected EnvObj
    */
   void checkBasicOperations();
   void checkDisequalities();
+  void checkSelect();
   bool checkSplit();
   bool isNullOrValue(Node eqc);
 

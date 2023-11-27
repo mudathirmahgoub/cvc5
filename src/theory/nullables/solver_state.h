@@ -46,6 +46,8 @@ class SolverState : public TheoryState
    */
   const std::map<Node, std::vector<Node>>& getNullables() const;
 
+  const std::set<Node>& getSelectTerms() const;
+
   /** clear all nullables data structures */
   void reset();
 
@@ -57,6 +59,8 @@ class SolverState : public TheoryState
   NodeManager* d_nm;
   /** collection of nullable representatives */
   std::map<Node, std::vector<Node>> d_nullables;
+  /** collection of nullable.select terms */
+  std::set<Node> d_selectTerms;
 }; /* class SolverState */
 
 }  // namespace nullables

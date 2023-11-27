@@ -220,6 +220,33 @@ bool NullablesSolver::isNullOrValue(Node eqc)
   return false;
 }
 
+void NullablesSolver::checkSelect()
+{
+  const auto& selectTerms = d_state.getSelectTerms();
+  const auto& nullables = d_state.getNullables();
+  for (const auto& n : selectTerms)
+  {
+    Assert(n.getKind() == Kind::NULLABLE_SELECT);
+    Node rep = d_state.getRepresentative(n[0]);
+    // search for nullable.value constructor in the equivalence class
+    if (nullables.find(rep) == nullables.cend())
+    {
+      continue;
+    }
+    for (const auto& nullable : nullables.at(rep))
+    {
+      if (nullable.getKind() != Kind::NULLABLE_VALUE)
+      {
+        continue;
+      }
+      Node premise = rep.eqNode(n[0]).andNode(rep.eqNode(nullable));
+      Node conclusion = n.eqNode(nullable[0]);
+      Node lemma = premise.notNode().orNode(conclusion);
+      d_im->addPendingLemma(lemma, InferenceId::NULLABLES_SELECT);
+    }
+  }
+}
+
 }  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

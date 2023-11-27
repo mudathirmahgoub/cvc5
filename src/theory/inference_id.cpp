@@ -175,6 +175,7 @@ const char* toString(InferenceId i)
     case InferenceId::NULLABLES_CLASH: return "NULLABLES_CLASH";
     case InferenceId::NULLABLES_SPLIT: return "NULLABLES_SPLIT";
     case InferenceId::NULLABLES_DISEQUAL: return "NULLABLES_DISEQUAL";
+    case InferenceId::NULLABLES_SELECT: return "NULLABLES_SELECT";
 
     case InferenceId::DATATYPES_PURIFY: return "DATATYPES_PURIFY";
     case InferenceId::DATATYPES_UNIF: return "DATATYPES_UNIF";

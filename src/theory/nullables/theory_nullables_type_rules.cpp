@@ -89,6 +89,21 @@ bool ValueTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
   return n[0].isConst();
 }
 
+TypeNode NullableLiftTypeRule::preComputeType(NodeManager* nm, TNode n)
+{
+  return TypeNode::null();
+}
+
+TypeNode NullableLiftTypeRule::computeType(NodeManager* nodeManager,
+                                           TNode n,
+                                           bool check,
+                                           std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::NULLABLE_LIFT);
+
+  return n[0].getType();
+}
+
 }  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

@@ -83,6 +83,8 @@ TypeNode ArithOperatorTypeRule::computeType(NodeManager* nodeManager,
 {
   TypeNode integerType = nodeManager->integerType();
   TypeNode realType = nodeManager->realType();
+
+  TypeNode nullableInteger = nodeManager->mkNullableType(integerType);
   TNode::iterator child_it = n.begin();
   TNode::iterator child_it_end = n.end();
   bool isInteger = true;
@@ -100,12 +102,13 @@ TypeNode ArithOperatorTypeRule::computeType(NodeManager* nodeManager,
     }
     if (check)
     {
-      if (!childType.isRealOrInt())
+      if (!(childType.isRealOrInt() || childType == nullableInteger))
       {
         throw TypeCheckingExceptionPrivate(n,
                                            "expecting an arithmetic subterm");
       }
-      if (k == Kind::TO_REAL && !childType.isInteger())
+      if (k == Kind::TO_REAL
+          && !(childType.isInteger() || childType == nullableInteger))
       {
         throw TypeCheckingExceptionPrivate(n, "expecting an integer subterm");
       }
@@ -117,6 +120,10 @@ TypeNode ArithOperatorTypeRule::computeType(NodeManager* nodeManager,
     case Kind::TO_INTEGER: return integerType;
     default:
     {
+      if (n[0].getType() == nullableInteger)
+      {
+        return nullableInteger;
+      }
       bool isDivision = k == Kind::DIVISION || k == Kind::DIVISION_TOTAL;
       return (isInteger && !isDivision ? integerType : realType);
     }
@@ -176,7 +183,8 @@ TypeNode IAndTypeRule::computeType(NodeManager* nodeManager,
 {
   if (n.getKind() != Kind::IAND)
   {
-    InternalError() << "IAND typerule invoked for " << n << " instead of IAND kind";
+    InternalError() << "IAND typerule invoked for " << n
+                    << " instead of IAND kind";
   }
   if (check)
   {
@@ -201,7 +209,8 @@ TypeNode Pow2TypeRule::computeType(NodeManager* nodeManager,
 {
   if (n.getKind() != Kind::POW2)
   {
-    InternalError() << "POW2 typerule invoked for " << n << " instead of POW2 kind";
+    InternalError() << "POW2 typerule invoked for " << n
+                    << " instead of POW2 kind";
   }
   if (check)
   {

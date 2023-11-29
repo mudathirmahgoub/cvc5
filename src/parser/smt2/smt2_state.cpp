@@ -838,6 +838,7 @@ void Smt2State::setLogic(std::string name)
     addOperator(Kind::NULLABLE_VALUE, "nullable.value");
     addOperator(Kind::NULLABLE_SELECT, "nullable.select");
     addOperator(Kind::NULLABLE_LIFT, "nullable.lift");
+    addIndexedOperator(Kind::NULLABLE_LIFT, "nullable.lift");
   }
 
   if (d_logic.isTheoryEnabled(internal::theory::THEORY_SETS))

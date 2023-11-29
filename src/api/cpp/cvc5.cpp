@@ -72,6 +72,7 @@
 #include "theory/arith/nl/poly_conversion.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/logic_info.h"
+#include "theory/nullables/lift_op.h"
 #include "theory/nullables/null.h"
 #include "theory/theory_model.h"
 #include "util/bitvector.h"
@@ -697,7 +698,8 @@ const static std::unordered_map<internal::Kind,
         {internal::Kind::NULLABLE_VALUE, Kind::NULLABLE_VALUE},
         {internal::Kind::NULLABLE_SELECT, Kind::NULLABLE_SELECT},
         {internal::Kind::NULLABLE_LIFT, Kind::NULLABLE_LIFT},
-        {internal::Kind::NULLABLE_NULL, Kind::NULLABLE_NULL},
+        {internal::Kind::NULLABLE_LIFT_OP, Kind::NULLABLE_LIFT},
+        {internal::Kind::NULLABLE_NULL, Kind::NULLABLE_NULL},        
         /* Datatypes ------------------------------------------------------- */
         {internal::Kind::APPLY_SELECTOR, Kind::APPLY_SELECTOR},
         {internal::Kind::APPLY_CONSTRUCTOR, Kind::APPLY_CONSTRUCTOR},
@@ -902,6 +904,7 @@ const static std::unordered_map<Kind, internal::Kind> s_op_kinds{
     {Kind::INT_TO_BITVECTOR, internal::Kind::INT_TO_BITVECTOR_OP},
     {Kind::REGEXP_REPEAT, internal::Kind::REGEXP_REPEAT_OP},
     {Kind::REGEXP_LOOP, internal::Kind::REGEXP_LOOP_OP},
+    {Kind::NULLABLE_LIFT, internal::Kind::NULLABLE_LIFT_OP},
     {Kind::TUPLE_PROJECT, internal::Kind::TUPLE_PROJECT_OP},
     {Kind::RELATION_AGGREGATE, internal::Kind::RELATION_AGGREGATE_OP},
     {Kind::RELATION_GROUP, internal::Kind::RELATION_GROUP_OP},
@@ -2208,6 +2211,11 @@ size_t Op::getNumIndicesHelper() const
       size = d_node->getConst<internal::ProjectOp>().getIndices().size();
       break;
     }
+    case Kind::NULLABLE_LIFT:
+    {
+      size = 1;
+      break;
+    }
     default: CVC5_API_CHECK(false) << "Unhandled kind " << kindToString(k);
   }
   return size;
@@ -2395,6 +2403,13 @@ Term Op::getIndexHelper(size_t index) const
       const std::vector<uint32_t>& projectionIndices =
           d_node->getConst<internal::ProjectOp>().getIndices();
       t = Solver::mkRationalValHelper(d_nm, projectionIndices[index], true);
+      break;
+    }
+    case Kind::NULLABLE_LIFT:
+    {
+      const auto& kind =
+          d_node->getConst<internal::LiftOp>().getKind();
+      t = Term();
       break;
     }
     default:

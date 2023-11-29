@@ -150,6 +150,7 @@ Term Smt2TermParser::parseTerm()
           case Token::LPAREN_TOK:
           {
             tok = d_lex.nextToken();
+            std::cout << "tok: " << d_lex.tokenStr()<<std::endl;
             switch (tok)
             {
               case Token::AS_TOK:
@@ -333,6 +334,8 @@ Term Smt2TermParser::parseTerm()
           // add it to the list of arguments and clear
           tstack.back().second.push_back(ret);
           ret = Term();
+          std::cout << "tstack.dname: " <<  tstack.back().first.d_name << ", "
+          << tstack.back().second << std::endl;
         }
         break;
         // ------------------------- let terms
@@ -1274,8 +1277,8 @@ ParseOp Smt2TermParser::continueParseIndexedIdentifier(bool isOperator)
   {
     // handles:
     // - testers and updaters indexed by constructor names
-    Kind k = d_state.getIndexedOpKind(name);
-    if (k != Kind::APPLY_UPDATER && k != Kind::APPLY_TESTER)
+    Kind k = d_state.getIndexedOpKind(name);    
+    if (k != Kind::APPLY_UPDATER && k != Kind::APPLY_TESTER && k != Kind::NULLABLE_LIFT)
     {
       d_lex.parseError(std::string("Unexpected indexed symbol " + name));
     }

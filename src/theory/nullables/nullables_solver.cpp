@@ -119,43 +119,6 @@ bool NullablesSolver::checkSplit()
   return false;
 }
 
-void NullablesSolver::checkDisequalities()
-{
-  const auto& nullables = d_state.getNullables();
-  auto i = nullables.cbegin();
-  while (i != nullables.cend())
-  {
-    auto j = i;
-    ++j;
-    while (j != nullables.cend())
-    {
-      if (d_state.areDisequal(i->first, j->first))
-      {
-        // check if we in the case (nullable.some a) != (nullable.some b)
-        for (const auto& x : i->second)
-        {
-          if (x.getKind() != Kind::NULLABLE_SOME)
-          {
-            continue;
-          }
-          for (const auto& y : j->second)
-          {
-            if (y.getKind() != Kind::NULLABLE_SOME)
-            {
-              continue;
-            }
-            Node lemma =
-                x.eqNode(y).notNode().impNode(x[0].eqNode(y[0]).notNode());
-            d_im->addPendingLemma(lemma, InferenceId::NULLABLES_DISEQUAL);
-          }
-        }
-      }
-      ++j;
-    }
-    ++i;
-  }
-}
-
 void NullablesSolver::checkValue(const Node& n1,
                                  std::vector<Node>::const_iterator it,
                                  std::vector<Node>::const_iterator end)

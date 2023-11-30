@@ -45,7 +45,6 @@ class NullablesSolver : protected EnvObj
    * apply inference rules for basic nullable operators
    */
   void checkBasicOperations();
-  void checkDisequalities();
   bool checkSplit();
   bool isNullOrValue(Node eqc);
 

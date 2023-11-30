@@ -32,6 +32,7 @@ enum class Rewrite : uint32_t
 {
   NONE,             // no rewrite happened
   IDENTICAL_NODES,  // identical nodes
+  ISNULL,
   SELECT_VALUE,
   EQ_REFL,
   EQ_CONST_FALSE,

@@ -61,6 +61,7 @@ class NullablesRewriter : public TheoryRewriter
    * - (= A A) = true where A is a nullable
    */
   NullablesRewriteResponse preRewriteEqual(const TNode& n) const;
+  NullablesRewriteResponse preRewriteIsNull(const TNode& n) const;
   NullablesRewriteResponse postRewriteEqual(const TNode& n) const;
   /**
    * (nullable.val(nullable.some x)) is rewritten to x

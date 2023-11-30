@@ -15,6 +15,7 @@
 
 #include "theory/nullables/nullables_rewriter.h"
 
+#include "theory/nullables/null.h"
 #include "theory/rewriter.h"
 #include "util/rational.h"
 #include "util/statistics_registry.h"
@@ -118,6 +119,7 @@ RewriteResponse NullablesRewriter::preRewrite(TNode n)
   switch (k)
   {
     case Kind::EQUAL: response = preRewriteEqual(n); break;
+    case Kind::NULLABLE_ISNULL: response = preRewriteIsNull(n); break;
     default: response = NullablesRewriteResponse(n, Rewrite::NONE);
   }
 
@@ -147,6 +149,16 @@ NullablesRewriteResponse NullablesRewriter::preRewriteEqual(
                                     Rewrite::IDENTICAL_NODES);
   }
   return NullablesRewriteResponse(n, Rewrite::NONE);
+}
+
+NullablesRewriteResponse NullablesRewriter::preRewriteIsNull(
+    const TNode& n) const
+{
+  Assert(n.getKind() == Kind::NULLABLE_ISNULL);
+  TypeNode type = n[0].getType();
+  Node null = d_nm->mkConst(Null(type));
+  Node equality = null.eqNode(n[0]);
+  return NullablesRewriteResponse(equality, Rewrite::ISNULL);
 }
 
 NullablesRewriteResponse NullablesRewriter::postRewriteSelect(

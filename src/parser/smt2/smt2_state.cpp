@@ -1318,6 +1318,10 @@ Term Smt2State::applyParseOp(const ParseOp& p, std::vector<Term>& args)
         Op op = d_solver->mkOp(kind, indices);
         return d_solver->mkTerm(op, args);
       }
+      else if(kind == Kind::NULLABLE_LIFT)
+      {
+        Assert(false) << "Reached here" << std::endl;
+      }
       else if (kind == Kind::APPLY_CONSTRUCTOR)
       {
         // tuple application

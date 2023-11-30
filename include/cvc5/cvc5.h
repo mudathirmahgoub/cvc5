@@ -4011,7 +4011,7 @@ class CVC5_EXPORT Solver
    * @return The cardinality constraint.
    */
   Term mkCardinalityConstraint(const Sort& sort, uint32_t upperBound) const;
-
+  Term mkLiftTerm(Kind kind, const std::vector<Term>& args) const;
   /* .................................................................... */
   /* Create Variables                                                     */
   /* .................................................................... */

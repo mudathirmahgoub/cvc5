@@ -6314,6 +6314,17 @@ Term Solver::mkCardinalityConstraint(const Sort& sort, uint32_t upperBound) cons
   CVC5_API_TRY_CATCH_END;
 }
 
+Term Solver::mkLiftTerm(Kind kind, const std::vector<Term>& args) const
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  internal::Kind internalKind = extToIntKind(kind);
+  Op op = mkOpHelper(kind, internal::LiftOp(internalKind));
+  return mkTermHelper(op, args);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 /* Create constants                                                           */
 /* -------------------------------------------------------------------------- */
 

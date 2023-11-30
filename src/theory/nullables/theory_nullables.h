@@ -105,6 +105,33 @@ class TheoryNullables : public Theory
   NullablesSolver d_solver;
   /** The representation of the strategy */
   Strategy d_strat;
+  /** Functions to handle callbacks from equality engine */
+  class NotifyClass : public TheoryEqNotifyClass
+  {
+   public:
+    NotifyClass(TheoryNullables& theory,
+                TheoryInferenceManager& inferenceManager)
+
+        : TheoryEqNotifyClass(inferenceManager), d_theory(theory)
+    {
+    }
+    void eqNotifyNewClass(TNode n) override;
+    void eqNotifyMerge(TNode n1, TNode n2) override;
+    void eqNotifyDisequal(TNode n1, TNode n2, TNode reason) override;
+
+   private:
+    TheoryNullables& d_theory;
+  };
+
+  /** Instance of the above class */
+  NotifyClass d_notify;
+
+  void eqNotifyNewClass(TNode n);
+
+  void eqNotifyMerge(TNode n1, TNode n2);
+
+  void eqNotifyDisequal(TNode n1, TNode n2, TNode reason);
+
 }; /* class TheoryNullables */
 
 }  // namespace nullables

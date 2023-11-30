@@ -36,7 +36,8 @@ TheoryNullables::TheoryNullables(Env& env,
       d_rewriter(env.getRewriter(), nullptr),
       d_state(env, valuation),
       d_im(env, *this, d_state, "theory::nullables::"),
-      d_solver(env, d_state, d_im)
+      d_solver(env, d_state, d_im),
+      d_notify(*this, d_im)
 {
   d_theoryState = &d_state;
   d_inferManager = &d_im;
@@ -54,7 +55,7 @@ std::string TheoryNullables::identify() const { return "THEORY_NULLABLES"; }
 
 bool TheoryNullables::needsEqualityEngine(EeSetupInfo& esi)
 {
-  // esi.d_notify = &d_notify;
+  esi.d_notify = &d_notify;
   esi.d_name = "theory::nullables::ee";
   return true;
 }
@@ -256,7 +257,7 @@ bool TheoryNullables::runInferStep(InferStep s, int effort)
     case CHECK_INIT: break;
     case CHECK_BASIC_OPERATIONS:
       d_solver.checkBasicOperations();
-      d_solver.checkDisequalities();
+      // d_solver.checkDisequalities();
       break;
     case CHECK_SPLIT:
     {
@@ -273,6 +274,36 @@ bool TheoryNullables::runInferStep(InferStep s, int effort)
       << ", addedLemma = " << d_im.hasPendingLemma()
       << ", conflict = " << d_state.isInConflict() << std::endl;
   return false;
+}
+
+void TheoryNullables::eqNotifyNewClass(TNode n) {}
+
+void TheoryNullables::eqNotifyMerge(TNode n1, TNode n2) {}
+
+void TheoryNullables::eqNotifyDisequal(TNode n1, TNode n2, TNode reason) {}
+
+void TheoryNullables::NotifyClass::eqNotifyNewClass(TNode n)
+{
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyNewClass:"
+                        << " n = " << n << std::endl;
+  d_theory.eqNotifyNewClass(n);
+}
+
+void TheoryNullables::NotifyClass::eqNotifyMerge(TNode n1, TNode n2)
+{
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyMerge:"
+                        << " n1 = " << n1 << " n2 = " << n2 << std::endl;
+  d_theory.eqNotifyMerge(n1, n2);
+}
+
+void TheoryNullables::NotifyClass::eqNotifyDisequal(TNode n1,
+                                                    TNode n2,
+                                                    TNode reason)
+{
+  Trace("nullables-eq") << "[nullables-eq] eqNotifyDisequal:"
+                        << " n1 = " << n1 << " n2 = " << n2
+                        << " reason = " << reason << std::endl;
+  d_theory.eqNotifyDisequal(n1, n2, reason);
 }
 
 }  // namespace nullables

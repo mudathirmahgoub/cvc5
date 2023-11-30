@@ -96,8 +96,8 @@ void TheoryNullables::finishInit()
 
   // functions we are doing congruence over
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_NULL);
-  d_equalityEngine->addFunctionKind(Kind::NULLABLE_VALUE);
-  d_equalityEngine->addFunctionKind(Kind::NULLABLE_SELECT);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_SOME);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_VAL);
 }
 
 void TheoryNullables::presolve()

@@ -298,8 +298,8 @@ const static std::unordered_map<Kind, std::pair<internal::Kind, std::string>>
         KIND_ENUM(Kind::CONST_ARRAY, internal::Kind::STORE_ALL),
         KIND_ENUM(Kind::EQ_RANGE, internal::Kind::EQ_RANGE),
         /* Nullables -------------------------------------------------------- */
-        KIND_ENUM(Kind::NULLABLE_VALUE, internal::Kind::NULLABLE_VALUE),
-        KIND_ENUM(Kind::NULLABLE_SELECT, internal::Kind::NULLABLE_SELECT),
+        KIND_ENUM(Kind::NULLABLE_SOME, internal::Kind::NULLABLE_SOME),
+        KIND_ENUM(Kind::NULLABLE_VAL, internal::Kind::NULLABLE_VAL),
         KIND_ENUM(Kind::NULLABLE_LIFT, internal::Kind::NULLABLE_LIFT),
         KIND_ENUM(Kind::NULLABLE_NULL, internal::Kind::NULLABLE_NULL),
         /* Datatypes -------------------------------------------------------- */
@@ -695,8 +695,8 @@ const static std::unordered_map<internal::Kind,
         {internal::Kind::STORE, Kind::STORE},
         {internal::Kind::STORE_ALL, Kind::CONST_ARRAY},
         /* Nullables -------------------------------------------------------- */
-        {internal::Kind::NULLABLE_VALUE, Kind::NULLABLE_VALUE},
-        {internal::Kind::NULLABLE_SELECT, Kind::NULLABLE_SELECT},
+        {internal::Kind::NULLABLE_SOME, Kind::NULLABLE_SOME},
+        {internal::Kind::NULLABLE_VAL, Kind::NULLABLE_VAL},
         {internal::Kind::NULLABLE_LIFT, Kind::NULLABLE_LIFT},
         {internal::Kind::NULLABLE_LIFT_OP, Kind::NULLABLE_LIFT},
         {internal::Kind::NULLABLE_NULL, Kind::NULLABLE_NULL},        

@@ -3,6 +3,6 @@
 (set-option :produce-models true)
 (declare-fun x () (Nullable Int))
 (declare-fun y () (Nullable Int))
-(assert (= (nullable.value x) (nullable.value y)))
+(assert (= (nullable.some x) (nullable.some y)))
 (assert (distinct x y))
 (check-sat)

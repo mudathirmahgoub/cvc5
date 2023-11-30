@@ -60,7 +60,7 @@ Node NullableEnumerator::operator*()
 NullableEnumerator& NullableEnumerator::operator++()
 {
   // construct the nullable using the current element
-  d_currentNullable = d_nm->mkNode(Kind::NULLABLE_VALUE, d_element);
+  d_currentNullable = d_nm->mkNode(Kind::NULLABLE_SOME, d_element);
   // prepare the element for the next nullable
   d_elementTypeEnumerator++;
   d_element = *d_elementTypeEnumerator;
@@ -74,7 +74,7 @@ NullableEnumerator& NullableEnumerator::operator++()
 bool NullableEnumerator::isFinished()
 {
   // current runnable value is the same as next runnable value
-  return (d_currentNullable.getKind() == Kind::NULLABLE_VALUE)
+  return (d_currentNullable.getKind() == Kind::NULLABLE_SOME)
          && (d_currentNullable[0] == d_element);
 }
 

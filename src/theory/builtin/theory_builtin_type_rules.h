@@ -57,7 +57,7 @@ class SExprTypeRule
                               std::ostream* errOut);
 };
 
-class UninterpretedSortValueTypeRule
+class UninterpretedSortSomeTypeRule
 {
  public:
   static TypeNode preComputeType(NodeManager* nm, TNode n);

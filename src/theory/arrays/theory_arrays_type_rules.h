@@ -25,7 +25,7 @@ namespace cvc5::internal {
 namespace theory {
 namespace arrays {
 
-struct ArraySelectTypeRule
+struct ArrayValTypeRule
 {
   static TypeNode preComputeType(NodeManager* nm, TNode n);
 

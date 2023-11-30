@@ -835,8 +835,8 @@ void Smt2State::setLogic(std::string name)
     defineVar("nullable.null",
               d_solver->mkNullNullable(d_solver->mkNullableSort(btype)));
 
-    addOperator(Kind::NULLABLE_VALUE, "nullable.value");
-    addOperator(Kind::NULLABLE_SELECT, "nullable.select");
+    addOperator(Kind::NULLABLE_SOME, "nullable.some");
+    addOperator(Kind::NULLABLE_VAL, "nullable.val");
     addOperator(Kind::NULLABLE_LIFT, "nullable.lift");
     addIndexedOperator(Kind::NULLABLE_LIFT, "nullable.lift");
   }

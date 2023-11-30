@@ -6,5 +6,5 @@
 (declare-fun z () (Nullable Int))
 (assert (distinct x y z))
 (assert (= x (as nullable.null (Nullable Int))))
-(assert (= y (nullable.value 5)))
+(assert (= y (nullable.some 5)))
 (check-sat)

@@ -44,47 +44,47 @@ TypeNode NullTypeRule::computeType(NodeManager* nodeManager,
   return null.getType();
 }
 
-TypeNode ValueTypeRule::preComputeType(NodeManager* nm, TNode n)
+TypeNode SomeTypeRule::preComputeType(NodeManager* nm, TNode n)
 {
   return TypeNode::null();
 }
-TypeNode ValueTypeRule::computeType(NodeManager* nm,
-                                    TNode n,
-                                    bool check,
-                                    std::ostream* errOut)
+TypeNode SomeTypeRule::computeType(NodeManager* nm,
+                                   TNode n,
+                                   bool check,
+                                   std::ostream* errOut)
 {
-  Assert(n.getKind() == Kind::NULLABLE_VALUE);
+  Assert(n.getKind() == Kind::NULLABLE_SOME);
   TypeNode elementType = n[0].getType(check);
   return nm->mkNullableType(elementType);
 }
 
-TypeNode SelectTypeRule::preComputeType(NodeManager* nm, TNode n)
+TypeNode ValTypeRule::preComputeType(NodeManager* nm, TNode n)
 {
   return TypeNode::null();
 }
 
-TypeNode SelectTypeRule::computeType(NodeManager* nm,
-                                     TNode n,
-                                     bool check,
-                                     std::ostream* errOut)
+TypeNode ValTypeRule::computeType(NodeManager* nm,
+                                  TNode n,
+                                  bool check,
+                                  std::ostream* errOut)
 {
-  Assert(n.getKind() == Kind::NULLABLE_SELECT);
+  Assert(n.getKind() == Kind::NULLABLE_VAL);
   TypeNode nullableType = n[0].getType(check);
   if (check)
   {
     if (!nullableType.isNullable())
     {
       throw TypeCheckingExceptionPrivate(n,
-                                         "NULLABLE_SELECT operator expects a "
+                                         "NULLABLE_VAL operator expects a "
                                          "nullable, a non-nullable is found");
     }
   }
   return nullableType.getNullableElementType();
 }
 
-bool ValueTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
+bool SomeTypeRule::computeIsConst(NodeManager* nodeManager, TNode n)
 {
-  Assert(n.getKind() == Kind::NULLABLE_VALUE);
+  Assert(n.getKind() == Kind::NULLABLE_SOME);
   // for a nullable to be constant, its element should be constant
   return n[0].isConst();
 }
@@ -102,6 +102,46 @@ TypeNode NullableLiftTypeRule::computeType(NodeManager* nodeManager,
   Assert(n.getKind() == Kind::NULLABLE_LIFT);
 
   return n[0].getType();
+}
+
+TypeNode IsNullTypeRule::preComputeType(NodeManager* nm, TNode n)
+{
+  return TypeNode::null();
+}
+
+TypeNode IsNullTypeRule::computeType(NodeManager* nm,
+                                     TNode n,
+                                     bool check,
+                                     std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::NULLABLE_ISNULL);
+  TypeNode nullableType = n[0].getType(check);
+  if (check)
+  {
+    if (!nullableType.isNullable())
+    {
+      throw TypeCheckingExceptionPrivate(n,
+                                         "NULLABLE_ISNULL operator expects a "
+                                         "nullable, a non-nullable is found");
+    }
+  }
+  return NodeManager::currentNM()->booleanType();
+}
+
+Cardinality NullablesProperties::computeCardinality(TypeNode type)
+{
+  return Cardinality::INTEGERS;
+}
+
+bool NullablesProperties::isWellFounded(TypeNode type)
+{
+  return type[0].isWellFounded();
+}
+
+Node NullablesProperties::mkGroundTerm(TypeNode type)
+{
+  Assert(type.isNullable());
+  return NodeManager::currentNM()->mkConst(Null(type));
 }
 
 }  // namespace nullables

@@ -279,7 +279,7 @@ constant UNINTERPRETED_SORT_VALUE \
     ::cvc5::internal::UninterpretedSortValueHashFunction \
     "util/uninterpreted_sort_value.h" \
     "the kind of expressions representing uninterpreted sort values; payload is an instance of the cvc5::internal::AbstractValue class (used in models)"
-typerule UNINTERPRETED_SORT_VALUE ::cvc5::internal::theory::builtin::UninterpretedSortValueTypeRule
+typerule UNINTERPRETED_SORT_VALUE ::cvc5::internal::theory::builtin::UninterpretedSortSomeTypeRule
 
 # A kind representing "inlined" operators defined with OPERATOR
 # Conceptually, (EQUAL a b) is actually an (APPLY EQUAL a b), but it's

@@ -43,7 +43,7 @@ struct NullTypeRule
 /**
  *
  */
-struct ValueTypeRule
+struct SomeTypeRule
 {
   static TypeNode preComputeType(NodeManager* nm, TNode n);
   static TypeNode computeType(NodeManager* nodeManager,
@@ -51,19 +51,31 @@ struct ValueTypeRule
                               bool check,
                               std::ostream* errOut);
   static bool computeIsConst(NodeManager* nodeManager, TNode n);
-}; /* struct ValueTypeRule */
+}; /* struct SomeTypeRule */
 
 /**
  *
  */
-struct SelectTypeRule
+struct ValTypeRule
 {
   static TypeNode preComputeType(NodeManager* nm, TNode n);
   static TypeNode computeType(NodeManager* nodeManager,
                               TNode n,
                               bool check,
                               std::ostream* errOut);
-}; /* struct SelectTypeRule */
+}; /* struct ValTypeRule */
+
+/**
+ *
+ */
+struct IsNullTypeRule
+{
+  static TypeNode preComputeType(NodeManager* nm, TNode n);
+  static TypeNode computeType(NodeManager* nodeManager,
+                              TNode n,
+                              bool check,
+                              std::ostream* errOut);
+}; /* struct IsNullTypeRule */
 
 /**
  */

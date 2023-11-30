@@ -26,12 +26,12 @@ namespace cvc5::internal {
 namespace theory {
 namespace arrays {
 
-TypeNode ArraySelectTypeRule::preComputeType(NodeManager* nm, TNode n)
+TypeNode ArrayValTypeRule::preComputeType(NodeManager* nm, TNode n)
 {
   return TypeNode::null();
 }
 
-TypeNode ArraySelectTypeRule::computeType(NodeManager* nodeManager,
+TypeNode ArrayValTypeRule::computeType(NodeManager* nodeManager,
                                           TNode n,
                                           bool check,
                                           std::ostream* errOut)

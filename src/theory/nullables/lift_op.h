@@ -13,8 +13,8 @@
  * A class for LiftOp operator.
  */
 
-#include "cvc5_public.h"
-
+#include "cvc5_private.h"
+#include "expr/node.h"
 #ifndef CVC5__LIFTOP_H
 #define CVC5__LIFTOP_H
 
@@ -39,7 +39,7 @@ class LiftOp
 
   bool operator==(const LiftOp& op) const;
 
- private:
+ public:
   Kind d_kind;
 }; /* class LiftOp */
 
@@ -53,6 +53,6 @@ struct LiftOpHashFunction
   size_t operator()(const LiftOp& op) const;
 }; /* struct LiftOpHashFunction */
 
-}  // namespace cvc5::internal
+}  // namespace internal
 
 #endif /* CVC5__LIFTOP_H */

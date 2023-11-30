@@ -62,7 +62,7 @@ RewriteResponse NullablesRewriter::postRewrite(TNode n)
   {
     response = postRewriteEqual(n);
   }
-  else if (n.getKind() == Kind::NULLABLE_SELECT)
+  else if (n.getKind() == Kind::NULLABLE_VAL)
   {
     response = postRewriteSelect(n);
   }
@@ -152,8 +152,8 @@ NullablesRewriteResponse NullablesRewriter::preRewriteEqual(
 NullablesRewriteResponse NullablesRewriter::postRewriteSelect(
     const TNode& n) const
 {
-  Assert(n.getKind() == Kind::NULLABLE_SELECT);
-  if (n[0].getKind() == Kind::NULLABLE_VALUE)
+  Assert(n.getKind() == Kind::NULLABLE_VAL);
+  if (n[0].getKind() == Kind::NULLABLE_SOME)
   {
     return NullablesRewriteResponse(n[0][0], Rewrite::IDENTICAL_NODES);
   }

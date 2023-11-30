@@ -1120,8 +1120,8 @@ std::string Smt2Printer::smtKindString(Kind k)
     // nullable theory
     case Kind::NULLABLE_TYPE: return "Nullable";
     case Kind::NULLABLE_NULL: return "nullable.null";
-    case Kind::NULLABLE_VALUE: return "nullable.value";
-    case Kind::NULLABLE_SELECT: return "nullable.select";
+    case Kind::NULLABLE_SOME: return "nullable.some";
+    case Kind::NULLABLE_VAL: return "nullable.val";
     case Kind::NULLABLE_LIFT: return "nullable.lift";
 
     // set theory

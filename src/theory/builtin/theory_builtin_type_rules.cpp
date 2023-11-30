@@ -99,12 +99,12 @@ TypeNode SExprTypeRule::computeType(NodeManager* nodeManager,
   return nodeManager->sExprType();
 }
 
-TypeNode UninterpretedSortValueTypeRule::preComputeType(NodeManager* nm,
+TypeNode UninterpretedSortSomeTypeRule::preComputeType(NodeManager* nm,
                                                         TNode n)
 {
   return TypeNode::null();
 }
-TypeNode UninterpretedSortValueTypeRule::computeType(NodeManager* nodeManager,
+TypeNode UninterpretedSortSomeTypeRule::computeType(NodeManager* nodeManager,
                                                      TNode n,
                                                      bool check,
                                                      std::ostream* errOut)

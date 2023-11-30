@@ -24,11 +24,15 @@ namespace cvc5::internal {
 std::ostream& operator<<(std::ostream& out, const LiftOp& op)
 {
   // should only be used for debugging, not in the smt2 printer.
-  out << "(LiftOp " << d_kind << ")";
+  out << "(LiftOp "
+      << ")";
   return out;
 }
 
-size_t LiftOpHashFunction::operator()(const LiftOp& op) const { return d_kind; }
+size_t LiftOpHashFunction::operator()(const LiftOp& op) const
+{
+  return static_cast<size_t>(op.d_kind);
+}
 
 LiftOp::LiftOp(Kind kind) : d_kind(kind) {}
 

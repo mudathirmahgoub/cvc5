@@ -63,7 +63,7 @@ void NullablesSolver::checkBasicOperations()
       Kind k = n.getKind();
       switch (k)
       {
-        case Kind::NULLABLE_VALUE:
+        case Kind::NULLABLE_SOME:
         {
           auto it2 = it;
           checkValue(n, it2, end);
@@ -98,7 +98,7 @@ bool NullablesSolver::checkSplit()
     }
     if (isNullOrValue(eqc))
     {
-      // ignore terms that are equal to nullable.null or nullable.value
+      // ignore terms that are equal to nullable.null or nullable.some
       continue;
     }
     // we need to split
@@ -109,7 +109,7 @@ bool NullablesSolver::checkSplit()
 
     Node skolem = sm->mkSkolemFunction(
         SkolemFunId::NULLABLES_SPLIT, type.getNullableElementType(), {eqc});
-    Node value = nm->mkNode(Kind::NULLABLE_VALUE, skolem);
+    Node value = nm->mkNode(Kind::NULLABLE_SOME, skolem);
     Node equalNull = eqc.eqNode(null);
     Node equalValue = eqc.eqNode(value);
     Node lemma = equalNull.orNode(equalValue);
@@ -131,16 +131,16 @@ void NullablesSolver::checkDisequalities()
     {
       if (d_state.areDisequal(i->first, j->first))
       {
-        // check if we in the case (nullable.value a) != (nullable.value b)
+        // check if we in the case (nullable.some a) != (nullable.some b)
         for (const auto& x : i->second)
         {
-          if (x.getKind() != Kind::NULLABLE_VALUE)
+          if (x.getKind() != Kind::NULLABLE_SOME)
           {
             continue;
           }
           for (const auto& y : j->second)
           {
-            if (y.getKind() != Kind::NULLABLE_VALUE)
+            if (y.getKind() != Kind::NULLABLE_SOME)
             {
               continue;
             }
@@ -160,12 +160,12 @@ void NullablesSolver::checkValue(const Node& n1,
                                  std::vector<Node>::const_iterator it,
                                  std::vector<Node>::const_iterator end)
 {
-  Assert(n1.getKind() == Kind::NULLABLE_VALUE);
+  Assert(n1.getKind() == Kind::NULLABLE_SOME);
   do
   {
     Node n2 = *it;
     it++;
-    if (n2.getKind() == Kind::NULLABLE_VALUE)
+    if (n2.getKind() == Kind::NULLABLE_SOME)
     {
       Node x = n1[0];
       Node y = n2[0];
@@ -193,7 +193,7 @@ void NullablesSolver::checkNull(const Node& n1,
   {
     Node n2 = *it;
     it++;
-    if (n2.getKind() == Kind::NULLABLE_VALUE)
+    if (n2.getKind() == Kind::NULLABLE_SOME)
     {
       Node premise = n1.eqNode(n2);
       Node conclusion = d_false;
@@ -212,7 +212,7 @@ bool NullablesSolver::isNullOrValue(Node eqc)
     Node n = *it;
     ++it;
     if (n.getKind() == Kind::NULLABLE_NULL
-        || n.getKind() == Kind::NULLABLE_VALUE)
+        || n.getKind() == Kind::NULLABLE_SOME)
     {
       return true;
     }

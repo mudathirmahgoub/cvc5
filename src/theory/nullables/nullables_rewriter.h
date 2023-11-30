@@ -63,7 +63,7 @@ class NullablesRewriter : public TheoryRewriter
   NullablesRewriteResponse preRewriteEqual(const TNode& n) const;
   NullablesRewriteResponse postRewriteEqual(const TNode& n) const;
   /**
-   * (nullable.select(nullable.value x)) is rewritten to x
+   * (nullable.val(nullable.some x)) is rewritten to x
    */
   NullablesRewriteResponse postRewriteSelect(const TNode& n) const;
 

@@ -720,6 +720,8 @@ libcvc5_add_sources(
   theory/fp/theory_fp_utils.h
   theory/fp/theory_fp_utils.cpp
   theory/fp/type_enumerator.h
+  theory/nullables/lift_op.cpp
+  theory/nullables/lift_op.h
   theory/nullables/null.cpp
   theory/nullables/null.h  
   theory/nullables/nullables_rewriter.cpp
@@ -735,7 +737,9 @@ libcvc5_add_sources(
   theory/nullables/theory_nullables_type_rules.cpp
   theory/nullables/theory_nullables_type_rules.h 
   theory/nullables/theory_nullables.cpp
-  theory/nullables/theory_nullables.h  
+  theory/nullables/theory_nullables.h
+  theory/nullables/rewrites.cpp
+  theory/nullables/rewrites.h
   theory/interrupted.h
   theory/incomplete_id.cpp
   theory/incomplete_id.h

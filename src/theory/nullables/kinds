@@ -43,16 +43,18 @@ constant NULLABLE_LIFT_OP \
   "theory/nullables/lift_op.h" \
   "operator for NULLABLE_LIFT_OP; payload is an instance of the cvc5::nullable::LiftOp class"
 
-operator NULLABLE_VALUE 1 "constructs a nullable from one element"
-operator NULLABLE_SELECT 1 "select the value from a nullable term"
+operator NULLABLE_SOME   1 "constructs a nullable from one element"
+operator NULLABLE_VAL    1 "select the value from a nullable term"
+operator NULLABLE_ISNULL 1 "test whether a nullable is null"
 
 parameterized NULLABLE_LIFT NULLABLE_LIFT_OP 1: "application of lift operator; first parameter is the lift operator, remaining ones are its arguments"
 
-typerule NULLABLE_NULL           ::cvc5::internal::theory::nullables::NullTypeRule
-typerule NULLABLE_VALUE          ::cvc5::internal::theory::nullables::ValueTypeRule
-construle NULLABLE_VALUE         ::cvc5::internal::theory::nullables::ValueTypeRule
-typerule NULLABLE_SELECT         ::cvc5::internal::theory::nullables::SelectTypeRule
-typerule NULLABLE_LIFT_OP        "SimpleTypeRule<RBuiltinOperator>"
-typerule NULLABLE_LIFT           ::cvc5::internal::theory::nullables::NullableLiftTypeRule
+typerule NULLABLE_NULL          ::cvc5::internal::theory::nullables::NullTypeRule
+typerule NULLABLE_SOME          ::cvc5::internal::theory::nullables::SomeTypeRule
+construle NULLABLE_SOME         ::cvc5::internal::theory::nullables::SomeTypeRule
+typerule NULLABLE_VAL           ::cvc5::internal::theory::nullables::ValTypeRule
+typerule NULLABLE_LIFT_OP       "SimpleTypeRule<RBuiltinOperator>"
+typerule NULLABLE_LIFT          ::cvc5::internal::theory::nullables::NullableLiftTypeRule
+typerule NULLABLE_ISNULL        ::cvc5::internal::theory::nullables::IsNullTypeRule
 
 endtheory

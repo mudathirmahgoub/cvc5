@@ -49,7 +49,7 @@ constant STORE_ALL \
 # as a shifted over one.
 operator ARRAY_LAMBDA 1 "array lambda (internal-only symbol)"
 
-typerule SELECT ::cvc5::internal::theory::arrays::ArraySelectTypeRule
+typerule SELECT ::cvc5::internal::theory::arrays::ArrayValTypeRule
 typerule STORE ::cvc5::internal::theory::arrays::ArrayStoreTypeRule
 typerule STORE_ALL ::cvc5::internal::theory::arrays::ArrayStoreTypeRule
 typerule ARRAY_LAMBDA ::cvc5::internal::theory::arrays::ArrayLambdaTypeRule

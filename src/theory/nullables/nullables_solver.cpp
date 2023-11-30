@@ -183,6 +183,69 @@ bool NullablesSolver::isNullOrValue(Node eqc)
   return false;
 }
 
+Node NullablesSolver::getValue(Node eqc)
+{
+  eq::EqClassIterator it =
+      eq::EqClassIterator(eqc, d_state.getEqualityEngine());
+  while (!it.isFinished())
+  {
+    Node n = *it;
+    ++it;
+    if (n.getKind() == Kind::NULLABLE_SOME)
+    {
+      return n[0];
+    }
+  }
+  return Node::null();
+}
+
+bool NullablesSolver::checkLift()
+{
+  // get the relevant term set, currently all nullable equivalence classes
+  // in the equality engine
+  eq::EqClassesIterator repIt =
+      eq::EqClassesIterator(d_state.getEqualityEngine());
+  while (!repIt.isFinished())
+  {
+    Node eqc = (*repIt);
+    ++repIt;
+    NodeManager* nm = NodeManager::currentNM();
+    if (eqc.getKind() == Kind::NULLABLE_LIFT)
+    {
+      std::vector<Node> args;
+      std::vector<Node> premises;
+      for (Node n : eqc)
+      {
+        Node childRep = d_state.getRepresentative(n);
+        Node value = getValue(childRep);
+        if (value.isNull())
+        {
+          // the result is null
+          Node premise = n.eqNode(value);
+          Node conclusion = eqc.eqNode(nm->mkConst(Null(eqc.getType())));
+          Node lemma = premise.notNode().orNode(conclusion);
+          d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
+        }
+        args.push_back(value);
+        premises.push_back(
+            childRep.eqNode(nm->mkNode(Kind::NULLABLE_SOME, value)));
+      }
+      if (args.size() == eqc.getNumChildren())
+      {
+        Node premise = nm->mkAnd(premises);
+
+        Node conclusion = eqc.eqNode(nm->mkNode(Kind::ADD, args));
+        Node lemma = premise.notNode().orNode(conclusion);
+        d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
+      }
+      Assert(false);
+    }
+  }
+  return false;
+}
+
+bool NullablesSolver::checkLift(Node eqc) {}
+
 }  // namespace nullables
 }  // namespace theory
 }  // namespace cvc5::internal

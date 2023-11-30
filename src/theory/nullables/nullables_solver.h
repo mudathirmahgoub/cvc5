@@ -46,7 +46,10 @@ class NullablesSolver : protected EnvObj
    */
   void checkBasicOperations();
   bool checkSplit();
+  bool checkLift();
   bool isNullOrValue(Node eqc);
+  Node getValue(Node eqc);
+  bool checkLift(Node eqc);
 
  private:
   /**

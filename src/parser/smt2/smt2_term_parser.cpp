@@ -149,8 +149,7 @@ Term Smt2TermParser::parseTerm()
           break;
           case Token::LPAREN_TOK:
           {
-            tok = d_lex.nextToken();
-            std::cout << "tok: " << d_lex.tokenStr()<<std::endl;
+            tok = d_lex.nextToken();            
             switch (tok)
             {
               case Token::AS_TOK:
@@ -334,8 +333,6 @@ Term Smt2TermParser::parseTerm()
           // add it to the list of arguments and clear
           tstack.back().second.push_back(ret);
           ret = Term();
-          std::cout << "tstack.dname: " <<  tstack.back().first.d_name << ", "
-          << tstack.back().second << std::endl;
         }
         break;
         // ------------------------- let terms

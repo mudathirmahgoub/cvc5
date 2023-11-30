@@ -838,6 +838,7 @@ void Smt2State::setLogic(std::string name)
     addOperator(Kind::NULLABLE_SOME, "nullable.some");
     addOperator(Kind::NULLABLE_VAL, "nullable.val");
     addOperator(Kind::NULLABLE_LIFT, "nullable.lift");
+    addOperator(Kind::NULLABLE_ISNULL, "nullable.isnull");
     addIndexedOperator(Kind::NULLABLE_LIFT, "nullable.lift");
   }
 
@@ -1592,13 +1593,14 @@ Sort Smt2State::getParametricSort(const std::string& name,
     }
     t = d_solver->mkBagSort(args[0]);
   }
-  else if (name == "Nullable" && isTheoryEnabled(internal::theory::THEORY_NULLABLES))
+  else if (name == "Nullable"
+           && isTheoryEnabled(internal::theory::THEORY_NULLABLES))
   {
     if (args.size() != 1)
     {
       parseError("Illegal nullable type.");
     }
-    t = d_solver->mkNullableSort(args[0]);    
+    t = d_solver->mkNullableSort(args[0]);
   }
   else if (name == "Seq" && !strictModeEnabled()
            && isTheoryEnabled(internal::theory::THEORY_STRINGS))

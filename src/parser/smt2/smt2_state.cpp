@@ -1174,6 +1174,14 @@ Term Smt2State::applyParseOp(const ParseOp& p, std::vector<Term>& args)
       Trace("parser") << "++ " << *i << std::endl;
     }
   }
+
+  if (p.d_kind == Kind::NULLABLE_LIFT)
+  {
+    Kind liftedKind = getOperatorKind(p.d_name);
+    Term ret = d_solver->mkLiftTerm(liftedKind, args);
+    return ret;
+  }
+
   if (!p.d_indices.empty())
   {
     Op op;
@@ -1417,7 +1425,7 @@ Term Smt2State::applyParseOp(const ParseOp& p, std::vector<Term>& args)
     Term iop = mkIndexedOp(p.d_kind, {p.d_name}, args);
     kind = p.d_kind;
     args.insert(args.begin(), iop);
-  }
+  }  
   else if (p.d_kind != Kind::NULL_TERM)
   {
     // it should not have an expression or type specified at this point

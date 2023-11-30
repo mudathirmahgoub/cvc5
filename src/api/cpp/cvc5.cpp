@@ -915,6 +915,7 @@ const static std::unordered_map<Kind, internal::Kind> s_op_kinds{
     {Kind::TABLE_AGGREGATE, internal::Kind::TABLE_AGGREGATE_OP},
     {Kind::TABLE_JOIN, internal::Kind::TABLE_JOIN_OP},
     {Kind::TABLE_GROUP, internal::Kind::TABLE_GROUP_OP},
+    {Kind::NULLABLE_LIFT, internal::Kind::NULLABLE_LIFT_OP}
 };
 
 /* -------------------------------------------------------------------------- */
@@ -6319,7 +6320,7 @@ Term Solver::mkLiftTerm(Kind kind, const std::vector<Term>& args) const
   CVC5_API_TRY_CATCH_BEGIN;
   //////// all checks before this line
   internal::Kind internalKind = extToIntKind(kind);
-  Op op = mkOpHelper(kind, internal::LiftOp(internalKind));
+  Op op = mkOpHelper(Kind::NULLABLE_LIFT, internal::LiftOp(internalKind));
   return mkTermHelper(op, args);
   ////////
   CVC5_API_TRY_CATCH_END;

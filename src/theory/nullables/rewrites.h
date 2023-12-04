@@ -34,6 +34,8 @@ enum class Rewrite : uint32_t
   IDENTICAL_NODES,  // identical nodes
   ISNULL,
   SELECT_VALUE,
+  LIFT_NULL,
+  LIFT_SOME,
   EQ_REFL,
   EQ_CONST_FALSE,
   EQ_SYM

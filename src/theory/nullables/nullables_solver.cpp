@@ -17,6 +17,7 @@
 
 #include "expr/skolem_manager.h"
 #include "theory/nullables/inference_manager.h"
+#include "theory/nullables/lift_op.h"
 #include "theory/nullables/null.h"
 #include "theory/nullables/solver_state.h"
 #include "theory/nullables/term_registry.h"
@@ -212,19 +213,34 @@ bool NullablesSolver::checkLift()
     NodeManager* nm = NodeManager::currentNM();
     if (eqc.getKind() == Kind::NULLABLE_LIFT)
     {
+      Kind liftKind = eqc.getOperator().getConst<LiftOp>().getKind();
+      Trace("nullables-check")
+          << "NullablesSolver::checkLift()::eqc: " << eqc << std::endl;
       std::vector<Node> args;
       std::vector<Node> premises;
       for (Node n : eqc)
       {
         Node childRep = d_state.getRepresentative(n);
+        Trace("nullables-check")
+            << "NullablesSolver::checkLift()::childRep: " << childRep
+            << std::endl;
+        Assert(d_state.hasTerm(childRep));
+        if (childRep.getKind() == Kind::NULLABLE_NULL)
+        {
+          // the result is null
+          Node null = nm->mkConst(Null(eqc.getType()));
+          Node nullArgument = nm->mkConst(Null(n.getType()));
+          Node premise = n.eqNode(nullArgument);
+          Node conclusion = eqc.eqNode(null);
+          Node lemma = premise.notNode().orNode(conclusion);
+          d_im->addPendingLemma(lemma, InferenceId::NULLABLES_LIFT_NULL);
+          return true;
+        }
         Node value = getValue(childRep);
         if (value.isNull())
         {
-          // the result is null
-          Node premise = n.eqNode(value);
-          Node conclusion = eqc.eqNode(nm->mkConst(Null(eqc.getType())));
-          Node lemma = premise.notNode().orNode(conclusion);
-          d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
+          // keep looking, we may find a null argument
+          continue;
         }
         args.push_back(value);
         premises.push_back(
@@ -233,12 +249,17 @@ bool NullablesSolver::checkLift()
       if (args.size() == eqc.getNumChildren())
       {
         Node premise = nm->mkAnd(premises);
-
-        Node conclusion = eqc.eqNode(nm->mkNode(Kind::ADD, args));
+        Trace("nullables-check")
+            << "NullablesSolver::checkLift()::premise: " << eqc << std::endl;
+        Trace("nullables-check")
+            << "NullablesSolver::checkLift()::args: " << args << std::endl;
+        Node result =
+            nm->mkNode(Kind::NULLABLE_SOME, nm->mkNode(liftKind, args));
+        Node conclusion = eqc.eqNode(result);
         Node lemma = premise.notNode().orNode(conclusion);
-        d_im->addPendingLemma(lemma, InferenceId::NULLABLES_INJECT);
+        d_im->addPendingLemma(lemma, InferenceId::NULLABLES_LIFT_SOME);
+        return true;
       }
-      Assert(false);
     }
   }
   return false;

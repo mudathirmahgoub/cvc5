@@ -24,8 +24,7 @@ namespace cvc5::internal {
 std::ostream& operator<<(std::ostream& out, const LiftOp& op)
 {
   // should only be used for debugging, not in the smt2 printer.
-  out << "(LiftOp "
-      << ")";
+  out << "(_ nullable.lift " << op.d_kind << ")";
   return out;
 }
 

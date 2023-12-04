@@ -80,6 +80,7 @@ class TheoryNullables : public Theory
   bool collectModelValues(TheoryModel* m,
                           const std::set<Node>& termSet) override;
 
+  void preRegisterTerm(TNode n) override;
   void presolve() override;
 
   /**

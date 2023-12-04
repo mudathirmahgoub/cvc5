@@ -15,6 +15,7 @@
 
 #include "theory/nullables/nullables_rewriter.h"
 
+#include "theory/nullables/lift_op.h"
 #include "theory/nullables/null.h"
 #include "theory/rewriter.h"
 #include "util/rational.h"
@@ -65,7 +66,11 @@ RewriteResponse NullablesRewriter::postRewrite(TNode n)
   }
   else if (n.getKind() == Kind::NULLABLE_VAL)
   {
-    response = postRewriteSelect(n);
+    response = postRewriteVal(n);
+  }
+  else if (n.getKind() == Kind::NULLABLE_LIFT)
+  {
+    response = postRewriteLift(n);
   }
   else
   {
@@ -161,13 +166,39 @@ NullablesRewriteResponse NullablesRewriter::preRewriteIsNull(
   return NullablesRewriteResponse(equality, Rewrite::ISNULL);
 }
 
-NullablesRewriteResponse NullablesRewriter::postRewriteSelect(
-    const TNode& n) const
+NullablesRewriteResponse NullablesRewriter::postRewriteVal(const TNode& n) const
 {
   Assert(n.getKind() == Kind::NULLABLE_VAL);
   if (n[0].getKind() == Kind::NULLABLE_SOME)
   {
     return NullablesRewriteResponse(n[0][0], Rewrite::IDENTICAL_NODES);
+  }
+  return NullablesRewriteResponse(n, Rewrite::NONE);
+}
+
+NullablesRewriteResponse NullablesRewriter::postRewriteLift(
+    const TNode& n) const
+{
+  Assert(n.getKind() == Kind::NULLABLE_LIFT);
+  std::vector<Node> args;
+  for (TNode child : n)
+  {
+    if (child.getKind() == Kind::NULLABLE_NULL)
+    {
+      Node null = d_nm->mkConst(Null(n.getType()));
+      return NullablesRewriteResponse(null, Rewrite::LIFT_NULL);
+    }
+    if (child.getKind() == Kind::NULLABLE_SOME)
+    {
+      args.push_back(child[0]);
+    }
+  }
+  if (args.size() == n.getNumChildren())
+  {
+    Kind liftKind = n.getOperator().getConst<LiftOp>().getKind();
+    Node value = d_nm->mkNode(liftKind, args);
+    Node some = d_nm->mkNode(Kind::NULLABLE_SOME, value);
+    return NullablesRewriteResponse(some, Rewrite::LIFT_SOME);
   }
   return NullablesRewriteResponse(n, Rewrite::NONE);
 }

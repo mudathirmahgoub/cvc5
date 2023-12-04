@@ -101,6 +101,24 @@ void TheoryNullables::finishInit()
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_VAL);
 }
 
+void TheoryNullables::preRegisterTerm(TNode n)
+{
+  Trace("nullables") << "TheoryNullables::preRegisterTerm: " << n << std::endl;
+  switch (n.getKind())
+  {
+    case Kind::NULLABLE_LIFT:
+    {
+      d_equalityEngine->addTerm(n);
+      for (Node arg : n)
+      {
+        d_equalityEngine->addTerm(arg);
+      }
+      break;
+    }
+    default: break;
+  }
+}
+
 void TheoryNullables::presolve()
 {
   Trace("nullables-presolve") << "Started presolve" << std::endl;

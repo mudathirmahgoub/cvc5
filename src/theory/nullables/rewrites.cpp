@@ -33,6 +33,8 @@ const char* toString(Rewrite r)
 
     case Rewrite::IDENTICAL_NODES: return "IDENTICAL_NODES";
     case Rewrite::SELECT_VALUE: return "SELECT_VALUE";
+    case Rewrite::LIFT_NULL: return "LIFT_NULL";
+    case Rewrite::LIFT_SOME: return "LIFT_SOME";
 
     default: return "?";
   }

@@ -130,7 +130,7 @@ TypeNode IsNullTypeRule::computeType(NodeManager* nm,
 
 Cardinality NullablesProperties::computeCardinality(TypeNode type)
 {
-  return Cardinality::INTEGERS;
+  return type.getCardinality() + 1;
 }
 
 bool NullablesProperties::isWellFounded(TypeNode type)

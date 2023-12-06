@@ -2366,6 +2366,7 @@ set(regress_1_tests
   regress1/nullables/nullables3.smt2
   regress1/nullables/nullables4.smt2
   regress1/nullables/nullables5.smt2
+  regress1/nullables/nullables6.smt2
   regress1/non-fatal-errors.smt2
   regress1/print_timeout_core.smt2
   regress1/proj-issue175.smt2

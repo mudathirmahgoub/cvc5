@@ -65,29 +65,7 @@ bool TheoryNullables::collectModelValues(TheoryModel* m,
 {
   Trace("nullables-model") << "TheoryNullables : Collect model values"
                            << std::endl;
-
   Trace("nullables-model") << "Term set: " << termSet << std::endl;
-
-  // a map from nullable representatives to their constructed values
-  std::map<Node, Node> processedNullables;
-
-  // get the relevant nullable equivalence classes
-  for (const Node& n : termSet)
-  {
-    TypeNode tn = n.getType();
-    if (!tn.isNullable())
-    {
-      // we are only concerned here about nullable terms
-      continue;
-    }
-
-    Node constructedNullable = n;
-    m->assertEquality(constructedNullable, n, true);
-    m->assertSkeleton(constructedNullable);
-  }
-
-  Trace("nullables-model") << "processedNullables:  " << processedNullables
-                           << std::endl;
   return true;
 }
 
@@ -99,6 +77,7 @@ void TheoryNullables::finishInit()
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_NULL);
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_SOME);
   d_equalityEngine->addFunctionKind(Kind::NULLABLE_VAL);
+  d_equalityEngine->addFunctionKind(Kind::NULLABLE_LIFT);
 }
 
 void TheoryNullables::preRegisterTerm(TNode n)

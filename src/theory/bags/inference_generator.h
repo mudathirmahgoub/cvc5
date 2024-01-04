@@ -272,6 +272,7 @@ class InferenceGenerator
    *     (and
    *       (>= skolem 1)
    *       (<= skolem preImageSize)
+   *       (>= preImageSize (bag.count x A))
    *       (= (uf skolem) x)))))
    * where skolem is a fresh variable
    */

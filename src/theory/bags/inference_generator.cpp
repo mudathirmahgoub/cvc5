@@ -514,8 +514,8 @@ InferInfo InferenceGenerator::mapUp(
   Node f = n[0];
   Node A = n[1];
 
-  Node countA = getMultiplicityTerm(x, A);
-  Node xInA = d_nm->mkNode(Kind::GEQ, countA, d_one);
+  Node countX = getMultiplicityTerm(x, A);
+  Node xInA = d_nm->mkNode(Kind::GEQ, countX, d_one);
   Node notEqual =
       d_nm->mkNode(Kind::EQUAL, d_nm->mkNode(Kind::APPLY_UF, f, x), y).negate();
 
@@ -527,7 +527,8 @@ InferInfo InferenceGenerator::mapUp(
                               d_nm->mkNode(Kind::LEQ, k, preImageSize));
   Node equal =
       d_nm->mkNode(Kind::EQUAL, d_nm->mkNode(Kind::APPLY_UF, uf, k), x);
-  Node andNode = d_nm->mkNode(Kind::AND, inRange, equal);
+  Node geq = d_nm->mkNode(Kind::GEQ, preImageSize, countX);
+  Node andNode = d_nm->mkNode(Kind::AND, inRange, equal).andNode(geq);
   Node orNode = d_nm->mkNode(Kind::OR, notEqual, andNode);
   Node implies = d_nm->mkNode(Kind::IMPLIES, xInA, orNode);
   inferInfo.d_conclusion = implies;

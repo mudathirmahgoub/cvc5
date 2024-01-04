@@ -125,10 +125,9 @@ class BagSolver : protected EnvObj
    * where f is a function (-> E T), A a bag of type (Bag E),
    * and values are maps where keys are elements y's of (bag.map f A)
    * and values are pairs <uf, preImageSize> such that
-   * uf is an uninterpreted function Int -> E represents the and
-   * preImageSize is the cardinality of the distinct elements in A that are
-   * mapped to each y
-   *
+   * uf is an uninterpreted function Int -> E represents the preImage of y and
+   * preImageSize is the cardinality of the set of the distinct elements in A
+   * that are mapped y
    */
   using BagElementsMap = context::CDHashMap<
       Node,

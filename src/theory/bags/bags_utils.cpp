@@ -14,13 +14,16 @@
  */
 #include "bags_utils.h"
 
+#include "expr/bound_var_manager.h"
 #include "expr/dtype.h"
 #include "expr/dtype_cons.h"
 #include "expr/emptybag.h"
+#include "expr/skolem_manager.h"
 #include "smt/logic_exception.h"
 #include "theory/bags/bag_reduction.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/datatypes/tuple_utils.h"
+#include "theory/quantifiers/fmf/bounded_integers.h"
 #include "theory/rewriter.h"
 #include "theory/sets/normal_form.h"
 #include "theory/type_enumerator.h"
@@ -1010,6 +1013,59 @@ BagsUtils::splitTableJoinIndices(Node n)
     indices2[index] = indices[i + 1];
   }
   return std::make_pair(indices1, indices2);
+}
+
+std::tuple<Node, Node, Node> BagsUtils::generateDistinctElements(Node b)
+{
+  NodeManager* nm = NodeManager::currentNM();
+  SkolemManager* sm = nm->getSkolemManager();
+  Node n = sm->mkSkolemFunction(SkolemFunId::BAGS_DISTINCT_ELEMENTS_SIZE, b);
+  Node elements = sm->mkSkolemFunction(SkolemFunId::BAGS_DISTINCT_ELEMENTS, b);
+  Node unionDisjoint = sm->mkSkolemFunction(
+      SkolemFunId::BAGS_DISTINCT_ELEMENTS_UNION_DISJOINT, b);
+  Node zero = nm->mkConstInt(Rational(0));
+  Node one = nm->mkConstInt(Rational(1));
+  TypeNode bagType = b.getType();
+
+  BoundVarManager* bvm = nm->getBoundVarManager();
+  Node i = bvm->mkBoundVar<FirstIndexVarAttribute>(b, "i", nm->integerType());
+  Node j = bvm->mkBoundVar<SecondIndexVarAttribute>(b, "j", nm->integerType());
+  Node iList = nm->mkNode(Kind::BOUND_VAR_LIST, i);
+  Node jList = nm->mkNode(Kind::BOUND_VAR_LIST, j);
+  Node iMinusOne = nm->mkNode(Kind::SUB, i, one);
+  Node elements_i = nm->mkNode(Kind::APPLY_UF, elements, i);
+  Node elements_j = nm->mkNode(Kind::APPLY_UF, elements, j);
+  Node unionDisjoint_0 = nm->mkNode(Kind::APPLY_UF, unionDisjoint, zero);
+  Node unionDisjoint_iMinusOne =
+      nm->mkNode(Kind::APPLY_UF, unionDisjoint, iMinusOne);
+  Node unionDisjoint_i = nm->mkNode(Kind::APPLY_UF, unionDisjoint, i);
+  Node unionDisjoint_n = nm->mkNode(Kind::APPLY_UF, unionDisjoint, n);
+  Node elements_i_multiplicity = nm->mkNode(Kind::BAG_COUNT, elements_i, b);
+  Node unionDisjoint_0_equal =
+      unionDisjoint_0.eqNode(nm->mkConst(EmptyBag(bagType)));
+  Node bag = nm->mkNode(Kind::BAG_MAKE, elements_i, elements_i_multiplicity);
+
+  Node unionDisjoint_i_equal = unionDisjoint_i.eqNode(
+      nm->mkNode(Kind::BAG_UNION_DISJOINT, bag, unionDisjoint_iMinusOne));
+  // 1 <= i <= n
+  Node interval_i = nm->mkNode(
+      Kind::AND, nm->mkNode(Kind::GEQ, i, one), nm->mkNode(Kind::LEQ, i, n));
+
+  // i < j <= n
+  Node interval_j = nm->mkNode(
+      Kind::AND, nm->mkNode(Kind::LT, i, j), nm->mkNode(Kind::LEQ, j, n));
+  // elements(i) != elements(j)
+  Node elements_i_equals_elements_j =
+      nm->mkNode(Kind::EQUAL, elements_i, elements_j);
+  Node notEqual = nm->mkNode(Kind::EQUAL, elements_i, elements_j).negate();
+  Node body_j = nm->mkNode(Kind::OR, interval_j.negate(), notEqual);
+  Node forAll_j = quantifiers::BoundedIntegers::mkBoundedForall(jList, body_j);
+  Node body_i =
+      nm->mkNode(Kind::IMPLIES,
+                 interval_i,
+                 nm->mkNode(Kind::AND, unionDisjoint_i_equal, forAll_j));
+  Node forAll_i = quantifiers::BoundedIntegers::mkBoundedForall(iList, body_i);
+  Node nonNegative = nm->mkNode(Kind::GEQ, n, zero);
 }
 
 }  // namespace bags

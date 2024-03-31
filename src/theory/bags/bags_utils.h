@@ -26,6 +26,29 @@ namespace cvc5::internal {
 namespace theory {
 namespace bags {
 
+/**
+ * A bound variable corresponding to the universally quantified integer
+ * variable used to range over (may be distinct) elements in a bag, used
+ * for axiomatizing the behavior of some term.
+ * If there are multiple quantifiers, this variable should be the first one.
+ */
+struct FirstIndexVarAttributeId
+{
+};
+typedef expr::Attribute<FirstIndexVarAttributeId, Node> FirstIndexVarAttribute;
+
+/**
+ * A bound variable corresponding to the universally quantified integer
+ * variable used to range over (may be distinct) elements in a bag, used
+ * for axiomatizing the behavior of some term.
+ * This variable should be the second of multiple quantifiers.
+ */
+struct SecondIndexVarAttributeId
+{
+};
+typedef expr::Attribute<SecondIndexVarAttributeId, Node>
+    SecondIndexVarAttribute;
+
 class BagsUtils
 {
  public:
@@ -154,6 +177,20 @@ class BagsUtils
    */
   static std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
   splitTableJoinIndices(Node n);
+
+  /**
+   * Generate three skolem functions for a bag b representing its distinct
+   * elements.
+   * @param b A bag term of type (Bag T).
+   * @return a triple <size, elements, constraint> such that
+   * size: the size of distinct elements.
+   * elements: a function of type (Int -> T) for the distinct elements.
+   * constraint: a formula the restrict the range [1, n] to only elements in the
+   * bag such that unionDisjoint(0) = bag.empty. unionDisjoint(i) = disjoint
+   * union of {<elements(i), m(elements(i), b)>} and unionDisjoint(i-1).
+   * unionDisjoint(n) = b.
+   */
+  static std::tuple<Node, Node, Node> generateDistinctElements(Node b);
 
  private:
   /**

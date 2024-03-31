@@ -18,6 +18,7 @@
 #include "expr/bound_var_manager.h"
 #include "expr/emptybag.h"
 #include "expr/skolem_manager.h"
+#include "theory/bags/bags_utils.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/datatypes/tuple_utils.h"
 #include "theory/quantifiers/fmf/bounded_integers.h"
@@ -33,29 +34,6 @@ namespace bags {
 BagReduction::BagReduction() {}
 
 BagReduction::~BagReduction() {}
-
-/**
- * A bound variable corresponding to the universally quantified integer
- * variable used to range over (may be distinct) elements in a bag, used
- * for axiomatizing the behavior of some term.
- * If there are multiple quantifiers, this variable should be the first one.
- */
-struct FirstIndexVarAttributeId
-{
-};
-typedef expr::Attribute<FirstIndexVarAttributeId, Node> FirstIndexVarAttribute;
-
-/**
- * A bound variable corresponding to the universally quantified integer
- * variable used to range over (may be distinct) elements in a bag, used
- * for axiomatizing the behavior of some term.
- * This variable should be the second of multiple quantifiers.
- */
-struct SecondIndexVarAttributeId
-{
-};
-typedef expr::Attribute<SecondIndexVarAttributeId, Node>
-    SecondIndexVarAttribute;
 
 Node BagReduction::reduceFoldOperator(Node node, std::vector<Node>& asserts)
 {
@@ -128,10 +106,8 @@ Node BagReduction::reduceCardOperator(Node node, std::vector<Node>& asserts)
   // types
   TypeNode bagType = A.getType();
   // skolem functions
-  Node n = sm->mkSkolemFunction(SkolemFunId::BAGS_DISTINCT_ELEMENTS_SIZE, A);
-  Node elements = sm->mkSkolemFunction(SkolemFunId::BAGS_DISTINCT_ELEMENTS, A);
-  Node unionDisjoint = sm->mkSkolemFunction(
-      SkolemFunId::BAGS_DISTINCT_ELEMENTS_UNION_DISJOINT, A);
+
+  auto [n, elements, formula] = BagsUtils::generateDistinctElements(A);
   Node combine = sm->mkSkolemFunction(SkolemFunId::BAGS_CARD_COMBINE, A);
 
   BoundVarManager* bvm = nm->getBoundVarManager();
@@ -148,21 +124,13 @@ Node BagReduction::reduceCardOperator(Node node, std::vector<Node>& asserts)
   Node combine_iMinusOne = nm->mkNode(Kind::APPLY_UF, combine, iMinusOne);
   Node combine_i = nm->mkNode(Kind::APPLY_UF, combine, i);
   Node combine_n = nm->mkNode(Kind::APPLY_UF, combine, n);
-  Node unionDisjoint_0 = nm->mkNode(Kind::APPLY_UF, unionDisjoint, zero);
-  Node unionDisjoint_iMinusOne =
-      nm->mkNode(Kind::APPLY_UF, unionDisjoint, iMinusOne);
-  Node unionDisjoint_i = nm->mkNode(Kind::APPLY_UF, unionDisjoint, i);
-  Node unionDisjoint_n = nm->mkNode(Kind::APPLY_UF, unionDisjoint, n);
   Node combine_0_equal = combine_0.eqNode(zero);
   Node elements_i_multiplicity = nm->mkNode(Kind::BAG_COUNT, elements_i, A);
   Node combine_i_equal = combine_i.eqNode(
       nm->mkNode(Kind::ADD, elements_i_multiplicity, combine_iMinusOne));
-  Node unionDisjoint_0_equal =
-      unionDisjoint_0.eqNode(nm->mkConst(EmptyBag(bagType)));
+
   Node bag = nm->mkNode(Kind::BAG_MAKE, elements_i, elements_i_multiplicity);
 
-  Node unionDisjoint_i_equal = unionDisjoint_i.eqNode(
-      nm->mkNode(Kind::BAG_UNION_DISJOINT, bag, unionDisjoint_iMinusOne));
   // 1 <= i <= n
   Node interval_i = nm->mkNode(
       Kind::AND, nm->mkNode(Kind::GEQ, i, one), nm->mkNode(Kind::LEQ, i, n));
@@ -176,17 +144,14 @@ Node BagReduction::reduceCardOperator(Node node, std::vector<Node>& asserts)
   Node notEqual = nm->mkNode(Kind::EQUAL, elements_i, elements_j).negate();
   Node body_j = nm->mkNode(Kind::OR, interval_j.negate(), notEqual);
   Node forAll_j = quantifiers::BoundedIntegers::mkBoundedForall(jList, body_j);
-  Node body_i = nm->mkNode(
-      Kind::IMPLIES,
-      interval_i,
-      nm->mkNode(Kind::AND, combine_i_equal, unionDisjoint_i_equal, forAll_j));
+  Node body_i = nm->mkNode(Kind::IMPLIES,
+                           interval_i,
+                           nm->mkNode(Kind::AND, combine_i_equal, forAll_j));
   Node forAll_i = quantifiers::BoundedIntegers::mkBoundedForall(iList, body_i);
   Node nonNegative = nm->mkNode(Kind::GEQ, n, zero);
-  Node unionDisjoint_n_equal = A.eqNode(unionDisjoint_n);
   asserts.push_back(forAll_i);
   asserts.push_back(combine_0_equal);
-  asserts.push_back(unionDisjoint_0_equal);
-  asserts.push_back(unionDisjoint_n_equal);
+  asserts.push_back(formula);
   asserts.push_back(nonNegative);
   return combine_n;
 }

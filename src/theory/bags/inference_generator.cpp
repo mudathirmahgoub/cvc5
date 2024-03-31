@@ -135,27 +135,6 @@ InferInfo InferenceGenerator::bagMake(Node n, Node e)
   return inferInfo;
 }
 
-/**
- * A bound variable corresponding to the universally quantified integer
- * variable used to range over the distinct elements in a bag, used
- * for axiomatizing the behavior of some term.
- */
-struct FirstIndexVarAttributeId
-{
-};
-typedef expr::Attribute<FirstIndexVarAttributeId, Node> FirstIndexVarAttribute;
-
-/**
- * A bound variable corresponding to the universally quantified integer
- * variable used to range over the distinct elements in a bag, used
- * for axiomatizing the behavior of some term.
- */
-struct SecondIndexVarAttributeId
-{
-};
-typedef expr::Attribute<SecondIndexVarAttributeId, Node>
-    SecondIndexVarAttribute;
-
 InferInfo InferenceGenerator::bagDisequality(Node equality, Node witness)
 {
   Assert(equality.getKind() == Kind::EQUAL && equality[0].getType().isBag());

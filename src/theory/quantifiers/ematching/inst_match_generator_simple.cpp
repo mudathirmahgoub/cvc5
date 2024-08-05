@@ -148,13 +148,13 @@ void InstMatchGeneratorSimple::addInstantiations(InstMatch& m,
     }
     // we do not need the trigger parent for simple triggers (no post-processing
     // required)
-    if (sendInstantiation(terms,
-                          InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE))
-    {
-      addedLemmas++;
-      Trace("simple-trigger")
-          << "-> Produced instantiation " << terms << std::endl;
-    }
+    // if (sendInstantiation(terms,
+    //                       InferenceId::QUANTIFIERS_INST_E_MATCHING_SIMPLE))
+    // {
+    //   addedLemmas++;
+    //   Trace("simple-trigger")
+    //       << "-> Produced instantiation " << terms << std::endl;
+    // }
     return;
   }
   if (d_match_pattern[argIndex].getKind() == Kind::INST_CONSTANT)

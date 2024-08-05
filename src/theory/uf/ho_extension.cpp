@@ -178,7 +178,7 @@ unsigned HoExtension::applyExtensionality(TNode deq)
     Node lem = nodeManager()->mkNode(Kind::OR, deq[0], conc);
     Trace("uf-ho-lemma") << "uf-ho-lemma : extensionality : " << lem
                          << std::endl;
-    d_im.lemma(lem, InferenceId::UF_HO_EXTENSIONALITY);
+    // d_im.lemma(lem, InferenceId::UF_HO_EXTENSIONALITY);
     return 1;
   }
   return 0;
@@ -239,7 +239,7 @@ Node HoExtension::getApplyUfForHoApply(Node node)
       Trace("uf-ho-lemma")
           << "uf-ho-lemma : Skolem definition for apply-conversion : " << lem
           << std::endl;
-      d_im.lemma(lem, InferenceId::UF_HO_APP_CONV_SKOLEM);
+      // d_im.lemma(lem, InferenceId::UF_HO_APP_CONV_SKOLEM);
       d_uf_std_skolem[f] = new_f;
     }
     else
@@ -376,7 +376,7 @@ unsigned HoExtension::checkExtensionality(TheoryModel* m)
               Node lem = nm->mkNode(Kind::OR, deq.negate(), eq.negate());
               Trace("uf-ho") << "HoExtension: cmi extensionality lemma " << lem
                              << std::endl;
-              d_im.lemma(lem, InferenceId::UF_HO_MODEL_EXTENSIONALITY);
+              // d_im.lemma(lem, InferenceId::UF_HO_MODEL_EXTENSIONALITY);
               return 1;
             }
           }
@@ -630,7 +630,7 @@ unsigned HoExtension::checkLazyLambda()
         Node lem = nm->mkNode(Kind::IMPLIES, fgEq, univ);
         if (cacheLemma(lem))
         {
-          d_im.lemma(lem, InferenceId::UF_HO_LAMBDA_UNIV_EQ);
+          // d_im.lemma(lem, InferenceId::UF_HO_LAMBDA_UNIV_EQ);
           numLemmas++;
         }
       }
@@ -702,7 +702,7 @@ unsigned HoExtension::checkLazyLambda()
       Node lem = nm->mkNode(Kind::IMPLIES, premise, conc);
       if (cacheLemma(lem))
       {
-        d_im.lemma(lem, InferenceId::UF_HO_LAMBDA_APP_REDUCE);
+        // d_im.lemma(lem, InferenceId::UF_HO_LAMBDA_APP_REDUCE);
         numLemmas++;
       }
     }
@@ -795,7 +795,7 @@ bool HoExtension::collectModelInfoHoTerm(Node n, TheoryModel* m)
       Node eq = n.eqNode(hn);
       Trace("uf-ho") << "HoExtension: cmi app completion lemma " << eq
                      << std::endl;
-      d_im.lemma(eq, InferenceId::UF_HO_MODEL_APP_ENCODE);
+      // d_im.lemma(eq, InferenceId::UF_HO_MODEL_APP_ENCODE);
       return false;
     }
   }

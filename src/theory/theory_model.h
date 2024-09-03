@@ -336,6 +336,11 @@ class TheoryModel : protected EnvObj
    */
   bool isValue(TNode node) const;
 
+  const std::map<Node, Node> & getReps()
+  {
+    return d_reps;
+  }
+
  protected:
   /** Unique name of this model */
   std::string d_name;

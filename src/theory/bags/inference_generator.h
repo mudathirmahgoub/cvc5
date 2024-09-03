@@ -267,17 +267,19 @@ class InferenceGenerator
    * @return an inference that represents the following implication
    * (=>
    *   (bag.member x A)
-   *   (or
-   *     (not (= (f x) y)
-   *     (and
-   *       (>= skolem 1)
-   *       (<= skolem preImageSize)
-   *       (>= preImageSize (bag.count x A))
-   *       (= (uf skolem) x)))))
+   *   (and
+   *     (>= (bag.count (f x) n) (bag.count x A))
+   *     (or
+   *       (not (= (f x) y)
+   *       (and
+   *         (>= skolem 1)
+   *         (<= skolem preImageSize)
+   *         (>= preImageSize (bag.count x A))
+   *         (= (uf skolem) x))))))
    * where skolem is a fresh variable
    */
   InferInfo mapUp(Node n, Node uf, Node preImageSize, Node y, Node x);
-
+  InferInfo mapUp(Node n, Node x);
   /**
    * @param n is (bag.filter p A) where p is a function (-> E Bool),
    * A a bag of type (Bag E)

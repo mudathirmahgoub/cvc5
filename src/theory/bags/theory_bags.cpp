@@ -320,7 +320,9 @@ bool TheoryBags::runInferStep(InferStep s, int effort)
       break;
     }
     case CHECK_BASIC_OPERATIONS: d_solver.checkBasicOperations(); break;
-    case CHECK_QUANTIFIED_OPERATIONS: d_solver.checkQuantifiedOperations(); break;
+    case CHECK_QUANTIFIED_OPERATIONS:
+      d_solver.checkQuantifiedOperations();
+      break;
     case CHECK_CARDINALITY_CONSTRAINTS:
       d_cardSolver.checkCardinalityGraph();
       break;
@@ -346,8 +348,25 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
 {
   Trace("bags-model") << "TheoryBags : Collect model values" << std::endl;
 
-  Trace("bags-model") << "Term set: " << termSet << std::endl;
+  NodeManager* nm = NodeManager::currentNM();
+  Node zero = nm->mkConstInt(0);
+  Node d_true = nm->mkConst(true);
+  std::vector<Node> assertions;
+  for (Theory::assertions_iterator it = facts_begin(); it != facts_end(); ++it)
+  {
+    const Assertion& assertion = *it;
+    Node lit = assertion.d_assertion;
+    assertions.push_back(lit);
+  }
+  std::vector<Node> unsatAssertions;
+  Trace("bags-cm") << "Checking " << assertions.size() << " assertions..."
+                   << std::endl;
+  for (const Node& a : assertions)
+  {
+    Trace("bags-cm-debug") << "assertion: " << a << std::endl;
+  }
 
+  Trace("bags-model") << "Term set: " << termSet << std::endl;
   // a map from bag representatives to their constructed values
   std::map<Node, Node> processedBags;
 
@@ -370,14 +389,20 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
 
     const std::vector<std::pair<Node, Node>>& solverElements =
         d_state.getElementCountPairs(r);
+    Trace("bags-model") << "bags-model bagRep: " << r << std::endl
+                        << "bags-model elements size: " << solverElements.size()
+                        << std::endl;
     std::vector<std::pair<Node, Node>> elements;
+    std::cout << "bags-model elements: ";
     for (std::pair<Node, Node> pair : solverElements)
     {
-      if (termSet.find(pair.first) == termSet.end())
-      {
-        continue;
-      }
+      // if (termSet.find(pair.first) == termSet.end())
+      // {
+      //   continue;
+      // }
       elements.push_back(pair);
+      std::cout << "[" << pair.first << "], [" << pair.second << "] = ";      
+      std::cout << std::endl;
     }
 
     std::map<Node, Node> elementReps;
@@ -385,12 +410,16 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
     {
       Node key = d_state.getRepresentative(pair.first);
       Node countSkolem = pair.second;
+      // Node countSkolemValue = m->getValue(countSkolem);
+      // if (countSkolemValue == zero)
+      // {
+      //   continue;
+      // }
       Node value = m->getRepresentative(countSkolem);
       elementReps[key] = value;
     }
     Node constructedBag = BagsUtils::constructBagFromElements(tn, elementReps);
     constructedBag = rewrite(constructedBag);
-    NodeManager* nm = NodeManager::currentNM();
     if (d_state.hasCardinalityTerms())
     {
       if (d_cardSolver.isLeaf(n))

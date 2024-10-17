@@ -237,6 +237,7 @@ void TheorySetsPrivate::fullEffortCheck()
     std::map<TypeNode, unsigned> eqcTypeCount;
     eq::EqClassesIterator eqcs_i = eq::EqClassesIterator(d_equalityEngine);
     std::unordered_set<Node> isolatedCandidate;
+    std::unordered_set<Node> subterms;
     while (!eqcs_i.isFinished())
     {
       Node eqc = (*eqcs_i);
@@ -301,6 +302,10 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           d_higher_order_kinds_enabled = true;
         }
+        if (!Theory::isLeafOf(n, THEORY_SETS))
+        {
+          subterms.insert(n.begin(), n.end());
+        }
       }
       if (termCount==1 && tn.isSet())
       {
@@ -310,7 +315,7 @@ void TheorySetsPrivate::fullEffortCheck()
     }
     for (const Node& eqc : isolatedCandidate)
     {
-      if (!d_state.hasMembers(eqc))
+      if (subterms.find(eqc)==subterms.end())
       {
         d_isolatedEqc.insert(eqc);
       }

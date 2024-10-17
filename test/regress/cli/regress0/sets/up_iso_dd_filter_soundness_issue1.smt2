@@ -1,3 +1,4 @@
+; EXPECT: unsat
 (set-logic HO_ALL)
 (declare-const A (Set (Tuple Int)))
 (declare-const n (Set (Tuple Int Int)))

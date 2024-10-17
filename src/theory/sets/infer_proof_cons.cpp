@@ -372,9 +372,11 @@ bool InferProofCons::convert(CDProof& cdp,
         Node filterTerm = sm->getOriginalForm(conc[0][1]);
         Assert (filterTerm.getKind()==Kind::SET_FILTER);
         Node pred = filterTerm[0];
+        // FILTER_UP concludes a membership into the filter term
         res = psb.tryStep(ProofRule::SETS_FILTER_UP, {mem}, {pred});
         if (!res.isNull())
         {
+          // must convert from filter term to the purify skolem
           res = psb.tryStep(ProofRule::MACRO_SR_PRED_TRANSFORM, {res}, {conc});
         }
       }

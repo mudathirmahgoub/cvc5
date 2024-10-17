@@ -416,7 +416,9 @@ class TheorySetsPrivate : protected EnvObj
   std::map<Node, Node> d_isSingletonNodes;
   /** Reference to care pair argument callback, used for theory combination */
   CarePairArgumentCallback& d_cpacb;
-}; /* class TheorySetsPrivate */
+  /** */
+  std::unordered_set<Node> d_isolatedEqc;
+};
 
 }  // namespace sets
 }  // namespace theory

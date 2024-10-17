@@ -242,6 +242,7 @@ void TheorySetsPrivate::fullEffortCheck()
       d_state.registerEqc(tn, eqc);
       eqcTypeCount[tn]++;
       eq::EqClassIterator eqc_i = eq::EqClassIterator(eqc, d_equalityEngine);
+      size_t termCount = 0;
       while (!eqc_i.isFinished())
       {
         Node n = (*eqc_i);
@@ -251,6 +252,7 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           continue;
         }
+        termCount++;
         TypeNode tnn = n.getType();
         // register it with the state
         d_state.registerTerm(eqc, tnn, n);
@@ -297,6 +299,10 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           d_higher_order_kinds_enabled = true;
         }
+      }
+      if (termCount==1)
+      {
+        d_isolatedEqc.insert(eqc);
       }
       ++eqcs_i;
     }
@@ -716,6 +722,10 @@ void TheorySetsPrivate::checkFilterUp()
 
   for (const Node& term : filterTerms)
   {
+    if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
+    {
+      continue;
+    }
     Node p = term[0];
     Node A = term[1];
     const std::map<Node, Node>& positiveMembers =

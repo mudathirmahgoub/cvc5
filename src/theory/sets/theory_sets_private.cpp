@@ -839,7 +839,11 @@ void TheorySetsPrivate::checkQuantifiers()
       Node p_x = p.substitute(variable, x).notNode();
       disjuncts.push_back(p_x);
     }
-    Node orNode = nm->mkNode(Kind::OR, disjuncts);
+    Node orNode = disjuncts[0];
+    if (disjuncts.size() > 1)
+    {
+      orNode = nm->mkNode(Kind::OR, disjuncts);
+    }
     d_im.assertInference(orNode, InferenceId::SETS_EXISTS, exp);
     if (d_state.isInConflict())
     {

@@ -102,20 +102,26 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
         bool isMember = checkConstantMembership(node[0], S);
         return RewriteResponse(REWRITE_DONE, nm->mkConst(isMember));
       }
-      else if (node[1].getKind() == Kind::SET_EMPTY)
+      Kind sk = node[1].getKind();
+      if (sk == Kind::SET_EMPTY)
       {
         return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
       }
-      else if (node[1].getKind() == Kind::SET_SINGLETON)
+      else if (sk == Kind::SET_SINGLETON)
       {
         return RewriteResponse(REWRITE_AGAIN_FULL,
                                nm->mkNode(Kind::EQUAL, node[0], node[1][0]));
       }
-      else if (node[1].getKind() == Kind::SET_UNION
-               || node[1].getKind() == Kind::SET_INTER
-               || node[1].getKind() == Kind::SET_MINUS)
+      else if (sk == Kind::SET_UNION
+               || sk == Kind::SET_INTER
+               || sk == Kind::SET_MINUS)
       {
         Node ret = rewriteMembershipBinaryOp(node);
+        return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+      }
+      else if (sk == Kind::SET_FILTER)
+      {
+        Node ret = nm->mkNode(Kind::AND, nm->mkNode(Kind::APPLY_UF, node[1][0], node[0]), nm->mkNode(Kind::SET_MEMBER, node[0], node[1][1]));
         return RewriteResponse(REWRITE_AGAIN_FULL, ret);
       }
       break;

@@ -302,7 +302,7 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           d_higher_order_kinds_enabled = true;
         }
-        if (!Theory::isLeafOf(n, THEORY_SETS))
+        if (nk!=Kind::EQUAL && !Theory::isLeafOf(n, THEORY_SETS))
         {
           subterms.insert(n.begin(), n.end());
         }
@@ -555,6 +555,11 @@ void TheorySetsPrivate::checkUpwardsClosure()
         {
           Node r2 = d_state.getRepresentative(it2.first);
           Node term = it2.second;
+          if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
+          {
+            Trace("ajr-temp") << "...don't upwards closure " << term << " since isolated" << std::endl;
+            continue;
+          }
           // see if there are members in second argument
           const std::map<Node, Node>& r2mem = d_state.getMembers(r2);
           const std::map<Node, Node>& r2nmem = d_state.getNegativeMembers(r2);
@@ -738,7 +743,7 @@ void TheorySetsPrivate::checkFilterUp()
   {
     if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
     {
-      Trace("ajr-temp") << "...don't filter up since isolated" << std::endl;
+      Trace("ajr-temp") << "...don't filter up " << term << " since isolated" << std::endl;
       continue;
     }
     Node p = term[0];
@@ -1526,6 +1531,12 @@ bool TheorySetsPrivate::collectModelValues(TheoryModel* m,
     {
       Trace("sets-model") << "* Do not assign value for " << eqc
                           << " since is not relevant." << std::endl;
+    }
+    else if (d_isolatedEqc.find(eqc)!=d_isolatedEqc.end())
+    {
+      // isolated eqc are ignored as well
+      Trace("sets-model") << "* Do not assign value for " << eqc
+                          << " since isolated." << std::endl;
     }
     else
     {

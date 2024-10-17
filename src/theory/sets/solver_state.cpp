@@ -58,6 +58,7 @@ void SolverState::reset()
   d_op_list.clear();
   d_allCompSets.clear();
   d_filterTerms.clear();
+  d_isolatedEqc.clear();
 }
 
 void SolverState::registerEqc(TypeNode tn, Node r)
@@ -80,17 +81,18 @@ void SolverState::registerTerm(Node r, TypeNode tnn, Node n)
       Node x = d_ee->getRepresentative(n[0]);
       if (polarityIndex != -1)
       {
-        if (d_pol_mems[polarityIndex][s].find(x)
-            == d_pol_mems[polarityIndex][s].end())
+        std::map<Node, Node>& pmap = d_pol_mems[polarityIndex][s];
+        if (pmap.find(x)== pmap.end())
         {
-          d_pol_mems[polarityIndex][s][x] = n;
+          pmap[x] = n;
           Trace("sets-debug2")
               << "Membership[" << x << "][" << s << "] : " << n
               << ", polarityIndex = " << polarityIndex << std::endl;
         }
-        if (d_members_index[s].find(x) == d_members_index[s].end())
+        std::map<Node, Node>& mindex = d_members_index[s];
+        if (mindex.find(x) == mindex.end())
         {
-          d_members_index[s][x] = n;
+          mindex[x] = n;
           d_op_list[Kind::SET_MEMBER].push_back(n);
         }
       }
@@ -307,12 +309,15 @@ bool SolverState::isEntailed(Node n, bool polarity) const
   return false;
 }
 
-bool SolverState::isSetDisequalityEntailed(Node r1, Node r2) const
+bool SolverState::isSetDisequalityEntailed(Node r1, Node r2)
 {
   Assert(d_ee->hasTerm(r1) && d_ee->getRepresentative(r1) == r1);
   Assert(d_ee->hasTerm(r2) && d_ee->getRepresentative(r2) == r2);
   TypeNode tn = r1.getType();
   Node re = getEmptySetEqClass(tn);
+  // ensure that we have computed the members of r1 and r2
+  ensureMembersComputed(r1);
+  ensureMembersComputed(r2);
   for (unsigned e = 0; e < 2; e++)
   {
     Node a = e == 0 ? r1 : r2;
@@ -327,7 +332,7 @@ bool SolverState::isSetDisequalityEntailed(Node r1, Node r2) const
 
 bool SolverState::isSetDisequalityEntailedInternal(Node a,
                                                    Node b,
-                                                   Node re) const
+                                                   Node re)
 {
   // if there are members in a
   std::map<Node, std::map<Node, Node> >::const_iterator itpma =
@@ -354,13 +359,14 @@ bool SolverState::isSetDisequalityEntailedInternal(Node a,
     return false;
   }
   std::map<Node, Node>::const_iterator itsb = d_eqc_singleton.find(b);
+  bool bIsSingleton = (itsb != d_eqc_singleton.end());
   std::map<Node, std::map<Node, Node> >::const_iterator itpmb =
       d_pol_mems[1].find(b);
   std::vector<Node> prev;
   for (const std::pair<const Node, Node>& itm : itpma->second)
   {
     // if b is a singleton
-    if (itsb != d_eqc_singleton.end())
+    if (bIsSingleton)
     {
       if (areDisequal(itm.first, itsb->second[0]))
       {
@@ -397,6 +403,59 @@ bool SolverState::isSetDisequalityEntailedInternal(Node a,
     prev.push_back(itm.first);
   }
   return false;
+}
+
+void SolverState::ensureMembersComputed(const Node& r)
+{
+  return;
+  // only makes a difference for isolated equivalence classes
+  if (d_isolatedEqc.find(r)==d_isolatedEqc.end())
+  {
+    return;
+  }
+  Kind k = r.getKind();
+  if (k != Kind::SET_SINGLETON
+      && k != Kind::SET_INTER && k != Kind::SET_MINUS && k != Kind::SET_UNION
+      && k != Kind::SET_MAP && k != Kind::SET_FILTER)
+  {
+    return;
+  }
+  if (d_pol_mems[0].find(r)!=d_pol_mems[0].end())
+  {
+    // already computed
+    return;
+  }
+  std::map<Node, Node>& pmems = d_pol_mems[0][r];
+  std::map<Node, Node>& nmems = d_pol_mems[1][r];
+  if (k==Kind::SET_FILTER)
+  {
+    Node pred = r[0];
+    TNode rc = getRepresentative(r[1]);
+    for (size_t i=0; i<2; i++)
+    {
+      const std::map<Node, Node>& mems = getMembersInternal(rc, i);
+      if (!mems.empty())
+      { 
+        for (const std::pair<const Node, Node>& m : mems)
+        {
+          bool isPos = false;
+          if (i==0)
+          {
+            // TODO
+            isPos = true;
+          }
+          if (isPos)
+          {
+            pmems[m.first] = m.second;
+          }
+          else
+          {
+            nmems[m.first] = m.second;
+          }
+        }
+      }
+    }
+  }
 }
 
 Node SolverState::getCongruent(Node n) const
@@ -666,6 +725,16 @@ std::shared_ptr<context::CDHashSet<Node>> SolverState::getPartElementSkolems(
   return d_partElementSkolems[n];
 }
 
+void SolverState::setIsolatedEqClass(const Node& n)
+{
+  d_isolatedEqc.insert(n);
+}
+
+bool SolverState::isIsolatedEqClass(const Node& n) const
+{
+  return d_isolatedEqc.find(n)!=d_isolatedEqc.end();
+}
+  
 }  // namespace sets
 }  // namespace theory
 }  // namespace cvc5::internal

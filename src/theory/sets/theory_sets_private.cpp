@@ -211,7 +211,6 @@ void TheorySetsPrivate::fullEffortReset()
   d_im.clearPendingLemmas();
   // reset the cardinality solver
   d_cardSolver->reset();
-  d_isolatedEqc.clear();
 }
 
 void TheorySetsPrivate::fullEffortCheck()
@@ -317,7 +316,7 @@ void TheorySetsPrivate::fullEffortCheck()
     {
       if (subterms.find(eqc)==subterms.end())
       {
-        d_isolatedEqc.insert(eqc);
+        d_state.setIsolatedEqClass(eqc);
       }
     }
 
@@ -555,7 +554,7 @@ void TheorySetsPrivate::checkUpwardsClosure()
         {
           Node r2 = d_state.getRepresentative(it2.first);
           Node term = it2.second;
-          if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
+          if (d_state.isIsolatedEqClass(term))
           {
             Trace("ajr-temp") << "...don't upwards closure " << term << " since isolated" << std::endl;
             continue;
@@ -741,7 +740,7 @@ void TheorySetsPrivate::checkFilterUp()
 
   for (const Node& term : filterTerms)
   {
-    if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
+    if (d_state.isIsolatedEqClass(term))
     {
       Trace("ajr-temp") << "...don't filter up " << term << " since isolated" << std::endl;
       continue;
@@ -1532,7 +1531,7 @@ bool TheorySetsPrivate::collectModelValues(TheoryModel* m,
       Trace("sets-model") << "* Do not assign value for " << eqc
                           << " since is not relevant." << std::endl;
     }
-    else if (d_isolatedEqc.find(eqc)!=d_isolatedEqc.end())
+    else if (d_state.isIsolatedEqClass(eqc))
     {
       // isolated eqc are ignored as well
       Trace("sets-model") << "* Do not assign value for " << eqc

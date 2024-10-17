@@ -112,8 +112,7 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
         return RewriteResponse(REWRITE_AGAIN_FULL,
                                nm->mkNode(Kind::EQUAL, node[0], node[1][0]));
       }
-      else if (sk == Kind::SET_UNION
-               || sk == Kind::SET_INTER
+      else if (sk == Kind::SET_UNION || sk == Kind::SET_INTER
                || sk == Kind::SET_MINUS)
       {
         Node ret = rewriteMembershipBinaryOp(node);
@@ -121,7 +120,10 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
       }
       else if (sk == Kind::SET_FILTER)
       {
-        Node ret = nm->mkNode(Kind::AND, nm->mkNode(Kind::APPLY_UF, node[1][0], node[0]), nm->mkNode(Kind::SET_MEMBER, node[0], node[1][1]));
+        Node ret =
+            nm->mkNode(Kind::AND,
+                       nm->mkNode(Kind::APPLY_UF, node[1][0], node[0]),
+                       nm->mkNode(Kind::SET_MEMBER, node[0], node[1][1]));
         return RewriteResponse(REWRITE_AGAIN_FULL, ret);
       }
       break;

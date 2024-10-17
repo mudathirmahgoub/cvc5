@@ -211,6 +211,7 @@ void TheorySetsPrivate::fullEffortReset()
   d_im.clearPendingLemmas();
   // reset the cardinality solver
   d_cardSolver->reset();
+  d_isolatedEqc.clear();
 }
 
 void TheorySetsPrivate::fullEffortCheck()
@@ -235,6 +236,7 @@ void TheorySetsPrivate::fullEffortCheck()
     }
     std::map<TypeNode, unsigned> eqcTypeCount;
     eq::EqClassesIterator eqcs_i = eq::EqClassesIterator(d_equalityEngine);
+    std::unordered_set<Node> isolatedCandidate;
     while (!eqcs_i.isFinished())
     {
       Node eqc = (*eqcs_i);
@@ -300,11 +302,18 @@ void TheorySetsPrivate::fullEffortCheck()
           d_higher_order_kinds_enabled = true;
         }
       }
-      if (termCount==1)
+      if (termCount==1 && tn.isSet())
+      {
+        isolatedCandidate.insert(eqc);
+      }
+      ++eqcs_i;
+    }
+    for (const Node& eqc : isolatedCandidate)
+    {
+      if (!d_state.hasMembers(eqc))
       {
         d_isolatedEqc.insert(eqc);
       }
-      ++eqcs_i;
     }
 
     if (TraceIsOn("sets-state"))
@@ -724,6 +733,7 @@ void TheorySetsPrivate::checkFilterUp()
   {
     if (d_isolatedEqc.find(term)!=d_isolatedEqc.end())
     {
+      Trace("ajr-temp") << "...don't filter up since isolated" << std::endl;
       continue;
     }
     Node p = term[0];

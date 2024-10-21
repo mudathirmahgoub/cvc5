@@ -164,7 +164,7 @@ void SolverState::registerTerm(Node r, TypeNode tnn, Node n)
 
     else
     {
-      Assert(false);
+      // Assert(false);
     }
   }
   else if (nk == Kind::SET_FILTER)

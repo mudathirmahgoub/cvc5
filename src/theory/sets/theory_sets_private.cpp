@@ -221,6 +221,7 @@ void TheorySetsPrivate::fullEffortCheck()
   std::set<Node> rlvTerms;
   d_external.collectAssertedTerms(rlvTerms, true, irrKinds);
   d_external.computeRelevantTerms(rlvTerms);
+  Trace("sets-eqc") << "rlvTerms: " << rlvTerms << std::endl;
   do
   {
     Assert(!d_im.hasPendingLemma() || d_im.hasSent());
@@ -247,10 +248,10 @@ void TheorySetsPrivate::fullEffortCheck()
         Node n = (*eqc_i);
         ++eqc_i;
         // if it is not relevant, don't register it
-        if (rlvTerms.find(n)==rlvTerms.end())
-        {
-          continue;
-        }
+        // if (rlvTerms.find(n)==rlvTerms.end())
+        // {
+        //   continue;
+        // }
         TypeNode tnn = n.getType();
         // register it with the state
         d_state.registerTerm(eqc, tnn, n);
@@ -391,22 +392,6 @@ void TheorySetsPrivate::fullEffortCheck()
       continue;
     }
 
-    // check existential rules
-    checkExistentialQuantifiers();
-    d_im.doPendingLemmas();
-    if (d_im.hasSent())
-    {
-      continue;
-    }
-
-    // check universal rules
-    checkUniversalQuantifiers();
-    d_im.doPendingLemmas();
-    if (d_im.hasSent())
-    {
-      continue;
-    }
-
     // check map up rules
     checkMapUp();
     d_im.doPendingLemmas();
@@ -457,6 +442,23 @@ void TheorySetsPrivate::fullEffortCheck()
       // call the check method of the relations solver
       d_rels->check(Theory::EFFORT_FULL);
     }
+
+    // check existential rules
+    checkExistentialQuantifiers();
+    d_im.doPendingLemmas();
+    if (d_im.hasSent())
+    {
+      continue;
+    }
+
+    // check universal rules
+    checkUniversalQuantifiers();
+    d_im.doPendingLemmas();
+    if (d_im.hasSent())
+    {
+      continue;
+    }
+
   } while (!d_im.hasSentLemma() && !d_state.isInConflict()
            && d_im.hasSentFact());
   Assert(!d_im.hasPendingLemma() || d_im.hasSent());

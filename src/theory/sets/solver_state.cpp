@@ -152,6 +152,7 @@ void SolverState::registerTerm(Node r, TypeNode tnn, Node n)
   }
   else if (nk == Kind::SET_FORALL)
   {
+    d_ee->addTerm(n[1]);
     if (polarityIndex == 0)
     {
       d_forallTerms.push_back(n);

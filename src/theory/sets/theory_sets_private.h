@@ -95,7 +95,8 @@ class TheorySetsPrivate : protected EnvObj
    */
   void checkFilterDown();
 
-  void checkQuantifiers();
+  void checkUniversalQuantifiers();
+  void checkExistentialQuantifiers();
   /**
    * Apply the following rule for map terms (set.map f A):
    * Positive member rule:

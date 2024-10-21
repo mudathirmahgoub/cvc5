@@ -391,8 +391,16 @@ void TheorySetsPrivate::fullEffortCheck()
       continue;
     }
 
-    // check filter down rules
-    checkQuantifiers();
+    // check existential rules
+    checkExistentialQuantifiers();
+    d_im.doPendingLemmas();
+    if (d_im.hasSent())
+    {
+      continue;
+    }
+
+    // check universal rules
+    checkUniversalQuantifiers();
     d_im.doPendingLemmas();
     if (d_im.hasSent())
     {
@@ -780,10 +788,11 @@ void TheorySetsPrivate::checkFilterDown()
   }
 }
 
-void TheorySetsPrivate::checkQuantifiers()
+void TheorySetsPrivate::checkUniversalQuantifiers()
 {
   NodeManager* nm = nodeManager();
   const std::vector<Node>& terms = d_state.getForallTerms();
+  Trace("sets-q") << "universal terms: " << terms << std::endl;
   for (const Node& term : terms)
   {
     TNode variable = term[0][0];
@@ -791,6 +800,8 @@ void TheorySetsPrivate::checkQuantifiers()
     TNode p = term[2];
     const std::map<Node, Node>& positiveMembers =
         d_state.getMembers(d_state.getRepresentative(A));
+    Trace("sets-q") << "asserted members for '" << A << "' are "
+                    << positiveMembers << std::endl;
     for (const std::pair<const Node, Node>& pair : positiveMembers)
     {
       std::vector<Node> exp;
@@ -808,7 +819,11 @@ void TheorySetsPrivate::checkQuantifiers()
       }
     }
   }
+}
 
+void TheorySetsPrivate::checkExistentialQuantifiers()
+{
+  NodeManager* nm = nodeManager();
   const std::vector<Node>& existsTerms = d_state.getExistsTerms();
   for (const Node& term : existsTerms)
   {
@@ -816,8 +831,7 @@ void TheorySetsPrivate::checkQuantifiers()
     TNode A = term[1];
     // (not (set.forall ((x T)) A (not p))) is equivalent to 
     // (set.exists ((x T)) A p)
-    TNode p = term[2].notNode();
-    p = rewrite(p);
+    TNode p = term[2];
     SkolemManager* sm = nm->getSkolemManager();
     Node k = sm->mkSkolemFunction(SkolemId::SETS_EXISTS, {term});
 
@@ -825,7 +839,7 @@ void TheorySetsPrivate::checkQuantifiers()
     exp.push_back(term.notNode());
 
     Node memberA = nm->mkNode(Kind::SET_MEMBER, k, A);
-    Node p_k = p.substitute(variable, k);    
+    Node p_k = p.substitute(variable, k).notNode();
     Node conclusion = memberA.andNode(p_k);
     conclusion = rewrite(conclusion);
     std::vector<Node> disjuncts;
@@ -839,7 +853,7 @@ void TheorySetsPrivate::checkQuantifiers()
       exp.push_back(pair.second);
       d_state.addEqualityToExp(B, A, exp);
       Node x = pair.second[0];
-      Node p_x = p.substitute(variable, x);
+      Node p_x = p.substitute(variable, x).notNode();
       disjuncts.push_back(p_x);
     }
     Node orNode = disjuncts[0];

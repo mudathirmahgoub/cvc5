@@ -791,8 +791,6 @@ void TheorySetsPrivate::checkQuantifiers()
     TNode p = term[2];
     const std::map<Node, Node>& positiveMembers =
         d_state.getMembers(d_state.getRepresentative(A));
-    std::cout << "term: " << term << std::endl;
-    std::cout << "positiveMembers: " << positiveMembers << std::endl;
     for (const std::pair<const Node, Node>& pair : positiveMembers)
     {
       std::vector<Node> exp;
@@ -827,7 +825,6 @@ void TheorySetsPrivate::checkQuantifiers()
     Node p_k = p.substitute(variable, k);
     Node conclusion = memberA.andNode(p_k);
     conclusion = rewrite(conclusion);
-    std::cout << "conclusion: " << conclusion << std::endl;
     std::vector<Node> disjuncts;
     disjuncts.push_back(conclusion);
     // one of the existing elements can also be the witness for existence

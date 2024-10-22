@@ -1694,6 +1694,7 @@ set(regress_0_tests
   regress0/sets/eqtest.smt2
   regress0/sets/error1.smt2
   regress0/sets/error2.smt2
+  regress0/sets/filter_some_nterm.smt2
   regress0/sets/filter-up-unsat.smt2
   regress0/sets/filter-qe-simple.smt2
   regress0/sets/filter-qe-simple-bv.smt2
@@ -1753,6 +1754,7 @@ set(regress_0_tests
   regress0/sets/union-1b.smt2
   regress0/sets/union-2.smt2
   regress0/sets/univset-simp.smt2
+  regress0/sets/up_iso_dd_filter_soundness_issue1.smt2
   regress0/simple-dump-model.smt2
   regress0/simple-lra.smt2
   regress0/simple-lra.smtv1.smt2

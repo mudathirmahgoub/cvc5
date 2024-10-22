@@ -362,19 +362,28 @@ bool InferProofCons::convert(CDProof& cdp,
         mem = psb.tryStep(ProofRule::EQ_RESOLVE, {mem, eq}, {});
         Assert(!mem.isNull());
       }
-      ProofRule pr = (id == InferenceId::SETS_FILTER_UP)
-                         ? ProofRule::SETS_FILTER_UP
-                         : ProofRule::SETS_FILTER_DOWN;
-      std::vector<Node> pfArgs;
+      Node res;
       if (id == InferenceId::SETS_FILTER_UP)
       {
         Assert(conc.getKind() == Kind::EQUAL
                && conc[0].getKind() == Kind::SET_MEMBER
-               && conc[0][1].getKind() == Kind::SET_FILTER);
-        Node pred = conc[0][1][0];
-        pfArgs.push_back(pred);
+               && conc[0][1].getKind() == Kind::SKOLEM);
+        SkolemManager* sm = nodeManager()->getSkolemManager();
+        Node filterTerm = sm->getOriginalForm(conc[0][1]);
+        Assert (filterTerm.getKind()==Kind::SET_FILTER);
+        Node pred = filterTerm[0];
+        // FILTER_UP concludes a membership into the filter term
+        res = psb.tryStep(ProofRule::SETS_FILTER_UP, {mem}, {pred});
+        if (!res.isNull())
+        {
+          // must convert from filter term to the purify skolem
+          res = psb.tryStep(ProofRule::MACRO_SR_PRED_TRANSFORM, {res}, {conc});
+        }
       }
-      Node res = psb.tryStep(pr, {mem}, pfArgs);
+      else
+      {
+        res = psb.tryStep(ProofRule::SETS_FILTER_DOWN, {mem}, {});
+      }
       Trace("sets-ipc") << "Filter rule " << id << " returns " << res
                         << ", expects " << conc << std::endl;
       success = CDProof::isSame(res, conc);

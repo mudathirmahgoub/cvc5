@@ -45,7 +45,7 @@ Node TermRegistry::getProxy(Node n)
   Kind nk = n.getKind();
   if (nk != Kind::SET_EMPTY && nk != Kind::SET_SINGLETON
       && nk != Kind::SET_INTER && nk != Kind::SET_MINUS && nk != Kind::SET_UNION
-      && nk != Kind::SET_UNIVERSE && nk != Kind::SET_MAP)
+      && nk != Kind::SET_UNIVERSE && nk != Kind::SET_MAP && nk != Kind::SET_FILTER)
   {
     return n;
   }

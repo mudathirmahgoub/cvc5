@@ -235,6 +235,8 @@ void TheorySetsPrivate::fullEffortCheck()
     }
     std::map<TypeNode, unsigned> eqcTypeCount;
     eq::EqClassesIterator eqcs_i = eq::EqClassesIterator(d_equalityEngine);
+    std::unordered_set<Node> isolatedCandidate;
+    std::unordered_set<Node> subterms;
     while (!eqcs_i.isFinished())
     {
       Node eqc = (*eqcs_i);
@@ -242,6 +244,7 @@ void TheorySetsPrivate::fullEffortCheck()
       d_state.registerEqc(tn, eqc);
       eqcTypeCount[tn]++;
       eq::EqClassIterator eqc_i = eq::EqClassIterator(eqc, d_equalityEngine);
+      size_t termCount = 0;
       while (!eqc_i.isFinished())
       {
         Node n = (*eqc_i);
@@ -251,6 +254,7 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           continue;
         }
+        termCount++;
         TypeNode tnn = n.getType();
         // register it with the state
         d_state.registerTerm(eqc, tnn, n);
@@ -297,8 +301,23 @@ void TheorySetsPrivate::fullEffortCheck()
         {
           d_higher_order_kinds_enabled = true;
         }
+        if (nk!=Kind::EQUAL && !Theory::isLeafOf(n, THEORY_SETS))
+        {
+          subterms.insert(n.begin(), n.end());
+        }
+      }
+      if (termCount==1 && tn.isSet())
+      {
+        isolatedCandidate.insert(eqc);
       }
       ++eqcs_i;
+    }
+    for (const Node& eqc : isolatedCandidate)
+    {
+      if (subterms.find(eqc)==subterms.end())
+      {
+        d_state.setIsolatedEqClass(eqc);
+      }
     }
 
     if (TraceIsOn("sets-state"))
@@ -535,6 +554,11 @@ void TheorySetsPrivate::checkUpwardsClosure()
         {
           Node r2 = d_state.getRepresentative(it2.first);
           Node term = it2.second;
+          if (d_state.isIsolatedEqClass(term))
+          {
+            Trace("ajr-temp") << "...don't upwards closure " << term << " since isolated" << std::endl;
+            continue;
+          }
           // see if there are members in second argument
           const std::map<Node, Node>& r2mem = d_state.getMembers(r2);
           const std::map<Node, Node>& r2nmem = d_state.getNegativeMembers(r2);
@@ -716,6 +740,11 @@ void TheorySetsPrivate::checkFilterUp()
 
   for (const Node& term : filterTerms)
   {
+    if (d_state.isIsolatedEqClass(term))
+    {
+      Trace("ajr-temp") << "...don't filter up " << term << " since isolated" << std::endl;
+      continue;
+    }
     Node p = term[0];
     Node A = term[1];
     const std::map<Node, Node>& positiveMembers =
@@ -1501,6 +1530,12 @@ bool TheorySetsPrivate::collectModelValues(TheoryModel* m,
     {
       Trace("sets-model") << "* Do not assign value for " << eqc
                           << " since is not relevant." << std::endl;
+    }
+    else if (d_state.isIsolatedEqClass(eqc))
+    {
+      // isolated eqc are ignored as well
+      Trace("sets-model") << "* Do not assign value for " << eqc
+                          << " since isolated." << std::endl;
     }
     else
     {

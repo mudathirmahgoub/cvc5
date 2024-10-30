@@ -847,17 +847,17 @@ void TheorySetsPrivate::checkExistentialQuantifiers()
     std::vector<Node> disjuncts;
     disjuncts.push_back(conclusion);
     // one of the existing elements can also be the witness for existence
-    const std::map<Node, Node>& positiveMembers =
-        d_state.getMembers(d_state.getRepresentative(A));
-    for (const std::pair<const Node, Node>& pair : positiveMembers)
-    {
-      Node B = pair.second[1];
-      exp.push_back(pair.second);
-      d_state.addEqualityToExp(B, A, exp);
-      Node x = pair.second[0];
-      Node p_x = p.substitute(variable, x).notNode();
-      disjuncts.push_back(p_x);
-    }
+    // const std::map<Node, Node>& positiveMembers =
+    //     d_state.getMembers(d_state.getRepresentative(A));
+    // for (const std::pair<const Node, Node>& pair : positiveMembers)
+    // {
+    //   Node B = pair.second[1];
+    //   exp.push_back(pair.second);
+    //   d_state.addEqualityToExp(B, A, exp);
+    //   Node x = pair.second[0];
+    //   Node p_x = p.substitute(variable, x).notNode();
+    //   disjuncts.push_back(p_x);
+    // }
     Node orNode = disjuncts[0];
     if (disjuncts.size() > 1)
     {

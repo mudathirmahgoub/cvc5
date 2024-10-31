@@ -740,9 +740,9 @@ void TheorySetsPrivate::checkFilterUp()
 
   for (const Node& term : filterTerms)
   {
-    if (d_state.isIsolatedEqClass(term))
+    bool isIsolated = d_state.isIsolatedEqClass(term);
+    if (isIsolated)
     {
-      Trace("ajr-temp") << "...don't filter up " << term << " since isolated" << std::endl;
       continue;
     }
     Node p = term[0];
@@ -752,11 +752,21 @@ void TheorySetsPrivate::checkFilterUp()
     for (const std::pair<const Node, Node>& pair : positiveMembers)
     {
       Node x = pair.second[0];
+      Node p_x = nm->mkNode(Kind::APPLY_UF, p, x);
       std::vector<Node> exp;
+      if (isIsolated)   // FIXME
+      {
+        // ---------------------------------------
+        // (P x) or ~(P x)
+        //
+        // applied when we have (set.member x A) and (set.filter P A).
+        Node split = nm->mkNode(Kind::OR, p_x, p_x.notNode());
+        d_im.assertInference(split, InferenceId::SETS_FILTER_UP_PRED_SPLIT, exp);
+        continue;
+      }
       exp.push_back(pair.second);
       Node B = pair.second[1];
       d_state.addEqualityToExp(A, B, exp);
-      Node p_x = nm->mkNode(Kind::APPLY_UF, p, x);
       Node skolem = d_treg.getProxy(term);
       Node memberFilter = nm->mkNode(Kind::SET_MEMBER, x, skolem);
       // (set.member x A)

@@ -429,6 +429,8 @@ void SolverState::ensureMembersComputed(const Node& r)
   std::map<Node, Node>& nmems = d_pol_mems[1][r];
   if (k==Kind::SET_FILTER)
   {
+    Trace("ajr-temp") << "Check members " << r << std::endl;
+    NodeManager * nm = nodeManager();
     Node pred = r[0];
     TNode rc = getRepresentative(r[1]);
     for (size_t i=0; i<2; i++)
@@ -441,8 +443,13 @@ void SolverState::ensureMembersComputed(const Node& r)
           bool isPos = false;
           if (i==0)
           {
-            // TODO
-            isPos = true;
+            Trace("ajr-temp") << "check " << m.first << std::endl;
+            Node app = d_valuation.getPreprocessedTerm(nm->mkNode(Kind::APPLY_UF, pred, m.first));
+            if (!d_valuation.hasSatValue(app, isPos))
+            {
+              AlwaysAssert(false) << "Not there " << app;
+              continue;
+            }
           }
           if (isPos)
           {

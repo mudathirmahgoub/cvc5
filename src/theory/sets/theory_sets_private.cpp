@@ -831,18 +831,16 @@ void TheorySetsPrivate::checkExistentialQuantifiers()
   {
     TNode variable = term[0][0];
     TNode A = term[1];
+    Node memberA = nm->mkNode(Kind::SET_MEMBER, variable, A);
+    Node body = memberA.andNode(term[2]);
     // (not (set.forall ((x T)) A (not p))) is equivalent to 
     // (set.exists ((x T)) A p)
     TNode p = term[2];
-    SkolemManager* sm = nm->getSkolemManager();
-    Node k = sm->mkSkolemFunction(SkolemId::SETS_EXISTS, {term});
 
+    SkolemManager* sm = nm->getSkolemManager();
     std::vector<Node> exp;
     exp.push_back(term.notNode());
-
-    Node memberA = nm->mkNode(Kind::SET_MEMBER, k, A);
-    Node p_k = p.substitute(variable, k).notNode();
-    Node conclusion = memberA.andNode(p_k);
+    Node conclusion = nm->mkNode(Kind::EXISTS, term[0], body);
     conclusion = rewrite(conclusion);
     std::vector<Node> disjuncts;
     disjuncts.push_back(conclusion);

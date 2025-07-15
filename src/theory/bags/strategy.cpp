@@ -89,6 +89,10 @@ void Strategy::initializeStrategy()
     addStrategyStep(CHECK_QUANTIFIED_OPERATIONS);
     step_end[Theory::EFFORT_FULL] = d_infer_steps.size() - 1;
 
+    step_begin[Theory::EFFORT_LAST_CALL] = 0;
+
+    addStrategyStep(CHECK_BASIC_OPERATIONS, Theory::EFFORT_LAST_CALL);
+    step_end[Theory::EFFORT_LAST_CALL] = 1;
     // set the beginning/ending ranges
     for (const std::pair<const Theory::Effort, unsigned>& it_begin : step_begin)
     {

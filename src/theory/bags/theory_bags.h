@@ -69,6 +69,8 @@ class TheoryBags : public Theory
   void collectBagsAndCountTerms();
 
   //--------------------------------- standard check
+  /** Do we need a check call at last call effort? */
+  bool needsCheckLastEffort() override;
   /** Post-check, called after the fact queue of the theory is processed. */
   void postCheck(Effort effort) override;
   /** Notify fact */

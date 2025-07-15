@@ -234,6 +234,11 @@ void TheoryBags::collectBagsAndCountTerms()
   }
 }
 
+bool TheoryBags::needsCheckLastEffort() 
+{
+  return true;
+}
+
 void TheoryBags::postCheck(Effort effort)
 {
   d_im.doPendingFacts();
@@ -307,7 +312,7 @@ void TheoryBags::runStrategy(Theory::Effort e)
     }
     else
     {
-      if (runInferStep(curr, it->second) || d_state.isInConflict())
+      if (runInferStep(curr, e) || d_state.isInConflict())
       {
         break;
       }
@@ -326,6 +331,23 @@ bool TheoryBags::runInferStep(InferStep s, int effort)
     Trace("bags-process") << ", effort = " << effort;
   }
   Trace("bags-process") << "..." << std::endl;
+  if(effort == Effort::EFFORT_LAST_CALL)
+  {
+    auto m = d_state.getModel();
+    auto model = m->debugPrintModelEqc();
+    std::cout  <<"Model at last call effort: " << model << std::endl;
+
+    auto bags = d_state.getBags();      
+    for (auto bag : bags)
+    {
+      std::cout << "Bag: " << bag << " has value: " << m->getRepresentative(bag) << std::endl;
+      
+      NodeManager* nm = nodeManager();
+      Node empty = nm->mkConst(EmptyBag(bag.getType()));
+      d_im.lemma(bag.eqNode(empty), InferenceId::BAGS_CARD);
+    }
+    return false;
+  }
   switch (s)
   {
     case CHECK_INIT: break;

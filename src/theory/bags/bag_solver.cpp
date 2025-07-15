@@ -312,32 +312,7 @@ void BagSolver::checkMap(Node n)
 
     for (const Node& z : downwards)
     {
-      Node y = d_state.getRepresentative(z);
-      if (!d_mapCache.count(n))
-      {
-        std::shared_ptr<context::CDHashMap<Node, std::pair<Node, Node>>> nMap =
-            std::make_shared<context::CDHashMap<Node, std::pair<Node, Node>>>(
-                userContext());
-        d_mapCache[n] = nMap;
-      }
-      if (!d_mapCache[n].get()->count(y))
-      {
-        auto [downInference, uf, preImageSize] = d_ig.mapDown(n, y);
-        d_im.lemmaTheoryInference(&downInference);
-        std::pair<Node, Node> yPair = std::make_pair(uf, preImageSize);
-        d_mapCache[n].get()->insert(y, yPair);
-      }
-
-      context::CDHashMap<Node, std::pair<Node, Node>>::iterator it =
-          d_mapCache[n].get()->find(y);
-
-      auto [uf, preImageSize] = it->second;
-
-      for (const Node& x : upwards)
-      {
-        InferInfo upInference = d_ig.mapUp2(n, uf, preImageSize, y, x);
-        d_im.lemmaTheoryInference(&upInference);
-      }
+      
     }
   }
 }

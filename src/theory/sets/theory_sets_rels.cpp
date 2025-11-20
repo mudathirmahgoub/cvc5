@@ -649,7 +649,7 @@ void TheorySetsRels::check(Theory::Effort level)
                        sk_eq,
                        nm->mkNode(Kind::SET_MEMBER,
                                   RelsUtils::constructPair(tc_rel, sk_1, sk_2),
-                                  tc_rel))));
+                                  tc_rel).andNode(sk_eq.notNode()))));
 
     sendInfer(conc, InferenceId::SETS_RELS_TCLOSURE_UP, reason);
   }
@@ -736,6 +736,9 @@ void TheorySetsRels::check(Theory::Effort level)
       d_tcr_tcGraph_exps[tc_rel] = rel_tc_graph_exps;
       d_tcr_tcGraph[tc_rel] = rel_tc_graph;
     }
+    Trace("rels-debug") << "d_tcr_tcGraph: " << d_tcr_tcGraph << std::endl;
+    Trace("rels-debug") << "d_rRep_tcGraph: " << d_rRep_tcGraph << std::endl;
+    Trace("rels-debug") << "d_tcr_tcGraph_exps: " << d_tcr_tcGraph_exps << std::endl;
   }
 
   void TheorySetsRels::doTCInference(
@@ -800,6 +803,8 @@ void TheorySetsRels::check(Theory::Effort level)
           nodeManager()->mkNode(Kind::EQUAL, tc_rel[0], reasons.back()[1]));
     }
     if( all_reasons.size() > 1) {
+      Trace("rels-debug") << "reasons: " << reasons << std::endl;
+      Trace("rels-debug") << "all reasons: " << all_reasons << std::endl;
       sendInfer(nm->mkNode(Kind::SET_MEMBER, tc_mem, tc_rel),
                 InferenceId::SETS_RELS_TCLOSURE_FWD,
                 nm->mkNode(Kind::AND, all_reasons));

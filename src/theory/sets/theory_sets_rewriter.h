@@ -107,8 +107,10 @@ class TheorySetsRewriter : public TheoryRewriter
    *  rewrites for n include:
    *  - (rel.acyclic (as set.empty (Relation T T))) = true
    *  - (rel.acyclic (set.singleton (tuple x y))) = (distinct x y)
-   *  - (rel.acyclic (set.union A B)) =
-   *    TODO
+   *  - (rel.acyclic (set.union A B)) = if A and B are const, check if
+   *    (rel.tclosure (set.union A B)) intersect iden != empty, then
+   *    return false, otherwise true.
+   *    If A or B are not const, return the original node.
    */
   RewriteResponse postRewriteAcyclic(TNode n);
   /**

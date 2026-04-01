@@ -413,6 +413,7 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node) {
   case Kind::SET_ALL: return postRewriteAll(node);
   case Kind::SET_SOME: return postRewriteSome(node);
   case Kind::SET_FOLD: return postRewriteFold(node);
+  case Kind::RELATION_ACYCLIC: return postRewriteAcyclic(node);
   case Kind::RELATION_TABLE_JOIN:
   case Kind::RELATION_TRANSPOSE:
   case Kind::RELATION_PRODUCT:
@@ -865,6 +866,63 @@ RewriteResponse TheorySetsRewriter::postRewriteTableJoin(TNode n)
     Node ret = NormalForm::elementsToSet(newSet, n.getType());
 
     return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+  }
+  return RewriteResponse(REWRITE_DONE, n);
+}
+
+RewriteResponse TheorySetsRewriter::postRewriteAcyclic(TNode n)
+{
+  Assert(n.getKind() == Kind::RELATION_ACYCLIC);
+  NodeManager* nm = nodeManager();
+  Kind k = n[0].getKind();
+  switch (k)
+  {
+    case Kind::SET_EMPTY:
+    {
+      // (rel.acyclic (as set.empty (Relation T T))) = true
+      Node ret = nm->mkConst(true);
+      return RewriteResponse(REWRITE_DONE, ret);
+    }
+    case Kind::SET_SINGLETON:
+    {
+      // (rel.acyclic (set.singleton (tuple x y))) = (distinct x y)
+      Node tuple = n[0][0];
+      Node x = TupleUtils::nthElementOfTuple(tuple, 0);
+      Node y = TupleUtils::nthElementOfTuple(tuple, 1);
+      Node ret = x.eqNode(y).notNode();
+      return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+    }
+    case Kind::SET_UNION:
+    {
+      // (rel.acyclic (set.union A B)) = TODO
+      if (n[0].isConst())
+      {
+        std::set<Node> rel_mems =
+            NormalForm::getElementsFromNormalConstant(n[0]);
+        std::set<Node> tc_rel_mems = RelsUtils::computeTC(rel_mems, n);
+
+        bool acyclic = true;
+        for (const Node& tuple : tc_rel_mems)
+        {
+          Node x = TupleUtils::nthElementOfTuple(tuple, 0);
+          Node y = TupleUtils::nthElementOfTuple(tuple, 1);
+
+          Assert(x.isConst() && y.isConst());
+
+          if (x == y)
+          {
+            acyclic = false;
+            break;
+          }
+        }
+
+        Node ret = nm->mkConst(acyclic);
+        return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+      }
+      break;
+    }
+
+    default: break;
   }
   return RewriteResponse(REWRITE_DONE, n);
 }

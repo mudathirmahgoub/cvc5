@@ -105,6 +105,14 @@ class TheorySetsRewriter : public TheoryRewriter
   RewriteResponse postRewriteTableJoin(TNode n);
   /**
    *  rewrites for n include:
+   *  - (rel.acyclic (as set.empty (Relation T T))) = true
+   *  - (rel.acyclic (set.singleton (tuple x y))) = (distinct x y)
+   *  - (rel.acyclic (set.union A B)) =
+   *    TODO
+   */
+  RewriteResponse postRewriteAcyclic(TNode n);
+  /**
+   *  rewrites for n include:
    *  - (set.map f (as set.empty (Set T1)) = (as set.empty (Set T2))
    *  - (set.map f (set.singleton x)) = (set.singleton (apply f x))
    *  - (set.map f (set.union A B)) =

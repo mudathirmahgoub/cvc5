@@ -899,7 +899,7 @@ RewriteResponse TheorySetsRewriter::postRewriteAcyclic(TNode n)
       {
         std::set<Node> rel_mems =
             NormalForm::getElementsFromNormalConstant(n[0]);
-        std::set<Node> tc_rel_mems = RelsUtils::computeTC(rel_mems, n);
+        std::set<Node> tc_rel_mems = RelsUtils::computeTC(rel_mems, n[0]);
 
         bool acyclic = true;
         for (const Node& tuple : tc_rel_mems)

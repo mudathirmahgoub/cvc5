@@ -3907,6 +3907,23 @@ enum ENUM(Kind)
    */
   EVALUE(RELATION_TCLOSURE),
   /**
+   * Relation acyclic predicate.
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` Term of relation Sort
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - TermManager::mkTerm(Kind, const std::vector<Term>&)
+   *   - TermManager::mkTerm(const Op&, const std::vector<Term>&)
+   *
+   * - Create Op of this kind with:
+   *
+   *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
+   */
+  EVALUE(RELATION_ACYCLIC),
+  /**
    * Relation join image.
    *
    * - Arity: ``2``

@@ -1319,6 +1319,7 @@ std::string Smt2Printer::smtKindString(Kind k)
     case Kind::RELATION_PRODUCT: return "rel.product";
     case Kind::RELATION_TRANSPOSE: return "rel.transpose";
     case Kind::RELATION_TCLOSURE: return "rel.tclosure";
+    case Kind::RELATION_ACYCLIC: return "rel.acyclic";
     case Kind::RELATION_IDEN: return "rel.iden";
     case Kind::RELATION_JOIN_IMAGE: return "rel.join_image";
     case Kind::RELATION_GROUP: return "rel.group";

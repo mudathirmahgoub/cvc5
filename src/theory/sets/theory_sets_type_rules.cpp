@@ -955,6 +955,57 @@ TypeNode RelTransClosureTypeRule::computeType(NodeManager* nodeManager,
   return setType;
 }
 
+TypeNode RelAcyclicTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,
+                                            CVC5_UNUSED TNode n)
+{
+  return TypeNode::null();
+}
+TypeNode RelAcyclicTypeRule::computeType(NodeManager* nodeManager,
+                                         TNode n,
+                                         bool check,
+                                         std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::RELATION_ACYCLIC);
+  TypeNode setType = n[0].getTypeOrNull();
+  if (check)
+  {
+    if (!isMaybeRelation(setType))
+    {
+      if (errOut)
+      {
+        (*errOut) << "acyclic predicate operates on non-relation";
+      }
+      return TypeNode::null();
+    }
+    if (setType.isRelation())
+    {
+      std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
+      if (tupleTypes.size() != 2)
+      {
+        if (errOut)
+        {
+          (*errOut) << "acyclic predicate operates on non-binary relation";
+        }
+        return TypeNode::null();
+      }
+      if (!tupleTypes[0].isComparableTo(
+              tupleTypes[1]))  // TODO check mathematical definition of
+                               // tclosure,
+      // check if we want this to error out in acyclic as well
+      {
+        if (errOut)
+        {
+          (*errOut)
+              << "acyclic predicate operates on incompatible binary relation";
+        }
+        return TypeNode::null();
+      }
+    }
+  }
+
+  return nodeManager->booleanType();
+}
+
 TypeNode JoinImageTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,
                                            CVC5_UNUSED TNode n)
 {

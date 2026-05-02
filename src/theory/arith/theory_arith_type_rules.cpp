@@ -307,37 +307,28 @@ TypeNode IndexedRootPredicateTypeRule::computeType(NodeManager* nodeManager,
   return nodeManager->booleanType();
 }
 
-TypeNode StarContainsTypeRule::preComputeType(NodeManager* nm,
-                                              CVC5_UNUSED TNode n)
+TypeNode StarTypeRule::preComputeType(NodeManager* nm, CVC5_UNUSED TNode n)
 {
-  return nm->booleanType();
+  return TypeNode::null();
 }
 
-TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
+TypeNode StarTypeRule::computeType(NodeManager* nodeManager,
                                            TNode n,
                                            bool check,
                                            std::ostream* errOut)
 {
-  Assert(n.getKind() == Kind::STAR_CONTAINS);
+  Assert(n.getKind() == Kind::STAR);
   if (check)
   {
     // the first argument should be a lambda
     Node lambda = n[0];
     // remaining arguments should be elements of integer type
-    std::vector<Node> arguments;
-    for (size_t i = 1; i < n.getNumChildren(); i++)
-    {
-      arguments.push_back(n[i]);
-    }
-
-    bool anyIsNull = std::any_of(
-        arguments.begin(), arguments.end(), [](Node x) { return x.isNull(); });
-
-    if (lambda.isNull() || anyIsNull)
+    
+    if (lambda.isNull())
     {
       if (errOut)
       {
-        (*errOut) << "expecting concrete types for STAR_CONTAINS operator";
+        (*errOut) << "expecting concrete types for STAR operator";
       }
       return TypeNode::null();
     }
@@ -347,7 +338,7 @@ TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
       if (errOut)
       {
         (*errOut)
-            << "STAR_CONTAINS operator only allows lambdas as a first argument";
+            << "STAR operator only allows lambdas as an argument";
       }
       return TypeNode::null();
     }
@@ -380,39 +371,9 @@ TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
       }
       return TypeNode::null();
     }
-
-    if (argTypes.size() != arguments.size())
-    {
-      if (errOut)
-      {
-        (*errOut) << "The number of arguments " << arguments.size()
-                  << "does not match the number of function arguments "
-                  << argTypes.size();
-      }
-      return TypeNode::null();
-    }
-
-    allInt = std::all_of(arguments.begin(), arguments.end(), [](Node x) {
-      return x.getType().isInteger();
-    });
-
-    if (!allInt)
-    {
-      if (errOut)
-      {
-        std::stringstream types;
-        for (const Node& node : arguments)
-        {
-          types << node.getType();
-        }
-
-        (*errOut) << "Operator " << n.getKind() << " expects integer arguments "
-                  << "Found arguments of types '" << types.str() << "'.";
-      }
-      return TypeNode::null();
-    }
+    
   }
-  return nodeManager->booleanType();
+  return n[0].getType();
 }
 
 }  // namespace arith

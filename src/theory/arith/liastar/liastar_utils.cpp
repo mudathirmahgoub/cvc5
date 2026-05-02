@@ -40,28 +40,6 @@ using namespace libnormaliz;
 
 using libnormaliz::operator<<;
 
-std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
-{
-  Assert(n.getKind() == Kind::STAR_CONTAINS);
-  Node lambda = n[0];
-  std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
-  std::vector<Node> vecElements(n.begin() + 1, n.end());
-
-  Node substitute = lambda[1].substitute(
-      vars.begin(), vars.end(), vecElements.begin(), vecElements.end());
-
-  Trace("liastar-ext-debug") << "n: " << n << std::endl;
-  Trace("liastar-ext-debug") << "predicate : " << lambda[1] << std::endl;
-  Node nonnegativeConstraints = nm->mkConst<bool>(true);
-  for (const auto& v : vecElements)
-  {
-    Node nonnegative = nm->mkNode(Kind::GEQ, v, nm->mkConstInt(Rational(0)));
-    nonnegativeConstraints = nonnegativeConstraints.andNode(nonnegative);
-  }
-  Trace("liastar-ext-debug") << "substitute: " << substitute << std::endl;
-  return std::make_pair(substitute, nonnegativeConstraints);
-}
-
 Node LiaStarUtils::toDNF(Node n, Env* e)
 {
   // eliminate ites

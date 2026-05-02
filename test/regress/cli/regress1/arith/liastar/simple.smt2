@@ -26,28 +26,28 @@
 
 (set-info :status unsat)
 (push 1)
-(assert 
- (int.star-contains 
-  (lambda ((x Int) (y Int))
-    (and     
+(assert
+ ((int.star
+   (lambda ((x Int) (y Int))
+    (and
       (>= (+ (+ x y) (- 5)) 0) ; y >= 5-x
       (>= (+ (+ (* (- 1) x) y) 5) 0) ; y >= x - 5
     )
-  )
+   ))
   1 1))
 (check-sat)
 (pop 1)
 
 (set-info :status sat)
 (push 1)
-(assert 
- (int.star-contains 
-  (lambda ((x Int) (y Int)) 
-    (and     
+(assert
+ ((int.star
+   (lambda ((x Int) (y Int))
+    (and
       (>= (+ (+ x y) (- 5)) 0) ; y >= 5-x
       (>= (+ (+ (* (- 1) x) y) 5) 0) ; y >= x - 5
     )
-  )
+   ))
   4 4))
 (check-sat)
 (pop 1)

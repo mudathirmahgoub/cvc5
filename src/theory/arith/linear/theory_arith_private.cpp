@@ -4509,6 +4509,10 @@ Rational TheoryArithPrivate::deltaValueForTotalOrder() const
   for (; shared_iter != shared_end; ++shared_iter)
   {
     Node sharedCurr = *shared_iter;
+    if (sharedCurr.getType().isFunction())
+    {
+      continue;
+    }
     sharedCurr =
         sharedCurr.getKind() == Kind::TO_REAL ? sharedCurr[0] : sharedCurr;
 

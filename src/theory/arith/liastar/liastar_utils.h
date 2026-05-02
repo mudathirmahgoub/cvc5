@@ -33,12 +33,6 @@ class LiaStarUtils
 {
  public:
   /**
-   * @param n a node of the form
-   * (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) (y_1 ... y_n))
-   * @return <(p y_1 ... y_n), (and (>= y_1 0) ... (>= y_n 0))>
-   */
-  static std::pair<Node, Node> getVectorPredicate(Node n, NodeManager* nm);
-  /**
    * @param a node in LIA that only contains =, >=, ite in its tree
    * @return a node in DNF where ite and = are eliminated
    */

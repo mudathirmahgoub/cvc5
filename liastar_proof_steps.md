@@ -6,10 +6,10 @@ and to give the lia* extension a lazy, subsolver-ready proof generator.
 
 The fix has two independent parts:
 
-1. A bug fix in the generic proof machinery for `STAR_CONTAINS`-style
+1. A bug fix in the generic proof machinery for `STAR`-style
    "closure but not really" kinds.
 2. A lazy `ProofGenerator` for the three lia* lemmas (split,
-   non-negativity, STAR_CONTAINS reduction), wired into
+   non-negativity, STAR reduction), wired into
    `LiaStarExtension`.
 
 ---
@@ -32,9 +32,9 @@ k1 k2 1 0 0)` — well before any lia* lemma was sent.
 
 ### Root cause
 
-`STAR_CONTAINS` is registered as a closure kind in
+`STAR` is registered as a closure kind in
 [`src/expr/kind_template.cpp:76`](src/expr/kind_template.cpp#L76)
-(by commit `6695617930` "isClosure(STAR_CONTAINS) = true;"), so that
+(by commit `6695617930` "isClosure(STAR) = true;"), so that
 term-registration and other closure-aware passes treat it like a
 binder. **But unlike true binders (`FORALL` / `EXISTS` / `LAMBDA` / …)
 its first child is a `LAMBDA`, not a `BOUND_VAR_LIST`.**
@@ -53,7 +53,7 @@ is an immutable bound-variable list:
 2. **`UfProofRuleChecker::checkInternal`** in
    [`src/theory/uf/proof_checker.cpp`](src/theory/uf/proof_checker.cpp)
    auto-injects `t[0]` into both `lchildren` and `rchildren` for any
-   closure. With `STAR_CONTAINS` this prepended the lambda to the
+   closure. With `STAR` this prepended the lambda to the
    reconstructed term, so `CONG` produced a 7-arg
    `(int.star-contains lambda lambda k1 k2 1 0 0)` instead of the
    expected 6-arg `(int.star-contains new-lambda k1 k2 1 0 0)`.
@@ -62,7 +62,7 @@ is an immutable bound-variable list:
 
 In both places, narrow the closure-special-casing to
 `cur.isClosure() && cur[0].getKind() == Kind::BOUND_VAR_LIST` so that
-true binders still take the binder path while `STAR_CONTAINS`
+true binders still take the binder path while `STAR`
 (and any future "closure for term-registration only" kind) falls
 through to the regular `CONG` path.
 
@@ -82,7 +82,7 @@ if (t.isClosure() && t[0].getKind() == Kind::BOUND_VAR_LIST)
 }
 ```
 
-`STAR_CONTAINS` remains a closure kind in `kind_template.cpp` because
+`STAR` remains a closure kind in `kind_template.cpp` because
 `term_registration_visitor.cpp:91` and other places rely on that bit
 to skip term registration of the bound-variable subterms.
 
@@ -97,7 +97,7 @@ Three lemmas are emitted by `LiaStarExtension::checkFullEffort`
 |---|---|---|
 | split        | `vp ∨ ¬vp`, where `vp = predicate[v_1, ..., v_n]` | `ProofRule::SPLIT` |
 | non-negativity | `(>= v_1 0) ∧ ... ∧ (>= v_n 0)`           | `TRUST` w/ `ARITH_LIA_STAR_NONNEGATIVE` |
-| reduction    | `(int.star-contains lambda v) = star`           | `TRUST` w/ `ARITH_LIA_STAR_CONTAINS_REDUCE` |
+| reduction    | `(int.star-contains lambda v) = star`           | `TRUST` w/ `ARITH_LIA_STAR_REDUCE` |
 
 The two `TRUST` rules are placeholders. Each is the seam where a
 subsolver-derived proof can later replace the trust step (path "(b)"
@@ -113,7 +113,7 @@ under the arith block:
 
 ```cpp
 ARITH_LIA_STAR_NONNEGATIVE,
-ARITH_LIA_STAR_CONTAINS_REDUCE,
+ARITH_LIA_STAR_REDUCE,
 ```
 
 ### `LiaStarProofGenerator`
@@ -255,7 +255,7 @@ benchmark that hit `LiaStarProofGenerator` produced
 
 ```
 ; WARNING: add trust step for TRUST
-; trust TRUST ARITH_LIA_STAR_CONTAINS_REDUCE
+; trust TRUST ARITH_LIA_STAR_REDUCE
 (step @pXX <conclusion> :rule trust :premises () :args (...))
 ```
 
@@ -305,7 +305,7 @@ $ build/bin/cvc5 ... --dump-proofs paper2008.smt2 | grep arith_lia_star
 ### Improvement to the non-negativity TRUST step
 
 `LiaStarProofGenerator::mkNonnegativeProof` now passes the originating
-`STAR_CONTAINS` literal as a premise to the `addTrustedStep` call:
+`STAR` literal as a premise to the `addTrustedStep` call:
 
 ```cpp
 cdp.addTrustedStep(
@@ -313,7 +313,7 @@ cdp.addTrustedStep(
 ```
 
 The proof shape becomes
-`STAR_CONTAINS(lambda, v) ⊢ (>= v_1 0) ∧ ... ∧ (>= v_n 0)` rather
+`STAR(lambda, v) ⊢ (>= v_1 0) ∧ ... ∧ (>= v_n 0)` rather
 than an unconditional axiom — structurally aligning the trust step
 with what a real proof (subsolver-derived or otherwise) would look
 like.
@@ -416,7 +416,7 @@ Caveat: a generic subsolver doesn't natively handle `int.star-contains`
 (the operator only lives inside the lia* extension), so the subsolver
 would need to also be running lia*. This is circular for the
 *reduction* lemma (which is the algorithm itself). The non-negativity
-lemma is more amenable: with the originating `STAR_CONTAINS` literal
+lemma is more amenable: with the originating `STAR` literal
 asserted as a premise, a lia*-aware subsolver can derive the
 non-negativity conjunction directly.
 

@@ -106,13 +106,30 @@ class LiaStarExtension : EnvObj
    * c and c' are constants,
    * (2) M' may contain t = c if both t >= c and t <= c are in M.
    */
-  void getAssertions(std::vector<Node>& assertions);
+  void getAssertions(std::vector<std::pair<bool, Node>>& assertions);
+
+  /**
+   * If `op` is a STAR-headed function (either directly `(STAR L)` or a purify
+   * skolem of one introduced by HoExtension during APPLY_UF→HO_APPLY rewriting),
+   * return the underlying `(STAR L)` term. Otherwise return a null Node.
+   */
+  Node getStarOperator(TNode op) const;
+
+  /**
+   * Walk UF's equality engine and append every STAR-headed predicate that has
+   * a determined polarity (asserted equal to true or false) to `assertions`.
+   * Needed because after HO rewriting, STAR-headed APPLY_UF predicates live in
+   * UF's fact stream, not arith's.
+   */
+  void collectStarFactsFromUf(
+      std::vector<std::pair<bool, Node>>& assertions);
 
   Node isNotZeroVector(Node v);
 
   /**
-   * Argument n must be a node of the form (int.star-contains ((x1 Int) ... (xn
-   * Int)) p v) This functions convert the predicate p (which in QFLIA) to a
+   * Argument n must be a node of the form
+   * ((star (lambda ((x1 Int) ... (xn Int)) p)) v_1 ... v_n).
+   * This functions converts the predicate p (which is in QFLIA) to a
    * list of matrices representing a disjunction of set of inequalities in
    * Normaliz matrix form A x b >= 0 where A is a matrix and x = (x1 ... xn 1).
    * This form is used
@@ -151,6 +168,9 @@ class LiaStarExtension : EnvObj
   /** Do we have any liaStar terms? */
   context::CDO<bool> d_hasLiaStarTerms;
   std::vector<Node> d_processedStarTerms;
+  /** Map from a STAR-headed operator (or its purify skolem) to its (STAR L)
+   * form, populated during preRegisterTerm. */
+  std::map<Node, Node> d_starSkolemToOp;
 
   /**
    * A CDProofSet that hands out CDProof objects for lemmas.
@@ -159,7 +179,7 @@ class LiaStarExtension : EnvObj
 
   /**
    * Lazy proof generator for the lia* lemmas (split, non-negativity, and
-   * STAR_CONTAINS reduction). Allocated only when proofs are enabled.
+   * STAR reduction). Allocated only when proofs are enabled.
    */
   std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 

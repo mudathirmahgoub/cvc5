@@ -173,15 +173,16 @@ enum class TrustId : uint32_t
   ARITH_NL_FLATTEN_MON_LEMMA,
   /**
    * A lia* non-negativity lemma asserting that the argument vector of a
-   * positive-polarity STAR_CONTAINS literal is component-wise non-negative.
+   * positive-polarity STAR literal is component-wise non-negative.
    */
   ARITH_LIA_STAR_NONNEGATIVE,
   /**
-   * A lia* reduction lemma of the form `(int.star-contains ... v) = star`,
-   * where `star` is the existential cone-decomposition encoding produced by
-   * the lia* extension. Intended to be discharged by a subsolver proof.
+   * A lia* reduction lemma of the form `((star ...) v) = star_encoding`,
+   * where `star_encoding` is the existential cone-decomposition encoding
+   * produced by the lia* extension. Intended to be discharged by a subsolver
+   * proof.
    */
-  ARITH_LIA_STAR_CONTAINS_REDUCE,
+  ARITH_LIA_STAR_REDUCE,
   /** A conflict coming from the bitblast solver */
   BV_BITBLAST_CONFLICT,
   /** A step from BvPpAssert utility */

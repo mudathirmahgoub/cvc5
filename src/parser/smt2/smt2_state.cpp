@@ -45,13 +45,13 @@ void Smt2State::addArithmeticOperators()
   addOperator(Kind::LT, "<");
   addOperator(Kind::LEQ, "<=");
   addOperator(Kind::GT, ">");
-  addOperator(Kind::GEQ, ">=");
-  addOperator(Kind::STAR_CONTAINS, "int.star-contains");
+  addOperator(Kind::GEQ, ">=");  
 
   if (!strictModeEnabled())
   {
     // NOTE: this operator is non-standard
     addOperator(Kind::POW, "^");
+    addOperator(Kind::STAR, "int.star");
   }
 }
 

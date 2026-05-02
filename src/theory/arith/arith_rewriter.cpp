@@ -386,10 +386,6 @@ RewriteResponse ArithRewriter::postRewriteAtom(TNode atom)
     return RewriteResponse(REWRITE_DONE, rewriter::mkConst(d_nm, *response));
   }
 
-  if (kind == Kind::STAR_CONTAINS)
-  {
-    return rewriteStarContains(atom);
-  }
   Assert(isRelationOperator(kind));
 
   if (auto response = rewriter::tryEvaluateRelation(kind, left, right);
@@ -471,7 +467,7 @@ RewriteResponse ArithRewriter::preRewriteTerm(TNode t)
       case Kind::INTS_DIVISION_TOTAL:
       case Kind::INTS_MODULUS_TOTAL: return rewriteIntsDivModTotal(t, true);
       case Kind::ABS: return rewriteAbs(t);
-      case Kind::STAR_CONTAINS: return rewriteStarContains(t);
+      case Kind::STAR: return rewriteStar(t);
       case Kind::IAND:
       case Kind::PIAND:
       case Kind::POW2:
@@ -531,6 +527,7 @@ RewriteResponse ArithRewriter::postRewriteTerm(TNode t)
       case Kind::INTS_DIVISION_TOTAL:
       case Kind::INTS_MODULUS_TOTAL: return rewriteIntsDivModTotal(t, false);
       case Kind::ABS: return rewriteAbs(t);
+      case Kind::STAR: return rewriteStar(t);
       case Kind::TO_REAL: return rewriteToReal(t);
       case Kind::TO_INTEGER: return rewriteExtIntegerOp(t);
       case Kind::PI: return RewriteResponse(REWRITE_DONE, t);
@@ -1084,40 +1081,40 @@ RewriteResponse ArithRewriter::rewriteIntsDivModTotal(TNode t, bool pre)
   return RewriteResponse(REWRITE_DONE, t);
 }
 
-RewriteResponse ArithRewriter::rewriteStarContains(TNode t)
+RewriteResponse ArithRewriter::rewriteStar(TNode t)
 {
-  Assert(t.getKind() == Kind::STAR_CONTAINS);
+  Assert(t.getKind() == Kind::STAR);
 #ifdef CVC5_USE_NORMALIZ
   // if the vector is zero, return true
-  std::vector<Node> elements(t.begin() + 1, t.end());
-  bool isZero =
-      std::all_of(elements.begin(), elements.end(), [](const Node& e) {
-        return e.isConst() && e.getConst<Rational>().isZero();
-      });
+  // std::vector<Node> elements(t.begin() + 1, t.end());
+  // bool isZero =
+  //     std::all_of(elements.begin(), elements.end(), [](const Node& e) {
+  //       return e.isConst() && e.getConst<Rational>().isZero();
+  //     });
 
-  NodeManager* nm = nodeManager();
-  if (isZero)
-  {
-    return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
-  }
+  // NodeManager* nm = nodeManager();
+  // if (isZero)
+  // {
+  //   return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+  // }
 
-  bool allConst = std::all_of(elements.begin(),
-                              elements.end(),
-                              [](const Node& e) { return e.isConst(); });
+  // bool allConst = std::all_of(elements.begin(),
+  //                             elements.end(),
+  //                             [](const Node& e) { return e.isConst(); });
 
-  // if the vector is constant, we can evaluate the predicate
-  // and see if it holds.
-  if (allConst)
-  {
-    auto [vectorPredicate, nonnegative] =
-        liastar::LiaStarUtils::getVectorPredicate(t, nm);
-    Evaluator eval(nullptr);
-    Node value = eval.eval(vectorPredicate.andNode(nonnegative), {}, {});
-    if (value == d_nm->mkConst(true))
-    {
-      return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
-    }
-  }
+  // // if the vector is constant, we can evaluate the predicate
+  // // and see if it holds.
+  // if (allConst)
+  // {
+  //   auto [vectorPredicate, nonnegative] =
+  //       liastar::LiaStarUtils::getVectorPredicate(t, nm);
+  //   Evaluator eval(nullptr);
+  //   Node value = eval.eval(vectorPredicate.andNode(nonnegative), {}, {});
+  //   if (value == d_nm->mkConst(true))
+  //   {
+  //     return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+  //   }
+  // }
 #endif /* CVC5_USE_NORMALIZ */
   return RewriteResponse(REWRITE_DONE, t);
 }

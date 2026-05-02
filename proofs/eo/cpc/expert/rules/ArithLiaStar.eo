@@ -18,7 +18,7 @@
 ;               `LiaStarProofGenerator::mkNonnegativeProof`.
 ; conclusion shape: `(>= v_1 0) ∧ ... ∧ (>= v_n 0)` where the
 ;   `v_i` are the argument vector of the originating positive-polarity
-;   STAR_CONTAINS literal. The originating STAR_CONTAINS atom is
+;   STAR literal. The originating STAR atom is
 ;   carried as a (single) premise.
 (declare-rule arith_lia_star_nonnegative ((P Bool) (F Bool))
   :premise-list P and
@@ -28,11 +28,11 @@
 )
 
 ; rule: arith_lia_star_contains_reduce
-; cvc5 source: `TrustId::ARITH_LIA_STAR_CONTAINS_REDUCE`,
+; cvc5 source: `TrustId::ARITH_LIA_STAR_REDUCE`,
 ;               `LiaStarProofGenerator::mkContainsReduceProof`.
-; conclusion shape: `(= (int.star-contains lambda v_1 ... v_n) star)`,
-;   where `star` is the cone/Hilbert-basis encoding produced by the
-;   lia* extension (`LiaStarExtension::getCones`).
+; conclusion shape: `(= ((star lambda) v_1 ... v_n) star_encoding)`,
+;   where `star_encoding` is the cone/Hilbert-basis encoding produced
+;   by the lia* extension (`LiaStarExtension::getCones`).
 (declare-rule arith_lia_star_contains_reduce ((P Bool) (F Bool))
   :premise-list P and
   :args (F)

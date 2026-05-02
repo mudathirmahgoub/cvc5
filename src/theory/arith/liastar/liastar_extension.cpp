@@ -16,6 +16,7 @@
 
 #include "liastar_extension.h"
 
+#include "expr/skolem_manager.h"
 #include "liastar_utils.h"
 #include "libnormaliz/input.h"
 #include "options/arith_options.h"
@@ -30,7 +31,10 @@
 #include "theory/evaluator.h"
 #include "theory/ext_theory.h"
 #include "theory/rewriter.h"
+#include "theory/theory_engine.h"
 #include "theory/theory_model.h"
+#include "theory/uf/equality_engine.h"
+#include "theory/uf/equality_engine_iterator.h"
 #include "util/rational.h"
 
 using namespace cvc5::internal::kind;
@@ -67,7 +71,7 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
       d_extTheory(env, d_extTheoryCb, d_im),
       d_hasLiaStarTerms(context(), false)
 {
-  d_extTheory.addFunctionKind(Kind::STAR_CONTAINS);
+  d_extTheory.addFunctionKind(Kind::STAR);
   d_true = nodeManager()->mkConst(true);
   d_false = nodeManager()->mkConst(false);
   d_zero = nodeManager()->mkConstInt(Rational(0));
@@ -82,18 +86,49 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
 
 LiaStarExtension::~LiaStarExtension() {}
 
+Node LiaStarExtension::getStarOperator(TNode op) const
+{
+  // Direct STAR operator (parser output, before HO rewriting collapses it).
+  if (op.getKind() == Kind::STAR)
+  {
+    return op;
+  }
+  // Post-HO-rewrite shape: the function head was replaced by a purify skolem
+  // in HoExtension::getApplyUfForHoApply. Recover the original (STAR L) via
+  // the SkolemManager.
+  Node orig = SkolemManager::getOriginalForm(op);
+  if (orig.getKind() == Kind::STAR)
+  {
+    return orig;
+  }
+  return Node::null();
+}
+
 void LiaStarExtension::preRegisterTerm(TNode n)
 {
   // register terms with extended theory, to find extended terms that can be
   // eliminated by context-dependent simplification.
-  if (d_extTheory.hasFunctionKind(n.getKind()))
+  if (n.getKind() == Kind::APPLY_UF)
+  {
+    Node star = getStarOperator(n.getOperator());
+    if (!star.isNull())
+    {
+      d_hasLiaStarTerms = true;
+      d_extTheory.registerTerm(n);
+      d_starSkolemToOp[n.getOperator()] = star;
+    }
+  }
+  // The bare (int.star L) term may be preregistered to arith on its own
+  // (e.g. via the skolem-defining equality lemma). Record the alias so we can
+  // resolve the operator skolem to it later.
+  else if (n.getKind() == Kind::STAR)
   {
     d_hasLiaStarTerms = true;
-    d_extTheory.registerTerm(n);
   }
 }
 
-void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
+void LiaStarExtension::getAssertions(
+    std::vector<std::pair<bool, Node>>& assertions)
 {
   Trace("liastar-ext") << "Getting assertions..." << std::endl;
   Trace("liastar-ext") << "---------------------" << std::endl;
@@ -101,18 +136,84 @@ void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
   {
     Node lit = (*it).d_assertion;
     Trace("liastar-ext") << lit << std::endl;
-    if (lit.getKind() == Kind::STAR_CONTAINS)
+    bool polarity = true;
+    Node atom = lit;
+    if (atom.getKind() == Kind::NOT)
     {
-      // positive polarity of star-contains
-      assertions.push_back(lit);
+      polarity = false;
+      atom = atom[0];
     }
-    if (lit.getKind() == Kind::NOT && lit[0].getKind() == Kind::STAR_CONTAINS)
+    if (atom.getKind() == Kind::APPLY_UF
+        && !getStarOperator(atom.getOperator()).isNull())
     {
-      // negative polarity of star-contains
-      assertions.push_back(lit[0]);
+      assertions.push_back(std::make_pair(polarity, atom));
     }
   }
+  collectStarFactsFromUf(assertions);
   Trace("liastar-ext") << "---------------------" << std::endl;
+}
+
+void LiaStarExtension::collectStarFactsFromUf(
+    std::vector<std::pair<bool, Node>>& assertions)
+{
+  TheoryEngine* te = d_env.getTheoryEngine();
+  if (te == nullptr)
+  {
+    return;
+  }
+  Theory* tuf = te->theoryOf(theory::THEORY_UF);
+  if (tuf == nullptr)
+  {
+    return;
+  }
+  const eq::EqualityEngine* uee = tuf->getEqualityEngine();
+  if (uee == nullptr)
+  {
+    return;
+  }
+
+  std::set<Node> seen;
+  for (eq::EqClassesIterator eqc_i(uee); !eqc_i.isFinished(); ++eqc_i)
+  {
+    Node rep = *eqc_i;
+    if (!rep.getType().isBoolean())
+    {
+      continue;
+    }
+    bool polarity;
+    if (uee->areEqual(rep, d_true))
+    {
+      polarity = true;
+    }
+    else if (uee->areEqual(rep, d_false))
+    {
+      polarity = false;
+    }
+    else
+    {
+      continue;
+    }
+
+    for (eq::EqClassIterator m_i(rep, uee); !m_i.isFinished(); ++m_i)
+    {
+      Node t = *m_i;
+      if (t.getKind() != Kind::APPLY_UF)
+      {
+        continue;
+      }
+      if (getStarOperator(t.getOperator()).isNull())
+      {
+        continue;
+      }
+      if (!seen.insert(t).second)
+      {
+        continue;
+      }
+      Trace("liastar-ext") << "UF-EE star fact (" << polarity << "): " << t
+                           << std::endl;
+      assertions.push_back(std::make_pair(polarity, t));
+    }
+  }
 }
 
 void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
@@ -126,29 +227,34 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
   d_checkCounter++;
 
   // get the assertions
-  std::vector<Node> assertions;
+  std::vector<std::pair<bool, Node>> assertions;
   getAssertions(assertions);
 
-  Trace("liastar-ext") << "liastar assertions: " << assertions << std::endl;
   NodeManager* nm = nodeManager();
-  for (const auto& literal : assertions)
+  for (const auto& pair : assertions)
   {
-    Node lambda = literal[0];
-    Assert(literal.getKind() == Kind::STAR_CONTAINS);
-    auto [vectorPredicate, nonnegative] =
-        LiaStarUtils::getVectorPredicate(literal, nm);
-    // assert that vector elements are non negative
-    if (d_proofGen != nullptr)
+    bool polarity = pair.first;
+    Node literal = pair.second;
+    Assert(literal.getKind() == Kind::APPLY_UF);
+    Node starOp = getStarOperator(literal.getOperator());
+    Assert(!starOp.isNull() && starOp.getKind() == Kind::STAR);
+    Trace("liastar-ext") << "starOp: " << starOp << std::endl;
+    Node lambda = starOp[0];
+    // The lambda may itself be a purify skolem (HoElim/term-purification).
+    // Recover the real LAMBDA node so the body of the predicate is reachable.
+    if (lambda.getKind() != Kind::LAMBDA)
     {
-      d_proofGen->registerNonnegative(nonnegative, literal);
+      lambda = SkolemManager::getOriginalForm(lambda);
     }
-    d_im.addPendingLemma(
-        nonnegative, InferenceId::ARITH_LIA_STAR_NONNEGATIVE, d_proofGen.get());
+    std::vector<Node> arguments;
+    arguments.push_back(lambda);
+    arguments.insert(arguments.end(), literal.begin(), literal.end());
+    Node predicate = nm->mkNode(Kind::APPLY_UF, arguments);
     // add a spliting lemma for vector predicate
-    Node split = vectorPredicate.orNode(vectorPredicate.notNode());
+    Node split = predicate.orNode(predicate.notNode());
     if (d_proofGen != nullptr)
     {
-      d_proofGen->registerSplit(split, vectorPredicate);
+      d_proofGen->registerSplit(split, predicate);
     }
     d_im.addPendingLemma(
         split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
@@ -169,13 +275,13 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         values.push_back(value);
       }
 
-      Node value = vectorPredicate.substitute(
+      Node value = predicate.substitute(
           keys.begin(), keys.end(), values.begin(), values.end());
       value = rewrite(value);
 
       Trace("liastar-ext-debug") << "value: " << value << std::endl;
 
-      if (value == d_true)
+      if (polarity && value == d_true)
       {
         Trace("liastar-ext-debug")
             << "----------------------------------------" << std::endl;
@@ -197,7 +303,7 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
     std::vector<std::pair<std::vector<std::string>, Node>> pairs =
         convertQFLIAToMatrices(lambda);
 
-    auto [cones, starConstraints] = getCones(literal, pairs);
+    auto [cones, starConstraints] = getCones(lambda, pairs);
     std::vector<std::pair<Node, Node>> lia = getLia(lambda, cones);
 
     Trace("liastar-ext") << "lia constraint: " << std::endl;
@@ -251,7 +357,8 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
     Trace("liastar-ext") << "starConstraints: " << std::endl
                          << toString(starConstraints) << std::endl;
     star = rewrite(star);
-    Node lemma = literal.eqNode(star);
+    Node starLambda = d_nm->mkNode(Kind::LAMBDA, lambda[0], star);
+    Node lemma = starOp.eqNode(starLambda);
     Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
     if (d_proofGen != nullptr)
     {
@@ -267,11 +374,11 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
 std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
           std::vector<Node>>
 LiaStarExtension::getCones(
-    Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
+    Node lambda,
+    const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
 {
   std::vector<std::pair<Node, Cone<Integer>>> cones;
-  std::vector<Node> vec(n.begin() + 1, n.end());
-  size_t dimension = vec.size();
+  size_t dimension = lambda[0].getNumChildren();
   std::vector<Integer> zeroVector(dimension, Integer(0));
   std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
   std::vector<Node> starConstraints;
@@ -365,19 +472,19 @@ LiaStarExtension::getCones(
       std::vector<Vector> rays;
       for (const auto& basis : cone.getHilbertBasis())
       {
-        Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
+        Node l = d_nm->mkDummySkolem("l", d_nm->integerType());
         // (>= l 0)
-        starConstraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
+        starConstraints.push_back(d_nm->mkNode(Kind::GEQ, l, d_zero));
         // (=> (= mu 0) (= l 0))
         starConstraints.push_back(
             d_nm->mkNode(Kind::EQUAL, mu, d_zero)
-                .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
+                .impNode(d_nm->mkNode(Kind::EQUAL, l, d_zero)));
 
         Vector ray;
         for (const auto& element : basis)
         {
           Node constant = d_nm->mkConstInt(Rational(element));
-          Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
+          Node monomial = d_nm->mkNode(Kind::MULT, constant, l);
           ray.push_back(monomial);
         }
         rays.push_back(ray);
@@ -401,9 +508,10 @@ LiaStarExtension::getCones(
     }
   }
 
+  Node boundVariables = lambda[0];
   for (size_t i = 0; i < dimension; i++)
   {
-    starConstraints.push_back(vec[i].eqNode(sums[i]));
+    starConstraints.push_back(boundVariables[i].eqNode(sums[i]));
   }
 
   return std::make_pair(cones, starConstraints);

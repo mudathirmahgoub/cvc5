@@ -255,8 +255,10 @@ Node HoExtension::getApplyUfForHoApply(Node node)
       }
       else
       {
-        // introduce skolem to make a standard APPLY_UF
-        new_f = NodeManager::mkDummySkolem("app_uf", f.getType());
+        // Use a purify skolem so SkolemManager::getOriginalForm can recover f.
+        // This is needed by extensions (e.g. LIA*) that want to detect the
+        // original function-headed term after HO rewriting.
+        new_f = SkolemManager::mkPurifySkolem(f);
         lem = new_f.eqNode(f);
       }
       Trace("uf-ho-lemma")

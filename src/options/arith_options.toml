@@ -614,7 +614,7 @@ name   = "Arithmetic Theory"
   long       = "arith-liastar-model-value"
   type       = "bool"
   default    = "true"
-  help       = "check whether the current model satisfies int.star-contains before solving"
+  help       = "check whether the current model satisfies the star-contains predicate before solving"
 
 [[option]]
   name       = "arithLiaStarSubSolver"

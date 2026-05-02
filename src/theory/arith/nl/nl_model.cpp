@@ -96,7 +96,7 @@ Node NlModel::computeModelValue(TNode n, bool isConcrete)
       ret = getValueInternal(n);
     }
   }
-  else if (n.getKind() == Kind::STAR_CONTAINS)
+  else if (n.getKind() == Kind::STAR)
   {
     // star contains is handled by liastar extension
     return n;
@@ -1120,6 +1120,12 @@ Node NlModel::getValueInternal(TNode n)
   {
     AlwaysAssert(it->second.isConst());
     return it->second;
+  }
+  // Non-arithmetic terms (e.g. function-typed purification variables that
+  // appear via int.star) are not assigned a numeric default; return them as-is.
+  if (!n.getType().isRealOrInt())
+  {
+    return n;
   }
   // It is unconstrained in the model, return 0. We additionally add it
   // to mapping from the linear solver. This ensures that if the nonlinear

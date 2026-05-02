@@ -166,6 +166,23 @@ Term Smt2TermParser::parseTerm()
                 tstack.emplace_back(op, std::vector<Term>());
               }
               break;
+              case Token::SYMBOL:
+              {
+                // Special case: ((int.star <lambda>) x1 ... xn).
+                // STAR is unary and returns a function, so the term has the
+                // shape ((int.star L) args...). Parse the lambda, build
+                // STAR(L), then use it as the HO function head for args.
+                if (strcmp(d_lex.tokenStr(), "int.star") == 0)
+                {
+                  Term lambda = parseTerm();
+                  d_lex.eatToken(Token::RPAREN_TOK);
+                  ParseOp op;
+                  op.d_expr = tm.mkTerm(Kind::STAR, {lambda});
+                  xstack.emplace_back(ParseCtx::NEXT_ARG);
+                  tstack.emplace_back(op, std::vector<Term>());
+                }
+              }
+              break;
               default:
                 d_lex.unexpectedTokenError(
                     tok, "Expected SMT-LIBv2 qualified indentifier");

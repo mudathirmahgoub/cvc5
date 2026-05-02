@@ -139,7 +139,7 @@ static std::string trustIdRuleName(TrustId tid)
   {
     case TrustId::ARITH_LIA_STAR_NONNEGATIVE:
       return "arith_lia_star_nonnegative";
-    case TrustId::ARITH_LIA_STAR_CONTAINS_REDUCE:
+    case TrustId::ARITH_LIA_STAR_REDUCE:
       return "arith_lia_star_contains_reduce";
     default: return std::string();
   }

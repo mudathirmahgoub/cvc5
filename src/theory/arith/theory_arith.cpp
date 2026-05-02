@@ -25,6 +25,7 @@
 #include "theory/ext_theory.h"
 #include "theory/rewriter.h"
 #include "theory/theory_model.h"
+#include "theory/uf/equality_engine_iterator.h"
 #include "util/cocoa_globals.h"
 
 using namespace std;
@@ -94,7 +95,10 @@ void TheoryArith::finishInit()
   if (logic.isTheoryEnabled(THEORY_ARITH) && !logic.isLinear())
   {
     d_nonlinearExtension.reset(new nl::NonlinearExtension(d_env, *this));
-    d_valuation.setIrrelevantKind(Kind::STAR_CONTAINS);
+    // STAR is not directly evaluatable; the liastar extension asserts
+    // (= (int.star L) <lambda>) lemmas, so the model value of (int.star L)
+    // should be the representative of its equivalence class in the EE.
+    d_valuation.setUnevaluatedKind(Kind::STAR);
 #ifdef CVC5_USE_NORMALIZ
     d_liaStarExtension.reset(new liastar::LiaStarExtension(d_env, *this));
 #endif /* CVC5_USE_NORMALIZ */
@@ -190,6 +194,10 @@ void TheoryArith::preRegisterTerm(TNode n)
 void TheoryArith::notifySharedTerm(TNode n)
 {
   n = n.getKind() == Kind::TO_REAL ? n[0] : n;
+  if(n.getType().isFunction())
+  {
+    return;
+  }
   d_internal.notifySharedTerm(n);
 }
 
@@ -337,10 +345,19 @@ bool TheoryArith::preNotifyFact(
                        << ", isPrereg=" << isPrereg
                        << ", isInternal=" << isInternal << std::endl;
   // ToDo: review this if statement
-  if (atom.getKind() == Kind::STAR_CONTAINS)
+  if (atom.getKind() == Kind::APPLY_UF
+      && atom.getOperator().getKind() == Kind::STAR)
   {
     // star contains in not a standard arith predicate, so we return false
     // to indicate this fact is not processed at preNotifyFact.
+    return false;
+  }
+  if (atom.getKind() == Kind::EQUAL
+      && (atom[0].getKind() == Kind::STAR
+          || atom[1].getKind() == Kind::STAR))
+  {
+    // equalities involving STAR (a function-typed term wrapping a lambda)
+    // are not processed by arithmetic.
     return false;
   }
   // We do not assert to the equality engine of arithmetic in the standard way,
@@ -463,6 +480,58 @@ bool TheoryArith::collectModelValues(TheoryModel* m,
       bool added = d_im.lemma(lem, InferenceId::ARITH_SPLIT_FOR_NL_MODEL);
       AlwaysAssert(added) << "The lemma was already in cache. Probably there "
                              "is something wrong with theory combination...";
+    }
+    return false;
+  }
+  // Assign a model value to STAR terms. (int.star L) is treated as
+  // unevaluated, so the model uses its equivalence-class representative.
+  // The liastar extension emits an explicit (= (int.star L) <lambda>) lemma
+  // only when it has computed a closure-defining lambda (typically for
+  // refutation). For the SAT cases where no such lemma was emitted, we
+  // assign a permissive lambda (lambda (x_1 ... x_n) true): every asserted
+  // application ((int.star L) v_1 ... v_n) was already entailed true by
+  // the SAT solver, so a "true everywhere" interpretation is sound for the
+  // model checker.
+  NodeManager* nm = nodeManager();
+  eq::EqualityEngine* mee = m->getEqualityEngine();
+  for (const Node& t : termSet)
+  {
+    if (t.getKind() != Kind::STAR)
+    {
+      continue;
+    }
+    // Skip if the equivalence class already contains a LAMBDA (asserted by
+    // the liastar extension as a closure lemma).
+    bool hasLambda = false;
+    if (mee->hasTerm(t))
+    {
+      eq::EqClassIterator eqcIt(mee->getRepresentative(t), mee);
+      while (!eqcIt.isFinished())
+      {
+        if ((*eqcIt).getKind() == Kind::LAMBDA)
+        {
+          hasLambda = true;
+          break;
+        }
+        ++eqcIt;
+      }
+    }
+    if (hasLambda)
+    {
+      continue;
+    }
+    TypeNode ftype = t.getType();
+    Assert(ftype.isFunction());
+    std::vector<Node> bvs;
+    for (const TypeNode& argTy : ftype.getArgTypes())
+    {
+      bvs.push_back(nm->mkBoundVar(argTy));
+    }
+    Node bvl = nm->mkNode(Kind::BOUND_VAR_LIST, bvs);
+    Node lam = nm->mkNode(Kind::LAMBDA, bvl, nm->mkConst(true));
+    if (m->assertEquality(t, lam, true))
+    {
+      continue;
     }
     return false;
   }

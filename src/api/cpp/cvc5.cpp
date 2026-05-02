@@ -182,7 +182,7 @@ const static std::unordered_map<Kind, std::pair<internal::Kind, std::string>>
         KIND_ENUM(Kind::TO_INTEGER, internal::Kind::TO_INTEGER),
         KIND_ENUM(Kind::TO_REAL, internal::Kind::TO_REAL),
         KIND_ENUM(Kind::PI, internal::Kind::PI),
-        KIND_ENUM(Kind::STAR_CONTAINS, internal::Kind::STAR_CONTAINS),
+        KIND_ENUM(Kind::STAR, internal::Kind::STAR),
         /* BV --------------------------------------------------------------- */
         KIND_ENUM(Kind::CONST_BITVECTOR, internal::Kind::CONST_BITVECTOR),
         KIND_ENUM(Kind::BITVECTOR_CONCAT, internal::Kind::BITVECTOR_CONCAT),
@@ -583,7 +583,7 @@ const static std::unordered_map<internal::Kind,
         {internal::Kind::TO_REAL, Kind::TO_REAL},
         {internal::Kind::PI, Kind::PI},
         {internal::Kind::IAND_OP, Kind::IAND},
-        {internal::Kind::STAR_CONTAINS, Kind::STAR_CONTAINS},
+        {internal::Kind::STAR, Kind::STAR},
         /* BV -------------------------------------------------------------- */
         {internal::Kind::CONST_BITVECTOR, Kind::CONST_BITVECTOR},
         {internal::Kind::BITVECTOR_CONCAT, Kind::BITVECTOR_CONCAT},

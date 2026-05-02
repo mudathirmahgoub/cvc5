@@ -25,12 +25,12 @@ https://link.springer.com/chapter/10.1007/978-3-030-39322-9_17
 (assert (= x3 1))
 
 ; (x1, x2, x3) ∈ {(m, L, s) | m = L − s ∧ s ≤ m}*
-(assert 
-  (int.star-contains 
-    (lambda ((m Int) (L Int) (s Int)) 
+(assert
+  ((int.star
+    (lambda ((m Int) (L Int) (s Int))
       (and
         (= m (- L s))
         (<= s m))
-    )
+    ))
     x1 x2 x3))
 (check-sat) 

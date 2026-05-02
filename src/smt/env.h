@@ -39,6 +39,7 @@ class ProofLogger;
 class ProofNodeManager;
 class Printer;
 class ResourceManager;
+class TheoryEngine;
 namespace options {
 enum class OutputTag;
 }
@@ -80,6 +81,14 @@ class Env
   /* Access to members------------------------------------------------------- */
   /** Get a pointer to the node manager */
   NodeManager* getNodeManager() const;
+
+  /**
+   * Get the TheoryEngine, or nullptr if it has not been constructed yet.
+   * Set by SmtSolver after the TheoryEngine is created. Used by extensions
+   * that need to query a sister theory's equality engine (e.g. LIA*).
+   */
+  TheoryEngine* getTheoryEngine() const { return d_theoryEngine; }
+  void setTheoryEngine(TheoryEngine* te) { d_theoryEngine = te; }
 
   /** Get a pointer to the Context owned by this Env. */
   context::Context* getContext();
@@ -424,6 +433,8 @@ class Env
    * Boolean type.
    */
   context::CDHashSet<Node> d_boolTermSkolems;
+  /** Pointer to the TheoryEngine; not owned. Set by SmtSolver after init. */
+  TheoryEngine* d_theoryEngine = nullptr;
 }; /* class Env */
 
 }  // namespace cvc5::internal

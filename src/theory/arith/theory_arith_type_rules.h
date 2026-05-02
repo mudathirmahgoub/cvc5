@@ -148,7 +148,7 @@ class IndexedRootPredicateTypeRule
 /**
  * Type rule for the star contains operator.
  */
-class StarContainsTypeRule
+class StarTypeRule
 {
  public:
   static TypeNode preComputeType(NodeManager* nm, TNode n);

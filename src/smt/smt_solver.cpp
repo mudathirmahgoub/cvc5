@@ -58,6 +58,7 @@ void SmtSolver::finishInit()
   // We have mutual dependency here, so we add the prop engine to the theory
   // engine later (it is non-essential there)
   d_theoryEngine.reset(new TheoryEngine(d_env));
+  d_env.setTheoryEngine(d_theoryEngine.get());
 
   // Add the theories
   for (theory::TheoryId id = theory::THEORY_FIRST; id < theory::THEORY_LAST;

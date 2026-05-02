@@ -111,7 +111,7 @@ Node UfProofRuleChecker::checkInternal(ProofRule id,
     // True binders (FORALL/EXISTS/LAMBDA/...) carry their bound variable
     // list as the first child; congruence treats it as an argument rather
     // than a premise. Some kinds register as closures for term-registration
-    // purposes (e.g. STAR_CONTAINS) without actually having a BOUND_VAR_LIST
+    // purposes (e.g. STAR) without actually having a BOUND_VAR_LIST
     // as their first child; for those, every child is a regular premise.
     if (t.isClosure() && t[0].getKind() == Kind::BOUND_VAR_LIST)
     {

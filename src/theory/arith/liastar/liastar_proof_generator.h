@@ -40,10 +40,10 @@ namespace liastar {
  *
  * (1) split:           `vp ∨ ¬vp` for the substituted vector predicate
  *                      `vp = p[v_1, ..., v_n]` of a literal
- *                      `(int.star-contains (lambda (x_1 ... x_n) p) v_1 ...
- * v_n)`. (2) non-negativity:  `(>= v_1 0) ∧ ... ∧ (>= v_n 0)` from a positive
- *                      polarity STAR_CONTAINS literal.
- * (3) reduction:       `(int.star-contains ... v) = star`, where `star` is
+ *                      `((int.star (lambda (x_1 ... x_n) p)) v_1 ... v_n)`.
+ * (2) non-negativity:  `(>= v_1 0) ∧ ... ∧ (>= v_n 0)` from a positive
+ *                      polarity STAR literal.
+ * (3) reduction:       `((int.star ...) v) = star`, where `star` is
  *                      the cone/Hilbert-basis encoding produced by
  *                      `LiaStarExtension::getCones`.
  *
@@ -74,15 +74,15 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
    * Register a non-negativity lemma derived from `literal`.
    *
    * @param lemma the non-negativity conjunction
-   * @param literal the originating STAR_CONTAINS atom
+   * @param literal the originating STAR atom
    */
   void registerNonnegative(Node lemma, Node literal);
 
   /**
-   * Register a STAR_CONTAINS reduction lemma `literal = star`.
+   * Register a STAR reduction lemma `literal = star`.
    *
    * @param lemma the equality `(= literal star)`
-   * @param literal the STAR_CONTAINS atom
+   * @param literal the STAR atom
    * @param star the cone-decomposition encoding
    */
   void registerContainsReduce(Node lemma, Node literal, Node star);
@@ -103,8 +103,8 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
   /**
    * Per-fact metadata. `d_kind` is the lemma kind; `d_aux` is:
    *  - SPLIT:           the vector predicate `vp`,
-   *  - NONNEGATIVE:     the originating STAR_CONTAINS literal,
-   *  - CONTAINS_REDUCE: the originating STAR_CONTAINS literal (the encoding
+   *  - NONNEGATIVE:     the originating STAR literal,
+   *  - CONTAINS_REDUCE: the originating STAR literal (the encoding
    *                     `star` is recoverable as `lemma[1]`).
    */
   struct Info
@@ -123,7 +123,7 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
    */
   std::shared_ptr<ProofNode> mkNonnegativeProof(Node lemma, const Info& info);
   /**
-   * Build the proof for a STAR_CONTAINS reduction lemma. Currently a TRUST
+   * Build the proof for a STAR reduction lemma. Currently a TRUST
    * step; replace with a subsolver-discharged proof when ready. The
    * subsolver should be asked to prove `lemma` (or refute its negation) and
    * its proof transcribed onto the parent ProofNodeManager (see

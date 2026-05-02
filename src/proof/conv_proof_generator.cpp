@@ -498,7 +498,7 @@ Node TConvProofGenerator::getProofForRewriting(Node t,
             // variable list as their first child, which is added as an
             // argument and not as a congruence premise. The variable list
             // should never change. Some kinds register as closures for
-            // term-registration purposes (e.g. STAR_CONTAINS) without
+            // term-registration purposes (e.g. STAR) without
             // actually having a BOUND_VAR_LIST as their first child;
             // those are handled by the regular CONG path.
             startIndex = 1;

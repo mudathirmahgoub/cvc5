@@ -114,8 +114,8 @@ class ArithRewriter : public TheoryRewriter
   RewriteResponse rewriteIntsDivModTotal(TNode t, bool pre);
   /** rewrite to_int and is_int */
   RewriteResponse rewriteExtIntegerOp(TNode t);
-  /** rewrite int.star-contains  */
-  RewriteResponse rewriteStarContains(TNode t);
+  /** rewrite int.star */
+  RewriteResponse rewriteStar(TNode t);
 
   /** postRewrite IAND */
   RewriteResponse postRewriteIAnd(TNode t);

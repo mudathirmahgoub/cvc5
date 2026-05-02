@@ -1237,15 +1237,17 @@ enum ENUM(Kind)
    * Here we are interested only in sets of vectors given using
    * set-builder notation (set comprehension).
    * Suppose S = {(x_1,...,x_n) | p(x_1,...,x_n}, then the syntax
-   * (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) y_1 ... y_n)
+   * ((star (lambda ((x_1 Int) ... (x_n Int)) p)) y_1 ... y_n)
    * represents the predicate (y_1,...,y_n) ∈ S*
    * where y_1, ..., y_n are integer terms.
+   * The `star` operator accepts a lambda function of n integers and returns
+   * a function of n integers.
    * This membership means either (p y_1 ... y_n) holds or there exists
    * nonnegative integers l_1,...,l_k and vectors
    * v_1,...,v_k such that p(v_i) holds for all i=1,...,k and
    * (y_1,..., y_n) = l_1*v_1 + ... + l_k*v_k.
    */
-  EVALUE(STAR_CONTAINS),
+  EVALUE(STAR),
 
   /* BV -------------------------------------------------------------------- */
 

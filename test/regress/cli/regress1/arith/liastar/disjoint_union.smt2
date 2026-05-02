@@ -10,14 +10,15 @@
 (assert (>= B 0))
 (assert (>= C 0))
 (assert (distinct C (+ A B)))
-(assert 
- (int.star-contains 
+(assert
+ ((int.star
    (lambda ((a Int) (b Int) (c Int))
      (and
        (>= a 0) (>= b 0) (>= c 0)
        (= c (+ a b))
      )
    )
+  )
    A B C
  )
 )

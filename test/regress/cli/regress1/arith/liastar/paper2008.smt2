@@ -32,16 +32,16 @@ https://link.springer.com/chapter/10.1007/978-3-540-78163-9_20
   (distinct k1 (- k2 1))) 
 
 ;(k1, k2, 1, 0, 0) ∈ ∑ F(x1, L, x, z1, z2)
-(assert 
-  (int.star-contains 
+(assert
+  ((int.star
     (lambda ((x1 Int) (L Int) (x Int) (z1 Int) (z2 Int))
-      (and 
-        (= z1 
-          (ite 
-            (= x1 
-              (ite (<= L x) 0 (- L x))) 0 1)) 
+      (and
+        (= z1
+          (ite
+            (= x1
+              (ite (<= L x) 0 (- L x))) 0 1))
         (= z2 (ite (<= x L) 0 1)))
-    )
+    ))
     k1 k2 1 0 0))
         
 (check-sat) 

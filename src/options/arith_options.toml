@@ -631,3 +631,12 @@ name   = "Arithmetic Theory"
   type       = "bool"
   default    = "false"
   help       = "whether to use Normaliz or cvc5 as a subsolver when arithLiaStarSubSolver is enabled"
+
+[[option]]
+  name       = "arithLiaStarLazy"
+  category   = "regular"
+  long       = "arith-liastar-lazy"
+  type       = "bool"
+  default    = "false"
+  help       = "whether to lazily compute disjunctions of predicate under the star operator"
+  

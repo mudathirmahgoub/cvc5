@@ -128,6 +128,15 @@ class LiaStarExtension : EnvObj
   std::vector<std::pair<Node, Node>> getLia(
       Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
 
+  /**
+   * Performs the eager Hilbert-basis reduction for a single STAR_CONTAINS
+   * literal. Generates the star reduction lemma equating `literal` with the
+   * conjunction of star constraints derived from the cones of `lambda`
+   * (== literal[0]), and sends it via the inference manager. Does nothing if
+   * the literal has already been processed.
+   */
+  void eagerHilbert(Node literal, Node lambda);
+
   /** node manager */
   NodeManager* d_nm;
   /** commonly used terms */

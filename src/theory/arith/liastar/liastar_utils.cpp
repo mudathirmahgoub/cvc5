@@ -22,6 +22,7 @@
 #include "libnormaliz/input.h"
 #include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
+#include "options/smt_options.h"
 #include "smt/smt_solver.h"
 #include "smt/solver_engine.h"
 #include "theory/arith/linear/normal_form.h"
@@ -66,7 +67,7 @@ std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
   return std::make_pair(substitute, nonnegativeConstraints);
 }
 
-Node LiaStarUtils::toDNF(Node n, Env* e)
+Node LiaStarUtils::removeItesAndNots(Node n, Env* e)
 {
   // eliminate ites
   Node noItes = removeItes(n, e);
@@ -101,6 +102,12 @@ Node LiaStarUtils::toDNF(Node n, Env* e)
     Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
     Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
   }
+  return nnf;
+}
+
+Node LiaStarUtils::toDNF(Node n, Env* e)
+{
+  Node nnf = removeItesAndNots(n, e);
   // distributes conjunctions over disjunctions
   Node dnf = distribute(nnf, e);
   Trace("liastar-ext-debug") << "dnf: " << dnf << std::endl;
@@ -563,6 +570,8 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
 {
   NodeManager* nm = e->getNodeManager();
   Options subOptions;
+  // we read the model below to construct the disjunct.
+  subOptions.write_smt().produceModels = true;
   SolverEngine smte(nm, &subOptions);
   smte.setIsInternalSubsolver();
   LogicInfo info("QF_LIA");
@@ -573,23 +582,69 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
   {
     assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
   }
+  // The lambda's bound variables appear free in `assertion`. A formula with
+  // free (bound) variables cannot be asserted to a subsolver, so we replace
+  // them with fresh free constants and substitute them back in the returned
+  // disjunct.
+  std::vector<Node> from;
+  std::vector<Node> to;
+  for (Node var : freeVariables)
+  {
+    if (var.getKind() == Kind::BOUND_VARIABLE)
+    {
+      from.push_back(var);
+      to.push_back(nm->mkDummySkolem("liastar", var.getType()));
+    }
+  }
+  if (!from.empty())
+  {
+    assertion = assertion.substitute(
+        from.begin(), from.end(), to.begin(), to.end());
+  }
   smte.assertFormula(assertion);
   Result result = smte.checkSat();
   if (result.getStatus() == Result::Status::UNSAT)
   {
     return nm->mkConst<>(false);
   }
-  // return the conjunction of asserted literals in arithmetic, which is one
-  // disjunct of the satisfying region.
-  smt::SmtSolver* solver = smte.getSmtSolver();
-  TheoryEngine* te = solver->getTheoryEngine();
-  theory::Theory* arithTheory = te->theoryOf(theory::TheoryId::THEORY_ARITH);
+  // Build one disjunct of the satisfying region by fixing every atom of the
+  // formula to its truth value in the model. The result is a conjunction of
+  // literals that implies the formula. We deliberately do not read the
+  // arithmetic theory's facts: the linear solver eliminates variables using
+  // equalities, so those equalities would be missing from the facts and the
+  // resulting cone would be too coarse.
+  std::vector<Node> atoms;
+  std::unordered_set<Node> visited;
+  collectAtoms(assertion, atoms, visited);
   std::vector<Node> literals;
-  for (theory::Theory::assertions_iterator it = arithTheory->facts_begin();
-       it != arithTheory->facts_end();
-       ++it)
+  for (const Node& atom : atoms)
   {
-    literals.push_back((*it).d_assertion);
+    Node literal;
+    if (smte.getValue(atom).getConst<bool>())
+    {
+      literal = atom;
+    }
+    else if (atom.getKind() == Kind::EQUAL && atom[0].getType().isInteger())
+    {
+      // A disequality is not convex (it is the union of two half-spaces), so it
+      // cannot be a single cone. Pick the strict inequality on the side that
+      // the model satisfies.
+      Rational lhs = smte.getValue(atom[0]).getConst<Rational>();
+      Rational rhs = smte.getValue(atom[1]).getConst<Rational>();
+      Kind k = lhs > rhs ? Kind::GT : Kind::LT;
+      literal = nm->mkNode(k, atom[0], atom[1]);
+    }
+    else
+    {
+      literal = atom.notNode();
+    }
+    if (!from.empty())
+    {
+      // substitute the fresh constants back to the lambda's bound variables.
+      literal = literal.substitute(
+          to.begin(), to.end(), from.begin(), from.end());
+    }
+    literals.push_back(literal);
   }
   if (literals.empty())
   {
@@ -600,6 +655,42 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
     return literals[0];
   }
   return nm->mkNode(Kind::AND, literals);
+}
+
+void LiaStarUtils::collectAtoms(Node n,
+                                std::vector<Node>& atoms,
+                                std::unordered_set<Node>& visited)
+{
+  if (!visited.insert(n).second)
+  {
+    return;
+  }
+  switch (n.getKind())
+  {
+    case Kind::CONST_BOOLEAN: return;
+    case Kind::NOT:
+    case Kind::AND:
+    case Kind::OR:
+    case Kind::IMPLIES:
+    case Kind::XOR:
+    case Kind::ITE:
+    {
+      for (const Node& child : n)
+      {
+        if (child.getType().isBoolean())
+        {
+          collectAtoms(child, atoms, visited);
+        }
+      }
+      return;
+    }
+    default:
+    {
+      // an atomic predicate (comparison or boolean equality)
+      atoms.push_back(n);
+      return;
+    }
+  }
 }
 
 Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
@@ -786,6 +877,71 @@ LiaStarUtils::getMatrices(Node variables, Node n)
     default: break;
   }
   return pairs;
+}
+
+std::pair<std::vector<std::string>, Node> LiaStarUtils::getMatrix(
+    Node variables, Node n)
+{
+  Assert(n.getType().isBoolean()) << "n: " << n << std::endl;
+  std::vector<std::pair<std::vector<std::string>, Node>> pairs;
+  Kind k = n.getKind();
+  switch (k)
+  {
+    case Kind::CONST_BOOLEAN:
+    {
+      bool value = n.getConst<bool>();
+      std::string constraint;
+      if (value)
+      {
+        constraint = "x[1] = x[1];";
+      }
+      else
+      {
+        constraint = "1 = 0;";
+      }
+      std::vector<std::string> constraints;
+      constraints.push_back(constraint);
+      return {constraints, n};
+    }
+    case Kind::LT:
+    case Kind::GT:
+    case Kind::LEQ:
+    case Kind::GEQ:
+    case Kind::EQUAL:
+    {
+      //
+      linear::Polynomial l = linear::Polynomial::parsePolynomial(n[0]);
+      linear::Polynomial r = linear::Polynomial::parsePolynomial(n[1]);
+      std::string lTerm = getString(variables, l);
+      std::string rTerm = getString(variables, r);
+      std::string kString = k == Kind::LT    ? " < "
+                            : k == Kind::GT  ? " > "
+                            : k == Kind::LEQ ? " <= "
+                            : k == Kind::GEQ ? " >= "
+                                             : " = ";
+      std::string constraint = lTerm + kString + rTerm + ";";
+      std::vector<std::string> constraints;
+      constraints.push_back(constraint);
+      return {constraints, n};
+    }
+    case Kind::AND:
+    {
+      std::vector<std::string> constraints;
+      for (size_t i = 0; i < n.getNumChildren(); i++)
+      {
+        std::pair<std::vector<std::string>, Node> m =
+            getMatrix(variables, n[i]);
+        constraints.push_back(m.first[0]);
+      }
+      return {constraints, n};
+    }
+
+    default:
+    {
+      InternalError() << "Unexpected kind. Node " << n
+                      << " has kind: " << n.getKind() << std::endl;
+    };
+  }
 }
 
 std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)

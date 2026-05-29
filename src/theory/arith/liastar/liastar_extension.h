@@ -125,6 +125,16 @@ class LiaStarExtension : EnvObj
   getCones(Node n,
            const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
 
+  /**
+   * Similar to `getCones`, but processes a single constraint pair instead of a
+   * list. The cone derived from `pair` is appended to the list of cones for
+   * `n[0]` (the lambda) stored in `d_lazyCones`, and the returned vector holds
+   * the starLia constraints computed over that whole updated list. If the cone
+   * derived from `pair` is empty it is not added.
+   */
+  std::vector<Node> getCone(
+      Node n, const std::pair<std::vector<std::string>, Node>& pair);
+
   std::vector<std::pair<Node, Node>> getLia(
       Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
 
@@ -135,7 +145,9 @@ class LiaStarExtension : EnvObj
    * (== literal[0]), and sends it via the inference manager. Does nothing if
    * the literal has already been processed.
    */
-  void eagerHilbert(Node literal, Node lambda);
+  void eagerCheckStar(Node literal, Node lambda);
+  void lazyCheckStar(Node literal, Node lambda);
+  void lazyHilbert(Node literal, Node formula);
 
   /** node manager */
   NodeManager* d_nm;
@@ -160,6 +172,14 @@ class LiaStarExtension : EnvObj
   /** Do we have any liaStar terms? */
   context::CDO<bool> d_hasLiaStarTerms;
   std::vector<Node> d_processedStarTerms;
+  // std::map<Node, std::vector<std::pair<Node, Node>> d_lazyStarTerms;
+
+  /**
+   * The cones accumulated so far during the lazy Hilbert-basis reduction. Each
+   * call to `getCone` appends the cone for the current disjunct here, and the
+   * starLia constraints are recomputed over this whole list.
+   */
+  std::map<Node, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>> d_lazyCones;
 
   /**
    * A CDProofSet that hands out CDProof objects for lemmas.

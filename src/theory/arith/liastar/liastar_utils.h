@@ -40,6 +40,11 @@ class LiaStarUtils
   static std::pair<Node, Node> getVectorPredicate(Node n, NodeManager* nm);
   /**
    * @param a node in LIA that only contains =, >=, ite in its tree
+   * @return a node where ite and = are eliminated
+   */
+  static Node removeItesAndNots(Node n, Env* e);
+  /**
+   * @param a node in LIA that only contains =, >=, ite in its tree
    * @return a node in DNF where ite and = are eliminated
    */
   static Node toDNF(Node n, Env* e);
@@ -61,6 +66,16 @@ class LiaStarUtils
   static Result normalizCheckSat(Node variables, Node assertion);
 
   /**
+   * This function returns a matrix representing a cone
+   * where the rows of the matrix are constraints of the form a1 x_1 + ... +
+   * an_xn + b >= 0
+   * @param variables is a node of Kind BOUND_VAR_LIST
+   * @param predicate is an inequality or conjunction of inequalities
+   */
+  static std::pair<std::vector<std::string>, Node> getMatrix(Node variables,
+                                                             Node n);
+
+  /**
    * This function returns a list of matrices representing cones (disjunctions)
    * where the rows of each matrix are constraints of the form a1 x_1 + ... +
    * an_xn + b >= 0
@@ -71,11 +86,19 @@ class LiaStarUtils
       Node variables, Node n);
 
   /** */
-  Node getDisjunct(const std::vector<Node>& freeVariables,
-                   Node assertion,
-                   Env* e);
+  static Node getDisjunct(const std::vector<Node>& freeVariables,
+                          Node assertion,
+                          Env* e);
 
  private:
+  /**
+   * Collect the atomic predicates (leaves of the boolean structure) of `n`
+   * into `atoms`, in deterministic traversal order, using `visited` to avoid
+   * duplicates.
+   */
+  static void collectAtoms(Node n,
+                           std::vector<Node>& atoms,
+                           std::unordered_set<Node>& visited);
   static std::vector<std::pair<Node, Node>> removeIntegerItes(Node n, Env* e);
   static Node removeNot(Node n, Env* e);
   static Node recursiveFlatten(NodeManager* nm, Node n);

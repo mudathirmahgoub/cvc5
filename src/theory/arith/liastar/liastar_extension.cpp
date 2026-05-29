@@ -186,12 +186,18 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         return;
       }
     }
-
-    eagerHilbert(literal, lambda);
+    if (options().arith.arithLiaStarLazy)
+    {
+      lazyCheckStar(literal, lambda);
+    }
+    else
+    {
+      eagerCheckStar(literal, lambda);
+    }
   }
 }
 
-void LiaStarExtension::eagerHilbert(Node literal, Node lambda)
+void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
 {
   if (std::find(
           d_processedStarTerms.begin(), d_processedStarTerms.end(), literal)
@@ -268,6 +274,26 @@ void LiaStarExtension::eagerHilbert(Node literal, Node lambda)
   d_processedStarTerms.push_back(literal);
   d_im.doPendingLemmas();
 }
+
+void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
+{
+  if (std::find(
+          d_processedStarTerms.begin(), d_processedStarTerms.end(), literal)
+      != d_processedStarTerms.end())
+  {
+    return;
+  }
+
+  auto pairs = d_lazyCones[lambda];
+  Node formula = lambda[1];
+  for (auto& pair : pairs)
+  {
+    Node disjunct = pair.first;
+    formula = formula.andNode(disjunct.notNode());
+  }
+  lazyHilbert(literal, formula);
+}
+
 
 std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
           std::vector<Node>>
@@ -414,6 +440,157 @@ LiaStarExtension::getCones(
   return std::make_pair(cones, starConstraints);
 }
 
+std::vector<Node> LiaStarExtension::getCone(
+    Node n, const std::pair<std::vector<std::string>, Node>& pair)
+{
+  std::vector<Node> vec(n.begin() + 1, n.end());
+  size_t dimension = vec.size();
+  std::vector<Integer> zeroVector(dimension, Integer(0));
+
+  // the cones accumulated so far for this lambda (n[0])
+  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
+      d_lazyCones[n[0]];
+
+  // Build the cone for the current pair and append it to the list of cones.
+  {
+    Trace("liastar-ext") << "---------------------------" << std::endl;
+    Trace("liastar-ext") << "Cone for node " << std::endl
+                         << pair.second << std::endl;
+
+    libnormaliz::OptionsHandler options;
+
+    std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
+        poly_param_input;
+    std::map<libnormaliz::NumParam::Param, long> num_param_input;
+    std::map<libnormaliz::BoolParam::Param, bool> bool_param_input;
+
+    libnormaliz::renf_class_ptr number_field_ref;
+
+    std::stringstream ss;
+    ss << "amb_space " << dimension << std::endl;
+    ss << "constraints " << pair.first.size() << " symbolic" << std::endl;
+    for (auto constraint : pair.first)
+    {
+      ss << constraint << std::endl;
+    }
+    ss << "nonnegative" << std::endl;
+    ss << "HilbertBasis" << std::endl;
+    ss << "ModuleGenerators" << std::endl;
+    Trace("liastar-ext") << "normaliz input:" << std::endl;
+    Trace("liastar-ext") << ss.str() << std::endl;
+
+    // here we use mpq_class instead of Integer (or mpz_class)
+    // because libnormaliz.so only has implementation for
+    // readNormalizInput<mpq_class>
+    std::map<Type::InputType, libnormaliz::Matrix<mpq_class>> input;
+    input = libnormaliz::readNormalizInput<mpq_class>(ss,
+                                                      options,
+                                                      num_param_input,
+                                                      bool_param_input,
+                                                      poly_param_input,
+                                                      number_field_ref);
+    Cone<Integer> cone(input);
+    cone.setNonnegative(true);
+    // always use infinite precision for integers
+    cone.deactivateChangeOfPrecision();
+    cone.compute(ConeProperty::HilbertBasis);
+    cone.compute(ConeProperty::ModuleGenerators);
+
+    bool empty = cone.isInhomogeneous() && cone.getAffineDim() == -1;
+    if (empty)
+    {
+      // the cone is empty, do not add it to the list.
+      Trace("liastar-ext") << "empty cone" << std::endl;
+    }
+    else
+    {
+      cones.push_back({pair.second, cone});
+    }
+  }
+
+  // Recompute the starLia constraints over the whole list of cones.
+  std::vector<Node> starConstraints;
+  std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
+
+  for (auto& conePair : cones)
+  {
+    Cone<Integer>& cone = conePair.second;
+
+    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
+    for (auto& basis : cone.getHilbertBasis())
+    {
+      Trace("liastar-ext") << toString(basis) << std::endl;
+    }
+
+    Trace("liastar-ext") << "Module generators:" << std::endl;
+    std::vector<std::vector<Integer>> generators = {zeroVector};
+    if (cone.getModuleGenerators().size() > 0)
+    {
+      generators = cone.getModuleGenerators();
+    }
+    for (const auto& generator : generators)
+    {
+      Trace("liastar-ext") << toString(generator) << std::endl;
+      Node mu = d_one;
+      if (generator != zeroVector)
+      {
+        mu = d_nm->mkDummySkolem("mu", d_nm->integerType());
+      }
+
+      starConstraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
+      Vector point;
+      for (const auto& element : generator)
+      {
+        Node constant = d_nm->mkConstInt(Rational(element));
+        Node monomial = d_nm->mkNode(Kind::MULT, constant, mu);
+        point.push_back(monomial);
+      }
+      std::vector<Vector> rays;
+      for (const auto& basis : cone.getHilbertBasis())
+      {
+        Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
+        // (>= l 0)
+        starConstraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
+        // (=> (= mu 0) (= l 0))
+        starConstraints.push_back(
+            d_nm->mkNode(Kind::EQUAL, mu, d_zero)
+                .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
+
+        Vector ray;
+        for (const auto& element : basis)
+        {
+          Node constant = d_nm->mkConstInt(Rational(element));
+          Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
+          ray.push_back(monomial);
+        }
+        rays.push_back(ray);
+      }
+      lambdas.push_back({point, rays});
+    }
+  }
+
+  // sum constraints
+  Vector sums(dimension, d_zero);
+  for (const std::pair<Vector, std::vector<Vector>>& p : lambdas)
+  {
+    for (size_t i = 0; i < dimension; i++)
+    {
+      sums[i] = d_nm->mkNode(Kind::ADD, sums[i], p.first[i]);
+      for (const auto& ray : p.second)
+      {
+        sums[i] = d_nm->mkNode(Kind::ADD, sums[i], ray[i]);
+      }
+    }
+  }
+
+  for (size_t i = 0; i < dimension; i++)
+  {
+    starConstraints.push_back(vec[i].eqNode(sums[i]));
+  }
+
+  return starConstraints;
+}
+
 std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
     Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones)
 {
@@ -547,6 +724,88 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
   std::vector<std::pair<std::vector<std::string>, Node>> pairs =
       LiaStarUtils::getMatrices(variables, dnf);
   return pairs;
+}
+void LiaStarExtension::lazyHilbert(Node literal, Node formula)
+{
+  Node variables = literal[0][0];
+  Trace("liastar-lazy") << "lazyHilbert::variables:" << variables << std::endl;
+  Trace("liastar-lazy") << "lazyHilbert::formula:" << formula << std::endl;
+  Trace("liastar-lazy") << "formula: " << formula << std::endl;
+
+  if (TraceIsOn("liastar-ext-smt"))
+  {
+    Trace("liastar-ext-smt") << "(set-logic ALL)" << std::endl;
+    Trace("liastar-ext-smt") << "(set-option :incremental true)" << std::endl;
+    Trace("liastar-ext-smt")
+        << "(set-option :produce-models true)" << std::endl;
+    for (Node var : variables)
+    {
+      Trace("liastar-ext-smt")
+          << "(declare-const " << var << " Int)" << std::endl;
+    }
+    for (Node var : variables)
+    {
+      Trace("liastar-ext-smt") << "(assert (>= " << var << " 0))" << std::endl;
+    }
+  }
+
+  Node nnf = LiaStarUtils::removeItesAndNots(formula, &d_env);
+  std::vector<Node> freeVariables;
+  for(size_t i = 0; i < variables.getNumChildren(); i++)
+  {
+    freeVariables.push_back(variables[i]);
+  }
+  Node disjunct = LiaStarUtils::getDisjunct(freeVariables, nnf, &d_env);
+  // `getDisjunct` returns false when no region of `formula` is left uncovered,
+  // i.e. every disjunct of the predicate already has a cone. At that point the
+  // cone encoding is exact and we can assert the full equivalence.
+  bool complete = disjunct == d_false;
+  // The disjunct is a conjunction of arithmetic facts in the subsolver's
+  // normal form, which can represent strict inequalities as negations (e.g.
+  // (not (>= a b))). Normalize away the negations before building the matrix.
+  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env);
+
+  Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
+
+  std::pair<std::vector<std::string>, Node> pair =
+      LiaStarUtils::getMatrix(variables, disjunct);
+
+  Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
+
+  // Add the cone for the current disjunct to `d_lazyCones` and recompute the
+  // starLia constraints over the whole list of cones so far. When `complete`,
+  // `disjunct` is the (infeasible) false constraint, so `getCone` adds no new
+  // cone and simply rebuilds the constraints over all cones found so far.
+  std::vector<Node> starConstraints = getCone(literal, pair);
+  Trace("liastar-ext") << "starConstraints: " << std::endl
+                       << toString(starConstraints) << std::endl;
+
+
+  Node star = d_nm->mkNode(Kind::AND, starConstraints);
+
+  Trace("liastar-ext") << d_lazyCones[literal[0]].size()
+                       << " cones for lambda:  " << literal[0] << std::endl;
+
+  star = rewrite(star);
+  // While cones are still being discovered, `star` is an under-approximation
+  // of the star set, so only the sound direction (star => literal) may be
+  // asserted. Once the encoding is complete, the full equivalence holds, which
+  // is what allows refuting a (positively asserted) star-contains.
+  Node lemma = complete ? literal.eqNode(star) : star.impNode(literal);
+  Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
+  if (d_proofGen != nullptr)
+  {
+    d_proofGen->registerContainsReduce(lemma, literal, star);
+  }
+  d_im.addPendingLemma(
+      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, d_proofGen.get());
+  // Keep refining (do not mark the term processed) until every disjunct of the
+  // predicate has been covered by a cone.
+  if (complete)
+  {
+    d_processedStarTerms.push_back(literal);
+  }
+  d_im.doPendingLemmas();
 }
 
 }  // namespace liastar

@@ -22,11 +22,15 @@
 #include "libnormaliz/input.h"
 #include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
+#include "smt/smt_solver.h"
+#include "smt/solver_engine.h"
 #include "theory/arith/linear/normal_form.h"
 #include "theory/booleans/theory_bool_rewriter.h"
 #include "theory/datatypes/tuple_utils.h"
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
+#include "theory/theory.h"
+#include "theory/theory_engine.h"
 #include "util/rational.h"
 
 using namespace cvc5::internal::kind;
@@ -553,6 +557,51 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
   }
 }
 
+Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
+                               Node assertion,
+                               Env* e)
+{
+  NodeManager* nm = e->getNodeManager();
+  Options subOptions;
+  SolverEngine smte(nm, &subOptions);
+  smte.setIsInternalSubsolver();
+  LogicInfo info("QF_LIA");
+  smte.setLogic(info);
+  // all variables are nonnegative.
+  Node zero = nm->mkConstInt(Rational(0));
+  for (Node var : freeVariables)
+  {
+    assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
+  }
+  smte.assertFormula(assertion);
+  Result result = smte.checkSat();
+  if (result.getStatus() == Result::Status::UNSAT)
+  {
+    return nm->mkConst<>(false);
+  }
+  // return the conjunction of asserted literals in arithmetic, which is one
+  // disjunct of the satisfying region.
+  smt::SmtSolver* solver = smte.getSmtSolver();
+  TheoryEngine* te = solver->getTheoryEngine();
+  theory::Theory* arithTheory = te->theoryOf(theory::TheoryId::THEORY_ARITH);
+  std::vector<Node> literals;
+  for (theory::Theory::assertions_iterator it = arithTheory->facts_begin();
+       it != arithTheory->facts_end();
+       ++it)
+  {
+    literals.push_back((*it).d_assertion);
+  }
+  if (literals.empty())
+  {
+    return nm->mkConst<>(true);
+  }
+  if (literals.size() == 1)
+  {
+    return literals[0];
+  }
+  return nm->mkNode(Kind::AND, literals);
+}
+
 Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
                                   Node assertion,
                                   Env* e)
@@ -570,13 +619,26 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
     NodeManager* nm = e->getNodeManager();
     Node zero = nm->mkConstInt(Rational(0));
     // all variables are nonnegative.
+    std::vector<Node> boundVariables;
     for (Node var : freeVariables)
     {
       assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
+      // Only genuine bound variables can be existentially quantified. Free
+      // constants (Kind::VARIABLE) are left in place: checking the
+      // satisfiability of a formula with free constants is equivalent to
+      // checking the satisfiability of its existential closure.
+      if (var.getKind() == Kind::BOUND_VARIABLE)
+      {
+        boundVariables.push_back(var);
+      }
     }
-    Node boundVariables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
-    Node exists = nm->mkNode(Kind::EXISTS, boundVariables, assertion);
-    result = checkWithSubsolver(exists, ssi);
+    Node query = assertion;
+    if (!boundVariables.empty())
+    {
+      Node varList = nm->mkNode(Kind::BOUND_VAR_LIST, boundVariables);
+      query = nm->mkNode(Kind::EXISTS, varList, assertion);
+    }
+    result = checkWithSubsolver(query, ssi);
   }
   Trace("liastar-ext-cvc5CheckSat")
       << "Conjunction: " << assertion << " is " << result << std::endl;

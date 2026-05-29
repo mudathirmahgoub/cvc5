@@ -1584,6 +1584,8 @@ std::vector<Node> SolverEngine::getSubstitutedAssertions()
 
 Env& SolverEngine::getEnv() { return *d_env.get(); }
 
+smt::SmtSolver* SolverEngine::getSmtSolver() { return d_smtSolver.get(); }
+
 void SolverEngine::declareSepHeap(TypeNode locT, TypeNode dataT)
 {
   if (d_state->isFullyInited())

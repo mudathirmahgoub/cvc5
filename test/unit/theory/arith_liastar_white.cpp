@@ -459,6 +459,77 @@ TEST_F(TestLiaStarUtils, toDnf8)
   // Node dnf = LiaStarUtils::toDNF(*(t.d_node.get()), env);
 }
 
+TEST_F(TestLiaStarUtils, getDisjunctUnsat)
+{
+  // getDisjunct forces every free variable to be nonnegative, so (< x 0) is
+  // unsatisfiable and the returned disjunct must be the false constant.
+  Node xInt = nm->mkVar("x", intType);
+  Node assertion = nm->mkNode(Kind::LT, xInt, zero);
+  LiaStarUtils utils;
+  Node disjunct = utils.getDisjunct({xInt}, assertion, e);
+  ASSERT_EQ(falseConst, disjunct);
+}
+
+TEST_F(TestLiaStarUtils, getDisjunctSatEquality)
+{
+  // (= x 5) is satisfiable together with the implicit x >= 0 constraint. The
+  // returned disjunct is a conjunction of the asserted arithmetic literals; it
+  // must not be false and must itself be satisfiable.
+  Node xInt = nm->mkVar("x", intType);
+  Node five = nm->mkConstInt(Rational(5));
+  Node assertion = nm->mkNode(Kind::EQUAL, xInt, five);
+  LiaStarUtils utils;
+  Node disjunct = utils.getDisjunct({xInt}, assertion, e);
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+}
+
+TEST_F(TestLiaStarUtils, getDisjunctSatInequalities)
+{
+  // (and (>= x 1) (>= y 2)) is satisfiable with the implicit nonnegativity
+  // constraints; the disjunct must be a satisfiable, non-false formula.
+  Node xInt = nm->mkVar("x", intType);
+  Node yInt = nm->mkVar("y", intType);
+  Node geqX = nm->mkNode(Kind::GEQ, xInt, one);
+  Node geqY = nm->mkNode(Kind::GEQ, yInt, two);
+  Node assertion = nm->mkNode(Kind::AND, geqX, geqY);
+  LiaStarUtils utils;
+  Node disjunct = utils.getDisjunct({xInt, yInt}, assertion, e);
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+}
+
+TEST_F(TestLiaStarUtils, getDisjunctDisjunction)
+{
+  // (or (> x (+ y z)) (= x (+ y z))) is satisfiable with the implicit
+  // nonnegativity constraints. getDisjunct returns the asserted arithmetic
+  // literals for a single disjunct of the satisfying region, so the result must
+  // be a satisfiable, non-false formula that entails the original disjunction.
+  Node xInt = nm->mkVar("x", intType);
+  Node yInt = nm->mkVar("y", intType);
+  Node zInt = nm->mkVar("z", intType);
+  Node sum = nm->mkNode(Kind::ADD, yInt, zInt);
+  Node gt = nm->mkNode(Kind::GT, xInt, sum);
+  Node eq = nm->mkNode(Kind::EQUAL, xInt, sum);
+  Node assertion = nm->mkNode(Kind::OR, gt, eq);
+  LiaStarUtils utils;
+  Node disjunct = utils.getDisjunct({xInt, yInt, zInt}, assertion, e);
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+  // The disjunct must entail the original disjunction: (and disjunct (not
+  // assertion)) is unsatisfiable.
+  Node entailment = nm->mkNode(Kind::AND, disjunct, assertion.notNode());
+  Result entailmentResult =
+      LiaStarUtils::cvc5CheckSat({xInt, yInt, zInt}, entailment, e);
+  ASSERT_EQ(Result::Status::UNSAT, entailmentResult.getStatus());
+}
+
 }  // namespace test
 }  // namespace cvc5::internal
 

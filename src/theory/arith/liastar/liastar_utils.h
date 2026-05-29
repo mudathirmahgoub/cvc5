@@ -70,6 +70,11 @@ class LiaStarUtils
   static std::vector<std::pair<std::vector<std::string>, Node>> getMatrices(
       Node variables, Node n);
 
+  /** */
+  Node getDisjunct(const std::vector<Node>& freeVariables,
+                   Node assertion,
+                   Env* e);
+
  private:
   static std::vector<std::pair<Node, Node>> removeIntegerItes(Node n, Env* e);
   static Node removeNot(Node n, Env* e);

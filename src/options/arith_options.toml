@@ -637,6 +637,6 @@ name   = "Arithmetic Theory"
   category   = "regular"
   long       = "arith-liastar-lazy"
   type       = "bool"
-  default    = "false"
+  default    = "true"
   help       = "whether to lazily compute disjunctions of predicate under the star operator"
   

@@ -516,13 +516,17 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
       d_lazyCones[n[0]];
 
-  // Recompute the starLia constraints over the whole list of cones.
-  std::vector<Node> starConstraints;
-  std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
+  // The per-cone constraints and lambdas computed in previous calls. We only
+  // compute new constraints (and fresh skolems) for cones that have not been
+  // processed yet, and append them here.
+  std::vector<Node>& starConstraints = d_starConstraints[n[0]];
+  std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas =
+      d_lambdas[n[0]];
+  size_t& processed = d_processedCones[n[0]];
 
-  for (auto& conePair : cones)
+  for (; processed < cones.size(); processed++)
   {
-    Cone<Integer>& cone = conePair.second;
+    Cone<Integer>& cone = cones[processed].second;
 
     Trace("liastar-ext") << "Hilbert basis:" << std::endl;
     for (auto& basis : cone.getHilbertBasis())
@@ -577,7 +581,11 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
     }
   }
 
-  // sum constraints
+  // The sum constraints span the lambdas of all cones, so they are rebuilt from
+  // the accumulated lambdas on each call. Start from the persisted per-cone
+  // constraints and append the freshly built sum constraints, leaving
+  // `d_starConstraints` holding only the per-cone constraints.
+  std::vector<Node> result = starConstraints;
   Vector sums(dimension, d_zero);
   for (const std::pair<Vector, std::vector<Vector>>& p : lambdas)
   {
@@ -593,10 +601,10 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
 
   for (size_t i = 0; i < dimension; i++)
   {
-    starConstraints.push_back(vec[i].eqNode(sums[i]));
+    result.push_back(vec[i].eqNode(sums[i]));
   }
 
-  return starConstraints;
+  return result;
 }
 
 std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
@@ -780,11 +788,13 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
 
   Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
 
-  // Add the cone for the current disjunct to `d_lazyCones` and recompute the
-  // starLia constraints over the whole list of cones so far. When `complete`,
-  // `disjunct` is the (infeasible) false constraint, so `addCone` adds no new
-  // cone and `getStarConstraints` simply rebuilds the constraints over all
-  // cones found so far.
+  // Add the cone for the current disjunct to `d_lazyCones` and get the starLia
+  // constraints over the whole list of cones so far. `getStarConstraints` only
+  // computes the per-cone constraints (and fresh skolems) for cones not yet
+  // processed, reusing the constraints computed in previous calls. When
+  // `complete`, `disjunct` is the (infeasible) false constraint, so `addCone`
+  // adds no new cone and `getStarConstraints` just rebuilds the sum constraints
+  // over the cones found so far.
   addCone(literal, pair);
   std::vector<Node> starConstraints = getStarConstraints(literal);
   Trace("liastar-ext") << "starConstraints: " << std::endl

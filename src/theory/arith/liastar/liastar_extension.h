@@ -134,9 +134,13 @@ class LiaStarExtension : EnvObj
   void addCone(Node n, const std::pair<std::vector<std::string>, Node>& pair);
 
   /**
-   * Recompute the starLia constraints over all cones accumulated so far in
+   * Returns the starLia constraints over all cones accumulated so far in
    * `d_lazyCones[n[0]]` (the cones added by previous calls to `addCone`).
-   * Returns the list of starLia constraints over that whole list.
+   *
+   * The per-cone constraints (and their skolems) are computed only for cones
+   * that have not been processed in a previous call, and are accumulated in
+   * `d_starConstraints[n[0]]`; the sum constraints, which span all cones, are
+   * rebuilt from the accumulated `d_lambdas[n[0]]` on each call.
    */
   std::vector<Node> getStarConstraints(Node n);
 
@@ -182,11 +186,31 @@ class LiaStarExtension : EnvObj
   /**
    * The cones accumulated so far during the lazy Hilbert-basis reduction. Each
    * call to `addCone` appends the cone for the current disjunct here, and
-   * `getStarConstraints` recomputes the starLia constraints over this whole
-   * list.
+   * `getStarConstraints` computes the starLia constraints for the newly added
+   * cones, accumulating them across calls.
    */
   std::map<Node, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>>
       d_lazyCones;
+
+  /**
+   * The per-cone starLia constraints computed so far for each lambda node
+   * (`n[0]`). `getStarConstraints` only generates the skolems and constraints
+   * for cones in `d_lazyCones` that have not been processed yet, appending them
+   * here, so previously computed constraints (and their skolems) are reused
+   * across refinement rounds. These are the constraints that are independent of
+   * the other cones (the (>= mu 0), (>= l 0), and (=> (= mu 0) (= l 0))
+   * constraints); the sum constraints span all cones and are rebuilt each call.
+   */
+  std::map<Node, std::vector<Node>> d_starConstraints;
+  /**
+   * The lambdas (point and rays) computed so far for each lambda node, kept in
+   * step with `d_starConstraints`. They are used to rebuild the sum
+   * constraints over all cones on each call to `getStarConstraints`.
+   */
+  std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>>
+      d_lambdas;
+  /** The number of cones in `d_lazyCones[n[0]]` already processed. */
+  std::map<Node, size_t> d_processedCones;
 
   /**
    * A CDProofSet that hands out CDProof objects for lemmas.

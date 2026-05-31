@@ -230,10 +230,10 @@ void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
       Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
     }
     std::vector<Node> disjunctions;
-    std::transform(lia.begin(),
-                   lia.end(),
-                   std::back_inserter(disjunctions),
-                   [](auto& p) { return p.second; });
+    std::transform(
+        lia.begin(), lia.end(), std::back_inserter(disjunctions), [](auto& p) {
+          return p.second;
+        });
     Node liaFormula;
     if (disjunctions.size() == 0)
     {
@@ -293,7 +293,6 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
   }
   lazyHilbert(literal, formula);
 }
-
 
 std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
           std::vector<Node>>
@@ -440,12 +439,10 @@ LiaStarExtension::getCones(
   return std::make_pair(cones, starConstraints);
 }
 
-std::vector<Node> LiaStarExtension::getCone(
+void LiaStarExtension::addCone(
     Node n, const std::pair<std::vector<std::string>, Node>& pair)
 {
-  std::vector<Node> vec(n.begin() + 1, n.end());
-  size_t dimension = vec.size();
-  std::vector<Integer> zeroVector(dimension, Integer(0));
+  size_t dimension = n.getNumChildren() - 1;
 
   // the cones accumulated so far for this lambda (n[0])
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
@@ -507,6 +504,17 @@ std::vector<Node> LiaStarExtension::getCone(
       cones.push_back({pair.second, cone});
     }
   }
+}
+
+std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
+{
+  std::vector<Node> vec(n.begin() + 1, n.end());
+  size_t dimension = vec.size();
+  std::vector<Integer> zeroVector(dimension, Integer(0));
+
+  // the cones accumulated so far for this lambda (n[0])
+  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
+      d_lazyCones[n[0]];
 
   // Recompute the starLia constraints over the whole list of cones.
   std::vector<Node> starConstraints;
@@ -751,7 +759,7 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
 
   Node nnf = LiaStarUtils::removeItesAndNots(formula, &d_env);
   std::vector<Node> freeVariables;
-  for(size_t i = 0; i < variables.getNumChildren(); i++)
+  for (size_t i = 0; i < variables.getNumChildren(); i++)
   {
     freeVariables.push_back(variables[i]);
   }
@@ -774,12 +782,13 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
 
   // Add the cone for the current disjunct to `d_lazyCones` and recompute the
   // starLia constraints over the whole list of cones so far. When `complete`,
-  // `disjunct` is the (infeasible) false constraint, so `getCone` adds no new
-  // cone and simply rebuilds the constraints over all cones found so far.
-  std::vector<Node> starConstraints = getCone(literal, pair);
+  // `disjunct` is the (infeasible) false constraint, so `addCone` adds no new
+  // cone and `getStarConstraints` simply rebuilds the constraints over all
+  // cones found so far.
+  addCone(literal, pair);
+  std::vector<Node> starConstraints = getStarConstraints(literal);
   Trace("liastar-ext") << "starConstraints: " << std::endl
                        << toString(starConstraints) << std::endl;
-
 
   Node star = d_nm->mkNode(Kind::AND, starConstraints);
 

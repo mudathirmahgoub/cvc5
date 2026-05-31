@@ -128,12 +128,17 @@ class LiaStarExtension : EnvObj
   /**
    * Similar to `getCones`, but processes a single constraint pair instead of a
    * list. The cone derived from `pair` is appended to the list of cones for
-   * `n[0]` (the lambda) stored in `d_lazyCones`, and the returned vector holds
-   * the starLia constraints computed over that whole updated list. If the cone
-   * derived from `pair` is empty it is not added.
+   * `n[0]` (the lambda) stored in `d_lazyCones`. If the cone derived from
+   * `pair` is empty it is not added.
    */
-  std::vector<Node> getCone(
-      Node n, const std::pair<std::vector<std::string>, Node>& pair);
+  void addCone(Node n, const std::pair<std::vector<std::string>, Node>& pair);
+
+  /**
+   * Recompute the starLia constraints over all cones accumulated so far in
+   * `d_lazyCones[n[0]]` (the cones added by previous calls to `addCone`).
+   * Returns the list of starLia constraints over that whole list.
+   */
+  std::vector<Node> getStarConstraints(Node n);
 
   std::vector<std::pair<Node, Node>> getLia(
       Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
@@ -176,10 +181,12 @@ class LiaStarExtension : EnvObj
 
   /**
    * The cones accumulated so far during the lazy Hilbert-basis reduction. Each
-   * call to `getCone` appends the cone for the current disjunct here, and the
-   * starLia constraints are recomputed over this whole list.
+   * call to `addCone` appends the cone for the current disjunct here, and
+   * `getStarConstraints` recomputes the starLia constraints over this whole
+   * list.
    */
-  std::map<Node, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>> d_lazyCones;
+  std::map<Node, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>>
+      d_lazyCones;
 
   /**
    * A CDProofSet that hands out CDProof objects for lemmas.

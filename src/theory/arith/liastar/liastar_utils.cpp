@@ -1000,6 +1000,77 @@ std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)
   return ss.str();
 }
 
+void LiaStarUtils::getGeneratorBody(
+    size_t dimension,
+    const std::vector<Integer>& generator,
+    const std::vector<std::vector<Integer>>& hilbertBasis,
+    bool star,
+    bool useSkolems,
+    NodeManager* nm,
+    std::vector<Node>& vars,
+    std::vector<Node>& constraints,
+    std::vector<Node>& point,
+    std::vector<std::vector<Node>>& rays)
+{
+  Node zero = nm->mkConstInt(Rational(0));
+  Node one = nm->mkConstInt(Rational(1));
+  std::vector<Integer> zeroVector(dimension, Integer(0));
+
+  // The multiplier for the module generator. In the membership encoding the
+  // generator is a fixed offset (multiplier 1). In the star encoding it is a
+  // fresh variable counting how many times the generator is used, except for
+  // the zero generator (the cone's homogeneous part) which is always present
+  // once.
+  Node mu = one;
+  if (star && generator != zeroVector)
+  {
+    // a bound variable (to be existentially bound) or a skolem (to be asserted
+    // at the top level)
+    mu = useSkolems ? nm->mkDummySkolem("mu", nm->integerType())
+                    : nm->mkBoundVar("mu", nm->integerType());
+    vars.push_back(mu);
+  }
+  if (star)
+  {
+    // (>= mu 0)
+    constraints.push_back(nm->mkNode(Kind::GEQ, mu, zero));
+  }
+
+  // point = mu * generator (in the membership encoding mu == 1, so the point is
+  // just the generator)
+  for (const auto& element : generator)
+  {
+    Node constant = nm->mkConstInt(Rational(element));
+    Node monomial = star ? nm->mkNode(Kind::MULT, constant, mu) : constant;
+    point.push_back(monomial);
+  }
+
+  for (size_t index = 0; index < hilbertBasis.size(); index++)
+  {
+    const std::vector<Integer>& basis = hilbertBasis[index];
+    std::string name = "l" + std::to_string(index + 1);
+    Node l = useSkolems ? nm->mkDummySkolem(name, nm->integerType())
+                        : nm->mkBoundVar(name, nm->integerType());
+    vars.push_back(l);
+    // (>= l 0)
+    constraints.push_back(nm->mkNode(Kind::GEQ, l, zero));
+    if (star)
+    {
+      // (=> (= mu 0) (= l 0)): a ray may only be used if its generator is.
+      constraints.push_back(nm->mkNode(Kind::EQUAL, mu, zero)
+                                .impNode(nm->mkNode(Kind::EQUAL, l, zero)));
+    }
+
+    std::vector<Node> ray;
+    for (const auto& element : basis)
+    {
+      Node constant = nm->mkConstInt(Rational(element));
+      ray.push_back(nm->mkNode(Kind::MULT, constant, l));
+    }
+    rays.push_back(ray);
+  }
+}
+
 }  // namespace liastar
 }  // namespace arith
 }  // namespace theory

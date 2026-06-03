@@ -90,6 +90,40 @@ class LiaStarUtils
                           Node assertion,
                           Env* e);
 
+  /**
+   * Builds the encoding of one module generator of a cone in terms of fresh
+   * variables. The body is shared between the membership encoding (`getLia`,
+   * which existentially binds `vars`) and the star encoding
+   * (`getStarConstraints`, which asserts the constraints at the top level).
+   *
+   * @param dimension the ambient dimension of the cone
+   * @param generator a module generator of the cone (a lattice point)
+   * @param hilbertBasis the Hilbert basis of the cone (its rays)
+   * @param star whether to build the star encoding (introduce a multiplier
+   *   `mu` for `generator` and couple the rays to it) or the plain membership
+   *   encoding (use `generator` as a fixed offset, with multiplier 1)
+   * @param useSkolems whether the introduced variables are skolems (asserted at
+   *   the top level) or bound variables (to be existentially bound)
+   * @param nm the node manager
+   * @param vars output: the fresh variables introduced (the multiplier `mu` and
+   *   the ray multipliers `l_j`)
+   * @param constraints output: the side constraints over `vars` (non-negativity
+   *   and, for the star encoding, the coupling constraints)
+   * @param point output: the point `mu * generator` (star) or `generator`
+   * @param rays output: the rays `l_j * basis_j`, one per Hilbert basis element
+   */
+  static void getGeneratorBody(
+      size_t dimension,
+      const std::vector<Integer>& generator,
+      const std::vector<std::vector<Integer>>& hilbertBasis,
+      bool star,
+      bool useSkolems,
+      NodeManager* nm,
+      std::vector<Node>& vars,
+      std::vector<Node>& constraints,
+      std::vector<Node>& point,
+      std::vector<std::vector<Node>>& rays);
+
  private:
   /**
    * Collect the atomic predicates (leaves of the boolean structure) of `n`

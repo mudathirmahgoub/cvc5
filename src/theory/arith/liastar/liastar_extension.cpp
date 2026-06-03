@@ -543,40 +543,23 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
     for (const auto& generator : generators)
     {
       Trace("liastar-ext") << toString(generator) << std::endl;
-      Node mu = d_one;
-      if (generator != zeroVector)
-      {
-        mu = d_nm->mkDummySkolem("mu", d_nm->integerType());
-      }
-
-      starConstraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
+      // Build the generator's star encoding directly over skolems: the star
+      // constraints are asserted at the top level (not under a quantifier).
+      std::vector<Node> vars, constraints;
       Vector point;
-      for (const auto& element : generator)
-      {
-        Node constant = d_nm->mkConstInt(Rational(element));
-        Node monomial = d_nm->mkNode(Kind::MULT, constant, mu);
-        point.push_back(monomial);
-      }
       std::vector<Vector> rays;
-      for (const auto& basis : cone.getHilbertBasis())
-      {
-        Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
-        // (>= l 0)
-        starConstraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
-        // (=> (= mu 0) (= l 0))
-        starConstraints.push_back(
-            d_nm->mkNode(Kind::EQUAL, mu, d_zero)
-                .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
-
-        Vector ray;
-        for (const auto& element : basis)
-        {
-          Node constant = d_nm->mkConstInt(Rational(element));
-          Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
-          ray.push_back(monomial);
-        }
-        rays.push_back(ray);
-      }
+      LiaStarUtils::getGeneratorBody(dimension,
+                                     generator,
+                                     cone.getHilbertBasis(),
+                                     /*star=*/true,
+                                     /*useSkolems=*/true,
+                                     d_nm,
+                                     vars,
+                                     constraints,
+                                     point,
+                                     rays);
+      starConstraints.insert(
+          starConstraints.end(), constraints.begin(), constraints.end());
       lambdas.push_back({point, rays});
     }
   }
@@ -633,35 +616,21 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
     }
     for (const auto& generator : generators)
     {
-      std::vector<Node> conjunctions;
+      // Build the generator's membership encoding in terms of bound variables
+      // and existentially bind them.
+      std::vector<Node> boundVariables, conjunctions;
       Vector point;
-      for (const auto& element : generator)
-      {
-        Node constant = d_nm->mkConstInt(Rational(element));
-        point.push_back(constant);
-      }
-
       std::vector<Vector> rays;
-      std::vector<Node> boundVariables;
-      auto bases = cone.getHilbertBasis();
-      for (size_t index = 0; index < bases.size(); index++)
-      {
-        auto basis = bases[index];
-        std::string name = "l" + std::to_string(index + 1);
-        Node lambda = d_nm->mkBoundVar(name, d_nm->integerType());
-        boundVariables.push_back(lambda);
-        // (>= l 0)
-        conjunctions.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
-
-        Vector ray;
-        for (const auto& element : basis)
-        {
-          Node constant = d_nm->mkConstInt(Rational(element));
-          Node monomial = rewrite(d_nm->mkNode(Kind::MULT, constant, lambda));
-          ray.push_back(monomial);
-        }
-        rays.push_back(ray);
-      }
+      LiaStarUtils::getGeneratorBody(dimension,
+                                     generator,
+                                     cone.getHilbertBasis(),
+                                     /*star=*/false,
+                                     /*useSkolems=*/false,
+                                     d_nm,
+                                     boundVariables,
+                                     conjunctions,
+                                     point,
+                                     rays);
 
       // sum constraints
       Vector sums(dimension, d_zero);

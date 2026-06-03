@@ -169,7 +169,15 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         values.push_back(value);
       }
 
-      Node value = vectorPredicate.substitute(
+      // F: the membership predicate. Additionally consider the last computed
+      // starLia under-approximation, if any: if the model already satisfies
+      // F or that under-approximation, the literal already holds and no further
+      // refinement is needed.
+      Node f = vectorPredicate;
+      auto starIt = d_lastStarLia.find(literal);
+      Node check = starIt != d_lastStarLia.end() ? f.orNode(starIt->second) : f;
+
+      Node value = check.substitute(
           keys.begin(), keys.end(), values.begin(), values.end());
       value = rewrite(value);
 
@@ -775,11 +783,62 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
                        << " cones for lambda:  " << literal[0] << std::endl;
 
   star = rewrite(star);
-  // While cones are still being discovered, `star` is an under-approximation
-  // of the star set, so only the sound direction (star => literal) may be
-  // asserted. Once the encoding is complete, the full equivalence holds, which
-  // is what allows refuting a (positively asserted) star-contains.
-  Node lemma = complete ? literal.eqNode(star) : star.impNode(literal);
+  // Remember the last computed starLia under-approximation for `literal`; the
+  // model-value check in checkFullEffort uses it to skip refinement when the
+  // current model already satisfies it.
+  d_lastStarLia[literal] = star;
+
+  // Deactivate the guard from the previous refinement round for this literal:
+  // its under-approximation is a subset of the current `star`, so the tentative
+  // equivalence it guarded is subsumed. Asserting `(not g_old)` makes that
+  // guarded lemma vacuous, so the solver does not have to satisfy several
+  // (mutually constraining) guarded equivalences at once. Sound because `g_old`
+  // is fresh.
+  auto guardIt = d_lastGuard.find(literal);
+  if (guardIt != d_lastGuard.end())
+  {
+    Node deactivate = guardIt->second.notNode();
+    if (d_proofGen != nullptr)
+    {
+      d_proofGen->registerGuardDeactivate(deactivate);
+    }
+    d_im.addPendingLemma(
+        deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+    d_lastGuard.erase(guardIt);
+  }
+
+  Node lemma;
+  if (complete)
+  {
+    // The encoding is complete, so `star` captures the star set exactly and the
+    // full equivalence holds. This is what allows refuting a (positively
+    // asserted) star-contains.
+    lemma = literal.eqNode(star);
+  }
+  else
+  {
+    // While cones are still being discovered, `star` is an under-approximation
+    // of the star set, so the equivalence `literal = star` is not yet sound. We
+    // assert it only tentatively, implied by a fresh boolean guard `g`. The
+    // split makes `g` a genuine decision literal and `preferPhase` biases it to
+    // true, so the SAT solver tries the equivalence first. If assuming it leads
+    // to a conflict (the literal actually holds via a not-yet-discovered cone),
+    // the solver flips `g` to false, retracting the equivalence, and we refine.
+    Node g = d_nm->mkDummySkolem("liastarGuard", d_nm->booleanType());
+    g = d_astate.getValuation().ensureLiteral(g);
+    d_im.preferPhase(g, true);
+    Node split = g.orNode(g.notNode());
+    if (d_proofGen != nullptr)
+    {
+      d_proofGen->registerSplit(split, g);
+    }
+    d_im.addPendingLemma(
+        split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+    lemma = g.impNode(literal.eqNode(star));
+    // Remember this guard so it can be deactivated once a later, larger
+    // under-approximation subsumes it.
+    d_lastGuard[literal] = g;
+  }
   Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
   if (d_proofGen != nullptr)
   {

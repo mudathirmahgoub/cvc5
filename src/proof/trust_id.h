@@ -182,6 +182,13 @@ enum class TrustId : uint32_t
    * the lia* extension. Intended to be discharged by a subsolver proof.
    */
   ARITH_LIA_STAR_CONTAINS_REDUCE,
+  /**
+   * A lia* guard-deactivation lemma `(not g)`, where `g` is a fresh boolean
+   * guard introduced for a tentative (under-approximating) STAR_CONTAINS
+   * reduction. Sound because `g` is fresh and its only other occurrences are
+   * the (now subsumed) guarded reduction and its split.
+   */
+  ARITH_LIA_STAR_GUARD_DEACTIVATE,
   /** A conflict coming from the bitblast solver */
   BV_BITBLAST_CONFLICT,
   /** A step from BvPpAssert utility */

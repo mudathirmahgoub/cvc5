@@ -54,6 +54,12 @@ void LiaStarProofGenerator::registerContainsReduce(Node lemma,
   d_aux[lemma] = literal;
 }
 
+void LiaStarProofGenerator::registerGuardDeactivate(Node lemma)
+{
+  d_kind[lemma] = static_cast<uint32_t>(Kind::GUARD_DEACTIVATE);
+  d_aux[lemma] = lemma;
+}
+
 bool LiaStarProofGenerator::hasProofFor(Node fact)
 {
   return d_kind.find(fact) != d_kind.end();
@@ -74,6 +80,7 @@ std::shared_ptr<ProofNode> LiaStarProofGenerator::getProofFor(Node fact)
     case Kind::SPLIT: return mkSplitProof(fact, info);
     case Kind::NONNEGATIVE: return mkNonnegativeProof(fact, info);
     case Kind::CONTAINS_REDUCE: return mkContainsReduceProof(fact, info);
+    case Kind::GUARD_DEACTIVATE: return mkGuardDeactivateProof(fact, info);
   }
   Unreachable();
 }
@@ -111,6 +118,16 @@ std::shared_ptr<ProofNode> LiaStarProofGenerator::mkContainsReduceProof(
   // its proof onto `getEnv().getProofNodeManager()` here.
   CDProof cdp(d_env);
   cdp.addTrustedStep(lemma, TrustId::ARITH_LIA_STAR_CONTAINS_REDUCE, {}, {});
+  return cdp.getProofFor(lemma);
+}
+
+std::shared_ptr<ProofNode> LiaStarProofGenerator::mkGuardDeactivateProof(
+    Node lemma, const Info& /*info*/)
+{
+  // `lemma` is `(not g)` for a fresh guard `g`; taken on trust since fixing a
+  // fresh boolean to false is satisfiability-preserving.
+  CDProof cdp(d_env);
+  cdp.addTrustedStep(lemma, TrustId::ARITH_LIA_STAR_GUARD_DEACTIVATE, {}, {});
   return cdp.getProofFor(lemma);
 }
 

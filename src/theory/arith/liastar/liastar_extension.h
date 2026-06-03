@@ -213,6 +213,23 @@ class LiaStarExtension : EnvObj
   std::map<Node, size_t> d_processedCones;
 
   /**
+   * The last starLia under-approximation (`star`) computed for each
+   * STAR_CONTAINS literal by `lazyHilbert`. The model-value check in
+   * `checkFullEffort` uses it to skip refinement when the current model already
+   * satisfies the predicate or this under-approximation.
+   */
+  std::map<Node, Node> d_lastStarLia;
+
+  /**
+   * The fresh boolean guard of the last (still active) tentative reduction
+   * `g => (literal = star)` emitted for each STAR_CONTAINS literal by
+   * `lazyHilbert`. When a later round produces a larger under-approximation, the
+   * previous guard is deactivated (we assert `(not g)`), so at most one tentative
+   * reduction is active per literal.
+   */
+  std::map<Node, Node> d_lastGuard;
+
+  /**
    * A CDProofSet that hands out CDProof objects for lemmas.
    */
   std::unique_ptr<CDProofSet<CDProof>> d_proof;

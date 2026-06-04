@@ -86,9 +86,25 @@ class LiaStarUtils
   static std::vector<std::pair<std::vector<std::string>, Node>> getMatrices(
       Node variables, Node n);
 
-  /** */
-  static Node getDisjunct(const std::vector<Node>& freeVariables,
-                          Node assertion,
+  /**
+   * Checks the incremental subsolver `smte` (which must already have the
+   * membership predicate, and the negations of any previously discovered
+   * cone-disjuncts, asserted) and reads its model to build one disjunct (cell)
+   * of the predicate's satisfying region: a conjunction that fixes every atom
+   * of `assertion` to its model truth value (splitting a false integer equality
+   * into the strict inequality the model satisfies).
+   *
+   * @param assertion the (skolem-space) predicate, used only to enumerate the
+   *   atoms read from the model; it is not asserted here.
+   * @param from the lambda's bound variables and @param to the skolem constants
+   *   substituted for them; the returned disjunct is mapped back from `to` to
+   *   `from` (bound-variable space).
+   * @return the disjunct, `false` if `smte` is unsat (the predicate is fully
+   *   covered), or `true` if it has no atoms.
+   */
+  static Node getDisjunct(Node assertion,
+                          const std::vector<Node>& from,
+                          const std::vector<Node>& to,
                           Env* e,
                           SolverEngine* smte);
 

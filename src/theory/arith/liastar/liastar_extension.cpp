@@ -78,14 +78,6 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
         new CDProofSet<CDProof>(env, env.getUserContext(), "liastar-ext"));
     d_proofGen.reset(new LiaStarProofGenerator(env, env.getUserContext()));
   }
-  Options subOptions;
-  // we read the model below to construct the disjunct.
-  subOptions.write_smt().produceModels = true;
-  d_solverEngine = new SolverEngine(d_nm, &subOptions);
-  d_solverEngine->setIsInternalSubsolver();
-  LogicInfo info("QF_LIA");
-  d_solverEngine->setLogic(info);
-  d_solverEngine->setOption("incremental", "true");
 }
 
 LiaStarExtension::~LiaStarExtension() {}
@@ -291,6 +283,57 @@ void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
   d_im.doPendingLemmas();
 }
 
+LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
+{
+  auto it = d_subsolvers.find(lambda);
+  if (it != d_subsolvers.end())
+  {
+    return it->second;
+  }
+  Subsolver& sub = d_subsolvers[lambda];
+
+  Options subOptions;
+  // we read the model below to construct the disjunct.
+  subOptions.write_smt().produceModels = true;
+  sub.engine = std::make_unique<SolverEngine>(d_nm, &subOptions);
+  sub.engine->setIsInternalSubsolver();
+  LogicInfo info("QF_LIA");
+  sub.engine->setLogic(info);
+  sub.engine->setOption("incremental", "true");
+
+  // The base assertion is the membership predicate (with ites and negations
+  // eliminated) conjoined with the non-negativity of the lambda's variables.
+  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env);
+  std::vector<Node> conjuncts{base};
+  for (Node var : lambda[0])
+  {
+    conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
+  }
+  base =
+      conjuncts.size() == 1 ? conjuncts[0] : d_nm->mkNode(Kind::AND, conjuncts);
+
+  // The lambda's bound variables appear free in `base`. A formula with free
+  // (bound) variables cannot be asserted to a subsolver, so we replace them
+  // with fresh free constants and remember the mapping so the disjunct built
+  // from the model can be substituted back into bound-variable space.
+  for (Node var : lambda[0])
+  {
+    if (var.getKind() == Kind::BOUND_VARIABLE)
+    {
+      sub.from.push_back(var);
+      sub.to.push_back(d_nm->mkDummySkolem("liastar", var.getType()));
+    }
+  }
+  if (!sub.from.empty())
+  {
+    base = base.substitute(
+        sub.from.begin(), sub.from.end(), sub.to.begin(), sub.to.end());
+  }
+  sub.base = base;
+  sub.engine->assertFormula(base);
+  return sub;
+}
+
 void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
 {
   if (std::find(
@@ -300,44 +343,30 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
     return;
   }
 
-  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>> pairs =
+  // The persistent incremental subsolver for this lambda. On first use it is
+  // seeded with the (nonnegative) predicate.
+  Subsolver& sub = getSubsolver(lambda);
+
+  // Refine the subsolver by asserting the negation of every cone-disjunct
+  // discovered since the previous round, one assertFormula per disjunct, so the
+  // predicate is never re-asserted as a single growing conjunction. The
+  // disjuncts are stored in bound-variable space, so map them to skolem space
+  // first.
+  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& pairs =
       d_lazyCones[lambda];
-  Node formula = lambda[1];
-  if (pairs.size() == 0)
+  for (size_t i = sub.negated; i < pairs.size(); i++)
   {
-    // The lambda's bound variables appear free in `assertion`. A formula with
-    // free (bound) variables cannot be asserted to a subsolver, so we replace
-    // them with fresh free constants and substitute them back in the returned
-    // disjunct.
-    std::vector<Node> from;
-    std::vector<Node> to;
-    for (Node var : lambda[0])
+    Node disjunct = pairs[i].first;
+    if (!sub.from.empty())
     {
-      if (var.getKind() == Kind::BOUND_VARIABLE)
-      {
-        from.push_back(var);
-        to.push_back(d_nm->mkDummySkolem(var.toString(), var.getType()));
-      }
+      disjunct = disjunct.substitute(
+          sub.from.begin(), sub.from.end(), sub.to.begin(), sub.to.end());
     }
-    if (!from.empty())
-    {
-      formula =
-          formula.substitute(from.begin(), from.end(), to.begin(), to.end());
-    }
-    d_solverEngine->assertFormula(formula);
+    sub.engine->assertFormula(disjunct.notNode());
   }
-  else
-  {
-    d_solverEngine->push();
-    Node disjunct = pairs[pairs.size() - 1].first;
-    d_solverEngine->assertFormula(disjunct.notNode());
-  }
-  // for (auto& pair : pairs)
-  // {
-  //   Node disjunct = pair.first;
-  //   formula = formula.andNode(disjunct.notNode());
-  // }
-  lazyHilbert(literal, formula);
+  sub.negated = pairs.size();
+
+  lazyHilbert(literal, sub);
 }
 
 std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
@@ -756,12 +785,10 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
       LiaStarUtils::getMatrices(variables, dnf);
   return pairs;
 }
-void LiaStarExtension::lazyHilbert(Node literal, Node formula)
+void LiaStarExtension::lazyHilbert(Node literal, Subsolver& sub)
 {
   Node variables = literal[0][0];
   Trace("liastar-lazy") << "lazyHilbert::variables:" << variables << std::endl;
-  Trace("liastar-lazy") << "lazyHilbert::formula:" << formula << std::endl;
-  Trace("liastar-lazy") << "formula: " << formula << std::endl;
 
   if (TraceIsOn("liastar-ext-smt"))
   {
@@ -780,14 +807,12 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
     }
   }
 
-  Node nnf = LiaStarUtils::removeItesAndNots(formula, &d_env);
-  std::vector<Node> freeVariables;
-  for (size_t i = 0; i < variables.getNumChildren(); i++)
-  {
-    freeVariables.push_back(variables[i]);
-  }
+  // Check the subsolver and read off the disjunct (the cell of the predicate)
+  // containing the model. The subsolver already has the predicate and the
+  // negations of all previously discovered cone-disjuncts asserted, so the
+  // model lies in a region of the predicate not yet covered by any cone.
   Node disjunct =
-      LiaStarUtils::getDisjunct(freeVariables, nnf, &d_env, d_solverEngine);
+      LiaStarUtils::getDisjunct(sub.base, sub.from, sub.to, &d_env, sub.engine.get());
   // `getDisjunct` returns false when no region of `formula` is left uncovered,
   // i.e. every disjunct of the predicate already has a cone. At that point the
   // cone encoding is exact and we can assert the full equivalence.

@@ -19,6 +19,7 @@
 #define CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "expr/node.h"
@@ -157,7 +158,41 @@ class LiaStarExtension : EnvObj
    */
   void eagerCheckStar(Node literal, Node lambda);
   void lazyCheckStar(Node literal, Node lambda);
-  void lazyHilbert(Node literal, Node formula);
+
+  /**
+   * A persistent, incremental subsolver dedicated to one lambda (one
+   * STAR_CONTAINS predicate). It is used to enumerate the convex cells of the
+   * predicate's satisfying region: it is seeded once with the (nonnegative)
+   * predicate and then refined across rounds by asserting the negation of each
+   * discovered cone-disjunct one at a time, so the predicate is never
+   * re-asserted as a single growing conjunction.
+   */
+  struct Subsolver
+  {
+    /** the incremental QF_LIA subsolver. */
+    std::unique_ptr<SolverEngine> engine;
+    /** the lambda's bound variables ... */
+    std::vector<Node> from;
+    /** ... and the fresh skolem constants substituted for them, since a
+     * subsolver cannot be given a formula with free (bound) variables. */
+    std::vector<Node> to;
+    /**
+     * The (nonnegative) predicate in skolem space. It is already asserted in
+     * `engine`; it is kept only to read off the predicate's atoms when building
+     * a disjunct from the model.
+     */
+    Node base;
+    /** number of cones in `d_lazyCones[lambda]` already negated in `engine`. */
+    size_t negated = 0;
+  };
+
+  /**
+   * Returns the subsolver for `lambda`, creating and seeding it (with the
+   * nonnegative predicate) on first use.
+   */
+  Subsolver& getSubsolver(Node lambda);
+
+  void lazyHilbert(Node literal, Subsolver& sub);
 
   /** node manager */
   NodeManager* d_nm;
@@ -240,7 +275,12 @@ class LiaStarExtension : EnvObj
    */
   std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 
-  SolverEngine* d_solverEngine;
+  /**
+   * The incremental subsolver for each lambda (STAR_CONTAINS predicate). Each
+   * is created lazily and persists for the lifetime of the extension, so the
+   * predicate's cells are enumerated incrementally across refinement rounds.
+   */
+  std::map<Node, Subsolver> d_subsolvers;
 }; /* class LiaStarExtension */
 
 }  // namespace liastar

@@ -565,38 +565,17 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
   }
 }
 
-Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
-                               Node assertion,
+Node LiaStarUtils::getDisjunct(Node assertion,
+                               const std::vector<Node>& from,
+                               const std::vector<Node>& to,
                                Env* e,
                                SolverEngine* smte)
 {
   NodeManager* nm = e->getNodeManager();
-  // all variables are nonnegative.
-  Node zero = nm->mkConstInt(Rational(0));
-  for (Node var : freeVariables)
-  {
-    assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
-  }
-  // The lambda's bound variables appear free in `assertion`. A formula with
-  // free (bound) variables cannot be asserted to a subsolver, so we replace
-  // them with fresh free constants and substitute them back in the returned
-  // disjunct.
-  std::vector<Node> from;
-  std::vector<Node> to;
-  for (Node var : freeVariables)
-  {
-    if (var.getKind() == Kind::BOUND_VARIABLE)
-    {
-      from.push_back(var);
-      to.push_back(nm->mkDummySkolem("liastar", var.getType()));
-    }
-  }
-  if (!from.empty())
-  {
-    assertion =
-        assertion.substitute(from.begin(), from.end(), to.begin(), to.end());
-  }
-  // smte->assertFormula(assertion);
+  // The subsolver `smte` already has `assertion` (and the negations of the
+  // previously discovered cone-disjuncts) asserted; we only check it and read
+  // the model. `assertion` is passed here only to enumerate the atoms whose
+  // truth value the disjunct fixes.
   Result result = smte->checkSat();
   if (result.getStatus() == Result::Status::UNSAT)
   {

@@ -20,6 +20,7 @@
 
 #include "expr/node.h"
 #include "smt/env.h"
+#include "smt/solver_engine.h"
 #include "theory/arith/linear/normal_form.h"
 #include "util/result.h"
 namespace cvc5::internal {
@@ -88,7 +89,8 @@ class LiaStarUtils
   /** */
   static Node getDisjunct(const std::vector<Node>& freeVariables,
                           Node assertion,
-                          Env* e);
+                          Env* e,
+                          SolverEngine* smte);
 
   /**
    * Builds the encoding of one module generator of a cone in terms of fresh

@@ -78,6 +78,14 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
         new CDProofSet<CDProof>(env, env.getUserContext(), "liastar-ext"));
     d_proofGen.reset(new LiaStarProofGenerator(env, env.getUserContext()));
   }
+  Options subOptions;
+  // we read the model below to construct the disjunct.
+  subOptions.write_smt().produceModels = true;
+  d_solverEngine = new SolverEngine(d_nm, &subOptions);
+  d_solverEngine->setIsInternalSubsolver();
+  LogicInfo info("QF_LIA");
+  d_solverEngine->setLogic(info);
+  d_solverEngine->setOption("incremental", "true");
 }
 
 LiaStarExtension::~LiaStarExtension() {}
@@ -292,13 +300,43 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
     return;
   }
 
-  auto pairs = d_lazyCones[lambda];
+  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>> pairs =
+      d_lazyCones[lambda];
   Node formula = lambda[1];
-  for (auto& pair : pairs)
+  if (pairs.size() == 0)
   {
-    Node disjunct = pair.first;
-    formula = formula.andNode(disjunct.notNode());
+    // The lambda's bound variables appear free in `assertion`. A formula with
+    // free (bound) variables cannot be asserted to a subsolver, so we replace
+    // them with fresh free constants and substitute them back in the returned
+    // disjunct.
+    std::vector<Node> from;
+    std::vector<Node> to;
+    for (Node var : lambda[0])
+    {
+      if (var.getKind() == Kind::BOUND_VARIABLE)
+      {
+        from.push_back(var);
+        to.push_back(d_nm->mkDummySkolem(var.toString(), var.getType()));
+      }
+    }
+    if (!from.empty())
+    {
+      formula =
+          formula.substitute(from.begin(), from.end(), to.begin(), to.end());
+    }
+    d_solverEngine->assertFormula(formula);
   }
+  else
+  {
+    d_solverEngine->push();
+    Node disjunct = pairs[pairs.size() - 1].first;
+    d_solverEngine->assertFormula(disjunct.notNode());
+  }
+  // for (auto& pair : pairs)
+  // {
+  //   Node disjunct = pair.first;
+  //   formula = formula.andNode(disjunct.notNode());
+  // }
   lazyHilbert(literal, formula);
 }
 
@@ -748,7 +786,8 @@ void LiaStarExtension::lazyHilbert(Node literal, Node formula)
   {
     freeVariables.push_back(variables[i]);
   }
-  Node disjunct = LiaStarUtils::getDisjunct(freeVariables, nnf, &d_env);
+  Node disjunct =
+      LiaStarUtils::getDisjunct(freeVariables, nnf, &d_env, d_solverEngine);
   // `getDisjunct` returns false when no region of `formula` is left uncovered,
   // i.e. every disjunct of the predicate already has a cone. At that point the
   // cone encoding is exact and we can assert the full equivalence.

@@ -462,6 +462,7 @@ std::vector<std::pair<Node, Node>> LiaStarUtils::removeIntegerItes(Node n,
   switch (k)
   {
     case Kind::VARIABLE:
+    case Kind::DUMMY_SKOLEM:
     case Kind::BOUND_VARIABLE:
     case Kind::NEG:
     case Kind::CONST_INTEGER: return {{trueConst, n}};
@@ -566,16 +567,10 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
 
 Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
                                Node assertion,
-                               Env* e)
+                               Env* e,
+                               SolverEngine* smte)
 {
   NodeManager* nm = e->getNodeManager();
-  Options subOptions;
-  // we read the model below to construct the disjunct.
-  subOptions.write_smt().produceModels = true;
-  SolverEngine smte(nm, &subOptions);
-  smte.setIsInternalSubsolver();
-  LogicInfo info("QF_LIA");
-  smte.setLogic(info);
   // all variables are nonnegative.
   Node zero = nm->mkConstInt(Rational(0));
   for (Node var : freeVariables)
@@ -598,11 +593,11 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
   }
   if (!from.empty())
   {
-    assertion = assertion.substitute(
-        from.begin(), from.end(), to.begin(), to.end());
+    assertion =
+        assertion.substitute(from.begin(), from.end(), to.begin(), to.end());
   }
-  smte.assertFormula(assertion);
-  Result result = smte.checkSat();
+  // smte->assertFormula(assertion);
+  Result result = smte->checkSat();
   if (result.getStatus() == Result::Status::UNSAT)
   {
     return nm->mkConst<>(false);
@@ -620,7 +615,7 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
   for (const Node& atom : atoms)
   {
     Node literal;
-    if (smte.getValue(atom).getConst<bool>())
+    if (smte->getValue(atom).getConst<bool>())
     {
       literal = atom;
     }
@@ -629,8 +624,8 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
       // A disequality is not convex (it is the union of two half-spaces), so it
       // cannot be a single cone. Pick the strict inequality on the side that
       // the model satisfies.
-      Rational lhs = smte.getValue(atom[0]).getConst<Rational>();
-      Rational rhs = smte.getValue(atom[1]).getConst<Rational>();
+      Rational lhs = smte->getValue(atom[0]).getConst<Rational>();
+      Rational rhs = smte->getValue(atom[1]).getConst<Rational>();
       Kind k = lhs > rhs ? Kind::GT : Kind::LT;
       literal = nm->mkNode(k, atom[0], atom[1]);
     }
@@ -641,8 +636,8 @@ Node LiaStarUtils::getDisjunct(const std::vector<Node>& freeVariables,
     if (!from.empty())
     {
       // substitute the fresh constants back to the lambda's bound variables.
-      literal = literal.substitute(
-          to.begin(), to.end(), from.begin(), from.end());
+      literal =
+          literal.substitute(to.begin(), to.end(), from.begin(), from.end());
     }
     literals.push_back(literal);
   }

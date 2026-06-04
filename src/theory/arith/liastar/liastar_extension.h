@@ -25,6 +25,7 @@
 #include "libnormaliz/libnormaliz.h"
 #include "proof/proof_set.h"
 #include "smt/env_obj.h"
+#include "smt/solver_engine.h"
 #include "theory/arith/liastar/liastar_proof_generator.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
@@ -207,8 +208,7 @@ class LiaStarExtension : EnvObj
    * step with `d_starConstraints`. They are used to rebuild the sum
    * constraints over all cones on each call to `getStarConstraints`.
    */
-  std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>>
-      d_lambdas;
+  std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>> d_lambdas;
   /** The number of cones in `d_lazyCones[n[0]]` already processed. */
   std::map<Node, size_t> d_processedCones;
 
@@ -223,9 +223,9 @@ class LiaStarExtension : EnvObj
   /**
    * The fresh boolean guard of the last (still active) tentative reduction
    * `g => (literal = star)` emitted for each STAR_CONTAINS literal by
-   * `lazyHilbert`. When a later round produces a larger under-approximation, the
-   * previous guard is deactivated (we assert `(not g)`), so at most one tentative
-   * reduction is active per literal.
+   * `lazyHilbert`. When a later round produces a larger under-approximation,
+   * the previous guard is deactivated (we assert `(not g)`), so at most one
+   * tentative reduction is active per literal.
    */
   std::map<Node, Node> d_lastGuard;
 
@@ -240,6 +240,7 @@ class LiaStarExtension : EnvObj
    */
   std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 
+  SolverEngine* d_solverEngine;
 }; /* class LiaStarExtension */
 
 }  // namespace liastar

@@ -647,4 +647,12 @@ name   = "Arithmetic Theory"
   type       = "bool"
   default    = "false"
   help       = "in the lazy strategy, refine the subsolver by popping the previous refined formula and asserting a single cumulative one under push/pop, instead of accumulating one assertion per discovered disjunct"
+
+[[option]]
+  name       = "arithLiaStarMainSolver"
+  category   = "regular"
+  long       = "arith-liastar-main-solver"
+  type       = "bool"
+  default    = "false"
+  help       = "in the lazy strategy, enumerate the predicate's cells in the main solver instead of a dedicated subsolver: the lambda's bound variables become fresh skolems constrained by guarded lemmas, and new cells are read from the main solver's candidate model"
   

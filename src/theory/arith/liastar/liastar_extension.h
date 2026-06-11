@@ -257,12 +257,106 @@ class LiaStarExtension : EnvObj
   /**
    * One lazy refinement round for `literal`: ask the subsolver for a model in
    * a region of the predicate not yet covered by a cone, read off the convex
-   * cell containing it (`LiaStarUtils::getDisjunct`), turn the cell into a
-   * cone, and emit the reduction lemma -- guarded by a fresh boolean while the
-   * star is still an under-approximation, unconditional once the subsolver
-   * reports that every cell is covered.
+   * cell containing it (`LiaStarUtils::getDisjunct`), and hand it to
+   * `processDisjunct`.
    */
   void lazyHilbert(Node literal, Subsolver& sub);
+
+  /**
+   * Shared tail of one lazy refinement round (used by both the subsolver and
+   * the main-solver enumeration): turn `disjunct` -- a freshly discovered
+   * cell of the predicate, in bound-variable space -- into a cone, rebuild
+   * the star constraints over all cones found so far, and emit the reduction
+   * lemma: guarded by a fresh boolean while the star is still an
+   * under-approximation (`complete` false), unconditional once every cell is
+   * covered (`complete` true, `disjunct` is then the false constraint).
+   */
+  void processDisjunct(Node literal, Node disjunct, bool complete);
+
+  /**
+   * State for enumerating the convex cells of one lambda's predicate in the
+   * main solver (option arith-liastar-main-solver), replacing the dedicated
+   * subsolver. The lambda's bound variables are replaced by fresh skolems
+   * (`from` -> `to`) that live in the main solver, constrained through a
+   * chain of stage guards: h_0 => base, and for every discovered
+   * cone-disjunct D_k a fresh h_k with h_k => h_{k-1} and h_k => not(D_k)
+   * (two constant-size lemmas per stage, accumulate style). The current
+   * stage guard h_k therefore activates `base and not(D_1) ... and not(D_k)`,
+   * i.e. it places the skolems in a cell not yet covered by a cone; the cell
+   * is then read off the main solver's candidate arithmetic model.
+   *
+   * The enumeration is driven by the literal itself: each stage emits the
+   * (satisfiability-preserving) driver lemma
+   *     literal => (p[v] or star_k or h_k),
+   * so a model that claims the literal without certifying it must activate
+   * h_k and thereby exhibit a fresh cell; once every cell is covered the h_k
+   * branch closes by conflict and the driver leaves exactly the certified
+   * branches. Completeness is additionally detected when the SAT solver
+   * fixes the stage guard false at level 0 (`Valuation::isFixed`), at which
+   * point the exact reduction is emitted.
+   */
+  struct MainEnum
+  {
+    /** the lambda's bound variables ... */
+    std::vector<Node> from;
+    /** ... and the fresh skolems substituted for them in the main solver. */
+    std::vector<Node> to;
+    /** The (nonnegative) predicate in skolem space. It is asserted under the
+     * first stage guard; it is also used to read off the predicate's atoms
+     * when building a disjunct from the model. */
+    Node base;
+    /** The current stage guard h_k (a decision variable, biased true). */
+    Node guard;
+    /** number of cones in `d_lazyCones[lambda]` already negated via stage
+     * guards. */
+    size_t negated = 0;
+  };
+
+  /**
+   * Returns the main-solver enumeration state for `lambda`, creating it (and
+   * queueing its seed lemmas: the guard split and `guard => base`) on first
+   * use.
+   */
+  MainEnum& getMainEnum(Node lambda);
+
+  /**
+   * One refinement round of the main-solver lazy strategy for `literal`:
+   * depending on the guard's value in the current SAT assignment, read a
+   * fresh cell from the candidate model (guard true), conclude completeness
+   * (guard fixed false), or bias the guard and wait (otherwise). See
+   * `MainEnum`.
+   */
+  void mainSolverCheckStar(Node literal,
+                           Node lambda,
+                           const std::map<Node, Node>& arithModel);
+
+  /**
+   * Read the cell of `en.base` containing the current candidate arithmetic
+   * model: fix the truth value of every atom of `en.base` under `arithModel`
+   * (consulting `TheoryArith::getCandidateModelValue` for skolems missing
+   * from the map) and return the conjunction in bound-variable space.
+   * Returns the null node if some atom cannot be evaluated to a constant.
+   */
+  Node getModelDisjunct(MainEnum& en, const std::map<Node, Node>& arithModel);
+
+  /**
+   * Queue a main-solver enumeration lemma (InferenceId ARITH_LIA_STAR_ENUM),
+   * skipping lemmas that rewrite to a constant.
+   */
+  void addEnumLemma(Node lemma);
+
+  /**
+   * Open a new enumeration stage for `en`: a fresh guard that activates the
+   * previous stage's constraints plus the negation of the newly covered
+   * cell `skolemDisjunct` (in skolem space).
+   */
+  void advanceStage(MainEnum& en, Node skolemDisjunct);
+
+  /**
+   * Emit, once per (literal, stage), the driver lemma
+   * `literal => (p[v] or star or guard)`; see `MainEnum`.
+   */
+  void emitDriverLemma(Node literal, MainEnum& en);
 
   /** node manager */
   NodeManager* d_nm;
@@ -353,6 +447,19 @@ class LiaStarExtension : EnvObj
    * predicate's cells are enumerated incrementally across refinement rounds.
    */
   std::map<Node, Subsolver> d_subsolvers;
+
+  /**
+   * The main-solver enumeration state for each lambda (option
+   * arith-liastar-main-solver). Created lazily, like `d_subsolvers`.
+   */
+  std::map<Node, MainEnum> d_mainEnums;
+
+  /**
+   * The stage guard for which the driver lemma
+   * `literal => (p[v] or star or guard)` was last emitted, per literal. Used
+   * to emit the driver exactly once per (literal, stage).
+   */
+  std::map<Node, Node> d_lastDriver;
 }; /* class LiaStarExtension */
 
 }  // namespace liastar

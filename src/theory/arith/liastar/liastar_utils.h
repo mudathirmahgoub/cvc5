@@ -250,6 +250,15 @@ class LiaStarUtils
    */
   static void traceDistinctQuery(const std::string& label, Node a, Node b);
 
+  /**
+   * Collect the atomic predicates (leaves of the boolean structure) of `n`
+   * into `atoms`, in deterministic traversal order, using `visited` to avoid
+   * duplicates.
+   */
+  static void collectAtoms(Node n,
+                           std::vector<Node>& atoms,
+                           std::unordered_set<Node>& visited);
+
  private:
   /**
    * Eliminate if-then-elses from a QF_LIA predicate by case splitting, without
@@ -293,15 +302,6 @@ class LiaStarUtils
    * a non-empty cone yields an unknown Result.
    */
   static Result normalizCheckSat(Node variables, Node assertion);
-
-  /**
-   * Collect the atomic predicates (leaves of the boolean structure) of `n`
-   * into `atoms`, in deterministic traversal order, using `visited` to avoid
-   * duplicates.
-   */
-  static void collectAtoms(Node n,
-                           std::vector<Node>& atoms,
-                           std::unordered_set<Node>& visited);
 
   /**
    * Print a linear polynomial in Normaliz syntax, mapping the i-th variable

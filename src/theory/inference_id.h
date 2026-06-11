@@ -208,6 +208,9 @@ enum class InferenceId
   ARITH_LIA_STAR_NONNEGATIVE,
   // lia star split lemma
   ARITH_LIA_STAR_SPLIT,
+  // lia star main-solver cell enumeration lemma (guard => predicate /
+  // guard => negated cone-disjunct)
+  ARITH_LIA_STAR_ENUM,
   //-------------------- ff inference
   // ---------------------------------- end arith theory
 

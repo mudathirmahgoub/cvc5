@@ -525,17 +525,22 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
   Subsolver& sub = getSubsolver(lambda);
 
   // Refine the subsolver with the cone-disjuncts discovered since the previous
-  // round. The refined formula -- the negated union of every disjunct found so
-  // far -- subsumes the previous round's, so instead of accumulating one
-  // assertion per disjunct we pop the previous refined formula and assert the
-  // new one in a fresh frame: the subsolver always holds just the base
-  // predicate (at the base user level) plus a single refined formula. The
-  // disjuncts are stored in bound-variable space, so map them to skolem space
-  // first.
+  // round. The disjuncts are stored in bound-variable space, so map them to
+  // skolem space first. Two strategies (option arith-liastar-push-pop):
+  // - accumulate (default): assert the negation of each new disjunct, one
+  //   assertFormula per disjunct, so each disjunct is asserted exactly once
+  //   and the subsolver keeps everything it learned about covered regions;
+  // - push/pop: the refined formula -- the negated union of every disjunct
+  //   found so far -- subsumes the previous round's, so pop the previous
+  //   refined formula and assert the new one in a fresh frame: the subsolver
+  //   always holds just the base predicate (at the base user level) plus a
+  //   single refined formula, keeping the number of live assertions (and the
+  //   formulas cached per assertion) constant across rounds.
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& pairs =
       d_lazyCones[lambda];
   if (sub.negated < pairs.size())
   {
+    bool pushPop = options().arith.arithLiaStarPushPop;
     for (size_t i = sub.negated; i < pairs.size(); i++)
     {
       Node disjunct = pairs[i].first;
@@ -544,18 +549,28 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
         disjunct = disjunct.substitute(
             sub.from.begin(), sub.from.end(), sub.to.begin(), sub.to.end());
       }
-      sub.covered = sub.covered.isNull()
-                        ? disjunct
-                        : d_nm->mkNode(Kind::OR, sub.covered, disjunct);
+      if (pushPop)
+      {
+        sub.covered = sub.covered.isNull()
+                          ? disjunct
+                          : d_nm->mkNode(Kind::OR, sub.covered, disjunct);
+      }
+      else
+      {
+        sub.engine->assertFormula(disjunct.notNode());
+      }
     }
     sub.negated = pairs.size();
-    if (sub.pushed)
+    if (pushPop)
     {
-      sub.engine->pop();
+      if (sub.pushed)
+      {
+        sub.engine->pop();
+      }
+      sub.engine->push();
+      sub.engine->assertFormula(sub.covered.notNode());
+      sub.pushed = true;
     }
-    sub.engine->push();
-    sub.engine->assertFormula(sub.covered.notNode());
-    sub.pushed = true;
   }
 
   lazyHilbert(literal, sub);

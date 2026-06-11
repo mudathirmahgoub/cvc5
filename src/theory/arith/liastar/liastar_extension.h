@@ -212,14 +212,10 @@ class LiaStarExtension : EnvObj
    * A persistent, incremental subsolver dedicated to one lambda (one
    * STAR_CONTAINS predicate). It is used to enumerate the convex cells of the
    * predicate's satisfying region: it is seeded once with the (nonnegative)
-   * predicate at the base user level and then refined across rounds. Each
-   * round's refined formula -- the negated union of every cone-disjunct
-   * discovered so far -- subsumes (implies) the previous round's, so the
-   * previous one is popped and the new one asserted in a fresh frame: the
-   * subsolver always holds exactly the base predicate plus a single refined
-   * formula, however many rounds have run. This keeps the number of live
-   * assertions (and the formulas the subsolver caches per assertion) constant
-   * instead of growing with the number of refinement rounds.
+   * predicate at the base user level and then refined across rounds with the
+   * negations of the discovered cone-disjuncts, either one assertion per
+   * disjunct (the default) or as a single cumulative refined formula under
+   * push/pop (option arith-liastar-push-pop); see `lazyCheckStar`.
    */
   struct Subsolver
   {
@@ -238,16 +234,17 @@ class LiaStarExtension : EnvObj
      */
     Node base;
     /**
-     * The union (disjunction), in skolem space, of the cone-disjuncts
-     * discovered so far. Its negation is the refined formula currently
-     * asserted in `engine`.
+     * Push/pop strategy only: the union (disjunction), in skolem space, of
+     * the cone-disjuncts discovered so far. Its negation is the refined
+     * formula currently asserted in `engine`.
      */
     Node covered;
-    /** Whether a refined formula is currently asserted, i.e. whether `engine`
-     * has a pushed frame to pop before asserting the next refined formula. */
+    /** Push/pop strategy only: whether a refined formula is currently
+     * asserted, i.e. whether `engine` has a pushed frame to pop before
+     * asserting the next refined formula. */
     bool pushed = false;
-    /** number of cones in `d_lazyCones[lambda]` already folded into
-     * `covered`. */
+    /** number of cones in `d_lazyCones[lambda]` already negated in `engine`
+     * (or, for the push/pop strategy, folded into `covered`). */
     size_t negated = 0;
   };
 

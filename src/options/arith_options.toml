@@ -639,4 +639,12 @@ name   = "Arithmetic Theory"
   type       = "bool"
   default    = "true"
   help       = "whether to lazily compute disjunctions of predicate under the star operator"
+
+[[option]]
+  name       = "arithLiaStarPushPop"
+  category   = "regular"
+  long       = "arith-liastar-push-pop"
+  type       = "bool"
+  default    = "false"
+  help       = "in the lazy strategy, refine the subsolver by popping the previous refined formula and asserting a single cumulative one under push/pop, instead of accumulating one assertion per discovered disjunct"
   

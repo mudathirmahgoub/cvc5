@@ -73,21 +73,22 @@ using libnormaliz::operator<<;
 
 void LiaStarUtils::traceDistinctQuery(const std::string& label, Node a, Node b)
 {
-  if (!TraceIsOn("liastar-ext-smt"))
+  // `!TraceIsOn(...)` does not compile in non-tracing builds, so guard
+  // positively.
+  if (TraceIsOn("liastar-ext-smt"))
   {
-    return;
+    Trace("liastar-ext-smt") << "(push 1)" << std::endl;
+    Trace("liastar-ext-smt") << "(echo \"" << label << "\")" << std::endl;
+    Trace("liastar-ext-smt") << "(assert " << std::endl
+                             << "  (distinct" << std::endl
+                             << "    ";
+    Trace("liastar-ext-smt") << a << std::endl << "    ";
+    Trace("liastar-ext-smt") << b << std::endl
+                             << "  )" << std::endl
+                             << ")" << std::endl;
+    Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
+    Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
   }
-  Trace("liastar-ext-smt") << "(push 1)" << std::endl;
-  Trace("liastar-ext-smt") << "(echo \"" << label << "\")" << std::endl;
-  Trace("liastar-ext-smt") << "(assert " << std::endl
-                           << "  (distinct" << std::endl
-                           << "    ";
-  Trace("liastar-ext-smt") << a << std::endl << "    ";
-  Trace("liastar-ext-smt") << b << std::endl
-                           << "  )" << std::endl
-                           << ")" << std::endl;
-  Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
-  Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
 }
 
 std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)

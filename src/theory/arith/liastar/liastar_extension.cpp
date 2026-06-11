@@ -190,21 +190,22 @@ std::vector<std::vector<Integer>> getConeGenerators(
  */
 void traceSmtPreamble(Node variables)
 {
-  if (!TraceIsOn("liastar-ext-smt"))
+  // `!TraceIsOn(...)` does not compile in non-tracing builds, so guard
+  // positively.
+  if (TraceIsOn("liastar-ext-smt"))
   {
-    return;
-  }
-  Trace("liastar-ext-smt") << "(set-logic ALL)" << std::endl;
-  Trace("liastar-ext-smt") << "(set-option :incremental true)" << std::endl;
-  Trace("liastar-ext-smt") << "(set-option :produce-models true)" << std::endl;
-  for (Node var : variables)
-  {
-    Trace("liastar-ext-smt") << "(declare-const " << var << " Int)"
-                             << std::endl;
-  }
-  for (Node var : variables)
-  {
-    Trace("liastar-ext-smt") << "(assert (>= " << var << " 0))" << std::endl;
+    Trace("liastar-ext-smt") << "(set-logic ALL)" << std::endl;
+    Trace("liastar-ext-smt") << "(set-option :incremental true)" << std::endl;
+    Trace("liastar-ext-smt") << "(set-option :produce-models true)" << std::endl;
+    for (Node var : variables)
+    {
+      Trace("liastar-ext-smt") << "(declare-const " << var << " Int)"
+                               << std::endl;
+    }
+    for (Node var : variables)
+    {
+      Trace("liastar-ext-smt") << "(assert (>= " << var << " 0))" << std::endl;
+    }
   }
 }
 
@@ -523,24 +524,39 @@ void LiaStarExtension::lazyCheckStar(Node literal, Node lambda)
   // seeded with the (nonnegative) predicate.
   Subsolver& sub = getSubsolver(lambda);
 
-  // Refine the subsolver by asserting the negation of every cone-disjunct
-  // discovered since the previous round, one assertFormula per disjunct, so the
-  // predicate is never re-asserted as a single growing conjunction. The
+  // Refine the subsolver with the cone-disjuncts discovered since the previous
+  // round. The refined formula -- the negated union of every disjunct found so
+  // far -- subsumes the previous round's, so instead of accumulating one
+  // assertion per disjunct we pop the previous refined formula and assert the
+  // new one in a fresh frame: the subsolver always holds just the base
+  // predicate (at the base user level) plus a single refined formula. The
   // disjuncts are stored in bound-variable space, so map them to skolem space
   // first.
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& pairs =
       d_lazyCones[lambda];
-  for (size_t i = sub.negated; i < pairs.size(); i++)
+  if (sub.negated < pairs.size())
   {
-    Node disjunct = pairs[i].first;
-    if (!sub.from.empty())
+    for (size_t i = sub.negated; i < pairs.size(); i++)
     {
-      disjunct = disjunct.substitute(
-          sub.from.begin(), sub.from.end(), sub.to.begin(), sub.to.end());
+      Node disjunct = pairs[i].first;
+      if (!sub.from.empty())
+      {
+        disjunct = disjunct.substitute(
+            sub.from.begin(), sub.from.end(), sub.to.begin(), sub.to.end());
+      }
+      sub.covered = sub.covered.isNull()
+                        ? disjunct
+                        : d_nm->mkNode(Kind::OR, sub.covered, disjunct);
     }
-    sub.engine->assertFormula(disjunct.notNode());
+    sub.negated = pairs.size();
+    if (sub.pushed)
+    {
+      sub.engine->pop();
+    }
+    sub.engine->push();
+    sub.engine->assertFormula(sub.covered.notNode());
+    sub.pushed = true;
   }
-  sub.negated = pairs.size();
 
   lazyHilbert(literal, sub);
 }

@@ -212,9 +212,14 @@ class LiaStarExtension : EnvObj
    * A persistent, incremental subsolver dedicated to one lambda (one
    * STAR_CONTAINS predicate). It is used to enumerate the convex cells of the
    * predicate's satisfying region: it is seeded once with the (nonnegative)
-   * predicate and then refined across rounds by asserting the negation of each
-   * discovered cone-disjunct one at a time, so the predicate is never
-   * re-asserted as a single growing conjunction.
+   * predicate at the base user level and then refined across rounds. Each
+   * round's refined formula -- the negated union of every cone-disjunct
+   * discovered so far -- subsumes (implies) the previous round's, so the
+   * previous one is popped and the new one asserted in a fresh frame: the
+   * subsolver always holds exactly the base predicate plus a single refined
+   * formula, however many rounds have run. This keeps the number of live
+   * assertions (and the formulas the subsolver caches per assertion) constant
+   * instead of growing with the number of refinement rounds.
    */
   struct Subsolver
   {
@@ -227,11 +232,22 @@ class LiaStarExtension : EnvObj
     std::vector<Node> to;
     /**
      * The (nonnegative) predicate in skolem space. It is already asserted in
-     * `engine`; it is kept only to read off the predicate's atoms when
-     * building a disjunct from the model.
+     * `engine` at the base user level (so it survives every pop); it is kept
+     * only to read off the predicate's atoms when building a disjunct from
+     * the model.
      */
     Node base;
-    /** number of cones in `d_lazyCones[lambda]` already negated in `engine`. */
+    /**
+     * The union (disjunction), in skolem space, of the cone-disjuncts
+     * discovered so far. Its negation is the refined formula currently
+     * asserted in `engine`.
+     */
+    Node covered;
+    /** Whether a refined formula is currently asserted, i.e. whether `engine`
+     * has a pushed frame to pop before asserting the next refined formula. */
+    bool pushed = false;
+    /** number of cones in `d_lazyCones[lambda]` already folded into
+     * `covered`. */
     size_t negated = 0;
   };
 

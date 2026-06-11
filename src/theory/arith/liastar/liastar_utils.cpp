@@ -10,7 +10,38 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Utility functions for liastar extension.
+ * Utility functions for the lia* (LIA star) arithmetic extension.
+ *
+ * This file is a toolbox of stateless helpers used by `LiaStarExtension`. It
+ * has three responsibilities:
+ *
+ * 1. Predicate normalization. A STAR_CONTAINS literal carries a lambda whose
+ *    body `p` is an arbitrary QF_LIA predicate. Before it can be handed to
+ *    Normaliz it must be turned into a disjunction of conjunctions of linear
+ *    (in)equalities, with no if-then-elses, no negations, and no
+ *    disequalities. The pipeline is:
+ *      removeItes      : push integer/boolean if-then-elses into the boolean
+ *                        structure (case split, no new variables);
+ *      removeNot       : push negations to the leaves (NNF) and rewrite each
+ *                        negated comparison into a positive one, turning a
+ *                        disequality `(not (= a b))` into `(or (> a b) (< a b))`;
+ *      distribute      : distribute AND over OR to reach DNF, optionally pruning
+ *                        unsatisfiable conjuncts with a subsolver.
+ *    `removeItesAndNots` runs the first two; `toDNF` runs all three.
+ *
+ * 2. Translation to Normaliz input. `getMatrix`/`getMatrices` render a
+ *    conjunction (one cone) / a DNF (a list of cones) into Normaliz "symbolic"
+ *    constraint strings such as "x[1] + 2 x[2] >= 3;", and `buildCone` feeds
+ *    those strings to libnormaliz and computes the cone's Hilbert basis and
+ *    module generators. `getGeneratorBody` then turns one module generator into
+ *    its arithmetic encoding (shared by the membership and the star encodings).
+ *
+ * 3. Subsolver model extraction. In the lazy strategy a satisfying model of the
+ *    predicate is read back from an incremental subsolver and `getDisjunct`
+ *    distils it into a single convex cell (one conjunction of atoms) that
+ *    becomes the next cone to add.
+ *
+ * See `liastar_extension.cpp` for the overall decision procedure.
  */
 
 #ifdef CVC5_USE_NORMALIZ
@@ -22,16 +53,11 @@
 #include "libnormaliz/input.h"
 #include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
-#include "options/smt_options.h"
-#include "smt/smt_solver.h"
 #include "smt/solver_engine.h"
 #include "theory/arith/linear/normal_form.h"
 #include "theory/booleans/theory_bool_rewriter.h"
-#include "theory/datatypes/tuple_utils.h"
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
-#include "theory/theory.h"
-#include "theory/theory_engine.h"
 #include "util/rational.h"
 
 using namespace cvc5::internal::kind;
@@ -45,8 +71,34 @@ using namespace libnormaliz;
 
 using libnormaliz::operator<<;
 
+void LiaStarUtils::traceDistinctQuery(const std::string& label, Node a, Node b)
+{
+  if (!TraceIsOn("liastar-ext-smt"))
+  {
+    return;
+  }
+  Trace("liastar-ext-smt") << "(push 1)" << std::endl;
+  Trace("liastar-ext-smt") << "(echo \"" << label << "\")" << std::endl;
+  Trace("liastar-ext-smt") << "(assert " << std::endl
+                           << "  (distinct" << std::endl
+                           << "    ";
+  Trace("liastar-ext-smt") << a << std::endl << "    ";
+  Trace("liastar-ext-smt") << b << std::endl
+                           << "  )" << std::endl
+                           << ")" << std::endl;
+  Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
+  Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
+}
+
 std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
 {
+  // `n` is (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) y_1 ... y_n).
+  // The "vector predicate" is `p` with each bound variable x_i replaced by the
+  // corresponding vector element y_i, i.e. the statement that the vector itself
+  // satisfies `p` (and hence is a single-summand member of the star set). We
+  // also return the non-negativity constraints on the vector, which are a
+  // necessary condition for membership in the star set (the set lives in the
+  // non-negative orthant).
   Assert(n.getKind() == Kind::STAR_CONTAINS);
   Node lambda = n[0];
   std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
@@ -69,68 +121,38 @@ std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
 
 Node LiaStarUtils::removeItesAndNots(Node n, Env* e)
 {
-  // eliminate ites
+  // Eliminate if-then-elses, then push negations to the leaves (and rewrite
+  // negated comparisons into positive ones). The result is a negation-free,
+  // ite-free formula over positive linear (in)equalities.
   Node noItes = removeItes(n, e);
   Trace("liastar-ext-debug") << "noItes: " << noItes << std::endl;
-  // eliminate negation
   Node nnf = removeNot(noItes, e);
   Trace("liastar-ext-debug") << "nnf: " << nnf << std::endl;
-  if (TraceIsOn("liastar-ext-smt"))
-  {
-    // noItes
-    Trace("liastar-ext-smt") << "(push 1)" << std::endl;
-    Trace("liastar-ext-smt") << "(echo \"noItes\")" << std::endl;
-    Trace("liastar-ext-smt") << "(assert " << std::endl
-                             << "  (distinct" << std::endl
-                             << "    ";
-    Trace("liastar-ext-smt") << n << std::endl << "    ";
-    Trace("liastar-ext-smt") << noItes << std::endl
-                             << "  )" << std::endl
-                             << ")" << std::endl;
-    Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
-    // nnf
-    Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
-    Trace("liastar-ext-smt") << "(push 1)" << std::endl;
-    Trace("liastar-ext-smt") << "(echo \"nnf\")" << std::endl;
-    Trace("liastar-ext-smt") << "(assert " << std::endl
-                             << "  (distinct" << std::endl
-                             << "    ";
-    Trace("liastar-ext-smt") << noItes << std::endl << "    ";
-    Trace("liastar-ext-smt") << nnf << std::endl
-                             << "  )" << std::endl
-                             << ")" << std::endl;
-    Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
-    Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
-  }
+  // emit queries validating both transformations on the liastar-ext-smt trace
+  traceDistinctQuery("noItes", n, noItes);
+  traceDistinctQuery("nnf", noItes, nnf);
   return nnf;
 }
 
 Node LiaStarUtils::toDNF(Node n, Env* e)
 {
+  // Normalize (no ites/negations) and then distribute AND over OR to reach
+  // disjunctive normal form. `recursiveFlatten` collapses nested AND/OR so each
+  // disjunct is a flat conjunction (a single cone).
   Node nnf = removeItesAndNots(n, e);
-  // distributes conjunctions over disjunctions
   Node dnf = distribute(nnf, e);
   Trace("liastar-ext-debug") << "dnf: " << dnf << std::endl;
   dnf = recursiveFlatten(e->getNodeManager(), dnf);
-  if (TraceIsOn("liastar-ext-smt"))
-  {
-    Trace("liastar-ext-smt") << "(push 1)" << std::endl;
-    Trace("liastar-ext-smt") << "(echo \"dnf\")" << std::endl;
-    Trace("liastar-ext-smt") << "(assert " << std::endl
-                             << "  (distinct" << std::endl
-                             << "    ";
-    Trace("liastar-ext-smt") << nnf << std::endl << "    ";
-    Trace("liastar-ext-smt") << dnf << std::endl
-                             << "  )" << std::endl
-                             << ")" << std::endl;
-    Trace("liastar-ext-smt") << "(check-sat)" << std::endl;
-    Trace("liastar-ext-smt") << "(pop 1)" << std::endl;
-  }
+  // emit a query validating the distribution on the liastar-ext-smt trace
+  traceDistinctQuery("dnf", nnf, dnf);
   return dnf;
 }
 
 Node LiaStarUtils::recursiveFlatten(NodeManager* nm, Node n)
 {
+  // Collapse nested associative operators, e.g. (or a (or b c)) -> (or a b c)
+  // and likewise for the conjuncts one level down, so a DNF is exactly two
+  // levels deep: a flat OR of flat ANDs.
   Trace("liastar-ext-dnf") << "recursiveFlatten::n: " << n << std::endl;
   if (n.getNumChildren() == 0)
   {
@@ -147,6 +169,11 @@ Node LiaStarUtils::recursiveFlatten(NodeManager* nm, Node n)
 
 Node LiaStarUtils::distribute(Node n, Env* e)
 {
+  // Recursively rewrite `n` into DNF by distributing AND over OR. Atoms and
+  // boolean constants are returned unchanged; an OR distributes into its
+  // children; an AND computes the cartesian product of its children's
+  // disjuncts. Conjuncts found to be unsatisfiable (via `areAssertionsUnsat`)
+  // are dropped, which keeps the number of cones down by avoiding empty ones.
   Assert(n.getType().isBoolean())
       << "Expected " << n << " to be boolean" << std::endl;
   Trace("liastar-ext-dnf") << "distribute::n: " << n << std::endl;
@@ -166,10 +193,12 @@ Node LiaStarUtils::distribute(Node n, Env* e)
     case Kind::GEQ:
     case Kind::EQUAL:
     {
+      // already a literal
       return n;
     }
     case Kind::AND:
     {
+      // First put each conjunct into DNF.
       std::vector<Node> conjunctions;
       for (Node child : n)
       {
@@ -182,17 +211,19 @@ Node LiaStarUtils::distribute(Node n, Env* e)
       {
         return conjunctions[0];
       }
-      // basically we compute the cartesian product
+      // Distribute AND over the OR-children by building the cartesian product
+      // of their disjuncts. `disjunctions` holds the conjunctions accumulated so
+      // far. For example, distributing
+      //     (and (or a b) c (or d e))
+      // grows the accumulator as:
+      //     {}
+      //     {a}, {b}              (after the first conjunct (or a b))
+      //     {a,c}, {b,c}          (after the conjunct c)
+      //     {a,c,d}, {b,c,d}, {a,c,e}, {b,c,e}   (after (or d e))
+      // Partial conjunctions found unsatisfiable are pruned eagerly so the
+      // product does not blow up with dead branches.
       std::vector<std::vector<Node>> disjunctions;
       disjunctions.push_back({});
-      // {a, b}
-      // {c}
-      // {d, e}
-      // ****
-      // disjunctions: {}
-      // disjunctions: {a}, {b}
-      // disjunctions: {a, c}, {b, c}
-      // disjunctions: {a,c, d},{b, d, d},{a, c, e},{b, c, e}
       for (const Node& conjunct : conjunctions)
       {
         Kind conjunctKind = conjunct.getKind();
@@ -208,7 +239,7 @@ Node LiaStarUtils::distribute(Node n, Env* e)
               Result r = areAssertionsUnsat(v, e);
               if (r.getStatus() == Result::Status::UNSAT)
               {
-                // we can discard unsat conjunctions
+                // discard unsatisfiable conjunctions
                 continue;
               }
               else
@@ -221,19 +252,20 @@ Node LiaStarUtils::distribute(Node n, Env* e)
         }
         else
         {
+          // a plain conjunct is appended to every accumulated conjunction
           for (size_t i = 0; i < disjunctions.size(); i++)
           {
             disjunctions[i].push_back(conjunct);
           }
         }
       }
+      // Reassemble the surviving (satisfiable) conjunctions into a disjunction.
       std::vector<Node> final_disjuncts;
       for (std::vector<Node>& v : disjunctions)
       {
         Result r = areAssertionsUnsat(v, e);
         if (r.getStatus() == Result::Status::UNSAT)
         {
-          // we can discard unsat conjunctions
           continue;
         }
         if (v.size() == 1)
@@ -257,15 +289,14 @@ Node LiaStarUtils::distribute(Node n, Env* e)
     }
     case Kind::OR:
     {
+      // OR is already a disjunction; just put each child into DNF.
       std::vector<Node> disjuncts;
-
       for (size_t i = 0; i < n.getNumChildren(); i++)
       {
         Node childDnf = distribute(n[i], e);
         childDnf = expr::algorithm::flatten(nm, childDnf);
         disjuncts.push_back(childDnf);
       }
-
       return nm->mkNode(Kind::OR, disjuncts);
     }
 
@@ -280,6 +311,10 @@ Node LiaStarUtils::distribute(Node n, Env* e)
 
 Node LiaStarUtils::removeItes(Node n, Env* e)
 {
+  // Eliminate if-then-elses without introducing new variables, by case
+  // splitting. A boolean ITE becomes a disjunction of its two guarded branches;
+  // integer ITEs nested inside a comparison are lifted out by `removeIntegerItes`
+  // and the resulting (condition, value) pairs are combined into a disjunction.
   NodeManager* nm = e->getNodeManager();
   Node falseConst = nm->mkConst<bool>(false);
   Node trueConst = nm->mkConst<bool>(true);
@@ -295,14 +330,17 @@ Node LiaStarUtils::removeItes(Node n, Env* e)
     case Kind::GEQ:
     case Kind::EQUAL:
     {
+      // Lift integer ITEs out of both sides. Each side becomes a list of
+      // (condition, ite-free term) pairs; the comparison holds when some pair
+      // from the left and some pair from the right are both selected.
       std::vector<std::pair<Node, Node>> left = removeIntegerItes(n[0], e);
       std::vector<std::pair<Node, Node>> right = removeIntegerItes(n[1], e);
       if (left.size() == 1 && right.size() == 1)
       {
+        // no integer ites were present
         return n;
       }
 
-      // combine the conditions of left and right
       std::vector<Node> disjunctions;
       for (const auto& l : left)
       {
@@ -325,6 +363,7 @@ Node LiaStarUtils::removeItes(Node n, Env* e)
     }
     case Kind::ITE:
     {
+      // a boolean ite: (ite c t e) <-> (or (and c t) (and (not c) e))
       Node l = removeItes(n[0].andNode(n[1]), e);
       Node r = removeItes(n[0].notNode().andNode(n[2]), e);
       return l.orNode(r);
@@ -362,8 +401,10 @@ Node LiaStarUtils::removeItes(Node n, Env* e)
 
 Node LiaStarUtils::removeNot(Node n, Env* e)
 {
+  // Convert to negation normal form and then drive every remaining negation
+  // into the comparison it negates, so the formula has no NOT nodes and no
+  // disequalities (which are not convex and so cannot be a single cone).
   NodeManager* nm = e->getNodeManager();
-  // eliminate negation nodes of the form (not (or ...)), (not (and ...))
   Node nnf = booleans::TheoryBoolRewriter::computeNnfNorm(nm, n);
   Kind k = nnf.getKind();
   switch (k)
@@ -396,6 +437,8 @@ Node LiaStarUtils::removeNot(Node n, Env* e)
     }
     case Kind::NOT:
     {
+      // computeNnfNorm leaves a NOT only directly above an atom; rewrite the
+      // negated comparison into the equivalent positive one.
       Kind kind = nnf[0].getKind();
       switch (kind)
       {
@@ -421,7 +464,8 @@ Node LiaStarUtils::removeNot(Node n, Env* e)
         }
         case Kind::EQUAL:
         {
-          // (not (= a b)) is rewritten as (or (> a b) (< a b))
+          // (not (= a b)) is the union of two half-spaces, so it is rewritten
+          // as the disjunction (or (> a b) (< a b)).
           Node a = nnf[0][0];
           Node b = nnf[0][1];
           Node gt = nm->mkNode(Kind::GT, a, b);
@@ -446,15 +490,17 @@ Node LiaStarUtils::removeNot(Node n, Env* e)
 std::vector<std::pair<Node, Node>> LiaStarUtils::removeIntegerItes(Node n,
                                                                    Env* e)
 {
+  // Lift integer if-then-elses out of an integer term into a list of guarded
+  // alternatives. Each returned pair is (condition, ite-free term): the term is
+  // the value of `n` when the condition holds, and the conditions are mutually
+  // exclusive and exhaustive. For example
+  //   (+ (ite c1 a b) (ite c2 c d))
+  // returns the four pairs
+  //   <(and c1 c2),           (+ a c)>
+  //   <(and c1 (not c2)),     (+ a d)>
+  //   <(and (not c1) c2),     (+ b c)>
+  //   <(and (not c1) (not c2)),(+ b d)>
   Assert(n.getType().isInteger());
-  // (+
-  //    (ite c1 a b)
-  //    (ite c2 c d))
-  // should return 4 pairs:
-  // <(and c1 c2)           ,(+ a c)>
-  // <(and c1 (not c2)      ,(+ a d)>
-  // <(and (not c1) c2)     ,(+ b c)>
-  // <(and (not c1) (not c2),(+ b d)>
   NodeManager* nm = e->getNodeManager();
   Node trueConst = nm->mkConst<bool>(true);
   auto rw = e->getRewriter();
@@ -465,15 +511,19 @@ std::vector<std::pair<Node, Node>> LiaStarUtils::removeIntegerItes(Node n,
     case Kind::DUMMY_SKOLEM:
     case Kind::BOUND_VARIABLE:
     case Kind::NEG:
-    case Kind::CONST_INTEGER: return {{trueConst, n}};
+    case Kind::CONST_INTEGER:
+      // a leaf term with no ite and the trivial (true) condition
+      return {{trueConst, n}};
     case Kind::ADD:
     case Kind::SUB:
     case Kind::MULT:
     {
+      // Combine the guarded alternatives of both operands pairwise: the
+      // condition is the conjunction of the two operand conditions and the
+      // value is the operator applied to the two operand values.
       std::vector<std::pair<Node, Node>> left = removeIntegerItes(n[0], e);
       std::vector<std::pair<Node, Node>> right = removeIntegerItes(n[1], e);
       std::vector<std::pair<Node, Node>> combined;
-      // combine the conditions of left and right
       for (const auto& l : left)
       {
         for (const auto& r : right)
@@ -487,6 +537,8 @@ std::vector<std::pair<Node, Node>> LiaStarUtils::removeIntegerItes(Node n,
     }
     case Kind::ITE:
     {
+      // (ite c t e): guard the then-alternatives with c and the
+      // else-alternatives with (not c).
       std::vector<std::pair<Node, Node>> iteResult;
       Node condition = removeItes(n[0], e);
       std::vector<std::pair<Node, Node>> thenPart = removeIntegerItes(n[1], e);
@@ -536,6 +588,9 @@ std::vector<std::pair<Node, Node>> LiaStarUtils::removeIntegerItes(Node n,
 Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
                                         Env* e)
 {
+  // Decide whether a conjunction of literals is unsatisfiable, used by
+  // `distribute` to prune dead branches of the DNF. Returns an unknown Result
+  // when the sub-solver is disabled, so the caller keeps the conjunct.
   if (!e->getOptions().arith.arithLiaStarSubSolver)
   {
     return Result();
@@ -555,12 +610,15 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
   std::vector<Node> freeVariables(fvs.begin(), fvs.end());
   if (fvs.size() > 0 && e->getOptions().arith.arithLiaStarNormalizAsSubSolver)
   {
+    // Use Normaliz itself as the satisfiability oracle (the conjunction is a
+    // single cone; an empty cone means unsat).
     Node variables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
     assertion = expr::algorithm::flatten(nm, assertion);
     return normalizCheckSat(variables, assertion);
   }
   else
   {
+    // Use a regular cvc5 subsolver.
     return cvc5CheckSat(freeVariables, assertion, e);
   }
 }
@@ -579,6 +637,7 @@ Node LiaStarUtils::getDisjunct(Node assertion,
   Result result = smte->checkSat();
   if (result.getStatus() == Result::Status::UNSAT)
   {
+    // No region of the predicate is left uncovered: the cone encoding is exact.
     return nm->mkConst<>(false);
   }
   // Build one disjunct of the satisfying region by fixing every atom of the
@@ -596,6 +655,7 @@ Node LiaStarUtils::getDisjunct(Node assertion,
     Node literal;
     if (smte->getValue(atom).getConst<bool>())
     {
+      // the atom is true in the model: keep it as is
       literal = atom;
     }
     else if (atom.getKind() == Kind::EQUAL && atom[0].getType().isInteger())
@@ -610,6 +670,7 @@ Node LiaStarUtils::getDisjunct(Node assertion,
     }
     else
     {
+      // the atom is false in the model: negate it
       literal = atom.notNode();
     }
     if (!from.empty())
@@ -635,6 +696,8 @@ void LiaStarUtils::collectAtoms(Node n,
                                 std::vector<Node>& atoms,
                                 std::unordered_set<Node>& visited)
 {
+  // Walk the boolean skeleton of `n` and collect its atomic predicates (the
+  // boolean leaves) in deterministic order, deduplicating via `visited`.
   if (!visited.insert(n).second)
   {
     return;
@@ -671,6 +734,11 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
                                   Node assertion,
                                   Env* e)
 {
+  // Check the satisfiability of `assertion` with a fresh cvc5 subsolver. All
+  // variables are constrained to be non-negative (the star set lives in the
+  // non-negative orthant). Genuine bound variables are existentially quantified;
+  // free constants are left in place (checking a formula with free constants is
+  // the same as checking its existential closure).
   Options subOptions;
   SubsolverSetupInfo ssi(*e, subOptions);
 
@@ -683,15 +751,10 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
   {
     NodeManager* nm = e->getNodeManager();
     Node zero = nm->mkConstInt(Rational(0));
-    // all variables are nonnegative.
     std::vector<Node> boundVariables;
     for (Node var : freeVariables)
     {
       assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
-      // Only genuine bound variables can be existentially quantified. Free
-      // constants (Kind::VARIABLE) are left in place: checking the
-      // satisfiability of a formula with free constants is equivalent to
-      // checking the satisfiability of its existential closure.
       if (var.getKind() == Kind::BOUND_VARIABLE)
       {
         boundVariables.push_back(var);
@@ -710,13 +773,14 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
   return result;
 }
 
-Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
+Cone<Integer> LiaStarUtils::buildCone(
+    size_t dimension, const std::vector<std::string>& constraints)
 {
-  Trace("liastar-normalizCheckSat")
-      << "---------------------------" << std::endl;
-  Trace("liastar-normalizCheckSat")
-      << "Cone for node: " << assertion << std::endl;
-
+  // The single point of contact with libnormaliz. Render the constraint rows
+  // into a Normaliz "symbolic constraints" input block over `dimension`-many
+  // variables, restricted to the non-negative orthant, asking for the Hilbert
+  // basis and the module generators. Then construct the cone and compute those
+  // two properties.
   libnormaliz::OptionsHandler options;
 
   std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
@@ -727,20 +791,17 @@ Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
   libnormaliz::renf_class_ptr number_field_ref;
 
   std::stringstream ss;
-  ss << "amb_space " << variables.getNumChildren() << std::endl;
-  ss << "constraints "
-     << (assertion.getKind() == Kind::AND ? assertion.getNumChildren() : 1)
-     << " symbolic" << std::endl;
-  const std::vector<std::pair<std::vector<std::string>, Node>>& matrices =
-      getMatrices(variables, assertion);
-
-  ss << matrices[0].first << std::endl;
-
+  ss << "amb_space " << dimension << std::endl;
+  ss << "constraints " << constraints.size() << " symbolic" << std::endl;
+  for (const auto& constraint : constraints)
+  {
+    ss << constraint << std::endl;
+  }
   ss << "nonnegative" << std::endl;
   ss << "HilbertBasis" << std::endl;
   ss << "ModuleGenerators" << std::endl;
-  Trace("liastar-normalizCheckSat") << "normaliz input:" << std::endl;
-  Trace("liastar-normalizCheckSat") << ss.str() << std::endl;
+  Trace("liastar-ext") << "normaliz input:" << std::endl;
+  Trace("liastar-ext") << ss.str() << std::endl;
 
   // here we use mpq_class instead of Integer (or mpz_class)
   // because libnormaliz.so only has implementation for
@@ -758,18 +819,40 @@ Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
   cone.deactivateChangeOfPrecision();
   cone.compute(ConeProperty::HilbertBasis);
   cone.compute(ConeProperty::ModuleGenerators);
+  return cone;
+}
 
-  Result result;
+bool LiaStarUtils::isEmptyCone(Cone<Integer>& cone)
+{
+  // AffineDim is only computed for inhomogeneous cones; -1 marks the
+  // (inhomogeneous) constraint system as infeasible, i.e. the cone is empty.
   if (cone.isInhomogeneous())
   {
-    // AffineDim is only computed for inhomogeneous cones
-    if (cone.getAffineDim() == -1)
-    {
-      // the cone is empty skip.
-      Trace("liastar-ext") << "empty cone" << std::endl;
+    return cone.getAffineDim() == -1;
+  }
+  return false;
+}
 
-      result = Result(Result::Status::UNSAT);
-    }
+Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
+{
+  // Use Normaliz as a satisfiability oracle for a single conjunction of linear
+  // constraints: the conjunction is satisfiable over the non-negative integers
+  // iff the corresponding cone is non-empty. Only the UNSAT verdict is
+  // meaningful here; otherwise an unknown Result is returned.
+  Trace("liastar-normalizCheckSat")
+      << "---------------------------" << std::endl;
+  Trace("liastar-normalizCheckSat")
+      << "Cone for node: " << assertion << std::endl;
+
+  const std::vector<std::pair<std::vector<std::string>, Node>>& matrices =
+      getMatrices(variables, assertion);
+  Cone<Integer> cone = buildCone(variables.getNumChildren(), matrices[0].first);
+
+  Result result;
+  if (isEmptyCone(cone))
+  {
+    Trace("liastar-ext") << "empty cone" << std::endl;
+    result = Result(Result::Status::UNSAT);
   }
   Trace("liastar-ext-normalizCheckSat")
       << "Constraints are " << result << std::endl;
@@ -779,102 +862,40 @@ Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
 std::vector<std::pair<std::vector<std::string>, Node>>
 LiaStarUtils::getMatrices(Node variables, Node n)
 {
+  // Render a DNF predicate into one Normaliz matrix per disjunct (cone). A
+  // disjunction yields one matrix per child; any other shape (atom,
+  // conjunction, boolean constant) is a single disjunct handled by `getMatrix`.
   Assert(n.getType().isBoolean()) << "n: " << n << std::endl;
-  std::vector<std::pair<std::vector<std::string>, Node>> pairs;
-  Kind k = n.getKind();
-  switch (k)
+  if (n.getKind() == Kind::OR)
   {
-    case Kind::CONST_BOOLEAN:
+    std::vector<std::pair<std::vector<std::string>, Node>> pairs;
+    for (size_t i = 0; i < n.getNumChildren(); i++)
     {
-      bool value = n.getConst<bool>();
-      std::string constraint;
-      if (value)
-      {
-        constraint = "x[1] = x[1];";
-      }
-      else
-      {
-        constraint = "1 = 0;";
-      }
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
-      pairs.push_back({constraints, n});
-      return pairs;
+      Trace("liastar-ext") << "Disjunction " << i << ": " << n[i] << std::endl;
+      pairs.push_back(getMatrix(variables, n[i]));
     }
-    case Kind::LT:
-    case Kind::GT:
-    case Kind::LEQ:
-    case Kind::GEQ:
-    case Kind::EQUAL:
-    {
-      //
-      linear::Polynomial l = linear::Polynomial::parsePolynomial(n[0]);
-      linear::Polynomial r = linear::Polynomial::parsePolynomial(n[1]);
-      std::string lTerm = getString(variables, l);
-      std::string rTerm = getString(variables, r);
-      std::string kString = k == Kind::LT    ? " < "
-                            : k == Kind::GT  ? " > "
-                            : k == Kind::LEQ ? " <= "
-                            : k == Kind::GEQ ? " >= "
-                                             : " = ";
-      std::string constraint = lTerm + kString + rTerm + ";";
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
-      pairs.push_back({constraints, n});
-      return pairs;
-    }
-    case Kind::AND:
-    {
-      std::vector<std::string> constraints;
-      for (size_t i = 0; i < n.getNumChildren(); i++)
-      {
-        std::vector<std::pair<std::vector<std::string>, Node>> m =
-            getMatrices(variables, n[i]);
-        constraints.push_back(m[0].first[0]);
-      }
-      pairs.push_back({constraints, n});
-      return pairs;
-    }
-    case Kind::OR:
-    {
-      for (size_t i = 0; i < n.getNumChildren(); i++)
-      {
-        std::vector<std::pair<std::vector<std::string>, Node>> m =
-            getMatrices(variables, n[i]);
-        pairs.push_back(m[0]);
-        Trace("liastar-ext")
-            << "Disjunction " << i << ": " << n[i] << std::endl;
-      }
-      return pairs;
-    }
-
-    default: break;
+    return pairs;
   }
-  return pairs;
+  return {getMatrix(variables, n)};
 }
 
 std::pair<std::vector<std::string>, Node> LiaStarUtils::getMatrix(
     Node variables, Node n)
 {
+  // Render a single cone (a conjunction of linear (in)equalities, or one
+  // atom/boolean constant) into a list of Normaliz "symbolic" constraint
+  // strings paired with the original node `n`. The boolean constants are
+  // encoded as the trivially-true row "x[1] = x[1];" and the infeasible row
+  // "1 = 0;".
   Assert(n.getType().isBoolean()) << "n: " << n << std::endl;
-  std::vector<std::pair<std::vector<std::string>, Node>> pairs;
   Kind k = n.getKind();
   switch (k)
   {
     case Kind::CONST_BOOLEAN:
     {
       bool value = n.getConst<bool>();
-      std::string constraint;
-      if (value)
-      {
-        constraint = "x[1] = x[1];";
-      }
-      else
-      {
-        constraint = "1 = 0;";
-      }
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
+      std::string constraint = value ? "x[1] = x[1];" : "1 = 0;";
+      std::vector<std::string> constraints{constraint};
       return {constraints, n};
     }
     case Kind::LT:
@@ -883,7 +904,7 @@ std::pair<std::vector<std::string>, Node> LiaStarUtils::getMatrix(
     case Kind::GEQ:
     case Kind::EQUAL:
     {
-      //
+      // a comparison "lhs <op> rhs;" with each side printed as a linear term
       linear::Polynomial l = linear::Polynomial::parsePolynomial(n[0]);
       linear::Polynomial r = linear::Polynomial::parsePolynomial(n[1]);
       std::string lTerm = getString(variables, l);
@@ -894,12 +915,12 @@ std::pair<std::vector<std::string>, Node> LiaStarUtils::getMatrix(
                             : k == Kind::GEQ ? " >= "
                                              : " = ";
       std::string constraint = lTerm + kString + rTerm + ";";
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
+      std::vector<std::string> constraints{constraint};
       return {constraints, n};
     }
     case Kind::AND:
     {
+      // one row per conjunct (each conjunct is a single-constraint atom)
       std::vector<std::string> constraints;
       for (size_t i = 0; i < n.getNumChildren(); i++)
       {
@@ -920,6 +941,10 @@ std::pair<std::vector<std::string>, Node> LiaStarUtils::getMatrix(
 
 std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)
 {
+  // Print a linear polynomial in Normaliz syntax, mapping the i-th bound
+  // variable to the placeholder "x[i+1]" (Normaliz indexes from 1). For
+  // example, with variables (a b), the polynomial 2a - b + 3 prints as
+  // "2x[1] - x[2] + 3".
   Assert(variables.getKind() == Kind::BOUND_VAR_LIST)
       << "variables: " << variables << std::endl;
 
@@ -952,11 +977,12 @@ std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)
       ss << r;
       continue;
     }
+    // print the coefficient, omitting a unit coefficient
     if (r != Rational(1))
     {
       ss << r;
     }
-    // find the variable
+    // find the variable's index among the bound variables
     for (size_t i = 0; i < size; i++)
     {
       linear::VarList varList = monomial.getVarList();
@@ -986,6 +1012,23 @@ void LiaStarUtils::getGeneratorBody(
     std::vector<Node>& point,
     std::vector<std::vector<Node>>& rays)
 {
+  // Encode one module generator `g` of a cone whose recession cone is generated
+  // by `hilbertBasis = {h_1, ..., h_m}`. The integer points reachable from this
+  // generator are `g + sum_j l_j * h_j` for non-negative integers l_j. There
+  // are two flavours:
+  //
+  //   membership (star == false): the contribution of this generator is the
+  //     point `g + sum_j l_j h_j`, with `g` a fixed offset (multiplier 1). Used
+  //     to express that the vector is a single member of the set.
+  //
+  //   star (star == true): the generator may be used `mu >= 0` times, so its
+  //     contribution is `mu * g + sum_j l_j h_j`, with the coupling
+  //     `mu = 0 => l_j = 0` (a ray can only be taken if its generator is). This
+  //     encodes membership in the additive closure (the star).
+  //
+  // The fresh multipliers (`mu` and the `l_j`) are skolem constants when
+  // `useSkolems` (the constraints are asserted at the top level) or bound
+  // variables otherwise (the caller existentially binds them).
   Node zero = nm->mkConstInt(Rational(0));
   Node one = nm->mkConstInt(Rational(1));
   std::vector<Integer> zeroVector(dimension, Integer(0));
@@ -998,8 +1041,6 @@ void LiaStarUtils::getGeneratorBody(
   Node mu = one;
   if (star && generator != zeroVector)
   {
-    // a bound variable (to be existentially bound) or a skolem (to be asserted
-    // at the top level)
     mu = useSkolems ? nm->mkDummySkolem("mu", nm->integerType())
                     : nm->mkBoundVar("mu", nm->integerType());
     vars.push_back(mu);
@@ -1019,6 +1060,7 @@ void LiaStarUtils::getGeneratorBody(
     point.push_back(monomial);
   }
 
+  // one ray l_j * h_j per Hilbert basis element h_j
   for (size_t index = 0; index < hilbertBasis.size(); index++)
   {
     const std::vector<Integer>& basis = hilbertBasis[index];

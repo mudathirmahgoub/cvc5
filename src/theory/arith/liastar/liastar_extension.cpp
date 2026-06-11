@@ -871,15 +871,18 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   g = d_astate.getValuation().ensureLiteral(g);
   d_im.preferPhase(g, true);
   en.guard = g;
-  Node split = g.orNode(g.notNode());
+  en.firstGuard = g;
+  en.split = g.orNode(g.notNode());
   if (d_proofGen != nullptr)
   {
-    d_proofGen->registerSplit(split, g);
+    d_proofGen->registerSplit(en.split, g);
   }
   d_im.addPendingLemma(
-      split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
   // the guarded predicate: guard => base
-  addEnumLemma(g.impNode(base));
+  Node seed = g.impNode(base);
+  en.lemmas.push_back(seed);
+  addEnumLemma(seed);
   return en;
 }
 
@@ -916,8 +919,12 @@ Node LiaStarExtension::getModelDisjunct(
   {
     if (arithModel.find(sk) == arithModel.end())
     {
+      // The fallback can produce a non-integral (real-typed) value for an
+      // integer skolem (e.g. a delta-rational assignment); substituting it
+      // would build ill-typed nodes, so bail out for this round instead.
       Node value = d_arith.getCandidateModelValue(sk);
-      if (value.isNull() || !value.isConst())
+      if (value.isNull() || !value.isConst()
+          || value.getType() != sk.getType())
       {
         return Node();
       }
@@ -1000,8 +1007,12 @@ void LiaStarExtension::advanceStage(MainEnum& en, Node skolemDisjunct)
   Node g = d_nm->mkDummySkolem("liastarEnumGuard", d_nm->booleanType());
   g = d_astate.getValuation().ensureLiteral(g);
   d_im.preferPhase(g, true);
-  addEnumLemma(g.impNode(en.guard));
-  addEnumLemma(g.impNode(skolemDisjunct.notNode()));
+  Node prev = g.impNode(en.guard);
+  Node negation = g.impNode(skolemDisjunct.notNode());
+  en.lemmas.push_back(prev);
+  en.lemmas.push_back(negation);
+  addEnumLemma(prev);
+  addEnumLemma(negation);
   en.guard = g;
 }
 
@@ -1015,24 +1026,35 @@ void LiaStarExtension::emitDriverLemma(Node literal, MainEnum& en)
   // the next round then reads that cell off the model. Once every cell is
   // covered the guard branch closes by conflict and only the certified
   // branches remain (with `star` then exact). The lemma is satisfiability
-  // preserving: in any model where v is in the star set but outside the
+  // preserving: in any model where v is a *non-empty* sum outside the
   // discovered approximation, some cell of the predicate is still uncovered,
-  // and the model extends to one placing the (fresh) skolems in it.
-  auto it = d_lastDriver.find(literal);
-  if (it != d_lastDriver.end() && it->second == en.guard)
-  {
-    return;
-  }
-  Node pv = LiaStarUtils::getVectorPredicate(literal, d_nm).first;
-  std::vector<Node> branches{pv};
+  // and the model extends to one placing the (fresh) skolems in it. The
+  // empty sum (v = 0) is always in the star set but is covered by no cell,
+  // so the star branch must always include it: before any cone is discovered
+  // (`d_lastStarLia` has no entry yet) the branch is `v = 0` itself, and the
+  // star built over any non-empty set of cones admits it by setting every
+  // multiplier to zero.
+  Node star;
   auto starIt = d_lastStarLia.find(literal);
   if (starIt != d_lastStarLia.end())
   {
-    branches.push_back(starIt->second);
+    star = starIt->second;
   }
-  branches.push_back(en.guard);
-  addEnumLemma(literal.impNode(d_nm->mkNode(Kind::OR, branches)));
-  d_lastDriver[literal] = en.guard;
+  else
+  {
+    std::vector<Node> zeros;
+    for (size_t i = 1, n = literal.getNumChildren(); i < n; i++)
+    {
+      zeros.push_back(literal[i].eqNode(d_zero));
+    }
+    star = zeros.size() == 1 ? zeros[0] : d_nm->mkNode(Kind::AND, zeros);
+  }
+  Node pv = LiaStarUtils::getVectorPredicate(literal, d_nm).first;
+  Node lemma =
+      literal.impNode(d_nm->mkNode(Kind::OR, {pv, star, en.guard}));
+  // The inference manager caches sent lemmas per user context, so re-queueing
+  // the same driver is dropped for free (and re-sent after a user pop).
+  addEnumLemma(lemma);
 }
 
 void LiaStarExtension::mainSolverCheckStar(
@@ -1079,6 +1101,21 @@ void LiaStarExtension::mainSolverCheckStar(
     return;
   }
 
+  // Keep the enumeration lemmas alive across user pops: re-queue them all;
+  // within one user context the lemma cache drops the duplicates, and after
+  // a pop (which retracts the lemmas but not this non-context state) they
+  // are re-sent.
+  if (d_proofGen != nullptr)
+  {
+    d_proofGen->registerSplit(en.split, en.firstGuard);
+  }
+  d_im.addPendingLemma(
+      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+  for (const Node& lemma : en.lemmas)
+  {
+    addEnumLemma(lemma);
+  }
+
   Valuation& val = d_astate.getValuation();
   bool guardValue = false;
   bool assigned = val.isSatLiteral(en.guard)
@@ -1115,6 +1152,10 @@ void LiaStarExtension::mainSolverCheckStar(
     d_im.doPendingLemmas();
     return;
   }
+  // Normalize the cell like `processDisjunct` stores it in `d_lazyCones`
+  // (negations folded into positive comparisons), so the re-harvest check
+  // below compares like with like.
+  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env);
   // Guard against re-harvesting a known cell (its negation lemma may not
   // have reached the solver before this model was produced).
   for (const auto& pair : pairs)

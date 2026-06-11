@@ -307,6 +307,19 @@ class LiaStarExtension : EnvObj
     Node base;
     /** The current stage guard h_k (a decision variable, biased true). */
     Node guard;
+    /** The first stage guard h_0 (kept to re-register the split's proof). */
+    Node firstGuard;
+    /** The split lemma on the first stage guard. */
+    Node split;
+    /**
+     * Every enumeration lemma emitted for this lambda (the guarded predicate
+     * and the per-stage implications). They are re-queued every round: the
+     * inference manager's user-context lemma cache drops the duplicates for
+     * free, and after a user pop (which retracts the lemmas but not this
+     * non-context state) they are re-sent, so the enumeration constraints
+     * stay in force in every user context.
+     */
+    std::vector<Node> lemmas;
     /** number of cones in `d_lazyCones[lambda]` already negated via stage
      * guards. */
     size_t negated = 0;
@@ -354,7 +367,11 @@ class LiaStarExtension : EnvObj
 
   /**
    * Emit, once per (literal, stage), the driver lemma
-   * `literal => (p[v] or star or guard)`; see `MainEnum`.
+   * `literal => (p[v] or star or guard)`, where `star` is the last star
+   * under-approximation for `literal`, or `v = 0` (the empty sum, which is
+   * always in the star set) before any cone has been discovered; see
+   * `MainEnum`. Duplicates are dropped by the inference manager's
+   * user-context lemma cache.
    */
   void emitDriverLemma(Node literal, MainEnum& en);
 
@@ -453,13 +470,6 @@ class LiaStarExtension : EnvObj
    * arith-liastar-main-solver). Created lazily, like `d_subsolvers`.
    */
   std::map<Node, MainEnum> d_mainEnums;
-
-  /**
-   * The stage guard for which the driver lemma
-   * `literal => (p[v] or star or guard)` was last emitted, per literal. Used
-   * to emit the driver exactly once per (literal, stage).
-   */
-  std::map<Node, Node> d_lastDriver;
 }; /* class LiaStarExtension */
 
 }  // namespace liastar

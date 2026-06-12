@@ -296,6 +296,13 @@ class LiaStarExtension : EnvObj
      * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
      */
     std::unique_ptr<SolverEngine> probe;
+    /**
+     * Cut synthesis only: the validity oracle, with `base` asserted. A
+     * candidate inequality c*y >= 0 is valid for every point of the
+     * predicate iff checking `c*y <= -1` as an assumption answers unsat;
+     * a sat answer yields a counterexample point for the CEGIS loop.
+     */
+    std::unique_ptr<SolverEngine> validity;
   };
 
   /**
@@ -381,6 +388,13 @@ class LiaStarExtension : EnvObj
      * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
      */
     std::unique_ptr<SolverEngine> probe;
+    /**
+     * Cut synthesis only: the validity oracle, with `base` asserted. A
+     * candidate inequality c*y >= 0 is valid for every point of the
+     * predicate iff checking `c*y <= -1` as an assumption answers unsat;
+     * a sat answer yields a counterexample point for the CEGIS loop.
+     */
+    std::unique_ptr<SolverEngine> validity;
   };
 
   /**
@@ -423,6 +437,56 @@ class LiaStarExtension : EnvObj
    * `base` must be in the same skolem space as the literals later probed.
    */
   SolverEngine* getProbe(std::unique_ptr<SolverEngine>& probe, Node base);
+
+  /**
+   * Over-approximation cut synthesis state, per lambda (see
+   * `synthesizeCuts`).
+   */
+  struct CutState
+  {
+    /** the cuts emitted so far, over the literal's vector terms */
+    std::vector<Node> cuts;
+    /** sample points of the predicate (module generators of discovered
+     * cones, plus CEGIS counterexamples), as constant vectors */
+    std::vector<std::vector<Node>> points;
+    /** recession directions (Hilbert basis vectors of discovered cones) */
+    std::vector<std::vector<Node>> rays;
+    /** number of cones in `d_lazyCones` already sampled */
+    size_t sampled = 0;
+    /** consecutive failed synthesis attempts; give up after two */
+    uint32_t failures = 0;
+  };
+
+  /**
+   * Over-approximation cut synthesis (option arith-liastar-cuts), called
+   * when the endgame check finds `facts and star_k` unsatisfiable. Any
+   * homogeneous inequality `c * y >= 0` that is valid for every point of
+   * the predicate is preserved under addition, so it holds for every point
+   * of the star set and can be asserted for the vector unconditionally.
+   * The synthesis is a CEGIS loop: pick a target vector v* consistent with
+   * the input facts and the cuts so far; solve for bounded integer
+   * coefficients c with `c * p >= 0` for every known sample point and
+   * recession direction of the predicate and `c * v* <= -1`; check validity
+   * against the predicate (the `Subsolver::validity` oracle); counterexample
+   * points are added as samples and the search repeats. Valid cuts are
+   * emitted as unconditional lemmas; once the cuts refute the input facts,
+   * the main solver derives unsat by itself, without completing the cell
+   * enumeration.
+   */
+  void synthesizeCuts(Node literal, Node lambda, const std::vector<Node>& facts);
+
+  /**
+   * One CEGIS cut search for `synthesizeCuts`: returns a valid cut
+   * `c * v >= 0` separating `target` (the candidate vector's values) from
+   * the star set's over-approximation, or null if none is found within the
+   * iteration and coefficient bounds.
+   */
+  Node synthesizeOneCut(Node literal,
+                        Subsolver& sub,
+                        CutState& cs,
+                        const std::vector<Node>& target,
+                        const std::vector<bool>& zeroCoordinate,
+                        uint64_t coefficientBound);
 
   /**
    * Decoupled endgame check (option arith-liastar-endgame=N): every N newly
@@ -532,6 +596,8 @@ class LiaStarExtension : EnvObj
   /** The guard of the last (still active) endgame hint, per literal;
    * deactivated when a newer witness replaces it. */
   std::map<Node, Node> d_lastHint;
+
+  std::map<Node, CutState> d_cutStates;
 
   /** The decision strategy carrying the active endgame hint; allocated and
    * registered with the decision manager on the first hint. */

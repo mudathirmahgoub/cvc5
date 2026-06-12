@@ -217,6 +217,9 @@ enum class InferenceId
   // lia star endgame hint lemma (guard => witness values found by the
   // decoupled endgame subsolver)
   ARITH_LIA_STAR_HINT,
+  // lia star over-approximation cut (a valid homogeneous inequality of the
+  // predicate, asserted for the vector unconditionally)
+  ARITH_LIA_STAR_CUT,
   //-------------------- ff inference
   // ---------------------------------- end arith theory
 

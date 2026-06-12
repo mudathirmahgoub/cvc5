@@ -673,6 +673,14 @@ name   = "Arithmetic Theory"
   help       = "in the lazy strategy, additionally generalize each model-derived cell semantically: drop atoms whose removal keeps the cell inside the predicate arithmetically (checked with cheap unsat probes against a persistent probe subsolver), merging cells the boolean skeleton check cannot"
 
 [[option]]
+  name       = "arithLiaStarCuts"
+  category   = "regular"
+  long       = "arith-liastar-cuts"
+  type       = "bool"
+  default    = "true"
+  help       = "in the lazy strategy, when the endgame check finds the star under-approximation insufficient, synthesize valid homogeneous inequalities of the predicate (CEGIS over bounded coefficients, validated against the predicate) and assert them for the vector unconditionally: such inequalities survive addition, so they over-approximate the star set and can refute unsatisfiable instances without completing the cell enumeration"
+
+[[option]]
   name       = "arithLiaStarEndgame"
   category   = "regular"
   long       = "arith-liastar-endgame=N"

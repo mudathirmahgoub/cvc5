@@ -359,3 +359,56 @@ endgame subsolver segfaults in debug (use `checkSat(assumptions)` +
 `getUnsatAssumptions` instead, which also gives the more informative
 fact-side core); the liastar-endgame / liastar-endgame-smt trace channels
 dump the query and a replayable script.
+
+
+## Over-approximation cuts: ALL 480 BENCHMARKS SOLVED (2026-06-12)
+
+The four remaining timeouts (card/{bapa,mapa}/fol_0000098 and fol_0000107,
+all unsat) needed the over-approximation half of the VMCAI 2020 approach,
+implemented as `--arith-liastar-cuts` (default on):
+
+- **Homogeneous cuts**: any inequality `c . y >= 0` valid for every point of
+  the predicate is preserved under addition, hence valid for the whole star
+  set, and can be asserted for the vector unconditionally
+  (InferenceId ARITH_LIA_STAR_CUT).
+- **Conditional cuts**: when a vector coordinate is the constant 0 (frequent
+  -- input equalities are substituted into the literal), every summand is 0
+  there too, so validity is only needed on that restriction of the
+  predicate. The mapa/fol_0000107 refutation needs exactly such a cut
+  (4 u!10 - u!14 - u!17 - u!20 - u!23 - u!26 >= 0 on the bits-zero
+  restriction).
+- **CEGIS synthesis** (`synthesizeCuts`/`synthesizeOneCut`), invoked when
+  the endgame finds facts ^ star_k unsat: pick a target vector consistent
+  with the fixed facts and cuts so far; solve for sparse integer
+  coefficients (escalating L1 budget 4/9/16/30 -- an unconstrained box
+  makes CEGIS thrash on dense candidates) nonnegative on all restricted
+  sample points (module generators of discovered cones; CEGIS
+  counterexamples) and negative on the target; validate against the
+  restricted predicate via assumptions on a per-lambda validity subsolver.
+  **Hilbert-basis rays must NOT constrain the search**: rays of
+  unrestricted cells have zeros on pinned coordinates yet describe
+  directions outside the restriction, and requiring nonnegativity on them
+  excludes exactly the valid conditional cuts (a real bug, found by
+  replicating the loop offline where it converged in 8 cuts / ~33
+  iterations while the in-solver version failed).
+- Once the cuts refute the fixed facts, the main solver derives unsat by
+  itself -- cuts are ordinary lemmas, so no new soundness machinery.
+
+Final results (480 instances, 100 s, all defaults:
+generalize + guided + endgame=10 + cuts):
+
+| config | sat | unsat | timeout | solved |
+|---|---|---|---|---|
+| old recorded lazy | 272 | 178 | 30 | 450 |
+| guided+endgame (no cuts) | 296 | 180 | 4 | 476 |
+| **final default (+cuts)** | **296** | **184** | **0** | **480** |
+
+**480/480 solved, 143.5 s cumulative, median 45 ms, slowest instance
+37.2 s (card/cvc5_bapa/fol_0000099).** Zero answer discrepancies against
+every reference solver and every prior configuration. The four previously
+impossible unsat instances refute in 0.2--2.0 s. Raw results:
+`liastar_final_results.csv`; plotted as "cvc5 lazy (final: +cuts)".
+
+A full LaTeX report covering all strategies, algorithms, soundness
+arguments, and measurements: `liastar_lazy_report.tex` / `.pdf` (this
+directory).

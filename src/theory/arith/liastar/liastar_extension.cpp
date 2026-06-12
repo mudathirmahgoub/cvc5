@@ -518,6 +518,321 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
   return sub;
 }
 
+void LiaStarExtension::synthesizeCuts(Node literal,
+                                      Node lambda,
+                                      const std::vector<Node>& facts)
+{
+  // Over-approximation cuts: called when the endgame found the star
+  // under-approximation insufficient for the input facts. See the header for
+  // the algorithm; the short version: valid homogeneous inequalities of the
+  // predicate survive addition, so they bound the star set from above and
+  // can refute unsatisfiable instances without completing the enumeration.
+  if (!options().arith.arithLiaStarCuts)
+  {
+    return;
+  }
+  CutState& cs = d_cutStates[lambda];
+  if (cs.failures >= 2)
+  {
+    return;
+  }
+  Subsolver& sub = getSubsolver(lambda);
+  size_t dimension = literal.getNumChildren() - 1;
+  if (sub.to.size() != dimension)
+  {
+    // coordinate mapping would be ambiguous; bail out
+    return;
+  }
+  // Coordinates where the vector is the constant zero: every summand of a
+  // nonnegative decomposition is zero there too, so cuts only need to be
+  // valid on that restriction of the predicate -- a strictly larger space of
+  // valid cuts.
+  std::vector<bool> zeroCoordinate(dimension, false);
+  for (size_t i = 0; i < dimension; i++)
+  {
+    zeroCoordinate[i] = literal[i + 1] == d_zero;
+  }
+
+  // Refresh the sample points and recession directions from the cones
+  // discovered since the last call: their module generators are concrete
+  // points of the predicate, and their Hilbert bases are its recession
+  // directions, so a valid cut must be nonnegative on all of them.
+  std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
+      d_lazyCones[lambda];
+  if (cs.sampled < cones.size())
+  {
+    // new cones bring new sample points: give the synthesis another chance
+    cs.failures = 0;
+  }
+  for (; cs.sampled < cones.size(); cs.sampled++)
+  {
+    Cone<Integer>& cone = cones[cs.sampled].second;
+    for (const auto& generator : getConeGenerators(cone, dimension))
+    {
+      std::vector<Node> point;
+      for (const auto& entry : generator)
+      {
+        point.push_back(d_nm->mkConstInt(Rational(entry)));
+      }
+      cs.points.push_back(point);
+    }
+    for (const auto& basis : cone.getHilbertBasis())
+    {
+      std::vector<Node> ray;
+      for (const auto& entry : basis)
+      {
+        ray.push_back(d_nm->mkConstInt(Rational(entry)));
+      }
+      cs.rays.push_back(ray);
+    }
+  }
+
+  // The validity oracle: the predicate asserted once; candidate cuts are
+  // checked as assumptions.
+  if (sub.validity == nullptr)
+  {
+    Options validityOptions;
+    validityOptions.write_smt().produceModels = true;
+    sub.validity = std::make_unique<SolverEngine>(d_nm, &validityOptions);
+    sub.validity->setIsInternalSubsolver();
+    LogicInfo info("QF_LIA");
+    sub.validity->setLogic(info);
+    sub.validity->assertFormula(sub.base);
+  }
+
+  bool emitted = false;
+  for (size_t round = 0; round < 8; round++)
+  {
+    // (1) a target vector consistent with the input facts and the cuts so
+    // far; once none exists, the emitted cut lemmas refute the facts and the
+    // main solver concludes unsat by itself
+    Options targetOptions;
+    targetOptions.write_smt().produceModels = true;
+    SolverEngine target(d_nm, &targetOptions);
+    target.setIsInternalSubsolver();
+    LogicInfo targetInfo("QF_LIA");
+    target.setLogic(targetInfo);
+    for (const Node& fact : facts)
+    {
+      target.assertFormula(fact);
+    }
+    for (const Node& cut : cs.cuts)
+    {
+      target.assertFormula(cut);
+    }
+    Result result = target.checkSat();
+    Trace("liastar-cuts") << "cuts target check: " << result << std::endl;
+    if (result.getStatus() == Result::Status::UNSAT)
+    {
+      break;
+    }
+    if (result.getStatus() != Result::Status::SAT)
+    {
+      break;
+    }
+    std::vector<Node> targetValues;
+    bool known = true;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      Node value = target.getValue(literal[i + 1]);
+      if (value.isNull() || !value.isConst())
+      {
+        known = false;
+        break;
+      }
+      targetValues.push_back(value);
+    }
+    if (!known)
+    {
+      break;
+    }
+
+    // (2) search for a valid cut separating the target. The L1 budget on
+    // the coefficients keeps the candidates sparse, which both matches the
+    // cuts that exist in practice and makes the counterexample-guided search
+    // converge: an unconstrained box admits arbitrary dense candidates that
+    // the validity oracle rejects one by one.
+    Node cut;
+    for (uint64_t budget : {4, 9, 16, 30})
+    {
+      cut = synthesizeOneCut(
+          literal, sub, cs, targetValues, zeroCoordinate, budget);
+      if (!cut.isNull())
+      {
+        break;
+      }
+    }
+    if (cut.isNull())
+    {
+      cs.failures++;
+      break;
+    }
+    cs.failures = 0;
+    cs.cuts.push_back(cut);
+    Trace("liastar-cuts") << "cut: " << cut << std::endl;
+    if (!rewrite(cut).isConst())
+    {
+      d_im.addPendingLemma(cut, InferenceId::ARITH_LIA_STAR_CUT);
+      emitted = true;
+    }
+  }
+  if (emitted)
+  {
+    d_im.doPendingLemmas();
+  }
+}
+
+Node LiaStarExtension::synthesizeOneCut(Node literal,
+                                        Subsolver& sub,
+                                        CutState& cs,
+                                        const std::vector<Node>& target,
+                                        const std::vector<bool>& zeroCoordinate,
+                                        uint64_t coefficientBound)
+{
+  // a sample participates only if it lies in the zero-forced restriction
+  auto restricted = [&](const std::vector<Node>& vec) {
+    for (size_t i = 0; i < vec.size(); i++)
+    {
+      if (zeroCoordinate[i] && vec[i] != d_zero
+          && !(vec[i].isConst()
+               && vec[i].getConst<Rational>().sgn() == 0))
+      {
+        return false;
+      }
+    }
+    return true;
+  };
+  // CEGIS for bounded integer coefficients c with c*p >= 0 on every sample
+  // point and recession direction, and c*target <= -1. Each candidate is
+  // checked against the whole predicate via the validity oracle;
+  // counterexamples become new sample points.
+  size_t dimension = target.size();
+  Node zero = d_zero;
+  Node minusOne = d_nm->mkConstInt(Rational(-1));
+  Node budget = d_nm->mkConstInt(Rational(coefficientBound));
+
+  Options searchOptions;
+  searchOptions.write_smt().produceModels = true;
+  SolverEngine search(d_nm, &searchOptions);
+  search.setIsInternalSubsolver();
+  LogicInfo info("QF_LIA");
+  search.setLogic(info);
+  search.setOption("incremental", "true");
+
+  // coefficients with |c_1| + ... + |c_d| <= budget (sparsity)
+  std::vector<Node> coefficients;
+  std::vector<Node> magnitudes;
+  for (size_t i = 0; i < dimension; i++)
+  {
+    Node c = d_nm->mkDummySkolem("liastarCutCoeff", d_nm->integerType());
+    Node a = d_nm->mkDummySkolem("liastarCutAbs", d_nm->integerType());
+    coefficients.push_back(c);
+    magnitudes.push_back(a);
+    search.assertFormula(d_nm->mkNode(Kind::GEQ, a, c));
+    search.assertFormula(
+        d_nm->mkNode(Kind::GEQ, a, d_nm->mkNode(Kind::NEG, c)));
+  }
+  Node l1 = zero;
+  for (const Node& a : magnitudes)
+  {
+    l1 = d_nm->mkNode(Kind::ADD, l1, a);
+  }
+  search.assertFormula(d_nm->mkNode(Kind::LEQ, l1, budget));
+  auto dot = [&](const std::vector<Node>& vec) {
+    Node sum = zero;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      sum = d_nm->mkNode(
+          Kind::ADD, sum, d_nm->mkNode(Kind::MULT, coefficients[i], vec[i]));
+    }
+    return sum;
+  };
+  for (const std::vector<Node>& point : cs.points)
+  {
+    // Only points inside the zero-forced restriction constrain the search: a
+    // point of the predicate with zeros on the restricted coordinates lies in
+    // the restricted region itself. Rays are deliberately NOT used: a ray of
+    // an unrestricted cell has zeros on the pinned coordinates yet describes
+    // a direction outside the restriction, and requiring nonnegativity on it
+    // would exclude valid conditional cuts; the counterexample loop below
+    // discovers genuinely violating directions soundly instead.
+    if (restricted(point))
+    {
+      search.assertFormula(d_nm->mkNode(Kind::GEQ, dot(point), zero));
+    }
+  }
+  search.assertFormula(d_nm->mkNode(Kind::LEQ, dot(target), minusOne));
+
+  for (size_t iteration = 0; iteration < 60; iteration++)
+  {
+    Result result = search.checkSat();
+    if (result.getStatus() != Result::Status::SAT)
+    {
+      return Node();
+    }
+    std::vector<Node> values;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      Node value = search.getValue(coefficients[i]);
+      if (value.isNull() || !value.isConst())
+      {
+        return Node();
+      }
+      values.push_back(value);
+    }
+    // validity: does c*y >= 0 hold for every point of the predicate?
+    Node candidate = zero;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      candidate = d_nm->mkNode(
+          Kind::ADD,
+          candidate,
+          d_nm->mkNode(Kind::MULT, values[i], sub.to[i]));
+    }
+    std::vector<Node> assumptions{
+        d_nm->mkNode(Kind::LEQ, candidate, minusOne)};
+    for (size_t i = 0; i < dimension; i++)
+    {
+      if (zeroCoordinate[i])
+      {
+        assumptions.push_back(sub.to[i].eqNode(d_zero));
+      }
+    }
+    Result validity = sub.validity->checkSat(assumptions);
+    if (validity.getStatus() == Result::Status::UNSAT)
+    {
+      // valid for the whole predicate: build the cut over the vector terms
+      Node lhs = zero;
+      for (size_t i = 0; i < dimension; i++)
+      {
+        lhs = d_nm->mkNode(
+            Kind::ADD,
+            lhs,
+            d_nm->mkNode(Kind::MULT, values[i], literal[i + 1]));
+      }
+      return d_nm->mkNode(Kind::GEQ, lhs, zero);
+    }
+    if (validity.getStatus() != Result::Status::SAT)
+    {
+      return Node();
+    }
+    // counterexample: a predicate point with c*y < 0; add it as a sample
+    std::vector<Node> counterexample;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      Node value = sub.validity->getValue(sub.to[i]);
+      if (value.isNull() || !value.isConst())
+      {
+        return Node();
+      }
+      counterexample.push_back(value);
+    }
+    cs.points.push_back(counterexample);
+    search.assertFormula(d_nm->mkNode(Kind::GEQ, dot(counterexample), zero));
+  }
+  return Node();
+}
+
 bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
 {
   uint64_t period = options().arith.arithLiaStarEndgame;
@@ -638,6 +953,13 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   }
   if (result.getStatus() != Result::Status::SAT)
   {
+    if (result.getStatus() == Result::Status::UNSAT)
+    {
+      // The under-approximation cannot justify the literal yet; try the
+      // over-approximation side: synthesize valid cuts that may refute the
+      // input facts outright.
+      synthesizeCuts(literal, lambda, facts);
+    }
     return false;
   }
 

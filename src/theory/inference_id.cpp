@@ -142,6 +142,7 @@ const char* toString(InferenceId i)
     case InferenceId::ARITH_LIA_STAR_DEFINITION:
       return "ARITH_LIA_STAR_DEFINITION";
     case InferenceId::ARITH_LIA_STAR_HINT: return "ARITH_LIA_STAR_HINT";
+    case InferenceId::ARITH_LIA_STAR_CUT: return "ARITH_LIA_STAR_CUT";
     case InferenceId::FF_LEMMA: return "FF_LEMMA";
 
     case InferenceId::ARRAYS_EXT: return "ARRAYS_EXT";

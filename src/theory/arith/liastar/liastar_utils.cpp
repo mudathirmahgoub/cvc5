@@ -650,11 +650,29 @@ Node LiaStarUtils::getDisjunct(Node assertion,
   std::vector<Node> atoms;
   std::unordered_set<Node> visited;
   collectAtoms(assertion, atoms, visited);
-  std::vector<Node> literals;
+  std::vector<bool> values;
   for (const Node& atom : atoms)
   {
+    values.push_back(smte->getValue(atom).getConst<bool>());
+  }
+  // Optionally generalize the cell: drop the atoms the formula's truth does
+  // not depend on, so the cell (and hence its cone) covers more of the
+  // predicate per refinement round.
+  std::vector<bool> keep(atoms.size(), true);
+  if (e->getOptions().arith.arithLiaStarGeneralize)
+  {
+    keep = generalizeCell(assertion, atoms, values);
+  }
+  std::vector<Node> literals;
+  for (size_t i = 0; i < atoms.size(); i++)
+  {
+    if (!keep[i])
+    {
+      continue;
+    }
+    const Node& atom = atoms[i];
     Node literal;
-    if (smte->getValue(atom).getConst<bool>())
+    if (values[i])
     {
       // the atom is true in the model: keep it as is
       literal = atom;
@@ -691,6 +709,122 @@ Node LiaStarUtils::getDisjunct(Node assertion,
     return literals[0];
   }
   return nm->mkNode(Kind::AND, literals);
+}
+
+namespace {
+
+/** Truth values of the three-valued evaluation used by `generalizeCell`. */
+enum ThreeValued : uint8_t
+{
+  TV_FALSE = 0,
+  TV_TRUE = 1,
+  TV_UNKNOWN = 2,
+};
+
+/**
+ * Evaluate the boolean skeleton of `n` under a partial assignment of its
+ * atoms (atoms missing from `assignment` are unknown). Mirrors the traversal
+ * of `LiaStarUtils::collectAtoms`: AND/OR/NOT are evaluated structurally,
+ * boolean constants by value, everything else is an atom. `cache` memoizes
+ * results for the current assignment (it must not be reused across
+ * assignments).
+ */
+ThreeValued evalThreeValued(
+    TNode n,
+    const std::unordered_map<Node, ThreeValued>& assignment,
+    std::unordered_map<Node, ThreeValued>& cache)
+{
+  if (n.getKind() == Kind::CONST_BOOLEAN)
+  {
+    return n.getConst<bool>() ? TV_TRUE : TV_FALSE;
+  }
+  auto it = cache.find(n);
+  if (it != cache.end())
+  {
+    return it->second;
+  }
+  ThreeValued result;
+  switch (n.getKind())
+  {
+    case Kind::NOT:
+    {
+      ThreeValued child = evalThreeValued(n[0], assignment, cache);
+      result = child == TV_UNKNOWN ? TV_UNKNOWN
+                                   : (child == TV_TRUE ? TV_FALSE : TV_TRUE);
+      break;
+    }
+    case Kind::AND:
+    case Kind::OR:
+    {
+      // AND: false dominates, then unknown, else true. OR is the dual.
+      ThreeValued dominant = n.getKind() == Kind::AND ? TV_FALSE : TV_TRUE;
+      ThreeValued identity = n.getKind() == Kind::AND ? TV_TRUE : TV_FALSE;
+      result = identity;
+      for (const Node& child : n)
+      {
+        ThreeValued value = evalThreeValued(child, assignment, cache);
+        if (value == dominant)
+        {
+          result = dominant;
+          break;
+        }
+        if (value == TV_UNKNOWN)
+        {
+          result = TV_UNKNOWN;
+        }
+      }
+      break;
+    }
+    default:
+    {
+      auto a = assignment.find(n);
+      result = a == assignment.end() ? TV_UNKNOWN : a->second;
+      break;
+    }
+  }
+  cache[n] = result;
+  return result;
+}
+
+}  // namespace
+
+std::vector<bool> LiaStarUtils::generalizeCell(Node formula,
+                                               const std::vector<Node>& atoms,
+                                               const std::vector<bool>& values)
+{
+  // Greedily mark atoms as "don't care" while the formula still evaluates to
+  // true under the partial assignment: the conjunction of the literals of
+  // the remaining atoms then still (propositionally) implies the formula.
+  std::unordered_map<Node, ThreeValued> assignment;
+  for (size_t i = 0; i < atoms.size(); i++)
+  {
+    assignment[atoms[i]] = values[i] ? TV_TRUE : TV_FALSE;
+  }
+  std::vector<bool> keep(atoms.size(), true);
+  {
+    // Sanity: the model must satisfy the formula; if it does not (e.g. a
+    // stale candidate model), generalizing would be unsound, so keep all.
+    std::unordered_map<Node, ThreeValued> cache;
+    if (evalThreeValued(formula, assignment, cache) != TV_TRUE)
+    {
+      return keep;
+    }
+  }
+  for (size_t i = 0; i < atoms.size(); i++)
+  {
+    ThreeValued saved = assignment[atoms[i]];
+    assignment[atoms[i]] = TV_UNKNOWN;
+    std::unordered_map<Node, ThreeValued> cache;
+    if (evalThreeValued(formula, assignment, cache) == TV_TRUE)
+    {
+      keep[i] = false;
+    }
+    else
+    {
+      assignment[atoms[i]] = saved;
+    }
+  }
+  return keep;
 }
 
 void LiaStarUtils::collectAtoms(Node n,

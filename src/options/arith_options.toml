@@ -655,4 +655,20 @@ name   = "Arithmetic Theory"
   type       = "bool"
   default    = "false"
   help       = "in the lazy strategy, enumerate the predicate's cells in the main solver instead of a dedicated subsolver: the lambda's bound variables become fresh skolems constrained by guarded lemmas, and new cells are read from the main solver's candidate model"
+
+[[option]]
+  name       = "arithLiaStarGeneralize"
+  category   = "regular"
+  long       = "arith-liastar-generalize"
+  type       = "bool"
+  default    = "true"
+  help       = "in the lazy strategy, generalize each model-derived cell to a prime implicant of the predicate (dropping atoms the predicate's truth does not depend on) before building its cone, so each cone covers more of the predicate and fewer refinement rounds are needed"
+
+[[option]]
+  name       = "arithLiaStarPartialSums"
+  category   = "regular"
+  long       = "arith-liastar-partial-sums"
+  type       = "bool"
+  default    = "false"
+  help       = "in the lazy strategy, encode the star sum constraints with running partial-sum skolems defined once per cone (asserted as unguarded definitional lemmas), so each reduction lemma is constant size instead of growing with the number of cones"
   

@@ -436,6 +436,24 @@ class LiaStarExtension : EnvObj
   std::map<Node, size_t> d_processedCones;
 
   /**
+   * Partial-sums encoding (option arith-liastar-partial-sums): the current
+   * partial-sum skolems P_k for each lambda, one per coordinate of the star
+   * vector. P_k[i] equals the sum of every discovered cone's contribution to
+   * coordinate i, via the definitions in `d_partialSumDefs`, so the star
+   * formula is just `v = P_k`.
+   */
+  std::map<Node, std::vector<Node>> d_partialSums;
+
+  /**
+   * Partial-sums encoding: every definitional lemma for each lambda -- the
+   * per-cone multiplier constraints and the partial-sum definitions
+   * `P_k[i] = P_{k-1}[i] + contribution_k[i]`. Emitted unguarded by
+   * `processDisjunct` and re-queued each round (the user-context lemma cache
+   * deduplicates and re-sends them after a pop).
+   */
+  std::map<Node, std::vector<Node>> d_partialSumDefs;
+
+  /**
    * The last starLia under-approximation (`star`) computed for each
    * STAR_CONTAINS literal by `lazyHilbert`. The model-value check in
    * `checkFullEffort` uses it to skip refinement when the current model

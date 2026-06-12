@@ -674,9 +674,17 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
 {
   // Lazy path: return the star constraints over all cones accumulated so far in
   // `d_lazyCones[n[0]]`. The per-cone constraints (and their fresh skolems) are
-  // computed only once per cone and cached in `d_starConstraints`/`d_lambdas`
-  // (so the skolems are stable across refinement rounds); only the sum
-  // constraints, which span all cones, are rebuilt on each call.
+  // computed only once per cone (so the skolems are stable across refinement
+  // rounds). Two encodings (option arith-liastar-partial-sums):
+  // - default: the per-cone constraints are cached in
+  //   `d_starConstraints`/`d_lambdas` and folded into every star formula, and
+  //   the sum constraints, which span all cones, are rebuilt on each call --
+  //   the formula grows with the number of cones;
+  // - partial sums: the per-cone constraints and the running partial-sum
+  //   definitions `P_k = P_{k-1} + contribution_k` are accumulated in
+  //   `d_partialSumDefs` (emitted as unguarded definitional lemmas by
+  //   `processDisjunct`), and the returned star formula is just `v = P_k` --
+  //   constant size, however many cones have been found.
   std::vector<Node> vec(n.begin() + 1, n.end());
   size_t dimension = vec.size();
 
@@ -691,6 +699,10 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas =
       d_lambdas[n[0]];
   size_t& processed = d_processedCones[n[0]];
+  bool partialSums = options().arith.arithLiaStarPartialSums;
+  bool newCones = processed < cones.size();
+  // the contribution of the newly processed cones to each coordinate
+  Vector contribution(dimension, d_zero);
 
   for (; processed < cones.size(); processed++)
   {
@@ -713,20 +725,72 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
                                      constraints,
                                      point,
                                      rays);
-      starConstraints.insert(
-          starConstraints.end(), constraints.begin(), constraints.end());
-      lambdas.push_back({point, rays});
+      if (partialSums)
+      {
+        // The per-cone constraints become definitional lemmas, emitted once;
+        // the generator's terms are folded into the running contribution.
+        std::vector<Node>& defs = d_partialSumDefs[n[0]];
+        defs.insert(defs.end(), constraints.begin(), constraints.end());
+        for (size_t i = 0; i < dimension; i++)
+        {
+          contribution[i] =
+              d_nm->mkNode(Kind::ADD, contribution[i], point[i]);
+          for (const Vector& ray : rays)
+          {
+            contribution[i] =
+                d_nm->mkNode(Kind::ADD, contribution[i], ray[i]);
+          }
+        }
+      }
+      else
+      {
+        starConstraints.insert(
+            starConstraints.end(), constraints.begin(), constraints.end());
+        lambdas.push_back({point, rays});
+      }
     }
   }
 
-  // The sum constraints span the lambdas of all cones, so they are rebuilt from
-  // the accumulated lambdas on each call. Start from the persisted per-cone
-  // constraints and append the freshly built sum constraints, leaving
-  // `d_starConstraints` holding only the per-cone constraints.
-  std::vector<Node> result = starConstraints;
-  std::vector<Node> sums = buildSumConstraints(d_nm, d_zero, vec, lambdas);
-  result.insert(result.end(), sums.begin(), sums.end());
+  if (!partialSums)
+  {
+    // The sum constraints span the lambdas of all cones, so they are rebuilt
+    // from the accumulated lambdas on each call. Start from the persisted
+    // per-cone constraints and append the freshly built sum constraints,
+    // leaving `d_starConstraints` holding only the per-cone constraints.
+    std::vector<Node> result = starConstraints;
+    std::vector<Node> sums = buildSumConstraints(d_nm, d_zero, vec, lambdas);
+    result.insert(result.end(), sums.begin(), sums.end());
+    return result;
+  }
 
+  // Advance the partial sums by the new cones' contribution: fresh skolems
+  // P_k with the definitions P_k[i] = P_{k-1}[i] + contribution[i] (just
+  // contribution[i] for the first cones).
+  std::vector<Node>& sums = d_partialSums[n[0]];
+  if (newCones)
+  {
+    std::vector<Node>& defs = d_partialSumDefs[n[0]];
+    std::vector<Node> next;
+    for (size_t i = 0; i < dimension; i++)
+    {
+      Node p =
+          d_nm->mkDummySkolem("liastarPartialSum", d_nm->integerType());
+      Node rhs = sums.empty()
+                     ? contribution[i]
+                     : d_nm->mkNode(Kind::ADD, sums[i], contribution[i]);
+      defs.push_back(p.eqNode(rhs));
+      next.push_back(p);
+    }
+    sums = next;
+  }
+
+  // The star formula is the constant-size `v = P_k` (`v = 0` while no cone
+  // has been discovered: the star of the empty set is the empty sum).
+  std::vector<Node> result;
+  for (size_t i = 0; i < dimension; i++)
+  {
+    result.push_back(vec[i].eqNode(sums.empty() ? d_zero : sums[i]));
+  }
   return result;
 }
 
@@ -940,44 +1004,66 @@ Node LiaStarExtension::getModelDisjunct(
   std::vector<Node> atoms;
   std::unordered_set<Node> visited;
   LiaStarUtils::collectAtoms(en.base, atoms, visited);
-  std::vector<Node> literals;
+  std::vector<bool> atomValues;
   for (const Node& atom : atoms)
   {
     Node value = evaluate(atom);
-    Node literal;
     if (value == d_true)
     {
-      // the atom is true in the model: keep it as is
-      literal = atom;
+      atomValues.push_back(true);
     }
     else if (value == d_false)
     {
-      if (atom.getKind() == Kind::EQUAL && atom[0].getType().isInteger())
-      {
-        // A disequality is not convex (it is the union of two half-spaces),
-        // so it cannot be a single cone. Pick the strict inequality on the
-        // side that the model satisfies.
-        Node lhs = evaluate(atom[0]);
-        Node rhs = evaluate(atom[1]);
-        if (!lhs.isConst() || !rhs.isConst())
-        {
-          return Node();
-        }
-        Kind k = lhs.getConst<Rational>() > rhs.getConst<Rational>()
-                     ? Kind::GT
-                     : Kind::LT;
-        literal = d_nm->mkNode(k, atom[0], atom[1]);
-      }
-      else
-      {
-        // the atom is false in the model: negate it
-        literal = atom.notNode();
-      }
+      atomValues.push_back(false);
     }
     else
     {
       // the atom has no determined value under the candidate model
       return Node();
+    }
+  }
+  // Optionally generalize the cell: drop the atoms the predicate's truth
+  // does not depend on, so the cell (and hence its cone) covers more of the
+  // predicate per refinement round.
+  std::vector<bool> keep(atoms.size(), true);
+  if (options().arith.arithLiaStarGeneralize)
+  {
+    keep = LiaStarUtils::generalizeCell(en.base, atoms, atomValues);
+  }
+  std::vector<Node> literals;
+  for (size_t i = 0; i < atoms.size(); i++)
+  {
+    if (!keep[i])
+    {
+      continue;
+    }
+    const Node& atom = atoms[i];
+    Node literal;
+    if (atomValues[i])
+    {
+      // the atom is true in the model: keep it as is
+      literal = atom;
+    }
+    else if (atom.getKind() == Kind::EQUAL && atom[0].getType().isInteger())
+    {
+      // A disequality is not convex (it is the union of two half-spaces),
+      // so it cannot be a single cone. Pick the strict inequality on the
+      // side that the model satisfies.
+      Node lhs = evaluate(atom[0]);
+      Node rhs = evaluate(atom[1]);
+      if (!lhs.isConst() || !rhs.isConst())
+      {
+        return Node();
+      }
+      Kind k = lhs.getConst<Rational>() > rhs.getConst<Rational>()
+                   ? Kind::GT
+                   : Kind::LT;
+      literal = d_nm->mkNode(k, atom[0], atom[1]);
+    }
+    else
+    {
+      // the atom is false in the model: negate it
+      literal = atom.notNode();
     }
     if (!en.from.empty())
     {
@@ -1239,6 +1325,24 @@ void LiaStarExtension::processDisjunct(Node literal,
   std::vector<Node> starConstraints = getStarConstraints(literal);
   Trace("liastar-ext") << "starConstraints: " << std::endl
                        << toString(starConstraints) << std::endl;
+
+  if (options().arith.arithLiaStarPartialSums)
+  {
+    // Queue the definitional lemmas (per-cone multiplier constraints and
+    // partial-sum definitions) accumulated by `getStarConstraints`. They are
+    // unguarded: they only constrain fresh skolems and are satisfiable by
+    // setting every multiplier to zero. All of them are re-queued each
+    // round: within one user context the lemma cache drops the duplicates,
+    // and after a user pop they are re-sent, so the star formulas emitted
+    // below never reference undefined partial-sum skolems.
+    for (const Node& def : d_partialSumDefs[literal[0]])
+    {
+      if (!rewrite(def).isConst())
+      {
+        d_im.addPendingLemma(def, InferenceId::ARITH_LIA_STAR_DEFINITION);
+      }
+    }
+  }
 
   Node star = d_nm->mkNode(Kind::AND, starConstraints);
 

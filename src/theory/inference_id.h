@@ -211,6 +211,9 @@ enum class InferenceId
   // lia star main-solver cell enumeration lemma (guard => predicate /
   // guard => negated cone-disjunct)
   ARITH_LIA_STAR_ENUM,
+  // lia star definitional lemma (per-cone multiplier constraints and
+  // partial-sum skolem definitions, asserted unguarded)
+  ARITH_LIA_STAR_DEFINITION,
   //-------------------- ff inference
   // ---------------------------------- end arith theory
 

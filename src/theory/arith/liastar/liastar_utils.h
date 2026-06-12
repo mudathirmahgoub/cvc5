@@ -259,6 +259,27 @@ class LiaStarUtils
                            std::vector<Node>& atoms,
                            std::unordered_set<Node>& visited);
 
+  /**
+   * Generalize a model-derived cell to a prime implicant of `formula`
+   * (propositionally): given the atoms of `formula` and their truth values
+   * in the current model, greedily mark atoms as "don't care" while
+   * `formula` still evaluates to true under the resulting partial assignment
+   * (three-valued evaluation of the boolean skeleton). The conjunction of
+   * the literals of the remaining atoms then still implies `formula`, but
+   * describes a larger convex cell, so the cone built from it covers more of
+   * the predicate per refinement round. If the full assignment does not
+   * satisfy `formula` (e.g. a stale candidate model), every atom is kept.
+   *
+   * @param formula the predicate the cell must imply (e.g. the subsolver's
+   *   base predicate)
+   * @param atoms the atoms of `formula`, as returned by `collectAtoms`
+   * @param values the truth value of each atom in the current model
+   * @return one flag per atom: true to keep its literal in the cell
+   */
+  static std::vector<bool> generalizeCell(Node formula,
+                                          const std::vector<Node>& atoms,
+                                          const std::vector<bool>& values);
+
  private:
   /**
    * Eliminate if-then-elses from a QF_LIA predicate by case splitting, without

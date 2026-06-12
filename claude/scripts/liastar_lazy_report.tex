@@ -7,20 +7,29 @@
 \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 \usepackage{hyperref}
 \usepackage{xcolor}
+\usepackage{mdframed}
 
 \newcommand{\cvc}{\textsf{cvc5}\xspace}
 \newcommand{\normaliz}{\textsf{Normaliz}\xspace}
-\newcommand{\starc}{\ensuremath{\mathit{star\text{-}contains}}\xspace}
 \newcommand{\Sset}{\ensuremath{S}}
 \newcommand{\Sstar}{\ensuremath{S^{*}}}
-\newcommand{\vvec}{\ensuremath{\mathbf{v}}}
-\newcommand{\yvec}{\ensuremath{\mathbf{y}}}
-\newcommand{\cvec}{\ensuremath{\mathbf{c}}}
+\newcommand{\vv}{\ensuremath{\vec{v}}\xspace}
+\newcommand{\vy}{\ensuremath{\vec{y}}\xspace}
+\newcommand{\vc}{\ensuremath{\vec{c}}\xspace}
+\newcommand{\vzero}{\ensuremath{\vec{0}}\xspace}
+\newcommand{\true}{\ensuremath{\mathit{true}}\xspace}
+\newcommand{\false}{\ensuremath{\mathit{false}}\xspace}
 \newtheorem{proposition}{Proposition}
-\newtheorem{definition}{Definition}
 
-\title{Engineering a Lazy Decision Procedure for \textsc{LIA}$^{*}$ in \cvc:\\
-Strategies, Algorithms, and an Experimental Account}
+\newmdenv[backgroundcolor=blue!4,linecolor=blue!40,
+          skipabove=6pt,skipbelow=6pt]{whybox}
+\newmdenv[backgroundcolor=black!4,linecolor=black!30,
+          skipabove=6pt,skipbelow=6pt]{exbox}
+
+\newcommand{\why}[1]{\begin{whybox}\textbf{Why this step is needed.} #1\end{whybox}}
+
+\title{A Lazy Decision Procedure for \textsc{LIA}$^{*}$ in \cvc,\\
+Explained by Example}
 \author{Claude (Anthropic)}
 \date{June 2026}
 
@@ -28,369 +37,817 @@ Strategies, Algorithms, and an Experimental Account}
 \maketitle
 
 \begin{abstract}
-We describe a sequence of engineering and algorithmic improvements to the
-lazy decision procedure for the \emph{additive closure} (star) operator over
-linear integer arithmetic implemented in \cvc, following the
-approximation-based approach of Levatich et al.\ (VMCAI~2020). Starting from
-an implementation that timed out on the hardest instances of a
-BAPA/MAPA-derived benchmark family, we develop and evaluate seven
-strategies: subsolver refinement under push/pop, main-solver cell
-enumeration, propositional and semantic cell generalization, constant-size
-reduction lemmas via partial sums, decomposition-guided cell discovery with
-a decoupled endgame and decision-strategy witness feedback for satisfiable
-instances, and counterexample-guided synthesis of over-approximating
-homogeneous cuts for unsatisfiable instances. Each step was driven by a
-measured failure of the previous one; we report the negative results
-alongside the positive ones. The final configuration solves all 480
-benchmarks within a 100-second timeout (median well under one second),
-including instances on which every reference solver in our comparison set
-timed out, with no answer discrepancies.
+This document explains the algorithms behind the lazy decision procedure
+for the \emph{additive closure} (star) operator in \cvc, and the sequence
+of improvements that took a benchmark family from 450/480 solved to
+480/480 (median 45\,ms per instance). It is written to be self-contained:
+every concept is defined in plain language when it first appears, every
+definition and every claim comes with a small worked example placed right
+where it is used, and one \emph{running example} is carried through the
+whole document. Negative experimental results are included, because two of
+them supplied the machinery for the final breakthroughs.
 \end{abstract}
 
-\section{Problem and Background}
+\section{The problem}
 
-\subsection{The \starc{} operator}
+\subsection{Vectors, sums, and the star of a set}
 
-A literal
+We work with vectors of non-negative integers, written
+$\vec{x} = (x_1,\ldots,x_n)$. Vectors are added coordinate-wise:
+$(1,0) + (0,2) = (1,2)$.
+
+\begin{exbox}
+\textbf{Running example} (used throughout this document). Let $p$ be the
+predicate
 \[
-\ell \;=\; \mathit{int.star\text{-}contains}\big(\lambda x_1 \ldots x_n.\; p(\mathbf{x}),\; v_1,\ldots,v_n\big)
+p(x,y) \;=\; \big(\underbrace{x \ge 1 \wedge y = 0}_{\text{``horizontal''}}\big)
+\;\vee\;
+\big(\underbrace{x = 0 \wedge y \ge 2}_{\text{``vertical''}}\big),
 \]
-asserts that the vector $\vvec = (v_1,\ldots,v_n)$ of integer terms belongs
-to the \emph{star} (additive closure) of the set
+and let $\Sset$ be the set of non-negative integer vectors satisfying it:
 \[
-\Sset \;=\; \{\, \mathbf{x} \in \mathbb{Z}^n \mid p(\mathbf{x}) \wedge \mathbf{x} \ge 0 \,\},
-\qquad
-\Sstar \;=\; \Big\{\, \textstyle\sum_{j=1}^{k} \mathbf{s}_j \;\Big|\; k \ge 0,\; \mathbf{s}_j \in \Sset \,\Big\},
+\Sset \;=\; \{(1,0),\,(2,0),\,(3,0),\,\ldots\} \;\cup\; \{(0,2),\,(0,3),\,(0,4),\ldots\}.
 \]
-where the empty sum yields the zero vector. The sets $\Sstar$ are exactly
-the non-negative semilinear sets; the operator arises when encoding BAPA
-(Boolean algebra with Presburger arithmetic) and multiset (MAPA)
-constraints, where each summand abstracts one Venn-region cardinality
-pattern.
+\end{exbox}
 
-\subsection{The reduction of Levatich et al.}
+The \emph{star} of $\Sset$, written $\Sstar$, is the set of all vectors
+obtainable by adding finitely many members of $\Sset$ (taking \emph{zero}
+members is allowed, which produces the zero vector $\vzero$):
+\[
+\Sstar \;=\; \Big\{\, \vec{s}_1 + \cdots + \vec{s}_k \;\Big|\; k \ge 0,\ \vec{s}_j \in \Sset \,\Big\}.
+\]
 
-The decision procedure reduces $\ell$ to plain linear integer arithmetic:
+\begin{exbox}
+\textbf{Example.} In the running example:
+\begin{itemize}
+\item $(3,7) \in \Sstar$, because $(3,7) = (3,0) + (0,7)$, and both
+  summands satisfy $p$.
+\item $(0,0) \in \Sstar$: it is the empty sum. Note $(0,0) \notin \Sset$
+  itself --- the star always contains $\vzero$ even when the set does not.
+\item $(0,1) \notin \Sstar$: every member of $\Sset$ with a nonzero second
+  coordinate has $y \ge 2$, and coordinates never decrease when adding
+  non-negative vectors, so no sum can reach $y = 1$.
+\end{itemize}
+So $\Sstar = \{(0,0)\} \cup \{(x,0) \mid x \ge 1\} \cup \{(0,y) \mid y \ge 2\}
+\cup \{(x,y) \mid x \ge 1,\, y \ge 2\}$.
+\end{exbox}
+
+\subsection{The \texttt{int.star-contains} literal, and where it comes from}
+
+\cvc accepts the operator
+\[
+\ell \;=\; \mathit{int.star\mbox{-}contains}\big(\lambda x\, y.\; p(x,y),\;\; v_1,\, v_2\big),
+\]
+a formula that is true exactly when the vector $\vv = (v_1,v_2)$, built
+from the integer terms $v_1, v_2$ of the input problem, belongs to
+$\Sstar$. The first argument is a \emph{lambda term}: an anonymous function
+binding the variables $x,y$ of the predicate, so that the predicate can be
+passed around as a value.
+
+\begin{exbox}
+\textbf{Example (where such constraints come from).} Consider sets $A, B$
+over some universe and the constraint $|A| = 3 \wedge |A \cap B| = 0$.
+Every element of the universe falls into exactly one of four \emph{regions}
+(in $A$ only, in $B$ only, in both, in neither). Summing, per region, the
+0/1 indicator vector of each element shows that the vector of region
+cardinalities is a \emph{sum of per-element vectors}, each satisfying a
+fixed predicate --- i.e.\ a member of a star set. This is how Boolean
+algebra with Presburger arithmetic (BAPA, sets with cardinalities) and its
+multiset variant (MAPA) are encoded; our benchmarks come from such
+encodings, where the predicates contain many \textsf{ite} (if-then-else)
+terms defining indicator values.
+\end{exbox}
+
+Deciding $\ell$ means answering: \emph{can $\vv$ be written as a sum of
+vectors that each satisfy $p$?} The rest of this document is about doing
+that inside an SMT solver.
+
+\subsection{SMT vocabulary used in this document}
+
+For readers from neighbouring areas we fix the few solver terms we need.
+An SMT solver couples a SAT solver (handling the Boolean structure) with
+\emph{theory solvers} (handling, e.g., linear integer arithmetic, LIA). A
+\emph{lemma} is a formula a theory solver hands to the SAT solver to be
+conjoined with the problem; it must not change satisfiability.
+
+\begin{exbox}
+\textbf{Example (lemma).} The arithmetic solver may emit
+$x \ge 1 \Rightarrow x \ge 0$ --- valid, so always safe. A lemma may also
+introduce \emph{fresh} symbols: $d \Rightarrow x = 2$ with a brand-new
+Boolean $d$ is safe even though it is not valid, because any model can be
+extended by choosing $d = \false$. Such lemmas are called
+\emph{satisfiability-preserving}.
+\end{exbox}
+
+A \emph{candidate model} is the assignment the solver currently believes
+satisfies everything; theory solvers inspect it at \emph{full effort} (when
+the Boolean search has assigned all variables) and either accept it or emit
+new lemmas. The SAT solver maintains a \emph{trail} of variable
+assignments; each is either a \emph{decision} (a guess) or a
+\emph{propagation} (forced by a clause). The number of decisions on the
+trail is the \emph{decision level}; anything implied with no decisions at
+all is \emph{fixed at level~0} --- it holds in every model.
+
+\begin{exbox}
+\textbf{Example (trail, propagation, decision level).} Clauses:
+$(a \vee b)$, $(\neg a \vee c)$. The solver \emph{decides} $a = \true$
+(level~1); the second clause then \emph{propagates} $c = \true$ at
+level~1. Nothing here is fixed at level~0: a different decision
+($a=\false$) is still possible. If instead the input contained the unit
+clause $(a)$, then $a$ would be fixed at level~0.
+\end{exbox}
+
+Finally, a \emph{subsolver} is a separate, private SMT solver instance that
+a theory creates for its own queries; \emph{incremental} means assertions
+can be added between satisfiability checks; and checking with
+\emph{assumptions} means temporarily assuming extra literals for a single
+check, without asserting them permanently.
+
+\begin{exbox}
+\textbf{Example (assumptions and unsat core).} Assert $x \ge 1$
+permanently; then ask \texttt{checkSat} under assumptions
+$\{x \le 0,\ y \ge 5\}$. The answer is \textsf{unsat}, and the solver can
+report \emph{which assumptions were actually used}: the core
+$\{x \le 0\}$. The assumption $y \ge 5$ played no role. This
+``unsat-assumptions core'' feature is used twice in this document.
+\end{exbox}
+
+\section{The reduction to linear arithmetic}
+
+\subsection{Cells: the predicate in disjunctive normal form}
+
+A formula is in \emph{disjunctive normal form} (DNF) if it is a disjunction
+(or-list) of conjunctions (and-lists) of atomic constraints. Each
+conjunction of linear constraints describes a convex polyhedron; we call
+the polyhedra of the predicate's DNF its \emph{cells}.
+
+\begin{exbox}
+\textbf{Example.} The running example
+$p(x,y) = (x \ge 1 \wedge y = 0) \vee (x = 0 \wedge y \ge 2)$
+is already in DNF and has two cells: the horizontal ray and the vertical
+ray. A predicate that is \emph{not} in DNF, such as
+$(x \ge 1 \vee y \ge 1) \wedge (x \le 5)$, is converted by distributing:
+$(x \ge 1 \wedge x \le 5) \vee (y \ge 1 \wedge x \le 5)$ --- two cells.
+\end{exbox}
+
+\begin{exbox}
+\textbf{Example (why \textsf{ite} terms blow the DNF up).} The equation
+$u = \mathsf{ite}(x \ge 1,\, 1,\, 0)$ (``$u$ is $1$ if $x \ge 1$, else
+$0$'') becomes the disjunction
+$(x \ge 1 \wedge u = 1) \vee (x \le 0 \wedge u = 0)$: one \textsf{ite}
+doubles the number of cells. Two independent \textsf{ite}s give
+$2 \times 2 = 4$ cells, and the hard benchmark predicates contain up to
+\emph{23} \textsf{ite}s --- up to $2^{23} \approx 8.4$ million potential
+cells. This is why the \emph{eager} strategy below fails and a lazy one is
+needed.
+\end{exbox}
+
+\subsection{Describing one cell: generators and rays}
+
+To turn a cell into arithmetic, we need a finite description of its
+infinitely many integer points. The library \normaliz provides one: a
+finite set of \emph{base points} $g$ (called module generators) and a
+finite set of \emph{directions} $\vec{h}$ (the Hilbert basis of the cell's
+\emph{recession cone} --- the set of directions in which one can walk
+forever without leaving the cell). Every integer point of the cell is
+$g + \sum_k l_k \vec{h}_k$ for some base point and non-negative integers
+$l_k$.
+
+\begin{exbox}
+\textbf{Example.} The horizontal cell $x \ge 1 \wedge y = 0$ has one base
+point $g = (1,0)$ and one direction $\vec{h} = (1,0)$: its points are
+$(1,0) + l \cdot (1,0) = (1{+}l,\, 0)$, i.e.\ $(1,0), (2,0), (3,0), \ldots$
+The vertical cell has base point $(0,2)$ and direction $(0,1)$.
+
+A two-direction example: the cell $x \ge y \wedge y \ge 0$ (a quarter-plane
+tilted onto the diagonal) has base point $(0,0)$ and Hilbert basis
+$\{(1,0),\, (1,1)\}$; e.g.\ $(3,2) = (0,0) + 1\cdot(1,0) + 2\cdot(1,1)$.
+Note $(1,1)$ is needed: it cannot be built from $(1,0)$ and any other
+single direction inside the cell.
+\end{exbox}
+
+\subsection{The star constraints}
+
+How do we express ``$\vv$ is a sum of \emph{several} points of a cell''?
+Take the cell's base point $g$ with a multiplier $\mu \ge 0$ meaning
+\emph{how many summands} are drawn from this cell, and ray multipliers
+$l_k \ge 0$ accumulating all the ray steps of all those summands; the cell
+contributes $\mu \cdot g + \sum_k l_k \vec{h}_k$. The side condition $\mu =
+0 \Rightarrow l_k = 0$ says rays are only available if at least one summand
+was actually taken. Summing the contributions of all cells and equating
+with $\vv$ gives the \emph{star constraints}.
+
+\begin{exbox}
+\textbf{Example.} For the running example
+($p(x,y) = (x \ge 1 \wedge y = 0) \vee (x = 0 \wedge y \ge 2)$) the star
+constraints over the fresh integer unknowns $\mu_1,l_1,\mu_2,l_2$ are
+\[
+v_1 = \mu_1 \cdot 1 + l_1 \cdot 1, \qquad
+v_2 = \mu_2 \cdot 2 + l_2 \cdot 1, \qquad
+\mu_i, l_i \ge 0, \qquad
+\mu_i = 0 \Rightarrow l_i = 0 .
+\]
+$\vv \in \Sstar$ \emph{iff} these constraints are satisfiable:
+\begin{itemize}
+\item $\vv = (3,7)$: take $\mu_1 = 1, l_1 = 2$ (one horizontal summand,
+  stretched by 2) and $\mu_2 = 1, l_2 = 5$. Satisfiable --- and indeed
+  $(3,7) = (3,0) + (0,7) \in \Sstar$.
+\item $\vv = (0,1)$: $v_2 = 1$ forces $\mu_2 = 0$ (one vertical summand
+  already contributes $2$), hence $l_2 = 0$, hence $v_2 = 0 \ne 1$.
+  Unsatisfiable --- and indeed $(0,1) \notin \Sstar$.
+\end{itemize}
+\end{exbox}
+
+The procedure can therefore emit the single lemma
+$\ell \Leftrightarrow \mathit{star}$ and let the ordinary LIA engine decide
+everything. The \emph{eager} strategy does exactly this, building all
+cells up front --- and dies on the $2^{23}$-cell predicates, as explained
+above. Everything from here on is about avoiding the full DNF.
+
+\section{The lazy loop}
+
+The lazy strategy discovers cells \emph{one at a time}, maintaining an
+\emph{under-approximation}: a version of the star constraints,
+$\mathit{star}_k$, built from only the $k$ cells found so far. Since
+missing cells can only \emph{remove} ways of summing,
+$\mathit{star}_k$ describes a \emph{subset} of $\Sstar$.
+
+The discovery engine is a subsolver holding
+\[
+\mathit{base}(\vy) \;=\; p(\vy) \wedge \vy \ge 0
+\]
+over fresh constants $\vy = (y_1,\ldots,y_n)$. (Fresh constants are needed
+because a subsolver cannot be given a formula with the lambda's bound
+variables; replacing bound variables by fresh constants is standard and
+preserves satisfiability --- e.g.\ asking whether $\lambda x.\,x{\ge}1$ is
+satisfiable becomes asking whether $y \ge 1$ is, for a new symbol $y$.)
+
+Each \emph{round} of the loop does the following.
+
 \begin{enumerate}
-\item Normalize $p$ into DNF, $p \Leftrightarrow D_1 \vee \cdots \vee D_m$;
-  each disjunct (a \emph{cell}) is a convex polyhedron, so
-  $\Sset = S_1 \cup \cdots \cup S_m$.
-\item The closure distributes over union as a Minkowski sum:
-  $\Sstar = S_1^{*} + \cdots + S_m^{*}$, since the summands of any sum can be
-  grouped by the cell they came from.
-\item For each cell, \normaliz computes \emph{module generators} $g$ and a
-  \emph{Hilbert basis} $\{h_k\}$ of its recession cone, so its integer
-  points are $\{\, g + \sum_k l_k h_k \mid l_k \ge 0 \,\}$. The semigroup
-  $S_j^{*}$ is captured by a multiplier $\mu_g \ge 0$ per generator (how
-  many copies are taken) and $l_k \ge 0$ per ray, coupled by
-  $\mu_g = 0 \Rightarrow l_k = 0$.
-\item Summing the contributions over all cells gives the \emph{star
-  constraints}: a linear system over fresh multipliers whose satisfiability
-  is equivalent to $\vvec \in \Sstar$. The procedure emits the reduction
-  lemma $\ell \Leftrightarrow \mathit{star}$.
+\item Run \texttt{checkSat} on the subsolver, which also holds the
+  negations of all previously found cells. If \textsf{unsat}, every cell is
+  covered: emit the \emph{exact} lemma $\ell \Leftrightarrow \mathit{star}$
+  and stop. (This exactness is what makes \textsf{unsat} answers for $\ell$
+  possible at all.)
+\item Otherwise read the subsolver's model and extract the cell containing
+  it, by fixing every atomic constraint of $\mathit{base}$ to the truth
+  value it has in the model.
+\item Hand the cell to \normaliz, extend the star constraints to
+  $\mathit{star}_k$, and emit the \emph{guarded} lemma
+  $g_k \Rightarrow (\ell \Leftrightarrow \mathit{star}_k)$, where $g_k$ is
+  a fresh Boolean. Also emit $\neg g_{k-1}$, retiring the previous round's
+  guard. The solver is told to \emph{prefer} $g_k = \true$ when it gets to
+  choose (a \emph{phase preference}: a hint for decisions, never a
+  constraint).
+\item Assert the negation of the new cell in the subsolver, so the next
+  round's model lies somewhere new.
 \end{enumerate}
 
-The \emph{eager} strategy builds the whole DNF up front; since the DNF
-explodes (the benchmark predicates contain up to 23 if-then-else terms), the
-\emph{lazy} strategy instead discovers one cell per refinement round, from a
-model of a region not yet covered, and asserts the equivalence only
-\emph{tentatively}: while cells are missing, $\mathit{star}_k$
-under-approximates $\Sstar$, so the lemma $g_k \Rightarrow (\ell
-\Leftrightarrow \mathit{star}_k)$ is guarded by a fresh Boolean decision
-variable $g_k$ biased to true, and the previous guard is deactivated
-($\neg g_{k-1}$) each round. Once every cell is covered, the exact,
-unguarded equivalence is emitted; this is what allows refuting~$\ell$.
+\begin{exbox}
+\textbf{Example (two rounds on the running example).} Round 1: the
+subsolver holds $\mathit{base}$ only; say its model is $\vy = (4,0)$.
+The atoms of $\mathit{base}$ get the values $x{\ge}1 \mapsto \true$,
+$y{=}0 \mapsto \true$, $x{=}0 \mapsto \false$, $y{\ge}2 \mapsto \false$,
+giving the cell $D_1 = (x \ge 1 \wedge y = 0 \wedge \neg(x{=}0) \wedge y < 2)$
+--- the horizontal cell, plus two redundant conjuncts (cleaned up in the
+next section). We emit $g_1 \Rightarrow (\ell \Leftrightarrow
+\mathit{star}_1)$ where $\mathit{star}_1$ is
+$v_1 = \mu_1 + l_1 \wedge v_2 = 0 \wedge \ldots$, and assert $\neg D_1$ in
+the subsolver. Round 2: the subsolver's model must avoid $D_1$, say
+$\vy = (0,2)$; we discover the vertical cell, emit $\neg g_1$ and
+$g_2 \Rightarrow (\ell \Leftrightarrow \mathit{star}_2)$, and the
+subsolver becomes \textsf{unsat} in round 3: enumeration complete.
+\end{exbox}
 
-\subsection{Architecture in \cvc}
+\why{Why guard the lemma instead of asserting
+$\ell \Leftrightarrow \mathit{star}_k$ outright? Because
+$\mathit{star}_k$ is only an under-approximation. Concretely: after
+round~1 above, $\mathit{star}_1$ forces $v_2 = 0$, so for an input where
+$\vv = (0,5)$ the unguarded equivalence would force $\ell = \false$ ---
+but $(0,5) \in \Sstar$ via the vertical cell, so on an input asserting
+$\ell$ the solver would wrongly answer \textsf{unsat}. With the guard, the
+SAT solver escapes by setting $g_1 = \false$ (the lemma
+$g_1 \Rightarrow \cdots$ is then trivially satisfied), and the loop
+refines further. In the other direction no guard is needed: if the
+candidate model satisfies $p[\vv]$ ($\vv$ itself is a one-summand member)
+or satisfies $\mathit{star}_k$ (a $k$-cell sum exists), then
+$\vv \in \Sstar$ really holds --- an under-approximation can never wrongly
+certify \textsf{sat}. The procedure accepts a model exactly in these two
+cases (the \emph{model-value shortcut}).}
 
-The procedure lives in an extension of the arithmetic theory
-(\texttt{LiaStarExtension}), invoked at full effort with the linear solver's
-candidate model. Each round it (i)~emits a non-negativity lemma and a split
-on $p[\vvec]$ (if $\vvec$ itself satisfies $p$, it is a single-summand
-member); (ii)~checks whether the candidate model already satisfies
-$p[\vvec]$ or the last under-approximation (the \emph{model-value
-shortcut}); and otherwise (iii)~runs one refinement round. Cells are
-discovered from models of a persistent incremental \emph{subsolver} seeded
-with $p \wedge \yvec \ge 0$ (over fresh Skolem constants $\yvec$
-substituted for the lambda's bound variables) and refined with the
-negations of the cells found so far.
+\section{Four refinement strategies, and what they taught us}
 
-\section{Strategies for the refinement loop}
+This section reports engineering variants of the loop. Two are negative
+results; we keep them because their machinery returns later, and because
+they redirected the investigation to the real bottlenecks.
 
-\subsection{Accumulate vs.\ push/pop (options
-\texttt{arith-liastar-push-pop})}
+\subsection{Push/pop refinement}
 
-The baseline (\emph{accumulate}) asserts the negation of each newly
-discovered cell once, monotonically; incremental mode allows repeated
-\texttt{checkSat} calls. The \emph{push/pop} variant exploits the
-observation that each round's refined formula $\neg(D_1 \vee \cdots \vee
-D_k)$ \emph{subsumes} the previous round's: it pops the previous refined
-formula and asserts the single cumulative one in a fresh frame, so the
-subsolver always holds exactly two assertions and the per-assertion caches
-stay bounded.
+In the baseline, the subsolver accumulates one negated cell per round:
+after three rounds it holds $\mathit{base}, \neg D_1, \neg D_2, \neg D_3$,
+and these assertions live forever. The push/pop variant instead keeps a
+single combined formula: since
+$\neg(D_1 \vee D_2 \vee D_3)$ implies $\neg(D_1 \vee D_2)$, each round can
+\emph{pop} (retract) the previous combined formula and assert the new one,
+keeping exactly two live assertions --- the hope being lower memory in the
+subsolver.
 
-\emph{Measured:} on the hard instance the two are indistinguishable
-(both time out around $10^3$ rounds and $3.2$\,GB); on the full set
-accumulate is slightly ahead (463 vs.\ 460 of 480 solved at 100\,s), because
-popping discards learned clauses and re-clausifies the cumulative formula
-(quadratic total work). Memory was dominated by the main solver, not the
-subsolver, so the push/pop advantage never materialized. \emph{Lesson:} the
-suspected bottleneck (subsolver assertion accumulation) was wrong; measure
-before optimizing.
+\emph{Measured result:} no gain. On the hardest instance, both variants
+time out with the \emph{same} ${\sim}3.2$\,GB --- profiling showed the
+memory lived in the \emph{main} solver's accumulated lemmas, not in the
+subsolver. On the full suite, push/pop solves slightly \emph{fewer} (460
+vs.\ 463 of 480): popping throws away everything the subsolver had
+\emph{learned} about already-covered regions, and the cumulative formula
+must be re-processed from scratch each round.
+\textbf{Lesson: measure the bottleneck before optimizing it.}
 
-\subsection{Main-solver enumeration (option
-\texttt{arith-liastar-main-solver})}
+\subsection{Enumerating inside the main solver}
 
-This variant removes the subsolver entirely: the lambda's variables become
-fresh Skolems $\yvec$ \emph{in the main solver}, constrained through a chain
-of \emph{stage guards} ($h_0 \Rightarrow \mathit{base}$, and per cell $D_k$
-a fresh $h_k$ with $h_k \Rightarrow h_{k-1}$ and $h_k \Rightarrow \neg
-D_k$), and the next cell is read off the main solver's own candidate model.
-A na\"ive completeness test (wait until the SAT solver fixes $\neg h$ at
-level~0) livelocks; the working mechanism is a per-stage \emph{driver
-lemma}
+A more radical variant deletes the subsolver and lets the \emph{main}
+search enumerate cells: the fresh constants $\vy$ are added to the main
+problem, constrained by lemmas
+$h_0 \Rightarrow \mathit{base}(\vy)$ and, per discovered cell,
+$h_k \Rightarrow h_{k-1}$ and $h_k \Rightarrow \neg D_k(\vy)$, where the
+$h_k$ are fresh Booleans (so activating $h_k$ places $\vy$ in a
+not-yet-covered cell). When the candidate model sets $h_k = \true$, the
+values of $\vy$ are read off and a new cell is harvested.
+
+\why{Three problems appeared, each with a concrete failure.
+
+\emph{(1) Detecting completeness.} In the subsolver version,
+``\textsf{unsat}'' announces that all cells are covered. Here one would
+like to wait until the SAT solver proves $\neg h_k$ outright --- but a SAT
+solver only derives what the search forces it to derive, and nothing forces
+it to keep trying $h_k = \true$; runs livelocked. The repair is the
+\emph{driver lemma}
+$\ell \Rightarrow (p[\vv] \vee \mathit{star}_k \vee h_k)$:
+if the input asserts $\ell$ and the model certifies it by neither
+$p[\vv]$ nor $\mathit{star}_k$, the model \emph{must} set $h_k = \true$,
+i.e.\ exhibit a fresh cell. When all cells are covered, the $h_k$ branch
+becomes contradictory and only the certified branches survive.
+
+\emph{(2) The empty sum.} The first-round driver must not be
+$\ell \Rightarrow (p[\vv] \vee h_0)$. Counterexample: take the predicate
+$p(x) = x \ge 1 \wedge x \le 0$, which no point satisfies, so
+$\Sstar = \{\vzero\}$; and an input asserting $\ell$ plus $v_1 = 0$.
+Then $\ell$ is \emph{true} ($\vv = \vzero$ is the empty sum), but
+$p[\vv]$ is false and $h_0$ is contradictory ($\mathit{base}$ is
+unsatisfiable) --- the driver would force $\neg\ell$: a wrong
+\textsf{unsat}. The star branch must therefore always include the empty
+sum, $\vv = \vzero$. This bug was found by an adversarial review and is
+now the regression test \texttt{empty\_pred\_sat.smt2}.
+
+\emph{(3) Solver pops.} In incremental usage (\texttt{push}/\texttt{pop}
+by the \emph{user}), lemmas are retracted on pop but the extension's
+bookkeeping survives, so the enumeration constraints silently vanished
+(observed as a wrong \textsf{sat}). Fix: re-submit all enumeration lemmas
+every round; the solver's lemma cache drops duplicates for free and
+re-sends them after a pop.}
+
+\emph{Measured result:} sound after the fixes, but clearly worse (447 vs.\
+463): every refinement round now drags the entire input problem along, and
+only one cell is harvested per full-effort check. The lasting value is the
+\emph{decoupling lesson} --- enumeration and the main search starve each
+other when coupled --- which returns with the sign flipped in
+Section~\ref{sec:sat}.
+
+\subsection{Generalizing the discovered cells (now the default)}
+
+Step 2 of the lazy loop fixes \emph{every} atom of $\mathit{base}$ to its
+model value. That makes cells as small as possible --- bad, because more
+cells means more rounds.
+
+\begin{exbox}
+\textbf{Example.} Recall from the round-1 walk-through that the model
+$\vy = (4,0)$ produced
 \[
-\ell \;\Rightarrow\; \big(p[\vvec] \,\vee\, \mathit{star}_k \,\vee\, h_k\big),
+D_1 \;=\; x \ge 1 \;\wedge\; y = 0 \;\wedge\; \neg(x = 0) \;\wedge\; y < 2 .
 \]
-which is satisfiability-preserving (any model with $\vvec \in \Sstar$
-outside the current approximation extends to one placing $\yvec$ in an
-uncovered cell; the empty-sum member $\vvec = 0$ must be included in the
-star branch) and forces an asserted-but-uncertified literal to either
-certify itself or exhibit a fresh cell. An adversarial review found and we
-fixed two soundness bugs: the missing empty-sum branch (wrong
-\textsf{unsat} on predicates with empty $\Sset$), and enumeration lemmas
-not being re-sent after user-context pops (wrong \textsf{sat} in
-incremental mode), fixed by re-queueing all lemmas through the
-user-context-dependent lemma cache each round.
+The conjuncts $\neg(x = 0)$ and $y < 2$ come from atoms of the
+\emph{other} cell and are redundant here. Now imagine the predicate also
+contained an unrelated \textsf{ite} over a variable $w$: its atoms (say
+$w \ge 5$ and its negation) would also be fixed, splitting the one
+horizontal cell into \emph{two} cells ($w \ge 5$ and $w < 5$) that the
+loop must discover separately. With $m$ irrelevant atoms, one logical cell
+shatters into up to $2^m$ discovered cells.
+\end{exbox}
 
-\emph{Measured:} sound (zero discrepancies) but dominated by the subsolver
-architecture (447 vs.\ 463 solved; $2.5\times$ slower on the common set):
-every refinement round pays for the entire input search, and at most one
-cell is harvested per full-effort check.
+\emph{Boolean generalization} repairs this with a \emph{prime implicant}
+computation. (An implicant of a formula is a conjunction of literals that
+forces the formula to be true; it is \emph{prime} if dropping any literal
+breaks that. Example: for $a \wedge (b \vee c)$, the conjunction
+$a \wedge b \wedge c$ is an implicant; $a \wedge b$ is a prime implicant.)
+The algorithm walks over the kept literals and, for each, temporarily
+marks its atom \emph{unknown} and re-evaluates $\mathit{base}$ in
+three-valued logic --- where $\wedge$ yields \false{} if any conjunct is
+\false{}, \emph{unknown} if any is unknown (and none \false), and \true{}
+otherwise; $\vee$ is the mirror image. If the formula still evaluates to
+\true, every possible value of that atom keeps $\mathit{base}$ true, so
+the literal is dropped for good.
 
-\subsection{Cell generalization (options
-\texttt{arith-liastar-generalize}, \texttt{-generalize-semantic})}
+\begin{exbox}
+\textbf{Example.} On
+$D_1$ above, with $\mathit{base} = (x{\ge}1 \wedge y{=}0) \vee (x{=}0 \wedge y{\ge}2)$:
+marking $\neg(x{=}0)$'s atom unknown leaves the first disjunct
+$\true \wedge \true = \true$, so the disjunction is \true{} --- drop it.
+Marking $y < 2$'s atom ($y \ge 2$) unknown: same --- drop it. Marking
+$x \ge 1$ unknown: the first disjunct becomes \emph{unknown}, the second is
+\false, so the disjunction is \emph{unknown} --- keep it. Result:
+$D_1' = x \ge 1 \wedge y = 0$, exactly the logical cell.
+\end{exbox}
 
-The cell read from a model fixes the truth value of \emph{every} atom of
-the predicate, making cells maximally fine: the enumeration walks the
-arrangement of all atoms rather than the predicate's coarse cell structure.
-\emph{Boolean generalization} computes a prime implicant of the
-propositional skeleton: greedily drop literals while a three-valued
-evaluation of $\mathit{base}$ under the partial assignment still yields
-\emph{true} (Algorithm~\ref{alg:gen}). Soundness requires only that the
-shrunken conjunction still implies $\mathit{base}$; dropping conjuncts keeps
-the cell convex, the model point stays inside (so progress is preserved),
-and overlapping cells are harmless because the Minkowski-sum argument needs
-only $\Sset = \bigcup_j S_j$.
+Soundness: three-valued \true{} under a partial assignment means
+\emph{every} completion of the unknowns satisfies $\mathit{base}$ ---
+i.e.\ the kept conjunction still implies $\mathit{base}$, so the cell's
+points all lie in $\Sset$ and the star constraints built from it never
+overshoot. The model point stays inside the (larger) cell, so asserting
+its negation still makes progress. And if two generalized cells overlap,
+nothing breaks: the correctness of the cell-by-cell star encoding only
+needs the cells to \emph{cover} $\Sset$, not to be disjoint --- a sum
+grouped by cells stays a sum.
 
-\begin{algorithm}[t]
-\caption{Boolean cell generalization (\texttt{generalizeCell})}
-\label{alg:gen}
-\KwIn{formula $\mathit{base}$, atoms $a_1..a_m$ with model values $b_1..b_m$}
-\KwOut{keep flags $k_1..k_m$}
-$\sigma \gets \{a_i \mapsto b_i\}$; \lIf{$\mathrm{eval}_3(\mathit{base},\sigma) \ne \mathit{true}$}{\Return all-keep}
-\For{$i \gets 1$ \KwTo $m$}{
-  $\sigma[a_i] \gets \mathit{unknown}$\;
-  \leIf{$\mathrm{eval}_3(\mathit{base},\sigma) = \mathit{true}$}{$k_i \gets \mathit{false}$}{$\sigma[a_i] \gets b_i$;\; $k_i \gets \mathit{true}$}
-}
-\end{algorithm}
+\emph{Measured result:} the best general-purpose improvement of the whole
+project --- discovered cells halve in size, 466/480 solved, $4.4\times$
+faster on the commonly solved instances. Enabled by default.
 
-\emph{Measured:} a clear win and now the default --- cells shrink to about
-half their literals, 466/480 solved (3 newly solved, none lost), and
-$4.4\times$ faster on the commonly solved set.
+\emph{Semantic generalization} (optional, off) pushes further: drop a
+literal whenever the rest \emph{arithmetically} implies $\mathit{base}$,
+which the propositional view cannot see.
 
-\emph{Semantic generalization} strengthens the test to arithmetic
-entailment: literal $l$ may be dropped iff $(D \setminus \{l\}) \wedge \neg
-\mathit{base}$ is unsatisfiable. The implementation is core-guided: one
-\texttt{checkSat} with all cell literals as \emph{assumptions} against a
-persistent probe subsolver holding $\neg\mathit{base}$; the
-unsat-assumptions core drops everything outside it at once, then a greedy
-deletion pass (equalities first) minimizes the core. \emph{Measured:}
-mechanically effective (cells halve again) but a net loss (465 solved,
-$2.25\times$ slower): probe latency plus fatter cells (larger Hilbert
-bases, more multipliers per cone) outweigh the extra merging. Kept
-optional, default off.
+\begin{exbox}
+\textbf{Example.} $\mathit{base} = x \ge 1 \wedge x + y \ge 1 \wedge y \ge 0$,
+model $(1,0)$. All three atoms are top-level conjuncts, so the
+propositional check keeps all three. But
+$x \ge 1 \wedge y \ge 0$ already implies $x + y \ge 1$ \emph{as
+arithmetic}. The implication is verified with a probe subsolver holding
+$\neg\mathit{base}$: check, under assumptions $\{x \ge 1,\ y \ge 0\}$
+--- \textsf{unsat} confirms the implication, so $x + y \ge 1$ is dropped
+and the cell fattens.
+\end{exbox}
 
-\subsection{Partial sums (option \texttt{arith-liastar-partial-sums})}
+\emph{Measured result:} negative on this suite (465 solved, $2.25\times$
+slower) --- each probe costs a solver call, and fatter cells have larger
+Hilbert bases, hence more multipliers. Kept as an option; its
+\emph{probe-validation} pattern (``a claim about all of $\mathit{base}$
+$=$ one \textsf{unsat} answer'') is reused by the cut synthesis in
+Section~\ref{sec:cuts}.
 
-Each round's reduction lemma contains sum constraints spanning \emph{all}
-cones found so far, so cumulative lemma content grows quadratically in the
-round count. Defining running partial-sum Skolems $P_k[i] = P_{k-1}[i] +
-\mathit{contribution}_k[i]$ as unconditional lemmas (sound: they constrain
-only fresh Skolems, satisfiable by zeros) collapses the guarded lemma to
-the constant-size $\vvec = P_k$. \emph{Measured:} a negative result ---
-memory got \emph{worse} (4.4 vs.\ 3.3\,GB on the hard instance) and 13
-fewer instances solved. Two mechanisms: the per-cone definitional volume
-(tens of lemmas per round) dominates with a large constant, and the
-all-equality star forces dis-equality splitting when negated
-($\mathit{ARITH\_SPLIT\_DEQ}$ jumped $14 \to 663$), where the fat star
-offered cheap escapes (violate one multiplier bound). The
-quadratic-lemma-content hypothesis for the memory wall was thereby
-refuted. Kept for reference, default off.
+\subsection{Constant-size lemmas via partial sums}
 
-\section{Solving satisfiable hard instances}
+Round $k$'s guarded lemma contains the sum constraints over \emph{all} $k$
+cells, so the total text emitted over $K$ rounds grows like $K^2$. One can
+instead define \emph{running totals} once per round ---
+$P_k = P_{k-1} + (\text{round } k\text{'s contribution})$, over fresh
+unknowns $P_k$ --- and shrink the guarded lemma to the constant-size
+$\vv = P_k$. The definitions are safe to assert unconditionally: they only
+constrain fresh symbols (set all multipliers to $0$ and every $P_k$ to
+$\vzero$ to satisfy them in any model).
 
-The hardest family (\texttt{card/fol\_0000099--0000106}) resisted every
-strategy above. Diagnosis on \texttt{fol\_0000100} established three facts.
-First, the instance is satisfiable but $A \wedge p[\vvec]$ is not (verified
-standalone): the vector genuinely needs $\ge 2$ summands. Second, cell
-discovery was \emph{not} the bottleneck once guided (below): all five
-summand bit-patterns needed by a hand decomposition appear within ${\sim}30$
-rounds. Third, the failure was the \emph{endgame}: concluding \textsf{sat}
-requires the main solver to find integer multipliers decomposing $\vvec$
-over the discovered cones --- an ILP over hundreds of Skolems --- and it
-never gets to finish, because (i) the extension's check runs \emph{before}
-integer branching, so fractional candidate models fail the shortcut and
-trigger yet another refinement, growing the ILP under the solver's feet,
-and (ii) the star's fresh equality atoms receive default SAT phases, so the
-guard is \emph{propagated} false before ever being decided --- measured: the
-guard was never true across 643 rounds.
+\emph{Measured result:} clearly negative --- memory rose (4.4 vs.\
+3.3\,GB on the hard instance) and 13 fewer instances were solved. Two
+measured reasons. First, the per-cell machinery (multiplier bounds,
+coupling implications, definition rows) is itself tens of lemmas per
+round; the quadratic term we removed was not the dominant cost. Second, a
+subtle search effect: when the solver explores
+$\ell = \false$ under the guarded equivalence, it must falsify the star
+formula; falsifying the old ``fat'' star was cheap (violate any one
+$\mu \ge 0$), but falsifying $\vv = P_k$ means asserting a
+\emph{disequality} $v_i \ne P_k[i]$, which integer reasoning handles by
+case-splitting ($<$ or $>$) --- the count of those splits exploded
+($14 \to 663$). \textbf{Lesson: lemma \emph{shape} affects search, not
+just lemma size.} This negative result redirected attention from memory to
+the two real bottlenecks, treated next.
 
-Three mechanisms together solve this class (\texttt{fol\_0000100}:
-timeout${} \to 0.7$\,s):
+\section{Hard satisfiable instances: aim the search, then finish the job}
+\label{sec:sat}
 
-\paragraph{Guided enumeration (option \texttt{arith-liastar-guided},
-default on).} Every summand of a non-negative decomposition satisfies
-$\yvec \le \vvec$ componentwise. The subsolver query is therefore first
-checked under the assumptions $\{ y_i \le \hat v_i \}$, where $\hat\vvec$
-is the candidate model's value of $\vvec$, with an unbiased fallback when
-the biased query is unsatisfiable --- so completeness (the unbiased
-\textsf{unsat} signalling full coverage) is untouched. In particular,
-coordinates with $\hat v_i = 0$ force $y_i = 0$, pruning the cell search
-to the subspace relevant for decomposing $\vvec$.
+The hardest \textsf{sat} instances (the \texttt{fol\_0000099--106}
+family) survived everything above; the flagship \texttt{fol\_0000100}
+timed out at 600\,s in every configuration, running ${\sim}1000$
+refinement rounds. Three measured facts explain it, and each dictates one
+component of the cure.
 
-\paragraph{Decoupled endgame (option \texttt{arith-liastar-endgame}$=N$,
-default 10).} Every $N$ newly discovered cones, a \emph{fresh} subsolver
-solves $F_0 \wedge \mathit{star}_k$, where $F_0$ are the arithmetic trail
-facts \emph{fixed at decision level 0} (\texttt{Valuation::isFixed}) ---
-using unfixed trail facts poisons the query with branch decisions (in one
-measured run, the trail had pinned $n = 1$ inside a region already known
-contradictory). The fresh solver runs branch-and-bound to completion,
-unencumbered by stale guards, frozen phases, and lemma churn. With
-guidance, it answers \textsf{sat} at ${\sim}30$ cones and yields a concrete
-multiplier witness.
+\textbf{Fact 1: a one-summand witness does not exist.} The input's side
+constraints force $\vv$ to be a sum of at least two members (checked
+standalone: side constraints $\wedge\ p[\vv]$ is \textsf{unsat}), so the
+model-value shortcut cannot fire early; the star is unavoidable.
 
-\paragraph{Witness feedback by decision strategy.} A guarded hint lemma $d
-\Rightarrow (x_1 = c_1 \wedge \cdots)$ with $d$ phase-preferred true
-\emph{never} engages: with hundreds of pinned variables, some are always
-already bound differently on the trail, so $\neg d$ is propagated round
-after round (measured: the hint guard was false at every single round). The
-working mechanism is a \cvc \emph{decision strategy}
-(\texttt{LiaStarHintStrategy}): while a hint is active, the SAT solver is
-handed the guard and then each pinned equality as its next decisions,
-building the witness assignment directly; one hint is active per literal
-(competing witnesses pin the same Skolems to different values). The hint is
-sound unconditionally --- the guard is fresh --- and once the witness
-assignment is complete, the model-value shortcut accepts it.
+\textbf{Fact 2: undirected discovery wanders.} The subsolver's model is
+\emph{any} point not yet covered --- nothing relates it to $\vv$. Traced
+on \texttt{fol\_0000100}: the cells needed to decompose $\vv$ appear
+within ${\sim}30$ rounds when the search is aimed (below), while the
+unaimed search ran $580$ cones without assembling them (proved by an
+\textsf{unsat}-core analysis in the next section).
 
-\section{Refuting unsatisfiable hard instances: over-approximating cuts}
+\textbf{Fact 3: the endgame is starved.} Even with the right cells
+present, certifying \textsf{sat} means the \emph{main} solver must find
+integer values for hundreds of multipliers --- an integer program. Integer
+reasoning in \cvc finishes with \emph{branch-and-bound}: if the relaxed
+(fractional) solution has $\mu = 1.5$, the solver splits on
+$\mu \le 1 \vee \mu \ge 2$ and recurses. Two measured interferences kept
+this from ever completing: (i)~the star extension runs \emph{before}
+branch-and-bound each round, sees a fractional candidate (which fails the
+model-value shortcut), and immediately harvests another cell --- rewriting
+and growing the integer program before the splitting could finish;
+(ii)~the star's many fresh equality atoms enter the SAT solver with
+default (false-leaning) phases, so some atom is assigned \false{} early,
+which \emph{unit-propagates} the guard $g_k$ to \false{} long before any
+decision on $g_k$ --- measured: across 643 rounds the guard was never
+\true{} even once, so the solver never even attempted the star. A phase
+\emph{preference} on $g_k$ is powerless against propagation.
 
-The four remaining timeouts (\texttt{fol\_0000098/0000107}, both
-encodings) are \emph{unsatisfiable}: the lazy procedure could refute them
-only by completing the enumeration, which is hopeless (the eager DNF also
-times out). They need the \emph{over-approximation half} of the VMCAI
-approach, which had not been implemented. Our instance of it:
+The cure has three cooperating parts.
 
-\begin{proposition}[Homogeneous cuts]
-If $\cvec \cdot \yvec \ge 0$ holds for every $\yvec \in \Sset$, then
-$\cvec \cdot \vvec \ge 0$ holds for every $\vvec \in \Sstar$.
+\subsection{Part 1: guided enumeration (default on)}
+
+\begin{proposition}
+If $\vv = \vec{s}_1 + \cdots + \vec{s}_k$ with all $\vec{s}_j \ge 0$,
+then every summand satisfies $\vec{s}_j \le \vv$ coordinate-wise.
 \end{proposition}
 \begin{proof}
-$\Sstar$ consists of finite sums of members of $\Sset$ (the empty sum being
-$0$); non-negativity of a linear form is preserved under addition.
+Removing non-negative summands never increases any coordinate.
 \end{proof}
 
-Such \emph{cuts} can therefore be asserted for $\vvec$ unconditionally.
-Crucially, cuts may also be \emph{conditional on the zero-forced
-restriction}: if $v_i$ is the constant $0$ (which happens frequently ---
-input equalities like $u_{13} = 0$ are substituted into the literal), then
-every summand has $y_i = 0$, so validity needs to hold only on $\Sset \cap
-\{y_i = 0\}$ --- a strictly larger space of valid cuts. The MAPA instance
-\texttt{fol\_0000107} is refuted only by such a conditional cut
-($4\,u_{10} - u_{14} - u_{17} - u_{20} - u_{23} - u_{26} \ge 0$, valid only
-where the comparison bits are pinned to zero).
+So only cells intersecting the box $\vy \le \vv$ can contribute to a
+decomposition of $\vv$. The subsolver query is therefore first asked under
+the assumptions $\{\,y_i \le \hat v_i\,\}$, where $\hat{\vv}$ is the value
+of $\vv$ in the current candidate model; if the assumed query is
+\textsf{unsat}, it is retried without assumptions. The fallback keeps the
+completeness signal intact: ``\textsf{unsat} without assumptions'' still
+means full coverage.
 
-Cuts are synthesized by counterexample-guided search
-(Algorithm~\ref{alg:cuts}), invoked whenever the endgame finds $F_0 \wedge
-\mathit{star}_k$ unsatisfiable. Three details matter in practice:
-\begin{itemize}
-\item \emph{Sparsity.} The coefficient search is constrained by an
-  escalating $L_1$ budget $\sum_i |c_i| \le K$, $K \in \{4,9,16,30\}$. An
-  unconstrained box admits arbitrary dense candidates that the validity
-  oracle rejects one at a time; the cuts that exist in practice are sparse,
-  and the budget makes the CEGIS loop converge (measured offline: 8 cuts,
-  ${\sim}33$ iterations in total, refute \texttt{fol\_0000107}).
-\item \emph{Sample soundness.} Module generators of discovered cones are
-  genuine points of $\Sset$; those with zeros on the restricted coordinates
-  lie in the restricted region and soundly constrain the search
-  ($\cvec \cdot p \ge 0$). Hilbert-basis \emph{rays} must \emph{not} be
-  used: a ray of an unrestricted cell has zeros on its pinned coordinates
-  yet describes a direction outside the restriction, and requiring
-  non-negativity on it excludes exactly the valid conditional cuts (this
-  was a measured implementation bug; the counterexample loop handles
-  unbounded directions soundly instead).
-\item \emph{Termination of the outer loop.} Once the accumulated cuts make
-  $F_0$ unsatisfiable, nothing more is needed: the cuts are ordinary
-  lemmas, so the main solver derives \textsf{unsat} by itself --- no special
-  reporting mechanism, hence no new soundness obligations.
-\end{itemize}
+\begin{exbox}
+\textbf{Example.} Running example,
+$p(x,y) = (x \ge 1 \wedge y = 0) \vee (x = 0 \wedge y \ge 2)$, with the
+input forcing $\vv = (5,0)$. The assumptions are
+$y_1 \le 5 \wedge y_2 \le 0$. The vertical cell needs $y_2 \ge 2$ ---
+excluded outright. The enumeration will only ever look at the horizontal
+cell: the single cell that can decompose $(5,0)$. On
+\texttt{fol\_0000100}, 7 of the 14 indicator coordinates of $\vv$ are
+$0$, so the assumptions pin those $y_i$ to $0$ and the search space
+collapses onto the relevant region.
+\end{exbox}
 
-\begin{algorithm}[t]
-\caption{Conditional cut synthesis (\texttt{synthesizeCuts}, per endgame-unsat)}
-\label{alg:cuts}
-\KwIn{literal $\ell$ with vector $\vvec$; fixed facts $F_0$; cuts $C$;
-  samples $P$ (restricted cone generators); zero-forced coordinates $Z$}
-\For{$\mathit{round} \gets 1$ \KwTo $8$}{
-  \lIf{$F_0 \wedge C$ \emph{unsat}}{\Return (main solver will conclude unsat)}
-  $\hat\vvec \gets$ model of $F_0 \wedge C$\;
-  \ForEach{$K \in \{4, 9, 16, 30\}$}{
-    \For{$\mathit{iter} \gets 1$ \KwTo $60$}{
-      find $\cvec$ with $\textstyle\sum_i |c_i| \le K$,\;
-      \quad $\cvec \cdot p \ge 0\ \forall p \in P$, \quad $\cvec \cdot \hat\vvec \le -1$\;
-      \lIf{none}{\textbf{break} (next $K$)}
-      check validity: $\mathit{base} \wedge \bigwedge_{i \in Z} y_i{=}0 \wedge \cvec\cdot\yvec \le -1$\;
-      \leIf{unsat}{emit lemma $\cvec \cdot \vvec \ge 0$; add to $C$; \textbf{continue outer}}{add the model point to $P$}
-    }
-  }
-  \lIf{no cut found}{record failure (give up after two consecutive, reset on new cones); \textbf{break}}
-}
-\end{algorithm}
+\subsection{Part 2: a decoupled endgame (default on, every 10 cells)}
 
-\emph{Measured:} all four remaining instances are refuted in $0.2$--$2.0$
-seconds (the conditional-cut and $L_1$ refinements were each necessary for
-the MAPA variant), with no effect on the rest of the suite.
+Every $N$ newly discovered cells, the extension builds a \emph{fresh}
+subsolver and asks one clean question:
+\[
+F_0 \;\wedge\; \mathit{star}_k \;\;\stackrel{?}{=}\;\; \textsf{sat},
+\]
+where $F_0$ is the set of arithmetic facts \emph{fixed at decision
+level~0} in the main solver (recall the trail example: level-0 facts hold
+in every model --- they are exactly the input-entailed constraints). A
+fresh solver has no history --- no retired guards, no unlucky phases, no
+half-grown integer program --- and runs branch-and-bound to completion in
+milliseconds. If the answer is \textsf{sat}, its model is a complete
+witness: concrete values for $\vv$ and for every multiplier.
 
-\section{Soundness summary}
+\why{Both design choices were forced by failures.
 
-Every mechanism emits only standard theory lemmas; the procedure's answers
-are justified as follows. \textsf{sat} is concluded only when the candidate
-model satisfies $p[\vvec]$ (single summand) or
-$\mathit{star}_k$ (an under-approximation of $\Sstar$, witnessing membership);
-hints and guards are fresh Booleans, so the guarded lemmas are
-satisfiability-preserving, and guided/endgame components only \emph{steer}
-the search. \textsf{unsat} is concluded by the main solver from
-(i)~the exact equivalence once enumeration completes, or (ii)~cut lemmas,
-each individually valid for $\Sstar$ (Proposition~1, restricted variant),
-conflicting with the input. Generalization preserves $D \Rightarrow
-\mathit{base}$ (propositionally or semantically), keeps the model point,
-and tolerates overlap; the subsolver's unbiased \textsf{unsat} remains the
-completeness certificate under guidance because the bias is applied only as
-assumptions with a fallback.
+\emph{Why only level-0 facts?} The first version asserted \emph{all}
+facts currently on the trail. On \texttt{fol\_0000100} the trail happened
+to contain the branch decision $n = 1$ (part of an abandoned search
+region that was already known to be contradictory), and every endgame
+query inherited it --- so every query answered \textsf{unsat} even though
+the discovered cells could perfectly well decompose a valid $\vv$ with,
+say, $n = 4$. Level-0 facts are exactly those every model must satisfy:
+the query becomes ``can the current cells justify \emph{some} valid
+$\vv$,'' which is the right question.
 
-\section{Experimental results}
+\emph{Why a fresh solver?} The main solver could in principle answer the
+same question --- Fact 3 shows why it never does: the question keeps being
+rewritten under it. This is the decoupling lesson from the failed
+main-solver experiment, applied in the profitable direction.}
 
-All experiments: production build of \cvc with \normaliz, 480 benchmarks
-(\texttt{sls-reachability}, arith/card $\times$ BAPA/MAPA encodings),
-100\,s timeout, 12-way parallel harness, \texttt{OMP\_NUM\_THREADS=1},
-6\,GB memory cap. No answer discrepancy was observed in any configuration,
-neither among our configurations nor against the four reference solvers
-recorded in the comparison data (SLS-reachability variants, an eager LIA
-encoding, and two SQLSolver variants).
+\subsection{Part 3: feeding the witness back as decisions}
+
+The witness must now reach the \emph{main} solver. Encoding it as a lemma
+$d \Rightarrow (x_1 = c_1 \wedge \cdots \wedge x_m = c_m)$, with $d$ a
+fresh Boolean whose phase is preferred \true, measurably never works.
+
+\begin{exbox}
+\textbf{Example (why the hint lemma never fires).} Hint:
+$d \Rightarrow (a = 2 \wedge b = 3)$, i.e.\ clauses
+$(\neg d \vee a{=}2)$ and $(\neg d \vee b{=}3)$. Suppose the trail
+already contains $a = 1$ --- some earlier decision or propagation made for
+unrelated reasons. Then the atom $a{=}2$ is \false{} and the first clause
+\emph{unit-propagates} $\neg d$. The phase preference on $d$ is
+irrelevant: $d$ is never \emph{decided}, it is forced. With $m \approx
+230$ pinned values, \emph{some} variable is always already bound
+differently, so this happens every single round --- measured: the hint
+guard was \false{} at every check, forever.
+\end{exbox}
+
+The fix uses a different solver facility: a \emph{decision strategy}. SAT
+solvers let theory modules dictate the next decision variable(s), taking
+priority over the built-in heuristic. While a hint is active, our strategy
+feeds the solver $d$ first and then each equality $x_i = c_i$, as
+\emph{decisions}. A decision happens at the top of the trail --- nothing is
+``already bound differently'' there; the solver either completes the
+witness assignment (and the model-value shortcut then certifies
+\textsf{sat}, since the witness satisfies $\mathit{star}_k$), or hits a
+genuine conflict whose reason is recorded and search continues. Only one
+hint is active per literal --- a newer witness retires the previous guard
+with $\neg d_{\mathit{old}}$ --- because two witnesses pin the same
+variables to different values and would fight.
+
+The hint lemma itself is sound for the usual reason: $d$ is fresh, so any
+model extends by $d = \false$.
+
+\emph{Measured result:} \texttt{fol\_0000100} went from a 600-second
+timeout (in every prior configuration) to \textsf{sat} in $0.7$ seconds,
+model-checked; the whole hard \textsf{sat} family followed; 476/480
+overall, with four \textsf{unsat} instances left.
+
+\section{Hard unsatisfiable instances: over-approximation by cuts}
+\label{sec:cuts}
+
+For an \textsf{unsat} instance the loop so far has only one exit: complete
+the enumeration and emit the exact equivalence. On the four remaining
+instances that is hopeless --- the cell count is astronomic (the eager
+mode times out too). What is missing is the \emph{other} half of the
+approximation recipe: a way to \emph{over}-approximate $\Sstar$, so that
+``input $\wedge$ over-approximation \textsf{unsat}'' refutes $\ell$
+\emph{without} enumerating anything.
+
+\subsection{Cuts: inequalities that survive addition}
+
+\begin{proposition}
+Let $\vc$ be an integer vector. If $\vc \cdot \vy \ge 0$ holds for every
+$\vy \in \Sset$ (a \emph{homogeneous} valid inequality --- no constant
+term), then $\vc \cdot \vv \ge 0$ holds for every $\vv \in \Sstar$.
+\end{proposition}
+\begin{proof}
+If $\vv = \sum_j \vec{s}_j$ then
+$\vc \cdot \vv = \sum_j \vc \cdot \vec{s}_j \ge 0$, a sum of non-negative
+numbers; and the empty sum gives $\vc \cdot \vzero = 0 \ge 0$.
+\end{proof}
+
+We call such an inequality a \emph{cut}. A cut is a sound,
+\emph{unconditional} lemma about $\vv$: no guard, no enumeration, no
+completeness requirement.
+
+\begin{exbox}
+\textbf{Example.} Let $\Sset' = \{(1,1)\}$, so
+$(S')^{*} = \{(k,k) \mid k \ge 0\}$ --- the diagonal. The inequality
+$x - y \ge 0$ is valid on $\Sset'$ (it holds at $(1,1)$) and homogeneous,
+so it lifts: every $(k,k)$ satisfies $k - k \ge 0$. Now suppose the input
+asserts $v_1 = 3 \wedge v_2 = 5$ and $\ell$. The single cut lemma
+$v_1 - v_2 \ge 0$ contradicts $3 - 5 = -2 \ge 0$ --- the solver answers
+\textsf{unsat} immediately, having never built a single cell cone.
+
+\textbf{Counter-example (why homogeneity is required).} The inequality
+$x \le 1$ \emph{also} holds for every member of $\Sset' = \{(1,1)\}$, but
+it must \emph{not} be lifted: $(2,2) \in (S')^{*}$ violates it. The
+difference: $x \le 1$ has a constant term ($x - 1 \le 0$), and constants
+do not scale when summands are added. The same trap in the running
+example $p(x,y) = (x{\ge}1 \wedge y{=}0) \vee (x{=}0 \wedge y{\ge}2)$:
+every point of $\Sset$ satisfies $x + y \ge 1$, yet the empty sum
+$\vzero \in \Sstar$ does not. Homogeneous ($\vc \cdot \vy \ge 0$) is
+exactly the shape that survives addition.
+\end{exbox}
+
+Why should such cuts refute our benchmarks? Because their \textsf{unsat}
+arguments are \emph{counting} arguments: ``every summand lacks at least
+one of these five features, but the input demands totals only achievable
+if almost no summand lacks any.'' Summed per-summand inequalities are
+precisely homogeneous cuts.
+
+\subsection{Conditional cuts: exploiting forced zeros}
+
+\begin{proposition}
+Suppose the input forces $v_i = 0$. Then every summand of every
+decomposition of $\vv$ has $y_i = 0$ (coordinates are non-negative and
+sums cannot cancel). Hence an inequality valid merely on the
+\emph{restriction} $\Sset \cap \{\vy \mid y_i = 0\}$ is still a sound cut
+for this $\vv$.
+\end{proposition}
+
+\begin{exbox}
+\textbf{Example.} In the running example, suppose the input forces
+$v_2 = 0$. Every summand then has $y = 0$, i.e.\ comes from the
+horizontal cell. On that restriction the inequality $x - y \ge 0$ is
+valid (it fails on the vertical cell, so it is \emph{not} valid on all of
+$\Sset$) --- and it may be soundly asserted for $\vv$.
+
+On the real benchmark \texttt{fol\_0000107} (multiset encoding) the
+refuting cut is
+$4 u_{10} - u_{14} - u_{17} - u_{20} - u_{23} - u_{26} \ge 0$
+(``the five tracked totals never exceed four universes''), which is valid
+\emph{only} where six comparison-indicator coordinates are $0$ --- and
+the input pins exactly those coordinates of $\vv$ to the constant $0$.
+Without conditional cuts this instance is out of reach; with them it
+refutes in $2$ seconds.
+\end{exbox}
+
+Forced zeros are easy to detect: input equalities like $u_{13} = 0$ are
+substituted into the literal by preprocessing, so the corresponding
+argument of $\ell$ is literally the constant $0$.
+
+\subsection{Finding cuts automatically}
+
+A cut useful for refutation must do two jobs: be \emph{valid} on (the
+restriction of) $\Sset$, and \emph{reject} the values of $\vv$ the input
+allows. The synthesis loop interleaves both, in the style known as
+counterexample-guided inductive synthesis (CEGIS): propose a candidate
+from finitely many constraints, check it against the real object, and turn
+each failure into a new constraint.
+
+Concretely, whenever the endgame query
+$F_0 \wedge \mathit{star}_k$ answers \textsf{unsat} (``the discovered
+cells cannot justify $\ell$ --- maybe nothing can''), the extension runs:
+
+\begin{enumerate}
+\item \textbf{Target.} Find a model of $F_0 \wedge C$, where $C$ are the
+  cuts found so far. If there is none, the already-emitted cut lemmas
+  contradict the input by themselves; the main solver will answer
+  \textsf{unsat} on its own, and synthesis stops. Otherwise read the
+  target $\hat{\vv}$.
+\item \textbf{Candidate.} Solve a small integer query for coefficients
+  $\vc$ such that: $\sum_i |c_i| \le K$ for an escalating budget
+  $K \in \{4,9,16,30\}$; $\vc \cdot \vec{q} \ge 0$ for every known sample
+  point $\vec{q}$ of the restricted predicate; and
+  $\vc \cdot \hat{\vv} \le -1$ (the candidate must reject the target).
+\item \textbf{Validate.} Ask the probe (the $\mathit{base}$ oracle reused
+  from semantic generalization): is
+  $\mathit{base} \wedge \bigwedge_{v_i \equiv 0} y_i{=}0 \wedge
+  \vc \cdot \vy \le -1$ satisfiable? If \textsf{unsat}, the candidate is
+  a valid cut --- emit $\vc \cdot \vv \ge 0$ and return to step 1. If
+  \textsf{sat}, the probe's model is a genuine point of the restricted
+  predicate violating the candidate --- add it to the samples and return
+  to step 2.
+\end{enumerate}
+
+\begin{exbox}
+\textbf{Example (one full pass).} $\Sset' = \{(1,1)\}$, input
+$v_1 = 3 \wedge v_2 = 5$, no samples yet.
+\emph{Target:} $\hat{\vv} = (3,5)$.
+\emph{Candidate:} with no sample constraints, the solver may propose
+$\vc = (0,-1)$, i.e.\ ``$-y \ge 0$'', which indeed rejects the target
+($-5 \le -1$).
+\emph{Validate:} is some point of $\Sset'$ with $-y \le -1$? Yes,
+$(1,1)$ --- the candidate is not valid; $(1,1)$ becomes a sample.
+\emph{Candidate again:} now require $c_1 + c_2 \ge 0$ (from the sample)
+and $3 c_1 + 5 c_2 \le -1$ (target); the budget-minimal solution is
+$\vc = (1,-1)$.
+\emph{Validate:} no point of $\Sset'$ has $x - y \le -1$ --- valid. Emit
+$v_1 - v_2 \ge 0$.
+\emph{Target again:} $F_0 \wedge (v_1 - v_2 \ge 0)$ with
+$v_1{=}3, v_2{=}5$ is \textsf{unsat} --- done; the input is refuted.
+\end{exbox}
+
+\why{Each ingredient of the loop closes a failure observed without it.
+
+\emph{The sparsity budget.} With 21 coordinates and coefficients in
+$[-10,10]$, there are ${\sim}21^{21}$ candidate vectors; an unbounded
+search returns scattered dense candidates, the oracle refutes them one
+counterexample at a time, and 40 iterations made no visible progress. The
+cuts that exist in practice are \emph{sparse} (few nonzero, small
+coefficients --- like every example above), and bounding
+$\sum_i |c_i|$ makes the candidate space tiny. An offline replica of the
+exact loop converged on \texttt{fol\_0000107} in 8 cuts and ${\sim}33$
+candidate--validate iterations once the budget was added.
+
+\emph{Level-0 facts for the target}, for the same reason as the endgame:
+a branch-pinned target sends the synthesis chasing values no model needs.
+
+\emph{Sample points yes, directions no.} Sample points are seeded from
+the module generators of already-discovered cells: a generator is a real
+point of $\Sset$, and if its restricted coordinates are zero it lies in
+the restricted region, so requiring $\vc \cdot \vec{q} \ge 0$ on it is
+exactly right and saves validate-rounds. The cells' \emph{ray} directions
+must NOT be used the same way, and this was a real bug: consider a cell
+whose pinned indicator is $u_{13} = 1$. Every \emph{ray} of that cell has
+$0$ in the $u_{13}$ coordinate --- moving along a direction never changes
+a pinned equality --- so the ray slips past the ``restricted coordinates
+are zero'' filter while describing motion \emph{inside a cell that is
+entirely outside the restriction}. Requiring $\vc \cdot \vec{r} \ge 0$ on
+such rays excluded precisely the valid conditional cut on
+\texttt{fol\_0000107}: the in-solver loop failed while the ray-free
+offline replica succeeded, and removing the ray constraints reconciled
+the two. Unbounded directions are still handled soundly: if a candidate
+is violated far out along some direction of the restricted region, the
+validation probe simply returns a far-out \emph{point} as the
+counterexample.}
+
+\emph{Measured result:} the four remaining instances refute in
+$0.2$--$2.0$ seconds; nothing else on the suite is affected.
+
+\section{Results}
+
+All experiments: production build of \cvc with \normaliz; 480 benchmarks
+(arith/card $\times$ BAPA/MAPA encodings of set-reachability problems);
+100\,s timeout; 12-way parallel harness; one solver thread
+(\texttt{OMP\_NUM\_THREADS=1}); 6\,GB memory cap per process. No answer
+discrepancy was observed anywhere: neither between any two of our
+configurations, nor against the four independent reference solvers
+recorded with the benchmark data.
 
 \begin{table}[h]
 \centering
 \caption{Solved instances per configuration (480 benchmarks, 100\,s).}
-\label{tab:results}
 \begin{tabular}{lrrrr}
 \toprule
 configuration & sat & unsat & timeout & solved \\
@@ -408,44 +865,51 @@ guided + endgame (no cuts)          & 296 & 180 &  4 & 476 \\
 \end{tabular}
 \end{table}
 
-The final default configuration --- boolean generalization, guided
-enumeration, decoupled endgame with decision-strategy witness feedback, and
-conditional homogeneous cuts --- solves the entire suite. Previously
-impossible instances now answer in under two seconds, including several
-MAPA instances on which the reference SLS solver itself timed out.
-
-\section{Options added}
+The final default --- boolean generalization, guided enumeration, the
+decoupled endgame with decision-strategy witness feedback, and conditional
+homogeneous cuts --- solves the entire suite in $143.5$\,s cumulative
+(median 45\,ms per instance, slowest instance $37.2$\,s), including
+multiset instances on which the reference solver that generated the
+benchmarks itself timed out.
 
 \begin{center}
 \begin{tabular}{lll}
 \toprule
 option & default & role \\
 \midrule
-\texttt{arith-liastar-generalize} & on & boolean cell generalization \\
-\texttt{arith-liastar-guided} & on & decomposition-guided cell discovery \\
-\texttt{arith-liastar-endgame=N} & 10 & decoupled endgame every $N$ cones \\
-\texttt{arith-liastar-cuts} & on & conditional homogeneous cut synthesis \\
-\texttt{arith-liastar-generalize-semantic} & off & semantic generalization \\
+\texttt{arith-liastar-generalize} & on & prime-implicant cells \\
+\texttt{arith-liastar-guided} & on & decomposition-guided discovery \\
+\texttt{arith-liastar-endgame=N} & 10 & decoupled witness search \\
+\texttt{arith-liastar-cuts} & on & conditional homogeneous cuts \\
+\texttt{arith-liastar-generalize-semantic} & off & arithmetic cell fattening \\
 \texttt{arith-liastar-push-pop} & off & cumulative subsolver refinement \\
 \texttt{arith-liastar-main-solver} & off & subsolver-free enumeration \\
 \texttt{arith-liastar-partial-sums} & off & constant-size reduction lemmas \\
-\texttt{arith-liastar-patient} & off & refinement throttling experiment \\
+\texttt{arith-liastar-patient} & off & refinement-throttling experiment \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\section{Lessons}
+\section{Takeaways}
 
-Three methodological points carried the project. \emph{Measure before
-optimizing}: the first two memory-motivated strategies (push/pop, partial
-sums) targeted a bottleneck that profiling later refuted. \emph{Localize by
-experiment}: the satisfiable-instance breakthrough came from tracing that
-the needed cones were found early and that the guard was never true ---
-each fix was forced by a measured failure of the previous mechanism, down
-to the level of SAT-solver phase propagation. \emph{Negative results are
-load-bearing}: semantic generalization and partial sums lost on this suite
-but their machinery (the probe oracle, the validity-by-assumptions
-pattern) became essential components of the cut synthesis that closed the
-final instances.
+\begin{itemize}
+\item \textbf{Measure, then optimize.} The two memory-motivated designs
+  (push/pop, partial sums) attacked a bottleneck that profiling refuted;
+  the real walls were the \emph{order} of cell discovery (sat side) and
+  the missing over-approximation (unsat side).
+\item \textbf{Approximate from both sides.} Under-approximations certify
+  \textsf{sat} as soon as enough cells exist; homogeneous (conditionally
+  valid) cuts certify \textsf{unsat} without ever completing the
+  enumeration. The lazy star needs both.
+\item \textbf{Decouple searches that starve each other.} In-search
+  refinement kept rewriting the main solver's integer program; a fresh
+  subsolver answers the same question in milliseconds. And when feeding a
+  many-variable witness back, use a decision strategy --- propagation
+  defeats phase preferences every time.
+\item \textbf{Negative results pay rent.} The probe oracle built for the
+  losing semantic generalization became the validity engine of the winning
+  cut synthesis; the failed main-solver experiment supplied the
+  decoupling principle behind the endgame.
+\end{itemize}
 
 \end{document}

@@ -665,6 +665,38 @@ name   = "Arithmetic Theory"
   help       = "in the lazy strategy, generalize each model-derived cell to a prime implicant of the predicate (dropping atoms the predicate's truth does not depend on) before building its cone, so each cone covers more of the predicate and fewer refinement rounds are needed"
 
 [[option]]
+  name       = "arithLiaStarGeneralizeSemantic"
+  category   = "regular"
+  long       = "arith-liastar-generalize-semantic"
+  type       = "bool"
+  default    = "false"
+  help       = "in the lazy strategy, additionally generalize each model-derived cell semantically: drop atoms whose removal keeps the cell inside the predicate arithmetically (checked with cheap unsat probes against a persistent probe subsolver), merging cells the boolean skeleton check cannot"
+
+[[option]]
+  name       = "arithLiaStarEndgame"
+  category   = "regular"
+  long       = "arith-liastar-endgame=N"
+  type       = "uint64_t"
+  default    = "10"
+  help       = "in the lazy strategy, every N newly discovered cones run a decoupled endgame check: solve the current arithmetic facts together with the star under-approximation in a fresh subsolver (a clean search, unencumbered by the incremental lemma churn); on sat, feed the discovered multiplier witness back as a guarded hint lemma steering the main solver onto it (0 disables)"
+
+[[option]]
+  name       = "arithLiaStarPatient"
+  category   = "regular"
+  long       = "arith-liastar-patient"
+  type       = "bool"
+  default    = "false"
+  help       = "in the lazy strategy, do not refine while the current tentative reduction's guard is asserted true: the candidate model then fails the shortcut only because the star multipliers are not yet integral (integer branching runs after this check), and harvesting another cone every round starves that search by growing the problem"
+
+[[option]]
+  name       = "arithLiaStarGuided"
+  category   = "regular"
+  long       = "arith-liastar-guided"
+  type       = "bool"
+  default    = "true"
+  help       = "in the lazy strategy, guide the cell enumeration toward summands of the current candidate vector: every summand of a nonnegative decomposition is bounded componentwise by the vector, so the subsolver is first checked under these bounds as assumptions (falling back to an unbiased check, which keeps completeness unaffected)"
+
+[[option]]
   name       = "arithLiaStarPartialSums"
   category   = "regular"
   long       = "arith-liastar-partial-sums"

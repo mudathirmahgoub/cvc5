@@ -25,8 +25,10 @@
 #include "expr/node.h"
 #include "libnormaliz/libnormaliz.h"
 #include "smt/env_obj.h"
+#include "proof/unsat_core.h"
 #include "smt/solver_engine.h"
 #include "theory/arith/liastar/liastar_proof_generator.h"
+#include "theory/decision_strategy.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
 
@@ -43,6 +45,46 @@ namespace liastar {
 typedef mpz_class Integer;
 /** A row of arithmetic terms, e.g. the monomials of one cone contribution. */
 typedef std::vector<Node> Vector;
+
+/**
+ * Decision strategy carrying an endgame hint (see
+ * `LiaStarExtension::tryEndgame`): while a hint is active, it hands the SAT
+ * solver the hint's guard and then each pinned equality as the next
+ * decisions, so the witness assignment is built directly instead of hoping
+ * the solver's own heuristics stumble onto it (a phase preference alone is
+ * useless here: with hundreds of pinned variables, some are always already
+ * bound differently on the trail, so the guard would just be propagated
+ * false).
+ */
+class LiaStarHintStrategy : public DecisionStrategy
+{
+ public:
+  LiaStarHintStrategy(Env& env, Valuation valuation)
+      : DecisionStrategy(env), d_valuation(valuation)
+  {
+  }
+  void initialize() override {}
+  Node getNextDecisionRequest() override
+  {
+    for (const Node& literal : d_literals)
+    {
+      if (!d_valuation.hasSatValue(literal))
+      {
+        return literal;
+      }
+    }
+    return Node::null();
+  }
+  std::string identify() const override { return "LiaStarHint"; }
+  /** Replace the decisions with a new hint (guard first, then equalities). */
+  void setHint(const std::vector<Node>& literals) { d_literals = literals; }
+
+ private:
+  /** The valuation, for skipping already-assigned literals. */
+  Valuation d_valuation;
+  /** The hint literals, in decision order. */
+  std::vector<Node> d_literals;
+};
 
 /**
  * Extension to TheoryArith deciding the lia* operator STAR_CONTAINS.
@@ -206,7 +248,9 @@ class LiaStarExtension : EnvObj
    * of the cone-disjuncts discovered since the previous round, then delegates
    * to `lazyHilbert`. Does nothing if the literal has been fully reduced.
    */
-  void lazyCheckStar(Node literal, Node lambda);
+  void lazyCheckStar(Node literal,
+                     Node lambda,
+                     const std::map<Node, Node>& arithModel);
 
   /**
    * A persistent, incremental subsolver dedicated to one lambda (one
@@ -246,6 +290,12 @@ class LiaStarExtension : EnvObj
     /** number of cones in `d_lazyCones[lambda]` already negated in `engine`
      * (or, for the push/pop strategy, folded into `covered`). */
     size_t negated = 0;
+    /**
+     * Semantic generalization only: the probe subsolver, seeded with the
+     * negation of `base`, used as the entailment oracle by
+     * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
+     */
+    std::unique_ptr<SolverEngine> probe;
   };
 
   /**
@@ -260,7 +310,9 @@ class LiaStarExtension : EnvObj
    * cell containing it (`LiaStarUtils::getDisjunct`), and hand it to
    * `processDisjunct`.
    */
-  void lazyHilbert(Node literal, Subsolver& sub);
+  void lazyHilbert(Node literal,
+                   Subsolver& sub,
+                   const std::vector<Node>& bias = {});
 
   /**
    * Shared tail of one lazy refinement round (used by both the subsolver and
@@ -323,6 +375,12 @@ class LiaStarExtension : EnvObj
     /** number of cones in `d_lazyCones[lambda]` already negated via stage
      * guards. */
     size_t negated = 0;
+    /**
+     * Semantic generalization only: the probe subsolver, seeded with the
+     * negation of `base`, used as the entailment oracle by
+     * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
+     */
+    std::unique_ptr<SolverEngine> probe;
   };
 
   /**
@@ -357,6 +415,31 @@ class LiaStarExtension : EnvObj
    * skipping lemmas that rewrite to a constant.
    */
   void addEnumLemma(Node lemma);
+
+  /**
+   * Return the probe subsolver for semantic cell generalization (option
+   * arith-liastar-generalize-semantic), creating it and asserting the
+   * negation of `base` on first use; returns nullptr when the option is off.
+   * `base` must be in the same skolem space as the literals later probed.
+   */
+  SolverEngine* getProbe(std::unique_ptr<SolverEngine>& probe, Node base);
+
+  /**
+   * Decoupled endgame check (option arith-liastar-endgame=N): every N newly
+   * discovered cones, solve the current arithmetic facts (excluding the
+   * star literals themselves and any fact over liastar-created skolems)
+   * together with the star under-approximation for `literal` in a *fresh*
+   * subsolver -- a clean search for the integer multipliers, unencumbered by
+   * the main search's stale guards, frozen phases, and lemma churn. If it
+   * answers sat, the witness (values of the star formula's variables) is fed
+   * back as a guarded hint lemma `d => (x_1 = c_1 and ...)` with `d` a fresh
+   * decision variable biased true: sound unconditionally (`d` is fresh), and
+   * it steers the main solver directly onto the verified model, after which
+   * the model-value shortcut accepts.
+   *
+   * @return true if a hint was emitted (the round is then complete)
+   */
+  bool tryEndgame(Node literal, Node lambda);
 
   /**
    * Open a new enumeration stage for `en`: a fresh guard that activates the
@@ -434,6 +517,25 @@ class LiaStarExtension : EnvObj
   std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>> d_lambdas;
   /** The number of cones in `d_lazyCones[n[0]]` already processed. */
   std::map<Node, size_t> d_processedCones;
+
+  /**
+   * Every skolem created for star constraints (multipliers, partial sums),
+   * used by `tryEndgame` to exclude main-search facts over these skolems
+   * from the endgame query (their trail polarities reflect the failing
+   * search, not the input).
+   */
+  std::unordered_set<Node> d_starSkolems;
+
+  /** The cone count at the last endgame check, per literal. */
+  std::map<Node, size_t> d_lastEndgameCones;
+
+  /** The guard of the last (still active) endgame hint, per literal;
+   * deactivated when a newer witness replaces it. */
+  std::map<Node, Node> d_lastHint;
+
+  /** The decision strategy carrying the active endgame hint; allocated and
+   * registered with the decision manager on the first hint. */
+  std::unique_ptr<LiaStarHintStrategy> d_hintStrategy;
 
   /**
    * Partial-sums encoding (option arith-liastar-partial-sums): the current

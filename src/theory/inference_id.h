@@ -214,6 +214,9 @@ enum class InferenceId
   // lia star definitional lemma (per-cone multiplier constraints and
   // partial-sum skolem definitions, asserted unguarded)
   ARITH_LIA_STAR_DEFINITION,
+  // lia star endgame hint lemma (guard => witness values found by the
+  // decoupled endgame subsolver)
+  ARITH_LIA_STAR_HINT,
   //-------------------- ff inference
   // ---------------------------------- end arith theory
 

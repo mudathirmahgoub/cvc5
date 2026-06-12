@@ -628,14 +628,32 @@ Node LiaStarUtils::getDisjunct(Node assertion,
                                const std::vector<Node>& from,
                                const std::vector<Node>& to,
                                Env* e,
-                               SolverEngine* smte)
+                               SolverEngine* smte,
+                               SolverEngine* probe,
+                               const std::vector<Node>& bias)
 {
   NodeManager* nm = e->getNodeManager();
   // The subsolver `smte` already has `assertion` (and the negations of the
   // previously discovered cone-disjuncts) asserted; we only check it and read
   // the model. `assertion` is passed here only to enumerate the atoms whose
-  // truth value the disjunct fixes.
-  Result result = smte->checkSat();
+  // truth value the disjunct fixes. When a `bias` is given (componentwise
+  // bounds steering the model toward useful summands of the candidate
+  // vector), it is checked first as assumptions; an unsatisfiable biased
+  // query falls back to the unbiased one, so completeness (the unbiased
+  // unsat answer below) is unaffected.
+  Result result;
+  if (!bias.empty())
+  {
+    result = smte->checkSat(bias);
+    if (result.getStatus() == Result::Status::UNSAT)
+    {
+      result = smte->checkSat();
+    }
+  }
+  else
+  {
+    result = smte->checkSat();
+  }
   if (result.getStatus() == Result::Status::UNSAT)
   {
     // No region of the predicate is left uncovered: the cone encoding is exact.
@@ -692,23 +710,29 @@ Node LiaStarUtils::getDisjunct(Node assertion,
       // the atom is false in the model: negate it
       literal = atom.notNode();
     }
-    if (!from.empty())
-    {
-      // substitute the fresh constants back to the lambda's bound variables.
-      literal =
-          literal.substitute(to.begin(), to.end(), from.begin(), from.end());
-    }
     literals.push_back(literal);
+  }
+  // Optionally generalize the cell semantically: keep only a subset of the
+  // literals that still implies the formula arithmetically, using `probe`
+  // (the negated formula, in the same skolem space as the literals here) as
+  // the entailment oracle.
+  if (probe != nullptr)
+  {
+    semanticGeneralize(probe, literals);
   }
   if (literals.empty())
   {
     return nm->mkConst<>(true);
   }
-  if (literals.size() == 1)
+  Node disjunct =
+      literals.size() == 1 ? literals[0] : nm->mkNode(Kind::AND, literals);
+  if (!from.empty())
   {
-    return literals[0];
+    // substitute the fresh constants back to the lambda's bound variables.
+    disjunct =
+        disjunct.substitute(to.begin(), to.end(), from.begin(), from.end());
   }
-  return nm->mkNode(Kind::AND, literals);
+  return disjunct;
 }
 
 namespace {
@@ -787,6 +811,66 @@ ThreeValued evalThreeValued(
 }
 
 }  // namespace
+
+void LiaStarUtils::semanticGeneralize(SolverEngine* probe,
+                                      std::vector<Node>& literals)
+{
+  // The probe has the predicate's negation asserted, so a subset L of the
+  // cell's literals implies the predicate iff checkSat(L) is unsat. The full
+  // cell implies the predicate by construction, so the first check is unsat
+  // and its assumption core already identifies a sufficient subset;
+  // everything outside the core drops at once. Any other answer (sat or
+  // unknown on a stale or resource-limited probe) conservatively keeps the
+  // literals.
+  if (literals.empty())
+  {
+    return;
+  }
+  Result result = probe->checkSat(literals);
+  if (result.getStatus() != Result::Status::UNSAT)
+  {
+    return;
+  }
+  std::vector<Node> core = probe->getUnsatAssumptions();
+  std::unordered_set<Node> coreSet(core.begin(), core.end());
+  std::vector<Node> kept;
+  for (const Node& literal : literals)
+  {
+    if (coreSet.count(literal) > 0)
+    {
+      kept.push_back(literal);
+    }
+  }
+  // The core is not necessarily minimal: greedily try to drop each remaining
+  // literal, equalities first -- dropping a model-true equality fattens the
+  // cell from a hyperplane slice to a full-dimensional region, which merges
+  // the most cells.
+  std::stable_partition(kept.begin(), kept.end(), [](const Node& literal) {
+    return literal.getKind() == Kind::EQUAL;
+  });
+  for (size_t i = 0; i < kept.size();)
+  {
+    std::vector<Node> candidate;
+    candidate.reserve(kept.size() - 1);
+    for (size_t j = 0; j < kept.size(); j++)
+    {
+      if (j != i)
+      {
+        candidate.push_back(kept[j]);
+      }
+    }
+    Result r = candidate.empty() ? probe->checkSat() : probe->checkSat(candidate);
+    if (r.getStatus() == Result::Status::UNSAT)
+    {
+      kept.erase(kept.begin() + i);
+    }
+    else
+    {
+      i++;
+    }
+  }
+  literals = kept;
+}
 
 std::vector<bool> LiaStarUtils::generalizeCell(Node formula,
                                                const std::vector<Node>& atoms,

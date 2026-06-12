@@ -199,7 +199,9 @@ class LiaStarUtils
                           const std::vector<Node>& from,
                           const std::vector<Node>& to,
                           Env* e,
-                          SolverEngine* smte);
+                          SolverEngine* smte,
+                          SolverEngine* probe = nullptr,
+                          const std::vector<Node>& bias = {});
 
   /**
    * Builds the encoding of one module generator of a cone in terms of fresh
@@ -279,6 +281,31 @@ class LiaStarUtils
   static std::vector<bool> generalizeCell(Node formula,
                                           const std::vector<Node>& atoms,
                                           const std::vector<bool>& values);
+
+  /**
+   * Semantically generalize a model-derived cell: shrink `literals` (a
+   * conjunction implying the predicate) to a subset that still implies the
+   * predicate *arithmetically*, using `probe` -- a persistent incremental
+   * subsolver with the predicate's negation asserted -- as the entailment
+   * oracle: a subset L implies the predicate iff checkSat with assumptions L
+   * answers unsat. This merges cells the boolean skeleton check cannot, e.g.
+   * dropping a model-true equality `z = 1` subsumed by a kept inequality
+   * `z > 0`, which fattens the cell from a hyperplane slice to a
+   * full-dimensional region (collapsing the unbounded family of cells
+   * `z = 2`, `z = 3`, ... into one).
+   *
+   * Core-guided: one checkSat over all literals yields an unsat core of the
+   * assumptions (everything outside it drops at once), then a greedy
+   * deletion pass minimizes the core, trying equalities first. Any probe
+   * answer other than unsat conservatively keeps the literal, so the result
+   * always implies the predicate.
+   *
+   * @param probe the probe subsolver (negated predicate asserted, in the
+   *   same variable space as `literals`)
+   * @param literals the cell's literals, shrunk in place
+   */
+  static void semanticGeneralize(SolverEngine* probe,
+                                 std::vector<Node>& literals);
 
  private:
   /**

@@ -208,13 +208,154 @@ Raw results: `liastar_generalize_results.csv`,
 `liastar_partialsums_results.csv`, `liastar_gen_psum_results.csv` (repo
 root).
 
-## Remaining ideas for fol_0000100-class instances
+## Semantic generalization (option `--arith-liastar-generalize-semantic`, 2026-06-12)
 
-- The round count there is not driven by propositionally redundant atoms
-  (generalization halves the cells but only trims rounds ~15%), so the cell
-  structure is genuinely fine-grained: a *semantic* generalization (drop
-  atoms whose removal keeps the cell inside the predicate arithmetic-wise,
-  via cheap unsat probes) could merge cells the boolean skeleton cannot.
-- Reducing the per-cone constraint volume (e.g. sharing multiplier skolems
-  across module generators of one cone, or bounding the Hilbert basis size
-  Normaliz is asked for) attacks the measured memory term directly.
+Implemented as a follow-up to the boolean generalization: drop cell atoms
+whose removal keeps the cell inside the predicate *arithmetically*, merging
+cells the boolean skeleton cannot (e.g. a model-true equality `z = 1`
+subsumed by a kept `z > 0` -- collapsing the family `z = 2, 3, ...` of
+future cells).
+
+Design (`LiaStarUtils::semanticGeneralize`): a persistent incremental probe
+subsolver per lambda (in `Subsolver`/`MainEnum`, created by
+`LiaStarExtension::getProbe`) is seeded once with the negated base
+predicate; a literal subset implies the predicate iff checkSat with those
+literals as assumptions answers unsat. Core-guided minimization: one
+checkSat over all cell literals, the unsat-assumptions core drops everything
+else at once, then a greedy deletion pass over the (small) core, equalities
+first; any non-unsat probe answer conservatively keeps the literal, so the
+result always implies the predicate.
+
+Results: sound (0 discrepancies) and mechanically effective (paper2008
+cells: ~45 tokens after boolean generalization -> ~25 after semantic), but a
+**net loss on this benchmark set**: 465 solved (vs 466 for boolean
+generalization alone; loses card/cvc5_mapa/fol_0000102, gains none) and
+2.25x slower on the 465 common instances (883 s vs 392 s) -- the probe
+queries plus the fatter cells (larger Hilbert bases, more multiplier skolems
+per cone) cost more than the extra cell merging saves. On fol_0000100 the
+counter-equality hypothesis was *refuted*: 358 rounds in 600 s (vs 838 for
+boolean generalization), 3.63 GB, still timeout -- rounds got ~2.4x slower
+and convergence stayed out of reach, so that instance's fine-grained cell
+structure is not primarily subsumed equalities. Default stays **off**; raw
+results in `claude/scripts/liastar_semantic_results.csv`, config in
+comparison.csv / cactus plots as "cvc5 lazy (semantic)".
+
+## fol_0000100 deep dive (2026-06-12): the bottleneck is the endgame, not discovery
+
+Following the profiling advice, the failure is now precisely localized.
+
+Facts established:
+- The instance is **sat** (every other solver answers in < 1 s), but `A and
+  p[v]` is **unsat** (verified standalone): the vector genuinely needs >= 2
+  summands, so the star reduction is unavoidable. (The old "cvc5 lia" 0.02 s
+  entry in comparison.csv does not reproduce with the current star encoding;
+  eager mode also times out today.)
+- The lambda is 14 indicator equations `u_i = ite(cond, 1, 0)` plus a
+  min-tree; the A-constraints make v a counting vector (u!10 = n, etc.). A
+  hand analysis shows a valid decomposition needs only ~4-6 summand
+  bit-patterns (each u!10-summand "deficient" in exactly one counted bit, or
+  using the f = UNIV escape bounded by t).
+- A traced run shows the enumeration finds **all five needed deficiency
+  patterns within the first ~60 rounds** (66 rounds: 66 distinct cells, 46
+  decomposition candidates, Hilbert bases median 6 / max 32 vectors). Cell
+  discovery is NOT the problem.
+- The failure is the **main-solver endgame**: the solver must find integer
+  multipliers decomposing v over the discovered cones (an ILP over hundreds
+  of multiplier skolems), and it never gets to finish, because:
+  (1) `checkFullEffort` runs *before* `sanityCheckIntegerModel`, so candidate
+  models routinely carry fractional multipliers, fail the model-value
+  shortcut, and trigger yet another refinement -- growing the ILP under the
+  solver's feet every round; and
+  (2) the star's fresh sum-equality atoms get default SAT phases, so the
+  guard is *propagated false* from a false atom before ever being decided
+  (the preferPhase on the guard alone never engages) -- measured: the guard
+  is essentially never true at check time across 643 rounds.
+
+Two more opt-in mitigations were implemented and tested (both sound, both
+pass the regression suite, both default off, neither cracks the instance):
+- `--arith-liastar-guided`: bound the subsolver's next cell componentwise by
+  the candidate model's vector values (every summand of a nonnegative
+  decomposition satisfies y <= v), as assumptions with an unbiased fallback.
+  Shapes the cells correctly (the v-zero coordinates go to 0) but still
+  times out (449 rounds / 600 s).
+- `--arith-liastar-patient`: skip refinement while the current guard is
+  asserted true (defer to integer branching), plus phase-bias the star
+  conjuncts true so the solver actually commits to the reduction. The gate
+  rarely engages (492-643 rounds) because early stars *genuinely* conflict
+  with A until enough cones exist, and by then hundreds of stale frozen-true
+  atoms from deactivated stars pollute the search.
+
+Conclusion: incremental in-search refinement and the star endgame interfere
+structurally. The most promising remaining direction is to **decouple the
+endgame**: every R rounds, hand `input-assertions and star_k` to a fresh
+dedicated subsolver snapshot (clean search, no stale guards/phases, b&b can
+run to completion); a sat answer there yields concrete multiplier witnesses
+that can be fed back (e.g. asserted as a model hint), and unsat-with-core
+tells which constraints still lack cones. Alternatively, strengthen the ILP
+itself on counting structures (cuts), which is beyond the liastar extension.
+
+
+## Guided enumeration + decoupled endgame: fol_0000100 SOLVED (2026-06-12)
+
+The decoupled-endgame proposal above was implemented and, combined with
+guided enumeration and a decision-strategy feedback mechanism, **solves
+fol_0000100 in 0.67 s** (from a 600 s timeout in every prior configuration,
+model-checked) and nearly closes the whole benchmark set.
+
+The chain, each step driven by a measured failure:
+
+1. `--arith-liastar-guided`: bound the subsolver's next cell componentwise
+   by the candidate model's vector (`y <= v`; sound since summands of a
+   nonnegative decomposition cannot exceed the sum), as assumptions with an
+   unbiased fallback. Without it, the enumeration provably wanders: the
+   unsat-assumption core of the endgame query showed the unguided star could
+   not supply enough u!20-summands even at 580 cones; with it, all needed
+   patterns appear within ~30 cones.
+2. `--arith-liastar-endgame=N`: every N new cones, a *fresh* subsolver
+   solves `fixed-facts and star_k`, where fixed-facts are the arithmetic
+   facts with `Valuation::isFixed` (entailed at level 0). The first version
+   used all trail facts and was poisoned by branch decisions (the search's
+   purify pins forced n = 1, a region already known contradictory); the
+   isFixed filter is essential. With guidance the endgame turns **sat at 30
+   cones** and produces a concrete multiplier witness.
+3. Witness feedback: a guarded hint lemma `d => (x_1 = c_1 and ...)` alone
+   never engages -- traced: the guard is propagated false in every round,
+   since with hundreds of pinned variables some are always already bound
+   differently on the trail. The fix is a cvc5 **decision strategy**
+   (`LiaStarHintStrategy`, new id STRAT_ARITH_LIA_STAR_HINT): while a hint
+   is active, the SAT solver is handed the guard and each pinned equality as
+   its next decisions, building the witness assignment directly. One hint is
+   active per literal (the previous guard is deactivated), since competing
+   witnesses pin the same skolems to different values.
+
+Benchmarks (480 instances, 100 s, production,
+`--arith-liastar-guided --arith-liastar-endgame=10` on top of the defaults):
+
+| config | sat | unsat | timeout | solved |
+|---|---|---|---|---|
+| lazy generalize (previous best) | 285 | 181 | 14 | 466 |
+| **lazy guided+endgame** | **296** | **180** | **4** | **476** |
+
+Zero answer discrepancies against the generalize config and against all four
+recorded reference solvers (sls, cvc5 lia, unfold5, no_interp). It newly
+solves the entire hard card/fol_99-106 family (several of which even the
+reference SLS solver timed out on for the mapa encoding), loses only
+card/cvc5_mapa/fol_0000098, and is faster on the common set (306 s vs
+358 s). The four remaining timeouts are card/{bapa,mapa}/fol_0000098 and
+fol_0000107. Raw results: `liastar_endgame_results.csv`; plotted as
+"cvc5 lazy (guided+endgame)" in the cactus plots.
+
+**Both flags are now the default** (`arith-liastar-guided` defaults to true,
+`arith-liastar-endgame` defaults to 10), composing with the default boolean
+generalization: a plain `cvc5` invocation runs the guided + endgame
+strategy, and solves fol_0000100 in about a second. Disable with
+`--no-arith-liastar-guided` / `--arith-liastar-endgame=0`. The
+"cvc5 lazy (guided+endgame)" column/curve in the paper artifacts therefore
+measures the current default configuration.
+
+Notes for the future: the endgame check requires `produce-models` and reads
+the witness over the star formula's symbols; `getUnsatCore` on the internal
+endgame subsolver segfaults in debug (use `checkSat(assumptions)` +
+`getUnsatAssumptions` instead, which also gives the more informative
+fact-side core); the liastar-endgame / liastar-endgame-smt trace channels
+dump the query and a replayable script.

@@ -1,5 +1,7 @@
 \documentclass[11pt]{article}
 
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
@@ -8,6 +10,7 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{mdframed}
+\usepackage{float}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric}
 
@@ -306,6 +309,21 @@ Each \emph{round} of the loop does the following.
   round's model lies somewhere new.
 \end{enumerate}
 
+\begin{algorithm}[H]
+\caption{One lazy refinement round (with the accelerators of later sections)}
+\KwIn{literal $\ell$; subsolver $\Sigma$ holding $\mathit{base}(\vy)$ and the
+  negations of all cells found so far; candidate model $\hat{\vv}$}
+\lIf{$\hat{\vv} \models p[\vv]$ \textbf{or} $\hat{\vv} \models \mathit{star}_k$}{\Return \emph{accept} \tcp*[f]{model-value shortcut}}
+$r \gets \Sigma.\textsc{checkSat}\big(\{\,y_i \le \hat{v}_i\,\}\big)$ \tcp*{guided: box by $\hat{\vv}$ (\S\ref{sec:sat})}
+\lIf{$r = \textsc{unsat}$}{$r \gets \Sigma.\textsc{checkSat}()$ \tcp*[f]{unbiased fallback}}
+\lIf{$r = \textsc{unsat}$}{emit exact $\ell \Leftrightarrow \mathit{star}_k$; \Return \emph{complete}}
+$D \gets \textsc{GeneralizeCell}(\mathit{base},\ \text{model of }\Sigma)$ \tcp*{Alg.~\ref{alg:gen}}
+extend $\mathit{star}_{k-1}$ to $\mathit{star}_k$ with the cone of $D$ (via \normaliz)\;
+emit $\neg g_{k-1}$ and $g_k \Rightarrow (\ell \Leftrightarrow \mathit{star}_k)$; prefer $g_k=\true$\;
+assert $\neg D$ in $\Sigma$\;
+\lIf{$k \bmod N = 0$}{\textsc{Endgame}($\ell$) \tcp*[f]{Alg.~\ref{alg:endgame}}}
+\end{algorithm}
+
 \begin{exbox}
 \textbf{Example (two rounds on the running example).} Round 1: the
 subsolver holds $\mathit{base}$ only; say its model is $\vy = (4,0)$.
@@ -458,6 +476,20 @@ $x \ge 1$ unknown: the first disjunct becomes \emph{unknown}, the second is
 \false, so the disjunction is \emph{unknown} --- keep it. Result:
 $D_1' = x \ge 1 \wedge y = 0$, exactly the logical cell.
 \end{exbox}
+
+\begin{algorithm}[H]
+\caption{\textsc{GeneralizeCell}: prime implicant of $\mathit{base}$ at a model}
+\label{alg:gen}
+\KwIn{formula $\mathit{base}$; its atoms $a_1,\dots,a_m$ with model truth values $b_1,\dots,b_m$}
+\KwOut{a cell (conjunction of literals) that still implies $\mathit{base}$}
+$\sigma \gets \{a_i \mapsto b_i\}$ \tcp*{partial assignment; $\textsc{Eval}_3$ = three-valued eval}
+\lIf{$\textsc{Eval}_3(\mathit{base},\sigma) \ne \true$}{\Return $\bigwedge_i \mathit{lit}(a_i,b_i)$ \tcp*[f]{stale model: keep all}}
+\For{$i \gets 1$ \KwTo $m$}{
+  $\sigma[a_i] \gets \mathit{unknown}$\;
+  \lIf{$\textsc{Eval}_3(\mathit{base},\sigma) \ne \true$}{$\sigma[a_i] \gets b_i$ \tcp*[f]{needed: keep $a_i$}}
+}
+\Return $\bigwedge_{i:\,\sigma[a_i]\ne\mathit{unknown}} \mathit{lit}(a_i,b_i)$ \tcp*{$\mathit{lit}(a,b){=}a$ if $b$ else $\neg a$}
+\end{algorithm}
 
 Soundness: three-valued \true{} under a partial assignment means
 \emph{every} completion of the unknowns satisfies $\mathit{base}$ ---
@@ -657,6 +689,19 @@ variables to different values and would fight.
 
 The hint lemma itself is sound for the usual reason: $d$ is fresh, so any
 model extends by $d = \false$.
+
+\begin{algorithm}[H]
+\caption{\textsc{Endgame}: decoupled witness search, with feedback (\textsf{sat}) and cuts (\textsf{unsat})}
+\label{alg:endgame}
+\KwIn{literal $\ell$; current under-approximation $\mathit{star}_k$}
+$F_0 \gets$ arithmetic facts of the main trail \emph{fixed at decision level 0}\;
+$\rho \gets \textsc{FreshSolver}(F_0 \wedge \mathit{star}_k).\textsc{checkSat}()$ \tcp*{clean, runs to completion}
+\uIf{$\rho = \textsc{sat}$ with model $M$}{
+  $d \gets$ fresh Boolean; emit $d \Rightarrow \bigwedge_{x}\, (x = M[x])$\;
+  retire the previous hint ($\neg d_{\mathit{old}}$); install decision strategy: decide $d$, then each $x{=}M[x]$\;
+}
+\lElseIf{$\rho = \textsc{unsat}$}{\textsc{SynthesizeCuts}($\ell$, $F_0$) \tcp*[f]{Alg.~\ref{alg:cuts}}}
+\end{algorithm}
 
 \emph{Measured result:} \texttt{fol\_0000100} went from a 600-second
 timeout (in every prior configuration) to \textsf{sat} in $0.7$ seconds,
@@ -886,6 +931,37 @@ finite, and every counterexample permanently eliminates at least the
 current candidate; every emitted cut permanently eliminates the current
 target.
 
+\begin{algorithm}[H]
+\caption{\textsc{SynthesizeCuts}: refute the input with homogeneous cuts}
+\label{alg:cuts}
+\KwIn{literal $\ell$ with vector $\vv$; fixed facts $F_0$}
+\KwData{cuts $C$; samples $P\gets$ restricted module generators of known cells; zero coords $Z=\{i:v_i\equiv 0\}$}
+\For{$\mathit{round} \gets 1$ \KwTo $8$}{
+  \lIf{$F_0 \wedge C$ \emph{\textsc{unsat}}}{\Return \emph{(the main solver, holding $C$, derives \textsc{unsat})}}
+  $\hat{\vv} \gets \textsc{model}(F_0 \wedge C)$ \tcp*{a vector the input still allows}
+  $\vc \gets \textsc{SynthesizeOneCut}(\hat{\vv}, P, Z)$ \tcp*{Alg.~\ref{alg:onecut}}
+  \lIf{$\vc = \bot$}{\textbf{break} \emph{(give up; retry when new cells add samples)}}
+  $C \gets C \cup \{\vc\}$;\quad emit unconditional lemma $\vc \cdot \vv \ge 0$\;
+}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{SynthesizeOneCut}: CEGIS for one valid separating cut}
+\label{alg:onecut}
+\KwIn{target $\hat{\vv}$; samples $P$; zero coords $Z$; probe solver holding $\mathit{base}(\vy)$}
+\KwOut{cut coefficients $\vc$, or $\bot$}
+\ForEach{budget $K \in \{4,9,16,30\}$}{
+  \For{$\mathit{iter} \gets 1$ \KwTo $60$}{
+    $\vc \gets \textsc{solve}\big[\, \textstyle\sum_i|c_i|\le K,\ \ \vc\cdot\vec{q}\ge 0\ \ \forall \vec{q}\in P,\ \ \vc\cdot\hat{\vv}\le -1 \,\big]$\;
+    \lIf{no solution}{\textbf{break} \emph{(escalate $K$)}}
+    $\rho \gets \textsc{probe}.\textsc{checkSat}\big(\{\vc\cdot\vy \le -1\}\cup\{y_i{=}0 : i\in Z\}\big)$\;
+    \uIf{$\rho = \textsc{unsat}$}{\Return $\vc$ \tcp*[f]{valid on the restricted predicate}}
+    \lElse{$P \gets P \cup \{\textsc{model}(\rho)\}$ \tcp*[f]{counterexample becomes a sample}}
+  }
+}
+\Return $\bot$\;
+\end{algorithm}
+
 \subsection{Step 4: a complete run, with pictures}
 
 \begin{exbox}
@@ -1110,6 +1186,67 @@ instance is out of reach.
 \emph{Measured result:} all four remaining benchmarks refute in
 $0.2$--$2.0$ seconds, completing the suite at 480/480; no other instance
 is affected.
+
+\subsection{Step 8: when can cuts refute, and what the budget costs}
+
+Two natural questions: can cuts \emph{always} refute an unsatisfiable
+instance, and is the budget $K \le 30$ ever too small? Both answers are
+\emph{no}. Neither threatens correctness, because cuts are only an
+\emph{accelerator}: the lazy enumeration is itself a complete decision
+procedure --- the predicate has finitely many cells, and once all are
+discovered the subsolver turns \textsf{unsat} and the exact equivalence
+$\ell \Leftrightarrow \mathit{star}$ decides $\ell$. Cuts never need to
+succeed for the answer to be \emph{correct}; they only make it \emph{fast}.
+
+\paragraph{Cuts cannot refute every unsatisfiable instance.}
+A cut is a homogeneous linear inequality, so the vectors cuts can exclude
+are exactly those outside the \emph{convex conic hull} of $\Sstar$ (the
+smallest cone containing it). A vector \emph{inside} that cone but absent
+from $\Sstar$ for an \emph{integrality} reason is invisible to every cut.
+
+\begin{exbox}
+\textbf{Example (a parity gap no cut can see).} Let
+$\Sset = \{(2,0),\,(0,2)\}$, so $\Sstar = \{(2a,2b) : a,b\ge 0\}$ --- the
+\emph{even} lattice points of the quarter-plane. Its conic hull is the
+whole non-negative quadrant. The input $\vv = (1,1)$ is \textsf{unsat}
+($(1,1)$ is not a sum of even vectors), but it lies inside the quadrant,
+so every valid homogeneous inequality $c_1 x + c_2 y \ge 0$ (validity here
+forces $c_1,c_2 \ge 0$) is \emph{satisfied} by $(1,1)$: no cut excludes
+it. The procedure still answers \textsf{unsat} --- it enumerates the two
+cells and the exact constraints $v_1 = 2\mu_1,\ v_2 = 2\mu_2$ contradict
+$(1,1)$ immediately. (Verified: \cvc returns \textsf{unsat} with no cut
+emitted.)
+\end{exbox}
+
+\paragraph{$K \le 30$ can be too small for the cut that does exist.}
+Even when a separating cut exists, its smallest integer coefficients can
+exceed any fixed budget.
+
+\begin{exbox}
+\textbf{Example (a fence too steep for the budget).} Let
+$\Sset' = \{(1,31)\}$, so $(S')^{*} = \{(a,31a) : a \ge 0\}$ --- a ray of
+slope $31$. The input $\vv = (1,30)$ is \textsf{unsat} and lies
+\emph{outside} the cone (just below the ray), so a separating cut
+\emph{does} exist --- but the only one is $-31\,v_1 + v_2 \ge 0$ (the line
+through the origin along the ray), of weight $31 + 1 = 32 > 30$. The ladder
+stops at $30$, so the cut search fails; the instance is nonetheless solved
+at once by enumeration (one cell, $v_2 = 31 v_1$ versus $(1,30)$).
+(Verified: \cvc returns \textsf{unsat}.)\footnote{Constructing these
+single-point predicates also surfaced a latent crash unrelated to cuts: a
+\emph{constant} lambda such as $\lambda x.\,x{=}31$ is canonicalized by the
+solver into a 0-child function constant, which the lia$^*$ code had indexed
+as if it were a syntactic lambda. It is now converted back with
+\texttt{FunctionConst::toLambda} (regression test
+\texttt{const\_lambda.smt2}).}
+\end{exbox}
+
+The honest reading: the budget is a heuristic that makes the \emph{common}
+counting cuts cheap to find, at the price of missing rare high-weight ones.
+An instance that genuinely defeats the procedure would need \emph{both} an
+intractable enumeration \emph{and} a refutation available only through a
+high-weight cut; no benchmark in the suite is such a case (every counting
+cut that appears has weight $\le 9$), and the mitigation is simply to raise
+or adapt the ladder --- cheap, because the samples persist across budgets.
 
 \section{Results}
 

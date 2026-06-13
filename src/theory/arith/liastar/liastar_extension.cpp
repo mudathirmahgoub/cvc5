@@ -97,6 +97,7 @@
 #include "theory/arith/inference_manager.h"
 #include "theory/decision_manager.h"
 #include "theory/arith/theory_arith.h"
+#include "theory/uf/function_const.h"
 #include "util/rational.h"
 
 using namespace cvc5::internal::kind;
@@ -298,16 +299,35 @@ void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
   {
     Node lit = (*it).d_assertion;
     Trace("liastar-ext") << lit << std::endl;
+    Node atom;
     if (lit.getKind() == Kind::STAR_CONTAINS)
     {
       // positive polarity of star-contains
-      assertions.push_back(lit);
+      atom = lit;
     }
-    if (lit.getKind() == Kind::NOT && lit[0].getKind() == Kind::STAR_CONTAINS)
+    else if (lit.getKind() == Kind::NOT
+             && lit[0].getKind() == Kind::STAR_CONTAINS)
     {
-      // negative polarity of star-contains
-      assertions.push_back(lit[0]);
+      // negative polarity of star-contains (the same reduction lemma applies)
+      atom = lit[0];
     }
+    else
+    {
+      continue;
+    }
+    // The predicate argument is normally a LAMBDA, but a *constant* lambda is
+    // rewritten into a FUNCTION_ARRAY_CONST (no children). Rebuild the atom
+    // with the lambda form so every structural access below (lambda[0],
+    // lambda[1], ...) is well-defined. The rebuilt atom rewrites back to the
+    // original, so the reduction lemma still attaches to the asserted literal.
+    if (atom[0].getKind() != Kind::LAMBDA)
+    {
+      std::vector<Node> children;
+      children.push_back(uf::FunctionConst::toLambda(atom[0]));
+      children.insert(children.end(), atom.begin() + 1, atom.end());
+      atom = d_nm->mkNode(Kind::STAR_CONTAINS, children);
+    }
+    assertions.push_back(atom);
   }
   Trace("liastar-ext") << "---------------------" << std::endl;
 }

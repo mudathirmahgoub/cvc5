@@ -412,3 +412,34 @@ impossible unsat instances refute in 0.2--2.0 s. Raw results:
 A full LaTeX report covering all strategies, algorithms, soundness
 arguments, and measurements: `liastar_lazy_report.tex` / `.pdf` (this
 directory).
+
+## Bug fix: constant-lambda predicates crashed the solver (2026-06-12)
+
+Surfaced while constructing the report's "K too small" example. A
+*constant* lambda such as `(lambda ((x Int)) (= x 31))` (a function true at
+a single point) is canonicalized by the UF rewriter into a
+`FUNCTION_ARRAY_CONST` node with zero children. `getVectorPredicate` and the
+extension then indexed it as a syntactic lambda (`n[0][0]`), dereferencing a
+0-child node -> segfault (reproduced in eager mode and every config, so
+pre-existing, unrelated to the lazy/cut work).
+
+Fix: convert the predicate argument back to a lambda with
+`uf::FunctionConst::toLambda` at the two entry points --
+`LiaStarUtils::getVectorPredicate` (covers the rewriter's constant-vector
+optimization) and `LiaStarExtension::getAssertions` (rebuilds each collected
+STAR_CONTAINS atom so all structural accesses see a lambda; the rebuilt atom
+rewrites back to the asserted one, so the reduction lemma still attaches).
+Regression test `const_lambda.smt2` (unsat). Verified: 9 regression tests +
+the 4 hard benchmarks unchanged, unit test passes, debug build clean on the
+repro.
+
+## Report
+
+`liastar_lazy_report.tex` / `.pdf` (19 pages): example-driven explanation of
+every strategy, with TikZ figures for the cut geometry and CEGIS loop, five
+pseudocode algorithms (lazy round, GeneralizeCell, Endgame, SynthesizeCuts,
+SynthesizeOneCut), and a closing subsection on the limits of cuts:
+cuts refute only outside the convex conic hull of the star set (parity-gap
+example S={(2,0),(0,2)}, v=(1,1)), and the weight budget can be too small
+for an existing cut (S={(1,31)}, v=(1,30) needs weight 32) -- both harmless
+because the lazy enumeration remains a complete fallback.

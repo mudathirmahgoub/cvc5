@@ -58,6 +58,7 @@
 #include "theory/booleans/theory_bool_rewriter.h"
 #include "theory/rewriter.h"
 #include "theory/smt_engine_subsolver.h"
+#include "theory/uf/function_const.h"
 #include "util/rational.h"
 
 using namespace cvc5::internal::kind;
@@ -101,7 +102,11 @@ std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
   // necessary condition for membership in the star set (the set lives in the
   // non-negative orthant).
   Assert(n.getKind() == Kind::STAR_CONTAINS);
-  Node lambda = n[0];
+  // The predicate argument is normally a LAMBDA, but a *constant* lambda
+  // (e.g. `lambda x. x = 31`, the function true at a single point) is
+  // rewritten by the UF rewriter into a FUNCTION_ARRAY_CONST with no
+  // children. Convert it back to a lambda before indexing into it.
+  Node lambda = uf::FunctionConst::toLambda(n[0]);
   std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
   std::vector<Node> vecElements(n.begin() + 1, n.end());
 

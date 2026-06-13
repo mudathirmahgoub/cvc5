@@ -8,6 +8,8 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{mdframed}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
 
 \newcommand{\cvc}{\textsf{cvc5}\xspace}
 \newcommand{\normaliz}{\textsf{Normaliz}\xspace}
@@ -664,183 +666,458 @@ overall, with four \textsf{unsat} instances left.
 \section{Hard unsatisfiable instances: over-approximation by cuts}
 \label{sec:cuts}
 
-For an \textsf{unsat} instance the loop so far has only one exit: complete
-the enumeration and emit the exact equivalence. On the four remaining
-instances that is hopeless --- the cell count is astronomic (the eager
-mode times out too). What is missing is the \emph{other} half of the
-approximation recipe: a way to \emph{over}-approximate $\Sstar$, so that
-``input $\wedge$ over-approximation \textsf{unsat}'' refutes $\ell$
-\emph{without} enumerating anything.
+Four benchmarks remained, all \textsf{unsat}. This section explains, step
+by step, how they are refuted. We first build the intuition with pictures,
+then walk through the algorithm role by role, then show how it plays out
+on the real benchmarks, and finally describe the implementation inside
+\cvc.
 
-\subsection{Cuts: inequalities that survive addition}
+\subsection{Step 0: why these instances need something new}
+
+Everything before this section refutes $\ell$ in only one way: discover
+\emph{all} cells, emit the exact equivalence
+$\ell \Leftrightarrow \mathit{star}$, and let arithmetic find the
+contradiction. On these four instances the predicate has astronomically
+many cells (the eager mode, which builds them all, also times out), so
+``finish the enumeration'' is not a plan.
+
+But look at what an \textsf{unsat} instance actually \emph{is}: the input
+demands $\vv \in \Sstar$ together with side constraints that no sum can
+meet. To expose the contradiction we do not need to know $\Sstar$ exactly
+--- we only need \emph{one true fact about all of $\Sstar$} that the side
+constraints violate. A fact true of a superset is called an
+\emph{over-approximation}; the rest of this section is about finding such
+facts automatically, in the form of linear inequalities we call
+\emph{cuts}.
+
+\subsection{Step 1: the intuition --- a fence through the origin}
+
+\begin{exbox}
+\textbf{Mini example (used for the next three subsections).} Let the
+predicate have a single point, $\Sset' = \{(1,1)\}$. Then
+$(S')^{*} = \{(0,0), (1,1), (2,2), \ldots\}$ --- the diagonal. Let the
+input assert $\ell$ and $v_1 = 3 \wedge v_2 = 5$. It is \textsf{unsat}:
+$(3,5)$ is not on the diagonal.
+\end{exbox}
+
+Figure~\ref{fig:fence} shows the geometry. The line $x - y = 0$ is a
+\emph{fence through the origin}: every point of $(S')^{*}$ is on (or
+below) it, and the input point $(3,5)$ is strictly above it. So the single
+inequality $v_1 - v_2 \ge 0$ --- one lemma --- contradicts
+$v_1 = 3 \wedge v_2 = 5$, and the solver answers \textsf{unsat} having
+never enumerated anything.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.55]
+  \draw[->] (0,0) -- (6.5,0) node[right] {$x$};
+  \draw[->] (0,0) -- (0,6.5) node[above] {$y$};
+  \fill[blue!10] (0,0) -- (6.3,6.3) -- (6.3,0) -- cycle;
+  \draw[blue!60,thick] (0,0) -- (6.3,6.3) node[pos=0.78, below right=-2pt] {\small $x - y \ge 0$};
+  \foreach \i in {0,...,6} { \fill[black] (\i,\i) circle (3.2pt); }
+  \node[below right] at (2.1,2.0) {\small $(S')^{*}$};
+  \fill[red] (3,5) circle (4pt) node[above right] {\small target $(3,5)$};
+\end{tikzpicture}
+\caption{A cut is a fence through the origin: all of the star set on one
+side (shaded), the input's vector on the other. The fence must pass
+through the origin because $\vzero$ (the empty sum) is always in the star
+set.}
+\label{fig:fence}
+\end{figure}
+
+Why must the fence pass through the origin, i.e.\ why must the inequality
+be \emph{homogeneous} ($\vc \cdot \vy \ge 0$, no constant term)? Because
+that is exactly the shape that survives addition:
 
 \begin{proposition}
-Let $\vc$ be an integer vector. If $\vc \cdot \vy \ge 0$ holds for every
-$\vy \in \Sset$ (a \emph{homogeneous} valid inequality --- no constant
-term), then $\vc \cdot \vv \ge 0$ holds for every $\vv \in \Sstar$.
+If $\vc \cdot \vy \ge 0$ for every $\vy \in \Sset$, then
+$\vc \cdot \vv \ge 0$ for every $\vv \in \Sstar$.
 \end{proposition}
 \begin{proof}
-If $\vv = \sum_j \vec{s}_j$ then
-$\vc \cdot \vv = \sum_j \vc \cdot \vec{s}_j \ge 0$, a sum of non-negative
-numbers; and the empty sum gives $\vc \cdot \vzero = 0 \ge 0$.
+$\vv = \vec{s}_1 + \cdots + \vec{s}_k$ gives
+$\vc \cdot \vv = \sum_j \vc \cdot \vec{s}_j$, a sum of non-negative
+numbers; the empty sum gives $\vc \cdot \vzero = 0 \ge 0$.
 \end{proof}
 
-We call such an inequality a \emph{cut}. A cut is a sound,
-\emph{unconditional} lemma about $\vv$: no guard, no enumeration, no
-completeness requirement.
-
 \begin{exbox}
-\textbf{Example.} Let $\Sset' = \{(1,1)\}$, so
-$(S')^{*} = \{(k,k) \mid k \ge 0\}$ --- the diagonal. The inequality
-$x - y \ge 0$ is valid on $\Sset'$ (it holds at $(1,1)$) and homogeneous,
-so it lifts: every $(k,k)$ satisfies $k - k \ge 0$. Now suppose the input
-asserts $v_1 = 3 \wedge v_2 = 5$ and $\ell$. The single cut lemma
-$v_1 - v_2 \ge 0$ contradicts $3 - 5 = -2 \ge 0$ --- the solver answers
-\textsf{unsat} immediately, having never built a single cell cone.
-
-\textbf{Counter-example (why homogeneity is required).} The inequality
-$x \le 1$ \emph{also} holds for every member of $\Sset' = \{(1,1)\}$, but
-it must \emph{not} be lifted: $(2,2) \in (S')^{*}$ violates it. The
-difference: $x \le 1$ has a constant term ($x - 1 \le 0$), and constants
-do not scale when summands are added. The same trap in the running
+\textbf{Counter-example (a non-homogeneous fact does not lift).} On
+$\Sset' = \{(1,1)\}$ the inequality $x \le 1$ is also true of every
+member --- but $(2,2) \in (S')^{*}$ violates it. Adding two summands
+doubled the left side while the constant $1$ stayed put. Only
+constant-free inequalities scale with the sum. (Same trap in the running
 example $p(x,y) = (x{\ge}1 \wedge y{=}0) \vee (x{=}0 \wedge y{\ge}2)$:
-every point of $\Sset$ satisfies $x + y \ge 1$, yet the empty sum
-$\vzero \in \Sstar$ does not. Homogeneous ($\vc \cdot \vy \ge 0$) is
-exactly the shape that survives addition.
+every point of $\Sset$ satisfies $x + y \ge 1$, but the empty sum
+$\vzero \in \Sstar$ does not.)
 \end{exbox}
 
-Why should such cuts refute our benchmarks? Because their \textsf{unsat}
-arguments are \emph{counting} arguments: ``every summand lacks at least
-one of these five features, but the input demands totals only achievable
-if almost no summand lacks any.'' Summed per-summand inequalities are
-precisely homogeneous cuts.
+So a cut is: \emph{a homogeneous inequality, true of every point of the
+predicate, asserted for $\vv$ as an ordinary unconditional lemma.} If we
+find cuts that together contradict the input's side constraints, the main
+solver concludes \textsf{unsat} by itself --- cuts are just lemmas, so no
+new machinery is needed to ``report'' anything.
 
-\subsection{Conditional cuts: exploiting forced zeros}
+Two questions remain, and they are the heart of the matter:
+\begin{enumerate}
+\item Which inequalities are \emph{allowed}? (True of all of $\Sset$ ---
+  but $\Sset$ has astronomically many cells, so how do we check that?)
+\item Which inequalities are \emph{useful}? (There are infinitely many
+  valid cuts --- $2x + 3y \ge 0$ is valid for every non-negative set ---
+  and almost all of them cut nothing the input cares about.)
+\end{enumerate}
+The synthesis loop of Step 3 answers both with one solver query each.
+
+\subsection{Step 2: conditional cuts --- using the zeros the input fixes}
+
+One refinement is needed before the loop, because on the multiset
+benchmarks no \emph{globally} valid cut is strong enough.
 
 \begin{proposition}
-Suppose the input forces $v_i = 0$. Then every summand of every
-decomposition of $\vv$ has $y_i = 0$ (coordinates are non-negative and
-sums cannot cancel). Hence an inequality valid merely on the
-\emph{restriction} $\Sset \cap \{\vy \mid y_i = 0\}$ is still a sound cut
-for this $\vv$.
+Suppose the input forces $v_i = 0$. Since summands are non-negative and
+sums never cancel, \emph{every} summand of every decomposition of $\vv$
+has $y_i = 0$. Hence an inequality that is valid only on the
+\emph{restriction} $\Sset \cap \{y_i = 0\}$ is still a sound cut for this
+particular $\vv$.
 \end{proposition}
 
 \begin{exbox}
-\textbf{Example.} In the running example, suppose the input forces
-$v_2 = 0$. Every summand then has $y = 0$, i.e.\ comes from the
-horizontal cell. On that restriction the inequality $x - y \ge 0$ is
-valid (it fails on the vertical cell, so it is \emph{not} valid on all of
-$\Sset$) --- and it may be soundly asserted for $\vv$.
-
-On the real benchmark \texttt{fol\_0000107} (multiset encoding) the
-refuting cut is
-$4 u_{10} - u_{14} - u_{17} - u_{20} - u_{23} - u_{26} \ge 0$
-(``the five tracked totals never exceed four universes''), which is valid
-\emph{only} where six comparison-indicator coordinates are $0$ --- and
-the input pins exactly those coordinates of $\vv$ to the constant $0$.
-Without conditional cuts this instance is out of reach; with them it
-refutes in $2$ seconds.
+\textbf{Example.} Running example, with the input forcing $v_2 = 0$.
+Then every summand has $y = 0$, i.e.\ comes from the horizontal cell
+$\{(x,0) \mid x \ge 1\}$. On that restriction, $x - y \ge 0$ is valid ---
+even though it is \emph{false} on the vertical cell $(0,2), (0,3),
+\ldots$ of the full predicate. Because the input itself rules the
+vertical cell out of every decomposition, the cut may be used.
 \end{exbox}
 
-Forced zeros are easy to detect: input equalities like $u_{13} = 0$ are
-substituted into the literal by preprocessing, so the corresponding
-argument of $\ell$ is literally the constant $0$.
+Detecting forced zeros is free: input equalities like $u_{13} = 0$ are
+substituted into the literal during preprocessing, so the corresponding
+argument of $\ell$ is \emph{literally the constant} $0$ --- the
+implementation just looks at the literal's arguments. All validity checks
+below then carry the extra assumptions $y_i = 0$ for those coordinates.
 
-\subsection{Finding cuts automatically}
+\subsection{Step 3: the synthesis loop --- target, candidate, validate}
 
-A cut useful for refutation must do two jobs: be \emph{valid} on (the
-restriction of) $\Sset$, and \emph{reject} the values of $\vv$ the input
-allows. The synthesis loop interleaves both, in the style known as
-counterexample-guided inductive synthesis (CEGIS): propose a candidate
-from finitely many constraints, check it against the real object, and turn
-each failure into a new constraint.
+We now need to \emph{find} a refuting cut automatically. The search space
+is the integer coefficient vector $\vc$; what makes the problem
+interesting is that checking ``$\vc$ is valid on all of $\Sset$'' is
+itself a solver query. The loop, drawn in Figure~\ref{fig:loop}, has
+three roles. Think of it as a game between a \emph{prosecutor}, a
+\emph{tailor}, and a \emph{judge}.
 
-Concretely, whenever the endgame query
-$F_0 \wedge \mathit{star}_k$ answers \textsf{unsat} (``the discovered
-cells cannot justify $\ell$ --- maybe nothing can''), the extension runs:
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners, align=center, inner sep=4pt, fill=black!3, font=\small},
+  lab/.style={font=\small, align=center},
+  >=Stealth, node distance=8mm and 9mm]
+\node[box] (target)    {\textbf{Target}\\[1pt]\small model of $F_0 \wedge C$\\\small ``which $\hat{\vv}$ still escapes?''};
+\node[box, right=of target] (cand) {\textbf{Candidate}\\[1pt]\small fit sparse $\vc$:\\\small $\vc\cdot \vec{q} \ge 0$ (samples),\ \ $\vc\cdot\hat{\vv} \le -1$};
+\node[box, right=of cand] (val)  {\textbf{Validate}\\[1pt]\small probe: any point of\\\small restricted $\Sset$ with $\vc\cdot\vy \le -1$?};
+\node[box, below=of target, fill=green!8] (done) {\textbf{done:} $F_0 \wedge C$ \textsf{unsat}\\\small cuts already refute the input};
+\draw[->] (target) -- node[lab, above] {$\hat{\vv}$} (cand);
+\draw[->] (cand) -- node[lab, above] {$\vc$} (val);
+\draw[->] (val.south) to[bend left=18] node[lab, below] {counterexample point $\to$ new sample} (cand.south);
+\draw[->] (val.north) to[bend right=22] node[lab, above] {valid: emit lemma $\vc \cdot \vv \ge 0$, add to $C$} (target.north);
+\draw[->] (target) -- node[lab, left] {no model} (done);
+\end{tikzpicture}
+\caption{The cut synthesis loop. $F_0$ = input-entailed facts, $C$ = cuts
+found so far, samples = known points of the (restricted) predicate.}
+\label{fig:loop}
+\end{figure}
 
-\begin{enumerate}
-\item \textbf{Target.} Find a model of $F_0 \wedge C$, where $C$ are the
-  cuts found so far. If there is none, the already-emitted cut lemmas
-  contradict the input by themselves; the main solver will answer
-  \textsf{unsat} on its own, and synthesis stops. Otherwise read the
-  target $\hat{\vv}$.
-\item \textbf{Candidate.} Solve a small integer query for coefficients
-  $\vc$ such that: $\sum_i |c_i| \le K$ for an escalating budget
-  $K \in \{4,9,16,30\}$; $\vc \cdot \vec{q} \ge 0$ for every known sample
-  point $\vec{q}$ of the restricted predicate; and
-  $\vc \cdot \hat{\vv} \le -1$ (the candidate must reject the target).
-\item \textbf{Validate.} Ask the probe (the $\mathit{base}$ oracle reused
-  from semantic generalization): is
-  $\mathit{base} \wedge \bigwedge_{v_i \equiv 0} y_i{=}0 \wedge
-  \vc \cdot \vy \le -1$ satisfiable? If \textsf{unsat}, the candidate is
-  a valid cut --- emit $\vc \cdot \vv \ge 0$ and return to step 1. If
-  \textsf{sat}, the probe's model is a genuine point of the restricted
-  predicate violating the candidate --- add it to the samples and return
-  to step 2.
-\end{enumerate}
+\paragraph{Target (the prosecutor): \emph{who must be cut?}}
+Ask a small solver for a model of $F_0 \wedge C$: the facts the input
+fixes, plus the cuts already found. Its $\vv$-values $\hat{\vv}$ are a
+concrete vector the input still considers possible. Intuition: there is
+no point inventing inequalities at random --- aim every new cut at a
+witness the input can still produce. Two outcomes:
+\begin{itemize}
+\item No model: $F_0 \wedge C$ is \textsf{unsat} --- \textbf{the cuts
+  already contradict the input}. Synthesis stops; the main solver, which
+  has the same cut lemmas, derives \textsf{unsat} on its own.
+\item A model: its values $\hat{\vv}$ become the target of the next cut.
+\end{itemize}
+In the mini example, before any cuts the target is forced:
+$\hat{\vv} = (3,5)$.
+
+\paragraph{Candidate (the tailor): \emph{guess a fence from the evidence
+so far.}} Ask another small solver for integer coefficients $\vc$ such
+that
+\[
+\underbrace{\textstyle\sum_i |c_i| \le K}_{\text{simplicity budget}}
+\qquad
+\underbrace{\vc \cdot \vec{q} \ge 0 \ \ \text{for every known sample } \vec{q}}_{\text{respect the evidence}}
+\qquad
+\underbrace{\vc \cdot \hat{\vv} \le -1}_{\text{reject the target}} .
+\]
+The \emph{samples} are points known to lie in the (restricted) predicate
+--- where they come from is part of the implementation, Step 6. The
+constraint $\vc \cdot \hat{\vv} \le -1$ uses $-1$ rather than $< 0$
+because everything is integer: it is the same as ``strictly negative'',
+and it guarantees the finished cut genuinely excludes the target.
+Intuition: the tailor fits the simplest fence that keeps all known sheep
+on the safe side and the wolf outside. The tailor knows nothing about the
+predicate --- only the finite evidence list. That ignorance is the point:
+fitting against finitely many constraints is a tiny, fast query.
+
+\paragraph{Validate (the judge): \emph{check the guess against the real
+predicate.}} The candidate was only checked against samples; now ask the
+\emph{probe} --- a solver holding the actual predicate
+$\mathit{base}(\vy)$ --- whether some point of the restricted predicate
+violates the candidate:
+\[
+\mathit{base}(\vy) \ \wedge \ \textstyle\bigwedge_{v_i \equiv 0} y_i = 0
+\ \wedge \ \vc \cdot \vy \le -1
+\qquad \stackrel{?}{=} \quad \textsf{sat}.
+\]
+\begin{itemize}
+\item \textsf{unsat}: no point of the predicate is on the wrong side ---
+  the candidate is \emph{valid}. Emit the lemma $\vc \cdot \vv \ge 0$ and
+  return to the prosecutor.
+\item \textsf{sat}: the model is a concrete predicate point on the wrong
+  side of the fence --- the guess was wrong, and here is the proof. Add
+  the point to the samples and let the tailor try again. The same mistake
+  is now impossible: the new sample constraint excludes every candidate
+  that misclassifies this point.
+\end{itemize}
+This propose-from-finite-evidence / refute-with-a-counterexample cycle is
+the standard technique called CEGIS (counterexample-guided inductive
+synthesis). It terminates: for a fixed budget $K$ the candidate space is
+finite, and every counterexample permanently eliminates at least the
+current candidate; every emitted cut permanently eliminates the current
+target.
+
+\subsection{Step 4: a complete run, with pictures}
 
 \begin{exbox}
-\textbf{Example (one full pass).} $\Sset' = \{(1,1)\}$, input
-$v_1 = 3 \wedge v_2 = 5$, no samples yet.
-\emph{Target:} $\hat{\vv} = (3,5)$.
-\emph{Candidate:} with no sample constraints, the solver may propose
-$\vc = (0,-1)$, i.e.\ ``$-y \ge 0$'', which indeed rejects the target
-($-5 \le -1$).
-\emph{Validate:} is some point of $\Sset'$ with $-y \le -1$? Yes,
-$(1,1)$ --- the candidate is not valid; $(1,1)$ becomes a sample.
-\emph{Candidate again:} now require $c_1 + c_2 \ge 0$ (from the sample)
-and $3 c_1 + 5 c_2 \le -1$ (target); the budget-minimal solution is
-$\vc = (1,-1)$.
-\emph{Validate:} no point of $\Sset'$ has $x - y \le -1$ --- valid. Emit
+\textbf{Worked run on the mini example} ($\Sset' = \{(1,1)\}$, input
+$v_1 = 3 \wedge v_2 = 5$, no samples yet, budget $K = 4$).
+
+\textbf{Round 1 --- Target:} model of $F_0$ (no cuts yet) gives
+$\hat{\vv} = (3,5)$.
+
+\textbf{Round 1 --- Candidate:} with no samples, the only constraints are
+$|c_1|+|c_2| \le 4$ and $3c_1 + 5c_2 \le -1$. The solver may return
+$\vc = (0,-1)$, the fence ``$-y \ge 0$'' (Figure~\ref{fig:cegis}, left).
+It does reject the target ($-5 \le -1$).
+
+\textbf{Round 1 --- Validate:} is there a point of $\Sset'$ with
+$-y \le -1$? Yes: $(1,1)$. The guess put a sheep outside the fence. Add
+$(1,1)$ to the samples.
+
+\textbf{Round 2 --- Candidate:} now also require
+$c_1 \cdot 1 + c_2 \cdot 1 \ge 0$. Together with
+$3c_1 + 5c_2 \le -1$ this forces $c_1 \ge -c_2$ and pushes toward
+$\vc = (1,-1)$: the fence $x - y \ge 0$ (Figure~\ref{fig:cegis}, right).
+
+\textbf{Round 2 --- Validate:} a point of $\Sset'$ with
+$x - y \le -1$? No --- \textsf{unsat}. Valid! Emit the lemma
 $v_1 - v_2 \ge 0$.
-\emph{Target again:} $F_0 \wedge (v_1 - v_2 \ge 0)$ with
-$v_1{=}3, v_2{=}5$ is \textsf{unsat} --- done; the input is refuted.
+
+\textbf{Round 3 --- Target:} model of
+$F_0 \wedge (v_1 - v_2 \ge 0)$, i.e.\ $3 - 5 \ge 0$? \textsf{unsat} ---
+done. The input is refuted by one cut.
 \end{exbox}
 
-\why{Each ingredient of the loop closes a failure observed without it.
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.5]
+  \draw[->] (0,0) -- (6.3,0) node[right] {$x$};
+  \draw[->] (0,0) -- (0,6.3) node[above] {$y$};
+  \fill[blue!10] (0,0) rectangle (6.1,-0.9);
+  \draw[blue!60,thick] (0,0) -- (6.1,0) node[pos=0.55, below] {\small $-y \ge 0$};
+  \fill[black] (1,1) circle (4pt) node[above left] {\small sample $(1,1)$ \textbf{violated!}};
+  \fill[red] (3,5) circle (4pt) node[right] {\small $(3,5)$ rejected \checkmark};
+  \node at (3.1,-2.0) {\small (a) first guess: invalid};
+\end{tikzpicture}
+\hspace{8mm}
+\begin{tikzpicture}[scale=0.5]
+  \draw[->] (0,0) -- (6.3,0) node[right] {$x$};
+  \draw[->] (0,0) -- (0,6.3) node[above] {$y$};
+  \fill[blue!10] (0,0) -- (6.1,6.1) -- (6.1,0) -- cycle;
+  \draw[blue!60,thick] (0,0) -- (6.1,6.1) node[pos=0.82, below right=-2pt] {\small $x - y \ge 0$};
+  \fill[black] (1,1) circle (4pt) node[below right] {\small $(1,1)$ on the fence \checkmark};
+  \fill[red] (3,5) circle (4pt) node[right] {\small $(3,5)$ rejected \checkmark};
+  \node at (3.1,-2.0) {\small (b) refit after the counterexample: valid};
+\end{tikzpicture}
+\caption{One CEGIS refinement on the mini example. The first candidate
+separates the target but misclassifies a real predicate point; the
+counterexample becomes a sample, and the refit candidate is valid.}
+\label{fig:cegis}
+\end{figure}
 
-\emph{The sparsity budget.} With 21 coordinates and coefficients in
-$[-10,10]$, there are ${\sim}21^{21}$ candidate vectors; an unbounded
-search returns scattered dense candidates, the oracle refutes them one
-counterexample at a time, and 40 iterations made no visible progress. The
-cuts that exist in practice are \emph{sparse} (few nonzero, small
-coefficients --- like every example above), and bounding
-$\sum_i |c_i|$ makes the candidate space tiny. An offline replica of the
-exact loop converged on \texttt{fol\_0000107} in 8 cuts and ${\sim}33$
-candidate--validate iterations once the budget was added.
+\subsection{Step 5: why the budget ladder $K \in \{4, 9, 16, 30\}$}
 
-\emph{Level-0 facts for the target}, for the same reason as the endgame:
-a branch-pinned target sends the synthesis chasing values no model needs.
+The budget bounds $\sum_i |c_i|$, the total weight of the inequality ---
+informally, how \emph{complicated} the fence is allowed to be. Examples:
+a pairwise comparison $y_i \le y_j$, i.e.\ $-y_i + y_j \ge 0$, has weight
+$2$; the mini example's cut has weight $2$; the real benchmark cut shown
+in Step 7 below has weight $9$.
 
-\emph{Sample points yes, directions no.} Sample points are seeded from
-the module generators of already-discovered cells: a generator is a real
-point of $\Sset$, and if its restricted coordinates are zero it lies in
-the restricted region, so requiring $\vc \cdot \vec{q} \ge 0$ on it is
-exactly right and saves validate-rounds. The cells' \emph{ray} directions
-must NOT be used the same way, and this was a real bug: consider a cell
-whose pinned indicator is $u_{13} = 1$. Every \emph{ray} of that cell has
-$0$ in the $u_{13}$ coordinate --- moving along a direction never changes
-a pinned equality --- so the ray slips past the ``restricted coordinates
-are zero'' filter while describing motion \emph{inside a cell that is
-entirely outside the restriction}. Requiring $\vc \cdot \vec{r} \ge 0$ on
-such rays excluded precisely the valid conditional cut on
-\texttt{fol\_0000107}: the in-solver loop failed while the ray-free
-offline replica succeeded, and removing the ray constraints reconciled
-the two. Unbounded directions are still handled soundly: if a candidate
-is violated far out along some direction of the restricted region, the
-validation probe simply returns a far-out \emph{point} as the
-counterexample.}
+\why{Without the budget, the search measurably diverges. The benchmark
+vectors have 21 coordinates; with coefficients in $[-10,10]$ the
+candidate space has about $21^{21} \approx 10^{27}$ members. An
+unconstrained candidate solver returns \emph{arbitrary dense} vectors ---
+typically with a dozen nonzero coefficients --- and each is refuted by
+one counterexample at a time; after 40 rounds the in-solver search had
+made no visible progress. The cuts that actually exist in these problems
+are \emph{sparse}: they express simple counting facts over a handful of
+coordinates. Bounding the weight makes the candidate space tiny
+(weight $\le 4$ over 21 coordinates is a few thousand shapes), so each
+counterexample eliminates a meaningful fraction of it. With the ladder in
+place, the same loop refutes the hardest instance in 8 cuts and
+${\sim}33$ candidate--validate rounds total.}
 
-\emph{Measured result:} the four remaining instances refute in
-$0.2$--$2.0$ seconds; nothing else on the suite is affected.
+Why these four rungs specifically? The choice is heuristic, and three
+properties matter more than the exact numbers:
+\begin{itemize}
+\item \emph{Start small.} Most useful cuts are very light (weight
+  $2$--$4$): pairwise comparisons and small sums. A small first rung
+  finds them almost instantly and keeps every later query cheap.
+\item \emph{Cover the known need.} The heaviest cut we ever derived by
+  hand on these benchmarks (the multiset cut of Step 7) has weight
+  $4 + 1 + 1 + 1 + 1 + 1 = 9$ --- the second rung is set exactly there.
+\item \emph{Cap it.} Rungs $16$ and $30$ are headroom (roughly doubling
+  each step, like the squares $2^2, 3^2, 4^2$ and a final allowance);
+  the cap guarantees each synthesis attempt terminates. If no cut of
+  weight $\le 30$ exists, the attempt is abandoned (and retried only when
+  new information --- new sample points from newly discovered cells ---
+  arrives).
+\end{itemize}
+Escalation is cheap because the samples \emph{persist} across rungs and
+across synthesis attempts: a counterexample collected at $K = 4$ still
+constrains the search at $K = 9$.
+
+\subsection{Step 6: how it is implemented in \cvc}
+
+The synthesis is triggered from the endgame: whenever the decoupled check
+$F_0 \wedge \mathit{star}_k$ answers \textsf{unsat} (``the cells found so
+far cannot justify $\ell$ --- and perhaps nothing can''), the extension
+calls \texttt{synthesizeCuts}. Everything is built from ordinary solver
+instances:
+
+\begin{center}
+\footnotesize
+\begin{tabular}{lllp{4.2cm}}
+\toprule
+solver instance & lifetime & holds & question it answers \\
+\midrule
+main solver & whole run & input $+$ all lemmas & is the input satisfiable? \\
+endgame & fresh per check & $F_0 \wedge \mathit{star}_k$ & can the current cells justify $\ell$? \\
+target & fresh per round & $F_0 \wedge C$ & which $\hat{\vv}$ still escapes the cuts? \\
+candidate & fresh per cut search & budget, samples, target & propose a sparse $\vc$ \\
+validity probe & persistent per predicate & $\mathit{base}(\vy)$ & is $\vc \cdot \vy \ge 0$ on the restricted predicate? \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Concrete details, in the order they matter:
+
+\begin{itemize}
+\item \emph{The facts $F_0$.} Taken from the arithmetic solver's asserted
+  facts, keeping only those \emph{fixed at decision level 0} (recall:
+  facts holding in every model). Using the whole trail instead poisons
+  the target: in one measured run a branch decision had pinned $n = 1$
+  inside an already-doomed region, and every synthesis chased that
+  phantom. Facts mentioning the star's internal unknowns (multipliers)
+  and the star literals themselves are filtered out.
+\item \emph{The candidate query.} Coefficient unknowns $c_1..c_n$ plus
+  helper unknowns $a_i$ with $a_i \ge c_i$ and $a_i \ge -c_i$ (so
+  $a_i \ge |c_i|$), and $\sum_i a_i \le K$ --- the standard linear
+  encoding of the weight budget. One linear constraint per sample, one
+  for the target. The solver instance is incremental, so each
+  counterexample is added as one new constraint.
+\item \emph{The validity probe.} One persistent solver per predicate,
+  with $\mathit{base}(\vy)$ asserted once (the same probe built for
+  semantic generalization). Each validity check passes
+  $\vc \cdot \vy \le -1$ \emph{and} the forced-zero equations
+  $y_i = 0$ as \emph{assumptions} --- nothing is permanently asserted, so
+  one probe serves every candidate, every budget rung, and every literal,
+  whatever its zero pattern.
+\item \emph{Seeding the samples.} Every cell already discovered by the
+  lazy loop was processed by \normaliz, whose module generators are
+  concrete points of $\Sset$. Those lying in the restriction (zeros at
+  the forced coordinates) are entered as samples up front, saving
+  validate-rounds. \textbf{Pitfall (a real bug):} the cells' \emph{ray
+  directions} must \emph{not} be used as samples. A ray of a cell pinned
+  at $u_{13} = 1$ has a $0$ in the $u_{13}$ coordinate --- directions
+  never change pinned equalities --- so it passes the zero filter while
+  describing motion inside a cell \emph{entirely outside} the
+  restriction. Constraining candidates by such rays excluded exactly the
+  valid conditional cut on the hardest instance: an offline replica of
+  the loop \emph{without} rays converged while the in-solver version
+  \emph{with} rays failed, which is how the bug was found. Far-out
+  violations are still caught soundly --- the probe just returns a
+  far-out \emph{point} as the counterexample.
+\item \emph{Budgets that keep the common case fast.} At most 8 cuts per
+  endgame call; at most 60 candidate--validate rounds per rung; after two
+  consecutive failed syntheses the loop stops trying and resumes only
+  when new cells (hence new samples) arrive. On \textsf{sat} instances
+  the endgame usually answers \textsf{sat} before any synthesis is
+  attempted, so the machinery costs nothing there.
+\item \emph{Emission.} A valid cut is sent as the unconditional lemma
+  $\vc \cdot \vv \ge 0$, tagged with its own inference identifier
+  (\texttt{ARITH\_LIA\_STAR\_CUT}); trivially-constant lemmas are
+  skipped.
+  Because cuts are plain lemmas, soundness needs no new argument beyond
+  the two propositions above, and \textsf{unsat} is produced by the main
+  solver's ordinary conflict machinery.
+\end{itemize}
+
+\subsection{Step 7: what happens on the real benchmarks}
+
+The real predicates are counting structures: each summand carries
+indicator bits and magnitudes, and the input demands totals. The
+\textsf{unsat} arguments are budget arguments, and they are exactly
+homogeneous cuts. A miniature with the precise shape of
+\texttt{fol\_0000098}:
+
+\begin{exbox}
+\textbf{Miniature of the real refutation.} Let each summand be
+$(\mathit{cnt}, A, B)$ with predicate
+\[
+\mathit{cnt} = 1 \;\wedge\; A,B \in \{0,1\} \;\wedge\; \neg(A = 1 \wedge B = 1)
+\]
+(``each summand is one object that may carry badge $A$ or badge $B$, but
+not both''). Every predicate point satisfies the weight-3 homogeneous
+inequality
+\[
+\mathit{cnt} - A - B \;\ge\; 0
+\qquad (\text{check: } (1,1,0) \mapsto 0,\ (1,0,1) \mapsto 0,\ (1,0,0) \mapsto 1).
+\]
+Summing over any decomposition: $v_{\mathit{cnt}} - v_A - v_B \ge 0$,
+i.e.\ \emph{badges never outnumber objects}. Now let the input demand
+$v_{\mathit{cnt}} = n,\ v_A = n,\ v_B = 1$ (``$n$ objects, all carrying
+$A$, and at least one $B$''). The cut gives $n - n - 1 \ge 0$:
+contradiction, \textsf{unsat} --- found without looking at a single cell
+decomposition of the input. \texttt{fol\_0000098} is this pattern with
+five badges and thresholds like $2 v_A \ge n + 3t + 1$; the loop finds
+the needed cuts in well under a second.
+\end{exbox}
+
+The multiset variant \texttt{fol\_0000107} additionally needs the
+conditional mechanism of Step 2: its refuting cut
+\[
+4\,u_{10} - u_{14} - u_{17} - u_{20} - u_{23} - u_{26} \;\ge\; 0
+\qquad (\text{weight } 9)
+\]
+(``the five tracked totals never exceed four universes'') is valid
+\emph{only} on the restriction where six comparison-indicator coordinates
+are $0$ --- which the input forces, since it pins exactly those
+coordinates of $\vv$ to the constant $0$. With conditional validity this
+cut is found and the instance refutes in $2$ seconds; without it, the
+instance is out of reach.
+
+\emph{Measured result:} all four remaining benchmarks refute in
+$0.2$--$2.0$ seconds, completing the suite at 480/480; no other instance
+is affected.
 
 \section{Results}
 
-All experiments: production build of \cvc with \normaliz; 480 benchmarks
-(arith/card $\times$ BAPA/MAPA encodings of set-reachability problems);
-100\,s timeout; 12-way parallel harness; one solver thread
-(\texttt{OMP\_NUM\_THREADS=1}); 6\,GB memory cap per process. No answer
+All experiments use a production build of \cvc with \normaliz, on 480
+benchmarks (arith/card $\times$ BAPA/MAPA encodings of set-reachability
+problems);
+100\,s timeout; 12-way parallel harness; one solver thread per instance;
+6\,GB memory cap per process. No answer
 discrepancy was observed anywhere: neither between any two of our
 configurations, nor against the four independent reference solvers
 recorded with the benchmark data.

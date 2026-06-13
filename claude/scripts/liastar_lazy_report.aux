@@ -25,10 +25,24 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Part 3: feeding the witness back as decisions}{9}{subsection.5.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {6}Hard unsatisfiable instances: over-approximation by cuts}{9}{section.6}\protected@file@percent }
 \newlabel{sec:cuts}{{6}{9}{Hard unsatisfiable instances: over-approximation by cuts}{section.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Cuts: inequalities that survive addition}{9}{subsection.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Conditional cuts: exploiting forced zeros}{10}{subsection.6.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Finding cuts automatically}{10}{subsection.6.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7}Results}{12}{section.7}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Solved instances per configuration (480 benchmarks, 100\,s).}}{12}{table.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {8}Takeaways}{12}{section.8}\protected@file@percent }
-\gdef \@abspage@last{13}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Step 0: why these instances need something new}{9}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Step 1: the intuition --- a fence through the origin}{10}{subsection.6.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces A cut is a fence through the origin: all of the star set on one side (shaded), the input's vector on the other. The fence must pass through the origin because $\ensuremath  {\vec  {0}}\xspace  $ (the empty sum) is always in the star set.}}{10}{figure.1}\protected@file@percent }
+\newlabel{fig:fence}{{1}{10}{A cut is a fence through the origin: all of the star set on one side (shaded), the input's vector on the other. The fence must pass through the origin because $\vzero $ (the empty sum) is always in the star set}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Step 2: conditional cuts --- using the zeros the input fixes}{11}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Step 3: the synthesis loop --- target, candidate, validate}{11}{subsection.6.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The cut synthesis loop. $F_0$ = input-entailed facts, $C$ = cuts found so far, samples = known points of the (restricted) predicate.}}{11}{figure.2}\protected@file@percent }
+\newlabel{fig:loop}{{2}{11}{The cut synthesis loop. $F_0$ = input-entailed facts, $C$ = cuts found so far, samples = known points of the (restricted) predicate}{figure.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Target (the prosecutor): \emph  {who must be cut?}}{12}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Candidate (the tailor): \emph  {guess a fence from the evidence so far.}}{12}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Validate (the judge): \emph  {check the guess against the real predicate.}}{12}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Step 4: a complete run, with pictures}{12}{subsection.6.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces One CEGIS refinement on the mini example. The first candidate separates the target but misclassifies a real predicate point; the counterexample becomes a sample, and the refit candidate is valid.}}{13}{figure.3}\protected@file@percent }
+\newlabel{fig:cegis}{{3}{13}{One CEGIS refinement on the mini example. The first candidate separates the target but misclassifies a real predicate point; the counterexample becomes a sample, and the refit candidate is valid}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Step 5: why the budget ladder $K \in \{4, 9, 16, 30\}$}{13}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.7}Step 6: how it is implemented in \textsf  {cvc5}\xspace  }{14}{subsection.6.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.8}Step 7: what happens on the real benchmarks}{15}{subsection.6.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Results}{15}{section.7}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Solved instances per configuration (480 benchmarks, 100\,s).}}{16}{table.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Takeaways}{16}{section.8}\protected@file@percent }
+\gdef \@abspage@last{17}

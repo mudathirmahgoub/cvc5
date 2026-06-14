@@ -10,7 +10,7 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Extension to the theory of arithmetic handling lia star operator.
+ * Extension to the theory of arithmetic handling the lia* (LIA star) operator.
  */
 
 #ifdef CVC5_USE_NORMALIZ
@@ -19,16 +19,18 @@
 #define CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "expr/node.h"
 #include "libnormaliz/libnormaliz.h"
-#include "proof/proof_set.h"
 #include "smt/env_obj.h"
+#include "proof/unsat_core.h"
+#include "smt/solver_engine.h"
 #include "theory/arith/liastar/liastar_proof_generator.h"
+#include "theory/decision_strategy.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
-#include "util/result.h"
 
 namespace cvc5::internal {
 namespace theory {
@@ -39,40 +41,91 @@ class TheoryArith;
 
 namespace liastar {
 
-class CDProof;
-
-// Arbitrary‑precision integers.
+/** Arbitrary-precision integers (the integer type handed to Normaliz). */
 typedef mpz_class Integer;
-// type the constraint matrix
-typedef std::vector<std::vector<Integer>> Matrix;
+/** A row of arithmetic terms, e.g. the monomials of one cone contribution. */
 typedef std::vector<Node> Vector;
-/** Liastar extension class
+
+/**
+ * Decision strategy carrying an endgame hint (see
+ * `LiaStarExtension::tryEndgame`): while a hint is active, it hands the SAT
+ * solver the hint's guard and then each pinned equality as the next
+ * decisions, so the witness assignment is built directly instead of hoping
+ * the solver's own heuristics stumble onto it (a phase preference alone is
+ * useless here: with hundreds of pinned variables, some are always already
+ * bound differently on the trail, so the guard would just be propagated
+ * false).
+ */
+class LiaStarHintStrategy : public DecisionStrategy
+{
+ public:
+  LiaStarHintStrategy(Env& env, Valuation valuation)
+      : DecisionStrategy(env), d_valuation(valuation)
+  {
+  }
+  void initialize() override {}
+  Node getNextDecisionRequest() override
+  {
+    for (const Node& literal : d_literals)
+    {
+      if (!d_valuation.hasSatValue(literal))
+      {
+        return literal;
+      }
+    }
+    return Node::null();
+  }
+  std::string identify() const override { return "LiaStarHint"; }
+  /** Replace the decisions with a new hint (guard first, then equalities). */
+  void setHint(const std::vector<Node>& literals) { d_literals = literals; }
+
+ private:
+  /** The valuation, for skipping already-assigned literals. */
+  Valuation d_valuation;
+  /** The hint literals, in decision order. */
+  std::vector<Node> d_literals;
+};
+
+/**
+ * Extension to TheoryArith deciding the lia* operator STAR_CONTAINS.
  *
- * This class implements model-based refinement schemes
- * for liastar formulas.
+ * A literal
+ *     (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) v_1 ... v_n)
+ * asserts that the vector v = (v_1, ..., v_n) belongs to the additive closure
+ * (the *star*) of the set S = { x in Z^n : p(x), x >= 0 }, i.e. that v is a
+ * finite sum of vectors each satisfying p. The extension decides such literals
+ * by reducing them to plain linear integer arithmetic, following
  *
  * - Levatich, M., Bjorner, N., Piskac, R., Shoham, S. (2020).
  *   Solving LIA* Using Approximations.
  *   VMCAI 2020.
  *   https://doi.org/10.1007/978-3-030-39322-9_17
  *
- * It's main functionality is a check(...) method,
- * which is called by TheoryArithPrivate either:
- * (1) at full effort with no conflicts or lemmas emitted, or
- * (2) at last call effort.
- * In this method, this class calls d_im.lemma(...)
- * for valid arithmetic theory lemmas, based on the current set of assertions,
- * where d_im is the inference manager of TheoryArith.
+ * The reduction views each convex cell (DNF disjunct) of p as a polyhedral
+ * cone, computes the cone's Hilbert basis and module generators with Normaliz,
+ * and encodes the star of the union of cells as a system of linear constraints
+ * over fresh non-negative multipliers (the "star constraints"). The reduction
+ * lemma `literal = star` is sent through TheoryArith's inference manager. See
+ * the file comment of liastar_extension.cpp for the full picture.
+ *
+ * The main entry point is checkFullEffort(...), called by TheoryArith at
+ * full/last-call effort with the current candidate arithmetic model. Two
+ * strategies are available (option arith-lia-star-lazy):
+ * - eager (`eagerCheckStar`): normalize p to DNF and reduce in one shot;
+ * - lazy (`lazyCheckStar`): discover one convex cell per refinement round from
+ *   models of a persistent incremental subsolver, asserting guarded
+ *   under-approximations until every cell is covered.
  */
 class LiaStarExtension : EnvObj
 {
-  typedef context::CDHashSet<Node> NodeSet;
-
  public:
   LiaStarExtension(Env& env, TheoryArith& containing);
   ~LiaStarExtension();
+
   /**
-   * Does non-context dependent setup for a node connected to a theory.
+   * Does non-context dependent setup for a node connected to a theory:
+   * registers STAR_CONTAINS terms with the extended theory and records that
+   * this extension has work to do.
    */
   void preRegisterTerm(TNode n);
 
@@ -84,10 +137,16 @@ class LiaStarExtension : EnvObj
    * non-terminating theories (e.g. quantifiers, strings) to run full effort
    * checks, before sending the lemmas generated by liastar.
    *
-   * The argument arithModel is a map of the form { v1 -> c1, ..., vn -> cn }
-   * which represents the linear arithmetic theory solver's contribution to the
-   * current candidate model where v1, ..., vn are arithmetic variables and
-   * c1, ..., cn are constants.
+   * For each STAR_CONTAINS assertion this emits a non-negativity lemma and a
+   * split on the substituted predicate p[v], and then -- unless the current
+   * model already satisfies the literal -- reduces the literal via the eager
+   * or lazy strategy.
+   *
+   * @param arithModel a map of the form { v1 -> c1, ..., vn -> cn } which
+   *   represents the linear arithmetic theory solver's contribution to the
+   *   current candidate model, where v1, ..., vn are arithmetic variables and
+   *   c1, ..., cn are constants
+   * @param termSet the set of terms relevant in the current check
    */
   void checkFullEffort(std::map<Node, Node>& arithModel,
                        const std::set<Node>& termSet);
@@ -96,37 +155,372 @@ class LiaStarExtension : EnvObj
   bool hasLiaStarTerms() const { return d_hasLiaStarTerms; }
 
  private:
-  /** get assertions
-   *
-   * Let M be the set of assertions known by THEORY_ARITH. This function adds a
-   * set of literals M' to assertions such that M' and M are equivalent.
-   *
-   * Examples of how M' differs with M:
-   * (1) M' may not include t < c (in M) if t < c' is in M' for c' < c, where
-   * c and c' are constants,
-   * (2) M' may contain t = c if both t >= c and t <= c are in M.
+  /**
+   * Collect from TheoryArith's fact queue the STAR_CONTAINS atoms asserted in
+   * the current context. Both polarities are reduced to the positive atom:
+   * the reduction lemma `atom = star` handles either polarity (the
+   * surrounding SAT solver applies the negation).
    */
   void getAssertions(std::vector<Node>& assertions);
 
-  Node isNotZeroVector(Node v);
-
   /**
-   * Argument n must be a node of the form (int.star-contains ((x1 Int) ... (xn
-   * Int)) p v) This functions convert the predicate p (which in QFLIA) to a
-   * list of matrices representing a disjunction of set of inequalities in
-   * Normaliz matrix form A x b >= 0 where A is a matrix and x = (x1 ... xn 1).
-   * This form is used
+   * Normalize the body p of the lambda `n` into DNF and render each disjunct
+   * as a Normaliz constraint matrix (see `LiaStarUtils::getMatrices`).
+   *
+   * @param n a lambda (lambda ((x_1 Int) ... (x_n Int)) p) with p in QF_LIA
+   * @return one (constraint rows, disjunct node) pair per DNF disjunct of p,
+   *   i.e. one per cone
    */
   const std::vector<std::pair<std::vector<std::string>, Node>>
   convertQFLIAToMatrices(Node n);
 
+  /**
+   * Eager path: build a Normaliz cone for every DNF disjunct of the predicate
+   * and accumulate the star constraints over all of them. Empty (infeasible)
+   * cones are skipped.
+   *
+   * @param n the STAR_CONTAINS literal; its children after the lambda are the
+   *   vector v
+   * @param pairs one (constraint rows, disjunct node) pair per disjunct, as
+   *   returned by `convertQFLIAToMatrices`
+   * @return the non-empty cones, each paired with the disjunct it came from
+   *   (used by `getMembershipDisjuncts` for the debug trace), and the star
+   *   constraints: fresh multiplier skolems with their side constraints plus
+   *   the sum constraints tying v to the cones' contributions. Their
+   *   conjunction is equivalent to `v in S*`.
+   */
   std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
             std::vector<Node>>
   getCones(Node n,
            const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
 
-  std::vector<std::pair<Node, Node>> getLia(
+  /**
+   * Lazy path: build the cone for a single disjunct and append it to the list
+   * of cones for `n[0]` (the lambda) stored in `d_lazyCones`. If the cone is
+   * empty (the disjunct is infeasible) it is not added.
+   *
+   * @param n the STAR_CONTAINS literal
+   * @param pair the disjunct's constraint rows and node, as returned by
+   *   `LiaStarUtils::getMatrix`
+   */
+  void addCone(Node n, const std::pair<std::vector<std::string>, Node>& pair);
+
+  /**
+   * Lazy path: return the star constraints over all cones accumulated so far
+   * in `d_lazyCones[n[0]]` (the cones added by previous calls to `addCone`).
+   *
+   * The per-cone constraints (and their fresh skolems) are computed only for
+   * cones that have not been processed in a previous call and are accumulated
+   * in `d_starConstraints[n[0]]`, so the skolems stay stable across refinement
+   * rounds; the sum constraints, which span all cones, are rebuilt from the
+   * accumulated `d_lambdas[n[0]]` on each call.
+   */
+  std::vector<Node> getStarConstraints(Node n);
+
+  /**
+   * Debug helper, used only for the "liastar-ext-smt" trace. Builds the
+   * *membership* encoding `v in S`: one existentially quantified formula per
+   * (cone, module generator) stating that v is the single element
+   * `g + sum_j l_j h_j` of that cone. The disjunction of all returned
+   * formulas is equivalent to the predicate itself, which the emitted trace
+   * queries let an external solver verify.
+   *
+   * @param n the STAR_CONTAINS literal
+   * @param cones the cones with their originating disjuncts, as returned by
+   *   `getCones`
+   * @return each membership formula paired with the disjunct it encodes
+   */
+  std::vector<std::pair<Node, Node>> getMembershipDisjuncts(
       Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
+
+  /**
+   * Performs the eager Hilbert-basis reduction for a single STAR_CONTAINS
+   * literal. Generates the star reduction lemma equating `literal` with the
+   * conjunction of star constraints derived from the cones of `lambda`
+   * (== literal[0]), and sends it via the inference manager. Does nothing if
+   * the literal has already been processed.
+   */
+  void eagerCheckStar(Node literal, Node lambda);
+
+  /**
+   * Performs one round of the lazy Hilbert-basis reduction for a single
+   * STAR_CONTAINS literal: refines the literal's subsolver with the negations
+   * of the cone-disjuncts discovered since the previous round, then delegates
+   * to `lazyHilbert`. Does nothing if the literal has been fully reduced.
+   */
+  void lazyCheckStar(Node literal,
+                     Node lambda,
+                     const std::map<Node, Node>& arithModel);
+
+  /**
+   * A persistent, incremental subsolver dedicated to one lambda (one
+   * STAR_CONTAINS predicate). It is used to enumerate the convex cells of the
+   * predicate's satisfying region: it is seeded once with the (nonnegative)
+   * predicate at the base user level and then refined across rounds with the
+   * negations of the discovered cone-disjuncts, either one assertion per
+   * disjunct (the default) or as a single cumulative refined formula under
+   * push/pop (option arith-liastar-push-pop); see `lazyCheckStar`.
+   */
+  struct Subsolver
+  {
+    /** the incremental QF_LIA subsolver. */
+    std::unique_ptr<SolverEngine> engine;
+    /** the lambda's bound variables ... */
+    std::vector<Node> from;
+    /** ... and the fresh skolem constants substituted for them, since a
+     * subsolver cannot be given a formula with free (bound) variables. */
+    std::vector<Node> to;
+    /**
+     * The (nonnegative) predicate in skolem space. It is already asserted in
+     * `engine` at the base user level (so it survives every pop); it is kept
+     * only to read off the predicate's atoms when building a disjunct from
+     * the model.
+     */
+    Node base;
+    /**
+     * Push/pop strategy only: the union (disjunction), in skolem space, of
+     * the cone-disjuncts discovered so far. Its negation is the refined
+     * formula currently asserted in `engine`.
+     */
+    Node covered;
+    /** Push/pop strategy only: whether a refined formula is currently
+     * asserted, i.e. whether `engine` has a pushed frame to pop before
+     * asserting the next refined formula. */
+    bool pushed = false;
+    /** number of cones in `d_lazyCones[lambda]` already negated in `engine`
+     * (or, for the push/pop strategy, folded into `covered`). */
+    size_t negated = 0;
+    /**
+     * Semantic generalization only: the probe subsolver, seeded with the
+     * negation of `base`, used as the entailment oracle by
+     * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
+     */
+    std::unique_ptr<SolverEngine> probe;
+    /**
+     * Cut synthesis only: the validity oracle, with `base` asserted. A
+     * candidate inequality c*y >= 0 is valid for every point of the
+     * predicate iff checking `c*y <= -1` as an assumption answers unsat;
+     * a sat answer yields a counterexample point for the CEGIS loop.
+     */
+    std::unique_ptr<SolverEngine> validity;
+  };
+
+  /**
+   * Returns the subsolver for `lambda`, creating and seeding it (with the
+   * nonnegative predicate) on first use.
+   */
+  Subsolver& getSubsolver(Node lambda);
+
+  /**
+   * One lazy refinement round for `literal`: ask the subsolver for a model in
+   * a region of the predicate not yet covered by a cone, read off the convex
+   * cell containing it (`LiaStarUtils::getDisjunct`), and hand it to
+   * `processDisjunct`.
+   */
+  void lazyHilbert(Node literal,
+                   Subsolver& sub,
+                   const std::vector<Node>& bias = {});
+
+  /**
+   * Shared tail of one lazy refinement round (used by both the subsolver and
+   * the main-solver enumeration): turn `disjunct` -- a freshly discovered
+   * cell of the predicate, in bound-variable space -- into a cone, rebuild
+   * the star constraints over all cones found so far, and emit the reduction
+   * lemma: guarded by a fresh boolean while the star is still an
+   * under-approximation (`complete` false), unconditional once every cell is
+   * covered (`complete` true, `disjunct` is then the false constraint).
+   */
+  void processDisjunct(Node literal, Node disjunct, bool complete);
+
+  /**
+   * State for enumerating the convex cells of one lambda's predicate in the
+   * main solver (option arith-liastar-main-solver), replacing the dedicated
+   * subsolver. The lambda's bound variables are replaced by fresh skolems
+   * (`from` -> `to`) that live in the main solver, constrained through a
+   * chain of stage guards: h_0 => base, and for every discovered
+   * cone-disjunct D_k a fresh h_k with h_k => h_{k-1} and h_k => not(D_k)
+   * (two constant-size lemmas per stage, accumulate style). The current
+   * stage guard h_k therefore activates `base and not(D_1) ... and not(D_k)`,
+   * i.e. it places the skolems in a cell not yet covered by a cone; the cell
+   * is then read off the main solver's candidate arithmetic model.
+   *
+   * The enumeration is driven by the literal itself: each stage emits the
+   * (satisfiability-preserving) driver lemma
+   *     literal => (p[v] or star_k or h_k),
+   * so a model that claims the literal without certifying it must activate
+   * h_k and thereby exhibit a fresh cell; once every cell is covered the h_k
+   * branch closes by conflict and the driver leaves exactly the certified
+   * branches. Completeness is additionally detected when the SAT solver
+   * fixes the stage guard false at level 0 (`Valuation::isFixed`), at which
+   * point the exact reduction is emitted.
+   */
+  struct MainEnum
+  {
+    /** the lambda's bound variables ... */
+    std::vector<Node> from;
+    /** ... and the fresh skolems substituted for them in the main solver. */
+    std::vector<Node> to;
+    /** The (nonnegative) predicate in skolem space. It is asserted under the
+     * first stage guard; it is also used to read off the predicate's atoms
+     * when building a disjunct from the model. */
+    Node base;
+    /** The current stage guard h_k (a decision variable, biased true). */
+    Node guard;
+    /** The first stage guard h_0 (kept to re-register the split's proof). */
+    Node firstGuard;
+    /** The split lemma on the first stage guard. */
+    Node split;
+    /**
+     * Every enumeration lemma emitted for this lambda (the guarded predicate
+     * and the per-stage implications). They are re-queued every round: the
+     * inference manager's user-context lemma cache drops the duplicates for
+     * free, and after a user pop (which retracts the lemmas but not this
+     * non-context state) they are re-sent, so the enumeration constraints
+     * stay in force in every user context.
+     */
+    std::vector<Node> lemmas;
+    /** number of cones in `d_lazyCones[lambda]` already negated via stage
+     * guards. */
+    size_t negated = 0;
+    /**
+     * Semantic generalization only: the probe subsolver, seeded with the
+     * negation of `base`, used as the entailment oracle by
+     * `LiaStarUtils::semanticGeneralize`. Created lazily by `getProbe`.
+     */
+    std::unique_ptr<SolverEngine> probe;
+    /**
+     * Cut synthesis only: the validity oracle, with `base` asserted. A
+     * candidate inequality c*y >= 0 is valid for every point of the
+     * predicate iff checking `c*y <= -1` as an assumption answers unsat;
+     * a sat answer yields a counterexample point for the CEGIS loop.
+     */
+    std::unique_ptr<SolverEngine> validity;
+  };
+
+  /**
+   * Returns the main-solver enumeration state for `lambda`, creating it (and
+   * queueing its seed lemmas: the guard split and `guard => base`) on first
+   * use.
+   */
+  MainEnum& getMainEnum(Node lambda);
+
+  /**
+   * One refinement round of the main-solver lazy strategy for `literal`:
+   * depending on the guard's value in the current SAT assignment, read a
+   * fresh cell from the candidate model (guard true), conclude completeness
+   * (guard fixed false), or bias the guard and wait (otherwise). See
+   * `MainEnum`.
+   */
+  void mainSolverCheckStar(Node literal,
+                           Node lambda,
+                           const std::map<Node, Node>& arithModel);
+
+  /**
+   * Read the cell of `en.base` containing the current candidate arithmetic
+   * model: fix the truth value of every atom of `en.base` under `arithModel`
+   * (consulting `TheoryArith::getCandidateModelValue` for skolems missing
+   * from the map) and return the conjunction in bound-variable space.
+   * Returns the null node if some atom cannot be evaluated to a constant.
+   */
+  Node getModelDisjunct(MainEnum& en, const std::map<Node, Node>& arithModel);
+
+  /**
+   * Queue a main-solver enumeration lemma (InferenceId ARITH_LIA_STAR_ENUM),
+   * skipping lemmas that rewrite to a constant.
+   */
+  void addEnumLemma(Node lemma);
+
+  /**
+   * Return the probe subsolver for semantic cell generalization (option
+   * arith-liastar-generalize-semantic), creating it and asserting the
+   * negation of `base` on first use; returns nullptr when the option is off.
+   * `base` must be in the same skolem space as the literals later probed.
+   */
+  SolverEngine* getProbe(std::unique_ptr<SolverEngine>& probe, Node base);
+
+  /**
+   * Over-approximation cut synthesis state, per lambda (see
+   * `synthesizeCuts`).
+   */
+  struct CutState
+  {
+    /** the cuts emitted so far, over the literal's vector terms */
+    std::vector<Node> cuts;
+    /** sample points of the predicate (module generators of discovered
+     * cones, plus CEGIS counterexamples), as constant vectors */
+    std::vector<std::vector<Node>> points;
+    /** recession directions (Hilbert basis vectors of discovered cones) */
+    std::vector<std::vector<Node>> rays;
+    /** number of cones in `d_lazyCones` already sampled */
+    size_t sampled = 0;
+    /** consecutive failed synthesis attempts; give up after two */
+    uint32_t failures = 0;
+  };
+
+  /**
+   * Over-approximation cut synthesis (option arith-liastar-cuts), called
+   * when the endgame check finds `facts and star_k` unsatisfiable. Any
+   * homogeneous inequality `c * y >= 0` that is valid for every point of
+   * the predicate is preserved under addition, so it holds for every point
+   * of the star set and can be asserted for the vector unconditionally.
+   * The synthesis is a CEGIS loop: pick a target vector v* consistent with
+   * the input facts and the cuts so far; solve for bounded integer
+   * coefficients c with `c * p >= 0` for every known sample point and
+   * recession direction of the predicate and `c * v* <= -1`; check validity
+   * against the predicate (the `Subsolver::validity` oracle); counterexample
+   * points are added as samples and the search repeats. Valid cuts are
+   * emitted as unconditional lemmas; once the cuts refute the input facts,
+   * the main solver derives unsat by itself, without completing the cell
+   * enumeration.
+   */
+  void synthesizeCuts(Node literal, Node lambda, const std::vector<Node>& facts);
+
+  /**
+   * One CEGIS cut search for `synthesizeCuts`: returns a valid cut
+   * `c * v >= 0` separating `target` (the candidate vector's values) from
+   * the star set's over-approximation, or null if none is found within the
+   * iteration and coefficient bounds.
+   */
+  Node synthesizeOneCut(Node literal,
+                        Subsolver& sub,
+                        CutState& cs,
+                        const std::vector<Node>& target,
+                        const std::vector<bool>& zeroCoordinate,
+                        uint64_t coefficientBound);
+
+  /**
+   * Decoupled endgame check (option arith-liastar-endgame=N): every N newly
+   * discovered cones, solve the current arithmetic facts (excluding the
+   * star literals themselves and any fact over liastar-created skolems)
+   * together with the star under-approximation for `literal` in a *fresh*
+   * subsolver -- a clean search for the integer multipliers, unencumbered by
+   * the main search's stale guards, frozen phases, and lemma churn. If it
+   * answers sat, the witness (values of the star formula's variables) is fed
+   * back as a guarded hint lemma `d => (x_1 = c_1 and ...)` with `d` a fresh
+   * decision variable biased true: sound unconditionally (`d` is fresh), and
+   * it steers the main solver directly onto the verified model, after which
+   * the model-value shortcut accepts.
+   *
+   * @return true if a hint was emitted (the round is then complete)
+   */
+  bool tryEndgame(Node literal, Node lambda);
+
+  /**
+   * Open a new enumeration stage for `en`: a fresh guard that activates the
+   * previous stage's constraints plus the negation of the newly covered
+   * cell `skolemDisjunct` (in skolem space).
+   */
+  void advanceStage(MainEnum& en, Node skolemDisjunct);
+
+  /**
+   * Emit, once per (literal, stage), the driver lemma
+   * `literal => (p[v] or star or guard)`, where `star` is the last star
+   * under-approximation for `literal`, or `v = 0` (the empty sum, which is
+   * always in the star set) before any cone has been discovered; see
+   * `MainEnum`. Duplicates are dropped by the inference manager's
+   * user-context lemma cache.
+   */
+  void emitDriverLemma(Node literal, MainEnum& en);
 
   /** node manager */
   NodeManager* d_nm;
@@ -135,27 +529,114 @@ class LiaStarExtension : EnvObj
   Node d_false;
   Node d_zero;
   Node d_one;
-  // The theory of arithmetic containing this extension.
+  /** The theory of arithmetic containing this extension. */
   TheoryArith& d_arith;
-  /** A reference to the arithmetic state object */
+  /** A reference to the arithmetic state object. */
   TheoryState& d_astate;
+  /** The inference manager of TheoryArith, used to send lemmas. */
   InferenceManager& d_im;
   /**
-   * The number of times we have the called main check method
-   * (modelBasedRefinement). This counter is used for interleaving strategies.
+   * The number of times the main check method (checkFullEffort) has been
+   * called. Currently only incremented; intended for interleaving strategies.
    */
   unsigned d_checkCounter;
+  /** Callback for the extended theory below. */
   ExtTheoryCallback d_extTheoryCb;
   /** Extended theory, responsible for context-dependent simplification. */
   ExtTheory d_extTheory;
   /** Do we have any liaStar terms? */
   context::CDO<bool> d_hasLiaStarTerms;
+  /**
+   * The STAR_CONTAINS literals already fully reduced: eagerly reduced
+   * literals, and lazily reduced literals whose cone coverage is complete. No
+   * further lemmas are generated for these.
+   */
   std::vector<Node> d_processedStarTerms;
 
   /**
-   * A CDProofSet that hands out CDProof objects for lemmas.
+   * The cones accumulated so far during the lazy Hilbert-basis reduction,
+   * keyed by lambda. Each call to `addCone` appends the cone for the current
+   * disjunct, and `getStarConstraints` computes the starLia constraints for
+   * the newly added cones, accumulating them across calls.
    */
-  std::unique_ptr<CDProofSet<CDProof>> d_proof;
+  std::map<Node, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>>
+      d_lazyCones;
+
+  /**
+   * The per-cone starLia constraints computed so far for each lambda node
+   * (`n[0]`). `getStarConstraints` only generates the skolems and constraints
+   * for cones in `d_lazyCones` that have not been processed yet, appending
+   * them here, so previously computed constraints (and their skolems) are
+   * reused across refinement rounds. These are the constraints that are
+   * independent of the other cones (the (>= mu 0), (>= l 0), and
+   * (=> (= mu 0) (= l 0)) constraints); the sum constraints span all cones
+   * and are rebuilt each call.
+   */
+  std::map<Node, std::vector<Node>> d_starConstraints;
+  /**
+   * The (point, rays) contributions computed so far for each lambda node,
+   * kept in step with `d_starConstraints`. They are used to rebuild the sum
+   * constraints over all cones on each call to `getStarConstraints`.
+   */
+  std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>> d_lambdas;
+  /** The number of cones in `d_lazyCones[n[0]]` already processed. */
+  std::map<Node, size_t> d_processedCones;
+
+  /**
+   * Every skolem created for star constraints (multipliers, partial sums),
+   * used by `tryEndgame` to exclude main-search facts over these skolems
+   * from the endgame query (their trail polarities reflect the failing
+   * search, not the input).
+   */
+  std::unordered_set<Node> d_starSkolems;
+
+  /** The cone count at the last endgame check, per literal. */
+  std::map<Node, size_t> d_lastEndgameCones;
+
+  /** The guard of the last (still active) endgame hint, per literal;
+   * deactivated when a newer witness replaces it. */
+  std::map<Node, Node> d_lastHint;
+
+  std::map<Node, CutState> d_cutStates;
+
+  /** The decision strategy carrying the active endgame hint; allocated and
+   * registered with the decision manager on the first hint. */
+  std::unique_ptr<LiaStarHintStrategy> d_hintStrategy;
+
+  /**
+   * Partial-sums encoding (option arith-liastar-partial-sums): the current
+   * partial-sum skolems P_k for each lambda, one per coordinate of the star
+   * vector. P_k[i] equals the sum of every discovered cone's contribution to
+   * coordinate i, via the definitions in `d_partialSumDefs`, so the star
+   * formula is just `v = P_k`.
+   */
+  std::map<Node, std::vector<Node>> d_partialSums;
+
+  /**
+   * Partial-sums encoding: every definitional lemma for each lambda -- the
+   * per-cone multiplier constraints and the partial-sum definitions
+   * `P_k[i] = P_{k-1}[i] + contribution_k[i]`. Emitted unguarded by
+   * `processDisjunct` and re-queued each round (the user-context lemma cache
+   * deduplicates and re-sends them after a pop).
+   */
+  std::map<Node, std::vector<Node>> d_partialSumDefs;
+
+  /**
+   * The last starLia under-approximation (`star`) computed for each
+   * STAR_CONTAINS literal by `lazyHilbert`. The model-value check in
+   * `checkFullEffort` uses it to skip refinement when the current model
+   * already satisfies the predicate or this under-approximation.
+   */
+  std::map<Node, Node> d_lastStarLia;
+
+  /**
+   * The fresh boolean guard of the last (still active) tentative reduction
+   * `g => (literal = star)` emitted for each STAR_CONTAINS literal by
+   * `lazyHilbert`. When a later round produces a larger under-approximation,
+   * the previous guard is deactivated (we assert `(not g)`), so at most one
+   * tentative reduction is active per literal.
+   */
+  std::map<Node, Node> d_lastGuard;
 
   /**
    * Lazy proof generator for the lia* lemmas (split, non-negativity, and
@@ -163,6 +644,18 @@ class LiaStarExtension : EnvObj
    */
   std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 
+  /**
+   * The incremental subsolver for each lambda (STAR_CONTAINS predicate). Each
+   * is created lazily and persists for the lifetime of the extension, so the
+   * predicate's cells are enumerated incrementally across refinement rounds.
+   */
+  std::map<Node, Subsolver> d_subsolvers;
+
+  /**
+   * The main-solver enumeration state for each lambda (option
+   * arith-liastar-main-solver). Created lazily, like `d_subsolvers`.
+   */
+  std::map<Node, MainEnum> d_mainEnums;
 }; /* class LiaStarExtension */
 
 }  // namespace liastar

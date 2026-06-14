@@ -87,6 +87,15 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
    */
   void registerContainsReduce(Node lemma, Node literal, Node star);
 
+  /**
+   * Register a guard-deactivation lemma `(not g)` for a fresh boolean guard `g`
+   * whose tentative (under-approximating) reduction has been subsumed by a
+   * larger under-approximation.
+   *
+   * @param lemma the unit `(not g)`
+   */
+  void registerGuardDeactivate(Node lemma);
+
   /** ProofGenerator API. */
   std::shared_ptr<ProofNode> getProofFor(Node fact) override;
   bool hasProofFor(Node fact) override;
@@ -99,6 +108,7 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
     SPLIT,
     NONNEGATIVE,
     CONTAINS_REDUCE,
+    GUARD_DEACTIVATE,
   };
   /**
    * Per-fact metadata. `d_kind` is the lemma kind; `d_aux` is:
@@ -131,6 +141,12 @@ class LiaStarProofGenerator : protected EnvObj, public ProofGenerator
    */
   std::shared_ptr<ProofNode> mkContainsReduceProof(Node lemma,
                                                    const Info& info);
+  /**
+   * Build the proof for a guard-deactivation lemma `(not g)`. A TRUST step,
+   * sound because `g` is a fresh guard.
+   */
+  std::shared_ptr<ProofNode> mkGuardDeactivateProof(Node lemma,
+                                                    const Info& info);
 
   /** Lemma -> kind map. */
   context::CDHashMap<Node, uint32_t> d_kind;

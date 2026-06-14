@@ -208,6 +208,18 @@ enum class InferenceId
   ARITH_LIA_STAR_NONNEGATIVE,
   // lia star split lemma
   ARITH_LIA_STAR_SPLIT,
+  // lia star main-solver cell enumeration lemma (guard => predicate /
+  // guard => negated cone-disjunct)
+  ARITH_LIA_STAR_ENUM,
+  // lia star definitional lemma (per-cone multiplier constraints and
+  // partial-sum skolem definitions, asserted unguarded)
+  ARITH_LIA_STAR_DEFINITION,
+  // lia star endgame hint lemma (guard => witness values found by the
+  // decoupled endgame subsolver)
+  ARITH_LIA_STAR_HINT,
+  // lia star over-approximation cut (a valid homogeneous inequality of the
+  // predicate, asserted for the vector unconditionally)
+  ARITH_LIA_STAR_CUT,
   //-------------------- ff inference
   // ---------------------------------- end arith theory
 

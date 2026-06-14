@@ -99,6 +99,8 @@ const char* toString(TrustId id)
       return "ARITH_LIA_STAR_NONNEGATIVE";
     case TrustId::ARITH_LIA_STAR_CONTAINS_REDUCE:
       return "ARITH_LIA_STAR_CONTAINS_REDUCE";
+    case TrustId::ARITH_LIA_STAR_GUARD_DEACTIVATE:
+      return "ARITH_LIA_STAR_GUARD_DEACTIVATE";
     case TrustId::BV_BITBLAST_CONFLICT: return "BV_BITBLAST_CONFLICT";
     case TrustId::BV_PP_ASSERT: return "BV_PP_ASSERT";
     case TrustId::DIAMONDS: return "DIAMONDS";

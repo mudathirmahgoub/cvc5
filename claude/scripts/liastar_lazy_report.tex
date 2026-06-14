@@ -1256,8 +1256,16 @@ problems);
 100\,s timeout; 12-way parallel harness; one solver thread per instance;
 6\,GB memory cap per process. No answer
 discrepancy was observed anywhere: neither between any two of our
-configurations, nor against the four independent reference solvers
-recorded with the benchmark data.
+configurations, nor against the four sound reference solvers recorded with
+the benchmark data (\textsf{sls}, the eager \textsf{cvc5 lia} encoding,
+\textsf{unfold-5}, \textsf{no-interp}).\footnote{The recorded \textsf{SQLSolver}
+column reports \textsf{sat} on five MAPA instances we (and the four sound
+solvers) decide \textsf{unsat}; this is a known unsoundness of that tool ---
+the independent eager \textsf{cvc5} encoding agrees with our \textsf{unsat},
+and the authors' own \textsf{modified\_SQLSolver} downgrades all five to
+\textsf{unknown}. It is therefore excluded from the agreement count. Every
+command behind these numbers, and this audit, is in
+\texttt{repro/REPRODUCE.md}.}
 
 \begin{table}[h]
 \centering

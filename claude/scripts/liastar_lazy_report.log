@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.3.6)  12 JUN 2026 23:58
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.3.6)  13 JUN 2026 19:24
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1274,9 +1274,8 @@ pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1323 \item \textbf
-                    {Negative results pay rent.} The probe oracle built for the
-]
+l.1326 \item \textbf
+                    {Decouple searches that starve each other.} In-search]
 
 [19] (./liastar_lazy_report.aux)
  ***********
@@ -1287,11 +1286,11 @@ Package rerunfilecheck Info: File `liastar_lazy_report.out' has not changed.
 (rerunfilecheck)             Checksum: 32C88EB372EEFAAA6727A17DAF1273B2;8092.
  ) 
 Here is how much of TeX's memory you used:
- 24597 strings out of 473201
- 458854 string characters out of 5716127
+ 24600 strings out of 473201
+ 458886 string characters out of 5716127
  860876 words of memory out of 5000000
- 47249 multiletter control sequences out of 15000+600000
- 758384 words of font info for 142 fonts, out of 8000000 for 9000
+ 47250 multiletter control sequences out of 15000+600000
+ 761161 words of font info for 143 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  102i,18n,107p,556b,862s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmbx10.pfb></usr/lo
@@ -1316,20 +1315,21 @@ lic/lm/lmri7.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmri
 8.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmri9.pfb></usr
 /local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmss10.pfb></usr/local/tex
 live/2024/texmf-dist/fonts/type1/public/lm/lmss17.pfb></usr/local/texlive/2024/
-texmf-dist/fonts/type1/public/lm/lmssbx10.pfb></usr/local/texlive/2024/texmf-di
-st/fonts/type1/public/lm/lmsy10.pfb></usr/local/texlive/2024/texmf-dist/fonts/t
-ype1/public/lm/lmsy6.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public
-/lm/lmsy7.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmsy8.p
-fb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmsy9.pfb></usr/lo
-cal/texlive/2024/texmf-dist/fonts/type1/public/lm/lmtcsc10.pfb></usr/local/texl
-ive/2024/texmf-dist/fonts/type1/public/lm/lmtk10.pfb></usr/local/texlive/2024/t
-exmf-dist/fonts/type1/public/lm/lmtt10.pfb></usr/local/texlive/2024/texmf-dist/
-fonts/type1/public/lm/lmtt9.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1
-/public/amsfonts/symbols/msam10.pfb>
-Output written on liastar_lazy_report.pdf (19 pages, 696621 bytes).
+texmf-dist/fonts/type1/public/lm/lmss9.pfb></usr/local/texlive/2024/texmf-dist/
+fonts/type1/public/lm/lmssbx10.pfb></usr/local/texlive/2024/texmf-dist/fonts/ty
+pe1/public/lm/lmsy10.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public
+/lm/lmsy6.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmsy7.p
+fb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/lm/lmsy8.pfb></usr/lo
+cal/texlive/2024/texmf-dist/fonts/type1/public/lm/lmsy9.pfb></usr/local/texlive
+/2024/texmf-dist/fonts/type1/public/lm/lmtcsc10.pfb></usr/local/texlive/2024/te
+xmf-dist/fonts/type1/public/lm/lmtk10.pfb></usr/local/texlive/2024/texmf-dist/f
+onts/type1/public/lm/lmtt10.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1
+/public/lm/lmtt9.pfb></usr/local/texlive/2024/texmf-dist/fonts/type1/public/ams
+fonts/symbols/msam10.pfb>
+Output written on liastar_lazy_report.pdf (19 pages, 718515 bytes).
 PDF statistics:
- 531 PDF objects out of 1000 (max. 8388607)
- 424 compressed objects within 5 object streams
- 115 named destinations out of 1000 (max. 500000)
+ 541 PDF objects out of 1000 (max. 8388607)
+ 431 compressed objects within 5 object streams
+ 116 named destinations out of 1000 (max. 500000)
  253 words of extra memory for PDF output out of 10000 (max. 10000000)
 

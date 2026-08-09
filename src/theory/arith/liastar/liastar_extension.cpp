@@ -72,6 +72,10 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
   d_false = nodeManager()->mkConst(false);
   d_zero = nodeManager()->mkConstInt(Rational(0));
   d_one = nodeManager()->mkConstInt(Rational(1));
+  if (env.isTheoryProofProducing())
+  {
+    d_proofGen.reset(new LiaStarProofGenerator(env, env.getUserContext()));
+  }
 }
 
 LiaStarExtension::~LiaStarExtension() {}
@@ -149,12 +153,21 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       // by the SAT solver, corrupting unsat cores and other contexts
       // where the literal does not hold.
       Node lemma = literal.impNode(nonnegative);
+      if (d_proofGen != nullptr)
+      {
+        d_proofGen->registerNonnegative(lemma, literal);
+      }
       d_im.addPendingLemma(
-          lemma, InferenceId::ARITH_LIA_STAR_NONNEGATIVE, nullptr);
+          lemma, InferenceId::ARITH_LIA_STAR_NONNEGATIVE, d_proofGen.get());
     }
     // add a spliting lemma for vector predicate
     Node split = vectorPredicate.orNode(vectorPredicate.notNode());
-    d_im.addPendingLemma(split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+    if (d_proofGen != nullptr)
+    {
+      d_proofGen->registerSplit(split, vectorPredicate);
+    }
+    d_im.addPendingLemma(
+        split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
     d_im.doPendingLemmas();
     if (d_im.hasSentLemma())
     {
@@ -261,7 +274,12 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
     star = rewrite(star);
     Node lemma = literal.eqNode(star);
     Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
-    d_im.addPendingLemma(lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
+    if (d_proofGen != nullptr)
+    {
+      d_proofGen->registerContainsReduce(lemma, literal, star);
+    }
+    d_im.addPendingLemma(
+        lemma, InferenceId::ARITH_LIA_STAR_EXISTS, d_proofGen.get());
     d_processedStarTerms.push_back(literal);
     ++d_stats.d_starTermsReduced;
     d_im.doPendingLemmas();

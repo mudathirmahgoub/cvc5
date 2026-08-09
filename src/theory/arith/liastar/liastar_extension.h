@@ -21,6 +21,7 @@
 #include "expr/node.h"
 #include "libnormaliz/libnormaliz.h"
 #include "smt/env_obj.h"
+#include "theory/arith/liastar/liastar_proof_generator.h"
 #include "theory/arith/liastar/liastar_stats.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
@@ -145,6 +146,12 @@ class LiaStarExtension : EnvObj
   /** Do we have any liaStar terms? */
   context::CDO<bool> d_hasLiaStarTerms;
   std::vector<Node> d_processedStarTerms;
+
+  /**
+   * Lazy proof generator for the lia* lemmas (split, non-negativity, and
+   * STAR_CONTAINS reduction). Allocated only when proofs are enabled.
+   */
+  std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 
   /** Statistics for the liastar extension */
   LiaStarStatistics d_stats;

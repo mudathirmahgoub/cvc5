@@ -302,6 +302,24 @@ class TheorySetsPrivate : protected EnvObj
   bool d_fullCheckIncomplete;
   /** The reason we set the above flag to true */
   IncompleteId d_fullCheckIncompleteId;
+  /** deferred cardinality + higher-order incompleteness
+   *
+   * Combining cardinality with higher-order set kinds is a source of
+   * incompleteness because the cardinality solver may pad sets with slack
+   * elements during model construction, which the (membership-driven)
+   * higher-order inference schemas never constrain. When the only higher-order
+   * kind involved is set.filter, we do not give up during the full effort check
+   * but instead check at last call effort whether the slack elements the
+   * cardinality solver actually created could be given values satisfying the
+   * relevant set.filter predicates. This flag indicates that this check is
+   * pending; see checkLastCallHoCard.
+   */
+  bool d_deferHoCardCheck;
+  /**
+   * Perform the deferred check described above. Called at last call effort,
+   * after the candidate model has been built.
+   */
+  void checkLastCallHoCard();
 
  public:
   /**
@@ -329,6 +347,8 @@ class TheorySetsPrivate : protected EnvObj
   //--------------------------------- standard check
   /** Post-check, called after the fact queue of the theory is processed. */
   void postCheck(Theory::Effort level);
+  /** Does this theory need a check at last call effort? */
+  bool needsCheckLastEffort() const { return d_deferHoCardCheck; }
   /** Notify new fact */
   void notifyFact(TNode atom, bool polarity, TNode fact);
   //--------------------------------- end standard check
@@ -418,6 +438,14 @@ class TheorySetsPrivate : protected EnvObj
    * higher order constraints is asserted to this theory.
    */
   bool d_higher_order_kinds_enabled;
+
+  /** are higher order set operators other than set.filter enabled?
+   *
+   * Set during a full effort check, like the above. We track this separately
+   * since the deferred cardinality check (see d_deferHoCardCheck) only knows
+   * how to account for set.filter constraints on slack elements.
+   */
+  bool d_higher_order_non_filter_kinds_enabled;
 
   /** a map that maps each set to an existential quantifier generated for
    * operator is_singleton */

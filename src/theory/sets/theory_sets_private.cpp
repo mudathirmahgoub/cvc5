@@ -47,6 +47,7 @@ TheorySetsPrivate::TheorySetsPrivate(Env& env,
       d_termProcessed(userContext()),
       d_fullCheckIncomplete(false),
       d_fullCheckIncompleteId(IncompleteId::UNKNOWN),
+      d_deferHoCardCheck(false),
       d_external(external),
       d_state(state),
       d_im(im),
@@ -58,6 +59,7 @@ TheorySetsPrivate::TheorySetsPrivate(Env& env,
       d_hasEnabledCard(false),
       d_card_enabled(false),
       d_higher_order_kinds_enabled(false),
+      d_higher_order_non_filter_kinds_enabled(false),
       d_cpacb(cpacb)
 {
   d_true = nodeManager()->mkConst(true);
@@ -239,7 +241,9 @@ void TheorySetsPrivate::fullEffortReset()
   Assert(d_equalityEngine->consistent());
   d_fullCheckIncomplete = false;
   d_fullCheckIncompleteId = IncompleteId::UNKNOWN;
+  d_deferHoCardCheck = false;
   d_higher_order_kinds_enabled = false;
+  d_higher_order_non_filter_kinds_enabled = false;
   d_card_enabled = false;
   d_rels_enabled = false;
   // reset the state object
@@ -334,6 +338,10 @@ void TheorySetsPrivate::fullEffortCheck()
         else if (isHigherOrderKind(nk))
         {
           d_higher_order_kinds_enabled = true;
+          if (nk != Kind::SET_FILTER)
+          {
+            d_higher_order_non_filter_kinds_enabled = true;
+          }
         }
       }
       ++eqcs_i;
@@ -354,8 +362,19 @@ void TheorySetsPrivate::fullEffortCheck()
     {
       if (d_higher_order_kinds_enabled)
       {
-        d_fullCheckIncomplete = true;
-        d_fullCheckIncompleteId = IncompleteId::SETS_HO_CARD;
+        if (d_higher_order_non_filter_kinds_enabled)
+        {
+          d_fullCheckIncomplete = true;
+          d_fullCheckIncompleteId = IncompleteId::SETS_HO_CARD;
+        }
+        else
+        {
+          // Only set.filter is involved. The cardinality solver may still pad
+          // sets with slack elements that violate the filter constraints, but it
+          // tries to choose values that satisfy them. Defer the decision to last
+          // call effort, where we can see the slack elements it actually made.
+          d_deferHoCardCheck = true;
+        }
       }
       if (options().quantifiers.fmfBound)
       {
@@ -1384,8 +1403,30 @@ void TheorySetsPrivate::postCheck(Theory::Effort level)
         }
       }
     }
+    else if (level == Theory::EFFORT_LAST_CALL)
+    {
+      checkLastCallHoCard();
+    }
   }
   Trace("sets-check") << "Sets finish Check effort " << level << std::endl;
+}
+
+void TheorySetsPrivate::checkLastCallHoCard()
+{
+  if (!d_deferHoCardCheck)
+  {
+    return;
+  }
+  // The candidate model has been built at this point, so the cardinality solver
+  // knows whether it had to pad any set with a slack element that it could not
+  // give a value satisfying the set.filter predicates constraining that set.
+  if (d_cardSolver->hasUnconstrainedSlackElements())
+  {
+    Trace("sets-incomplete")
+        << "Sets : incomplete because of cardinality with set.filter."
+        << std::endl;
+    d_im.setModelUnsound(IncompleteId::SETS_HO_CARD);
+  }
 }
 
 void TheorySetsPrivate::notifyFact(TNode atom,

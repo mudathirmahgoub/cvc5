@@ -153,6 +153,23 @@ class CardinalityExtension : protected EnvObj
    */
   const std::vector<Node>& getFiniteTypeMembers(TypeNode typeNode);
 
+  /**
+   * Did model construction introduce a slack element that is not guaranteed to
+   * satisfy the set.filter constraints applying to the set it was added to?
+   *
+   * Slack elements are introduced by mkModelValueElementsFor to pad a set up to
+   * the cardinality assigned to it by arithmetic. Such an element is invisible
+   * to the (lazy, membership-driven) higher-order inference schemas of
+   * TheorySetsPrivate, so in general it may violate them. We try to pick values
+   * that satisfy the applicable set.filter predicates; this returns true if we
+   * failed to do so for at least one slack element, in which case the model is
+   * not trustworthy. Only meaningful after a call to mkModelValueElementsFor.
+   */
+  bool hasUnconstrainedSlackElements() const
+  {
+    return d_unconstrainedSlack;
+  }
+
  private:
   /** constants */
   Node d_true;
@@ -410,6 +427,58 @@ class CardinalityExtension : protected EnvObj
    * (<= (card t) n) where t is an infinite type
    */
   std::map<TypeNode, Node> d_infiniteTypeUnivCardSkolems;
+
+  //-------------------------- constrained slack elements
+  /** See hasUnconstrainedSlackElements. */
+  bool d_unconstrainedSlack;
+  /**
+   * The values we have handed out as constrained slack elements, per element
+   * type. Used to keep slack elements of the same type distinct from each
+   * other, since they may end up in the same set.
+   */
+  std::map<TypeNode, std::vector<Node>> d_constrainedSlack;
+  /**
+   * Compute the set.filter predicates that constrain the elements of the
+   * cardinality graph leaf eqc, as pairs (lambda, polarity): a new element x of
+   * eqc must be such that (lambda x) rewrites to polarity.
+   *
+   * For a term (set.filter P A), whether P must hold of x depends on which of A
+   * and (set.filter P A) the region eqc contributes to: if it contributes to
+   * both then x is in the filtered set and P must hold of it, if it contributes
+   * only to A then x is excluded from the filtered set and P must not hold.
+   *
+   * Returns false if the constraints on eqc cannot be determined, in which case
+   * no slack element for eqc can be justified.
+   */
+  bool getRegionPredicates(Node eqc,
+                           std::vector<std::pair<Node, bool>>& preds);
+  /**
+   * Set contains to whether the model value of set equivalence class s includes
+   * the cardinality graph leaf region. Returns false if this cannot be
+   * determined, in which case contains is left untouched.
+   */
+  bool valueContainsRegion(Node s, Node region, bool& contains);
+  /**
+   * Return the lambda term in the equivalence class of the (unary) predicate p,
+   * or the null node if there is none.
+   */
+  Node getLambdaFor(Node p);
+  /**
+   * Try to construct a constant of elementType that satisfies preds and that is
+   * distinct from every constant already used for this element type. Returns
+   * the null node if no such constant was found within our search budget.
+   *
+   * The valuation v is used to resolve the elements of els that are not
+   * themselves constants to their candidate model values, which is needed to
+   * keep the new element distinct from them.
+   */
+  Node mkConstrainedSlackElement(Valuation& v,
+                                 const TypeNode& elementType,
+                                 const std::vector<std::pair<Node, bool>>& preds,
+                                 const std::vector<Node>& els);
+  /** Does c satisfy all of preds? */
+  bool satisfiesPredicates(const Node& c,
+                           const std::vector<std::pair<Node, bool>>& preds);
 
 }; /* class CardinalityExtension */
 

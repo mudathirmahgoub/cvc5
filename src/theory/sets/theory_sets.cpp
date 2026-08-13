@@ -98,6 +98,11 @@ void TheorySets::finishInit()
 
 void TheorySets::postCheck(Effort level) { d_internal->postCheck(level); }
 
+bool TheorySets::needsCheckLastEffort()
+{
+  return d_internal->needsCheckLastEffort();
+}
+
 void TheorySets::notifyFact(TNode atom,
                             bool polarity,
                             TNode fact,

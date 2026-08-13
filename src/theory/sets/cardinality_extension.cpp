@@ -21,9 +21,11 @@
 #include "theory/rewriter.h"
 #include "theory/sets/normal_form.h"
 #include "theory/theory_model.h"
+#include "theory/type_enumerator.h"
 #include "theory/valuation.h"
 #include "util/cardinality.h"
 #include "util/rational.h"
+#include "util/string.h"
 
 using namespace std;
 using namespace cvc5::internal::kind;
@@ -41,7 +43,8 @@ CardinalityExtension::CardinalityExtension(Env& env,
       d_im(im),
       d_treg(treg),
       d_card_processed(userContext()),
-      d_finite_type_constants_processed(false)
+      d_finite_type_constants_processed(false),
+      d_unconstrainedSlack(false)
 {
   d_true = nodeManager()->mkConst(true);
   d_zero = nodeManager()->mkConstInt(Rational(0));
@@ -55,6 +58,8 @@ void CardinalityExtension::reset()
   d_finite_type_constants_processed = false;
   d_finite_type_slack_elements.clear();
   d_univProxy.clear();
+  d_unconstrainedSlack = false;
+  d_constrainedSlack.clear();
 }
 void CardinalityExtension::registerTerm(Node n)
 {
@@ -1078,8 +1083,39 @@ void CardinalityExtension::mkModelValueElementsFor(
         // get all members of this finite type
         collectFiniteTypeSetElements(model);
       }
+      // If we are about to pad this set, determine the set.filter constraints
+      // that its elements are subject to. When there are none, an arbitrary
+      // slack element is fine. Otherwise we try to pick values satisfying them,
+      // and record that the model is not trustworthy if we cannot.
+      std::vector<std::pair<Node, bool>> preds;
+      bool predsOk = els.size() >= vu || getRegionPredicates(eqc, preds);
+      // Cap the search effort. Beyond this many elements we fall back to
+      // arbitrary slack elements, and hence to reporting the model as
+      // untrustworthy, rather than spending unbounded time here.
+      bool trySynth = predsOk && els.size() < vu && (vu - els.size()) <= 1024;
       while (els.size() < vu)
       {
+        if (!preds.empty() || !predsOk)
+        {
+          // this region is constrained: try to satisfy the constraints
+          Node c = trySynth
+                       ? mkConstrainedSlackElement(val, elementType, preds, els)
+                       : Node::null();
+          if (!c.isNull())
+          {
+            Trace("sets-model") << "Added constrained slack element " << c
+                                << " to set " << eqc << std::endl;
+            d_constrainedSlack[elementType].push_back(c);
+            els.push_back(nm->mkNode(Kind::SET_SINGLETON, c));
+            continue;
+          }
+          // We could not justify a slack element for this region. Fall through
+          // to an arbitrary one, but flag the model as untrustworthy.
+          Trace("sets-model")
+              << "Unconstrained slack element required for set " << eqc
+              << std::endl;
+          d_unconstrainedSlack = true;
+        }
         if (elementTypeFinite)
         {
           // At this point we are sure the formula is satisfiable and all
@@ -1131,6 +1167,256 @@ void CardinalityExtension::mkModelValueElementsFor(
       }
     }
   }
+}
+
+bool CardinalityExtension::valueContainsRegion(Node s,
+                                               Node region,
+                                               bool& contains)
+{
+  if (s == region)
+  {
+    contains = true;
+    return true;
+  }
+  std::map<Node, std::vector<Node>>::iterator it = d_nf.find(s);
+  if (it == d_nf.end())
+  {
+    // we do not know how the value of s decomposes into regions, so we cannot
+    // tell whether adding an element to region would change it
+    return false;
+  }
+  contains = std::find(it->second.begin(), it->second.end(), region)
+             != it->second.end();
+  return true;
+}
+
+Node CardinalityExtension::getLambdaFor(Node p)
+{
+  // a unary lambda is the only form we can evaluate in satisfiesPredicates
+  auto isUnaryLambda = [](const Node& n) {
+    return n.getKind() == Kind::LAMBDA && n[0].getNumChildren() == 1;
+  };
+  if (isUnaryLambda(p))
+  {
+    return p;
+  }
+  // Predicates of set.filter terms are typically purification skolems standing
+  // for a lambda; the equality between the two is not part of our equality
+  // engine, since it is owned by the theory of UF.
+  Node op = SkolemManager::getOriginalForm(p);
+  if (isUnaryLambda(op))
+  {
+    return op;
+  }
+  eq::EqualityEngine* ee = d_state.getEqualityEngine();
+  if (ee->hasTerm(p))
+  {
+    eq::EqClassIterator it =
+        eq::EqClassIterator(ee->getRepresentative(p), ee);
+    while (!it.isFinished())
+    {
+      if (isUnaryLambda(*it))
+      {
+        return *it;
+      }
+      ++it;
+    }
+  }
+  Trace("sets-model") << "No lambda for filter predicate " << p << std::endl;
+  return Node::null();
+}
+
+bool CardinalityExtension::getRegionPredicates(
+    Node eqc, std::vector<std::pair<Node, bool>>& preds)
+{
+  for (const Node& f : d_state.getFilterTerms())
+  {
+    Node repA = d_state.getRepresentative(f[1]);
+    Node repF = d_state.getRepresentative(f);
+    bool inA = false;
+    bool inF = false;
+    if (!valueContainsRegion(repA, eqc, inA)
+        || !valueContainsRegion(repF, eqc, inF))
+    {
+      return false;
+    }
+    if (!inA && !inF)
+    {
+      // this region does not contribute to either set, hence adding an element
+      // to it does not affect this filter term
+      continue;
+    }
+    if (!inA)
+    {
+      // (set.filter P A) should always be a subset of A; if the cardinality
+      // graph does not reflect that, do not attempt to reason here
+      return false;
+    }
+    Node lam = getLambdaFor(f[0]);
+    if (lam.isNull())
+    {
+      // the predicate is not a concrete lambda, so we cannot evaluate it
+      return false;
+    }
+    Trace("sets-model") << "Region " << eqc << " requires " << lam << " = "
+                        << (inF ? "true" : "false") << " from " << f
+                        << std::endl;
+    preds.emplace_back(lam, inF);
+  }
+  return true;
+}
+
+bool CardinalityExtension::satisfiesPredicates(
+    const Node& c, const std::vector<std::pair<Node, bool>>& preds)
+{
+  for (const std::pair<Node, bool>& p : preds)
+  {
+    // beta reduce (p.first c) and evaluate
+    Node body = p.first[1].substitute(TNode(p.first[0][0]), TNode(c));
+    Node v = rewrite(body);
+    if (!v.isConst() || v.getConst<bool>() != p.second)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+Node CardinalityExtension::mkConstrainedSlackElement(
+    Valuation& v,
+    const TypeNode& elementType,
+    const std::vector<std::pair<Node, bool>>& preds,
+    const std::vector<Node>& els)
+{
+  NodeManager* nm = nodeManager();
+  // Collect the values of every element of every set with this element type.
+  // We require all of them to be known constants: only then do we know exactly
+  // how many distinct elements each set has, and hence that introducing a value
+  // different from all of them keeps every cardinality constraint satisfied. If
+  // some element's value is still open, it could later coincide with the value
+  // we pick, leaving a set too small to meet its cardinality, so we give up.
+  std::unordered_set<Node> used;
+  auto addValue = [&](Node e, Node& val) {
+    val = e;
+    if (!val.isConst())
+    {
+      val = v.getCandidateModelValue(val);
+      if (val.isNull() || !val.isConst())
+      {
+        Trace("sets-model") << "No value for element " << e << std::endl;
+        return false;
+      }
+    }
+    used.insert(val);
+    return true;
+  };
+  for (const Node& seqc : d_state.getSetsEqClasses())
+  {
+    if (seqc.getType().getSetElementType() != elementType)
+    {
+      continue;
+    }
+    for (const std::pair<const Node, Node>& m : d_state.getMembers(seqc))
+    {
+      Node val;
+      if (!addValue(m.second[0], val))
+      {
+        return Node::null();
+      }
+    }
+  }
+  // The values already in the set we are padding are our seeds below: the
+  // predicates of this region hold of them, so small perturbations of them are
+  // good candidates.
+  std::vector<Node> seeds;
+  for (const Node& e : els)
+  {
+    if (e.getKind() != Kind::SET_SINGLETON)
+    {
+      return Node::null();
+    }
+    Node val;
+    if (!addValue(e[0], val))
+    {
+      return Node::null();
+    }
+    seeds.push_back(val);
+  }
+  // Slack elements we handed out earlier may share a set with this one.
+  std::map<TypeNode, std::vector<Node>>::iterator itc =
+      d_constrainedSlack.find(elementType);
+  if (itc != d_constrainedSlack.end())
+  {
+    for (const Node& c : itc->second)
+    {
+      used.insert(c);
+      seeds.push_back(c);
+    }
+  }
+  // A candidate must be new: if it were already a term of our equality engine
+  // it could be forced equal to an element we are trying to stay distinct from.
+  eq::EqualityEngine* ee = d_state.getEqualityEngine();
+  auto acceptable = [&](const Node& c) {
+    return used.find(c) == used.end() && !ee->hasTerm(c)
+           && satisfiesPredicates(c, preds);
+  };
+  // Strategy 1: mutate a value that is already known to work. This is the only
+  // strategy with a realistic chance for types like String, whose enumeration
+  // reaches a value like "fooAbar" far too slowly.
+  for (const Node& seed : seeds)
+  {
+    if (!satisfiesPredicates(seed, preds))
+    {
+      continue;
+    }
+    std::vector<Node> cands;
+    if (elementType.isString())
+    {
+      const std::vector<unsigned>& vec = seed.getConst<String>().getVec();
+      // insert one character at each position, preferring interior positions so
+      // that prefix and suffix constraints on the seed are preserved
+      for (unsigned pos = 0; pos <= vec.size(); pos++)
+      {
+        for (unsigned ch = 'A'; ch <= 'Z'; ch++)
+        {
+          std::vector<unsigned> nvec(vec.begin(), vec.begin() + pos);
+          nvec.push_back(ch);
+          nvec.insert(nvec.end(), vec.begin() + pos, vec.end());
+          cands.push_back(nm->mkConst(String(nvec)));
+        }
+      }
+    }
+    else if (elementType.isInteger() || elementType.isReal())
+    {
+      Rational r = seed.getConst<Rational>();
+      for (uint32_t i = 1; i <= 256; i++)
+      {
+        Rational off(i);
+        cands.push_back(nm->mkConstRealOrInt(elementType, r + off));
+        cands.push_back(nm->mkConstRealOrInt(elementType, r - off));
+      }
+    }
+    for (const Node& c : cands)
+    {
+      if (acceptable(c))
+      {
+        return c;
+      }
+    }
+  }
+  // Strategy 2: enumerate the type, within a budget.
+  if (elementType.isFirstClass())
+  {
+    TypeEnumerator te(elementType);
+    for (uint32_t i = 0; i < 1024 && !te.isFinished(); i++, ++te)
+    {
+      if (acceptable(*te))
+      {
+        return *te;
+      }
+    }
+  }
+  return Node::null();
 }
 
 void CardinalityExtension::collectFiniteTypeSetElements(TheoryModel* model)

@@ -64,6 +64,12 @@ class TheorySets : public Theory
   void postCheck(Effort level) override;
   /** Notify fact */
   void notifyFact(TNode atom, bool pol, TNode fact, bool isInternal) override;
+  /**
+   * Needs check at last call effort, which is the case when we must inspect the
+   * candidate model to determine whether combining cardinality with set.filter
+   * led to an untrustworthy model.
+   */
+  bool needsCheckLastEffort() override;
   //--------------------------------- end standard check
   /** Collect model values in m based on the relevant terms given by termSet */
   bool collectModelValues(TheoryModel* m,

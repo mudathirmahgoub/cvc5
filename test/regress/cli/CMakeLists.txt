@@ -1883,6 +1883,7 @@ set(regress_0_tests
   regress0/rels/rel_tc_2_1.cvc.smt2
   regress0/rels/rel_tc_3_1.cvc.smt2
   regress0/rels/rel_tc_3.cvc.smt2
+  regress0/rels/rel_tc_7.cvc.smt2
   regress0/rels/rel_tc_8.cvc.smt2
   regress0/rels/rel_tp_3_1.cvc.smt2
   regress0/rels/rel_tp_join_0.cvc.smt2
@@ -4324,8 +4325,6 @@ set(regression_disabled_tests
   # timeout on some builds with proofs, unsat cores after #12178
   regress0/bv/bv_to_int_bvmul2.smt2
   regress0/bv/test00.smtv1.smt2
-  # timeout after fixing upwards closure for relations
-  regress0/rels/rel_tc_7.cvc.smt2
   # FIXME #1649
   regress0/datatypes/datatype-dump.cvc.smt2
   # no longer support overloaded symbols across multiple parametric datatypes

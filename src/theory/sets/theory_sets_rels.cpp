@@ -833,7 +833,6 @@ void TheorySetsRels::buildTCGraphForRel(Node tc_rel)
   std::map<Node, std::unordered_set<Node> > rel_tc_graph;
 
   Node rel_rep = getRepresentative(tc_rel[0]);
-  Node tc_rel_rep = getRepresentative(tc_rel);
   MEM_IT mem_it = d_rReps_memberReps_cache.find(rel_rep);
   if (mem_it == d_rReps_memberReps_cache.end())
   {

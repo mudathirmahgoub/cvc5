@@ -135,31 +135,26 @@ culminating in a detailed treatment of transitive closure --- by far the most
 intricate part of the file.
 Part~\ref{part:tc} answers a concrete engineering question:
 \emph{should \fn{buildTCGraphForRel} be called once, up front, right after
-\fn{collectRelsInfo}, or twice, as the code did until recently?}
-The answer is \emph{once}: the second call is not merely redundant work, it
-silently destroys the closure edges that the first call's rule application had
-just recorded, and makes the solver diverge on problems it should refute. The
-evidence was in the repository already --- the in-tree regression
-\file{regress0/rels/rel\_tc\_7.cvc.smt2} was \emph{disabled} by the very commit
-that introduced the second call, and it is re-enabled by this work (timeout
-$\to$ \textsf{unsat} in 0.01\,s). A patch, a minimal repro, a differential fuzz
-test against an exact oracle, and a measurement on all 295
-\code{sets}\slash\code{rels} regression benchmarks are included.
+\fn{collectRelsInfo}, or twice under guards, as \code{main} does?}
+The answer is \emph{once}. A second call rebuilds the graph from the base
+relation's members alone, so it discards the closure edges that the first call's
+rule applications have added in the meantime --- which is why \code{main} has to
+guard both call sites to stay correct. Building once makes the guards
+unnecessary, and turns Invariant~\ref{inv:complete} into a property that holds by
+construction rather than by iteration order. The two configurations are
+behaviourally and performance-indistinguishable
+(Section~\ref{sec:measure}): no answer and no inference count differs on 167
+benchmarks, and 900 fuzzed formulas agree with an exact reachability oracle in
+both. So this is a structural argument, not a speedup; a patch, the benchmark
+family that exercises the interaction, the differential fuzzer and the full
+measurement are included.
 
 \medskip\noindent
-\textbf{Status.} Part~\ref{part:tc} was first written against
-\code{8dd659a3a}, where \fn{buildTCGraphForRel} had two \emph{unguarded} call
-sites. While it was being written, PR~\#12793 (\code{c851f83bf}) fixed the same
-destructive overwrite differently, by \emph{guarding} both call sites. The part
-has been updated to compare against that baseline as well, and it is careful to
-separate the two claims: against the unguarded code the one-call patch turns
-divergence into instant refutations (Section~\ref{sec:measure}), while against
-the guarded code it is behaviourally and performance-neutral
-(Section~\ref{sec:measure-vs-guarded}) and the case for it is the invariant it
-establishes, not a speedup. Section~\ref{sec:mergehazard} records why the two
-fixes must not be combined half-way. The implementation is commit
-\code{8bcdf3239} on branch \code{build-trc-graph-once}; line numbers throughout
-refer to it unless stated otherwise.
+\textbf{Baselines.} \code{main} is \code{5cc03f4b9}, which contains
+PR~\#12793 (\code{c851f83bf}, the commit that added the guards). The
+implementation is commit \code{8bcdf3239} on branch
+\code{build-trc-graph-once}; line numbers throughout refer to it unless stated
+otherwise.
 \end{abstract}
 
 \tableofcontents
@@ -1241,11 +1236,12 @@ lines 243--245. Nothing in them survives to the next full-effort round.
 
 \noindent
 Invariants~\ref{inv:nodes}, \ref{inv:base}, \ref{inv:sound}, \ref{inv:tot} and
-\ref{inv:life} have always held. Invariant~\ref{inv:complete} did
-\textbf{not}, until the two fixes discussed in the next part; with Phase~0 it
-holds by construction, because the only assignment to
-\code{d\_tcr\_tcGraph}$[T]$ happens before any rule runs and everything after it
-is an insertion. That is the subject of the next part.
+\ref{inv:life} hold in any arrangement of the code. Invariant~\ref{inv:complete}
+is the delicate one: it holds with Phase~0 by construction, because the only
+assignment to \code{d\_tcr\_tcGraph}$[T]$ happens before any rule runs and
+everything afterwards is an insertion, whereas on \code{main} it takes a
+guard at each of two call sites and holds only per base relation. That is the
+subject of the next part.
 
 %%==========================================================================
 \part{Should \fn{buildTCGraphForRel} be called once or twice?}\label{part:tc}
@@ -1253,58 +1249,27 @@ is an insertion. That is the subject of the next part.
 
 \section{The question}
 
-At commit \code{8dd659a3a}, where this investigation started,
-\fn{buildTCGraphForRel} had two call sites:
+On \code{main} (\code{5cc03f4b9}, whose line numbers this section quotes),
+\fn{buildTCGraphForRel} has two call sites, each guarded:
 
 \begin{center}\small
 \begin{tabular}{@{}llp{7.4cm}@{}}
 \toprule
 & Site & Guard\\
 \midrule
-$\bigstar_1$ & \fn{applyTCRule}, line 644 &
+$\bigstar_1$ & \fn{applyTCRule}, line 645 &
   \code{d\_rReps\_memberReps\_cache} contains \code{tc\_rel[0]}
   \textbf{and} \code{tc\_rel} $\notin$ \code{d\_rel\_nodes}
   \textbf{and} $\rep{\code{tc\_rel[0]}} \notin$ \code{d\_rRep\_tcGraph}\\
-$\bigstar_2$ & \fn{check()} Phase~B, line 189 & \emph{none}\\
+$\bigstar_2$ & \fn{check()} Phase~B, line 191 &
+  \code{*term\_it} $\notin$ \code{d\_rel\_nodes}
+  \textbf{and} $\rep{\code{(*term\_it)[0]}} \notin$ \code{d\_rRep\_tcGraph}\\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-Whenever a closure term $T$ has an asserted member and its base relation $r$
-has one too, $\bigstar_2$ always fires and $\bigstar_1$ fires as well provided
-$r$ happens to be its own representative --- so in the common case both run in
-the same \fn{check()} call, $\bigstar_1$ first (Phase~A) and $\bigstar_2$ second
-(Phase~B). (When $r$ is not its own representative, only $\bigstar_2$ runs, and
-Phase~A reasons without a graph at all; see Section~\ref{sec:tcrule}.) The question is whether to replace them with a single unconditional
-pass immediately after \fn{collectRelsInfo}.
-
-There are therefore three configurations to keep apart, and the rest of this
-part is careful about which one it is measuring against:
-
-\begin{center}\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}llp{6.9cm}@{}}
-\toprule
-Name & Commit & \fn{buildTCGraphForRel} call sites\\
-\midrule
-\emph{unguarded} & \code{8dd659a3a} &
-  $\bigstar_1$ (guarded) and $\bigstar_2$ (\emph{no} guard): the second call
-  overwrites the first call's augmented graph\\
-\emph{guarded} & \code{c851f83bf} (PR~\#12793) &
-  $\bigstar_1$ and $\bigstar_2$, both guarded on \code{d\_rel\_nodes} and
-  \code{d\_rRep\_tcGraph}, so at most one of them builds per base
-  representative\\
-\emph{once} & \code{8bcdf3239} &
-  Phase~0 only, unconditional, one call per closure term, before any rule\\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection{What PR \#12793 changed}\label{sec:12793}
-
-PR~\#12793 diagnosed exactly the overwrite described below and fixed it by
-adding to $\bigstar_2$ the guard that $\bigstar_1$ already had:
+in code:
 
 \begin{lstlisting}
 // Protect d_tcr_tcGraph from being overwritten, if it already exists
@@ -1318,26 +1283,31 @@ if (d_rel_nodes.find(*term_it) == d_rel_nodes.end()
 \end{lstlisting}
 
 \noindent
-That is sufficient, and it comes with the regression
-\file{regress1/rels/tc-overwrite-bug.smt2} --- benchmark~A of
-Section~\ref{sec:repro} in all but name. It is worth being explicit that the
-\emph{guarded} configuration is correct on everything measured here
-(Section~\ref{sec:measure-vs-guarded}), so what follows is not a bug report
-against it. Two properties still distinguish it from \emph{once}:
+The two maps in those conditions are not being consulted for their contents;
+they are being used as ``a graph for this relation has already been built''
+markers, and the comment says what they are protecting against. So the guards
+are not an optimisation, they are the mechanism that keeps the second call from
+destroying the first call's work (Observation~\ref{obs:destroy} below). The
+question of this part is whether to keep that arrangement or to replace both
+sites with a single unconditional pass immediately after \fn{collectRelsInfo}.
+
+\code{main} is correct on everything measured here
+(Section~\ref{sec:measure}), so what follows is not a bug report. Two properties
+distinguish the two configurations:
 
 \begin{itemize}[leftmargin=*,itemsep=2pt]
-\item \textbf{Which call builds is decided by iteration order.} Both maps in the
-  guard double as ``already built'' markers, so the outcome depends on whether
-  Phase~A reached $T$ before Phase~B did. Correctness is preserved by the fact
-  that Phase~A always runs first and that $\bigstar_1$ builds before it augments
-  --- a two-site argument, where \emph{once} needs no argument at all.
-\item \textbf{The guard is keyed by base representative, not by term.} If two
+\item \textbf{Which call builds is decided by iteration order.} The outcome
+  depends on whether Phase~A reached $T$ before Phase~B did. Correctness is
+  preserved by the facts that Phase~A always runs first and that $\bigstar_1$
+  builds before it augments --- a two-site argument, where one call needs no
+  argument at all.
+\item \textbf{The guards are keyed by base representative, not by term.} If two
   closure terms $\tc{x}$ and $\tc{y}$ have $x \approx y$, the second of them
   never receives the base edges in \code{d\_tcr\_tcGraph}, only whatever
-  $\bigstar_1$ later inserts. Invariant~\ref{inv:complete} still fails for that
-  term. This is benign --- the two closure terms are congruent, so the
-  memberships derived for the first propagate --- and it is unobservable in the
-  test suite, but it is a weaker statement than the invariant.
+  $\bigstar_1$ later inserts. Invariant~\ref{inv:complete} fails for that term.
+  This is benign --- the two closure terms are congruent, so the memberships
+  derived for the first propagate --- and it is unobservable in the test suite,
+  but it is a weaker statement than the invariant.
 \end{itemize}
 
 \section{Static analysis}
@@ -1352,22 +1322,24 @@ $\bigstar_1$ and $\bigstar_2$ compute \textbf{bit-identical} graphs, and a
 single call placed anywhere before Phase~C computes the same graph too.
 \end{observation}
 
-\begin{observation}[The second call is destructive]\label{obs:destroy}
+\begin{observation}[A second call would be destructive]\label{obs:destroy}
 Between $\bigstar_1$ and $\bigstar_2$, \fn{applyTCRule} adds edges to
 \code{d\_tcr\_tcGraph}$[T]$ for the asserted members of $T$ itself
-(Algorithm~\ref{alg:tcrule}, line 8). $\bigstar_2$ then executes
-\code{d\_tcr\_tcGraph[tc\_rel] = rel\_tc\_graph}, a whole-map assignment.
-\textbf{All of those edges are discarded}, together with their explanations.
+(Algorithm~\ref{alg:tcrule}, line 8). Were $\bigstar_2$ to run, it would execute
+\code{d\_tcr\_tcGraph[tc\_rel] = rel\_tc\_graph}, a whole-map assignment, and
+\textbf{all of those edges would be discarded}, together with their
+explanations. This is what the guards on \code{main} exist to prevent, and it is
+why they cannot be dropped while the call site remains.
 \end{observation}
 
 \noindent
 So the second call is not a redundant recomputation of the same thing. It is a
-recomputation of a \emph{smaller} thing that overwrites a larger one. The
-guard is \code{if (members.size() > 0)}, so the damage is done exactly when the
-base relation has at least one asserted member; when $r$ has no members the
-overwrite does not happen and the closure edges survive. That explains why the
-bug is not visible on most of the transitive-closure regressions, which assert
-memberships in $\tc{r}$ or in $r$ but rarely both.
+recomputation of a \emph{smaller} thing that would overwrite a larger one. The
+only reason the resulting bug was survivable for as long as it was is
+\code{if (members.size() > 0)} inside \fn{buildTCGraphForRel}: the damage needs
+the base relation to have at least one asserted member, and most
+transitive-closure regressions assert memberships in $\tc{r}$ or in $r$ but
+rarely both.
 
 \begin{figure}[h]\centering
 \begin{tikzpicture}[font=\footnotesize,
@@ -1382,7 +1354,7 @@ memberships in $\tc{r}$ or in $r$ but rarely both.
     \draw[clos] (a1)--(b1); \draw[base] (b1)--(c1);
   \end{scope}
   \begin{scope}[xshift=5.2cm]
-    \node[lbl] at (1.1,1.2) {after $\bigstar_2$ (current code)};
+    \node[lbl] at (1.1,1.2) {after a rebuild of $G_{\tc{x}}$};
     \node[n] (a2) at (0,0) {$1$}; \node[n] (b2) at (1.1,0) {$2$};
     \node[n] (c2) at (2.2,0) {$3$};
     \draw[base] (b2)--(c2);
@@ -1397,19 +1369,24 @@ memberships in $\tc{r}$ or in $r$ but rarely both.
     \node[good,font=\scriptsize] at (1.1,-0.55) {$\Rightarrow \tup{1,3}\in\tc{x}$};
   \end{scope}
 \end{tikzpicture}
-\caption{Effect of the second \fn{buildTCGraphForRel} call on
-$G_{\tc{x}}$ for the benchmark of Section~\ref{sec:repro}.}
+\caption{What Observation~\ref{obs:destroy} would cost on the benchmark of
+Section~\ref{sec:repro}: rebuilding $G_{\tc{x}}$ after \fn{applyTCRule} has run
+loses the edge $1\to2$, and with it the only path from 1 to 3.}
 \end{figure}
 
 \begin{observation}[Cost]
-The wasted work of $\bigstar_2$ is $O(|\mathit{members}(r)|)$ node
-constructions and map insertions per closure term per full-effort round ---
-including one \code{RelsUtils::constructPair} \code{APPLY\_CONSTRUCTOR} node
-per member, which goes through the node manager's hash-consing table. It is not
-dominant, but it is pure loss.
+When $\bigstar_2$ does fire --- for every closure term the guards have not
+already marked --- it is $O(|\mathit{members}(r)|)$ node constructions and map
+insertions per closure term per full-effort round, including one
+\code{RelsUtils::constructPair} \code{APPLY\_CONSTRUCTOR} node per member, which
+goes through the node manager's hash-consing table. Phase~0 does that work
+exactly once instead, and the guard lookups on the hot path of
+\fn{applyTCRule} --- three map searches and a \fn{getRepresentative} per
+(membership, closure term) pair --- disappear with it. It is not dominant, and
+Section~\ref{sec:measure} finds it unmeasurable.
 \end{observation}
 
-\section{A benchmark that separates the two}\label{sec:repro}
+\section{The benchmarks that exercise the interaction}\label{sec:repro}
 
 \begin{lstlisting}[style=smt]
 ; EXPECT: unsat
@@ -1427,17 +1404,17 @@ dominant, but it is pure loss.
 \noindent
 This is exactly \textsc{TClos Up I} followed by \textsc{TClos Up II}, i.e.\
 Example~3 of the paper with one of the two premises moved from $R$ to $\tc{R}$.
-The problem is trivially unsatisfiable.
+The problem is trivially unsatisfiable, and it is the smallest formula in which
+$G_{\tc{x}}$ has to hold a base edge and a closure edge at the same time: lose
+the closure edge $1\to2$ and \fn{doTCInference} can only re-derive
+$\tup{2,3}\in\tc{x}$, leaving the solver to split the \textsc{TClos Down}
+disjunction of \fn{applyTCRule} over freshly reachable Skolems for ever.
+\file{regress1/rels/tc-overwrite-bug.smt2} is the same formula, added to the
+suite by PR~\#12793.
 
-\noindent
-With the second call in place, $G_{\tc{x}}$ is reduced to the single edge
-$2\to3$, \fn{doTCInference} only re-derives $\tup{2,3}\in\tc{x}$, and the solver
-falls back on repeatedly splitting the \textsc{TClos Down} disjunction of
-\fn{applyTCRule} over freshly reachable Skolems --- it diverges instead of
-refuting.
-
-Four variations pin the trigger down exactly. All were run on the same Debug
-build with a 20\,s limit.
+Four variations pin the shape down. All were run on the same Debug build with a
+20\,s limit; both configurations answer all five correctly, which is the point
+--- \code{main}'s guards and Phase~0 protect the same edges.
 
 \begin{center}\small
 \renewcommand{\arraystretch}{1.15}
@@ -1445,42 +1422,41 @@ build with a 20\,s limit.
 \toprule
 & & \multicolumn{2}{c}{result / time}\\
 \cmidrule(l){3-4}
-Benchmark & Shape & two calls & once\\
+Benchmark & Shape & \code{main} & once\\
 \midrule
 A \code{repro} & $\tup{2,3}\in x$, $\tup{1,2}\in\tc{x}$, $\tup{1,3}\notin\tc{x}$
-  & \textbf{timeout} & \textbf{unsat} 0.00\,s\\
+  & unsat 0.013\,s & unsat 0.012\,s\\
 B \code{no-base-member} & as A but $\tup{2,3}\in\tc{x}$ instead of $\in x$
-  & unsat 0.01\,s & unsat 0.00\,s\\
+  & unsat 0.011\,s & unsat 0.011\,s\\
 C \code{all-base} & $\tup{1,2},\tup{2,3}\in x$, $\tup{1,3}\notin\tc{x}$
-  & unsat 0.00\,s & unsat 0.00\,s\\
+  & unsat 0.010\,s & unsat 0.009\,s\\
 D \code{sat-no-path} & $\tup{3,4}\in x$, $\tup{1,2}\in\tc{x}$, $\tup{1,4}\notin\tc{x}$
-  & sat 0.00\,s & sat 0.00\,s\\
+  & sat 0.011\,s & sat 0.010\,s\\
 E \code{chain4} & $1\!\to\!2\,(\tc{x})$, $2\!\to\!3\,(x)$, $3\!\to\!4\,(\tc{x})$,
   $4\!\to\!5\,(x)$, $\tup{1,5}\notin\tc{x}$
-  & \textbf{timeout} & \textbf{unsat} 0.00\,s\\
+  & unsat 0.010\,s & unsat 0.010\,s\\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \begin{itemize}[leftmargin=*,itemsep=1pt]
-\item \textbf{B} is the control for the \code{members.size() > 0} guard. Moving
-  the one base membership into the closure makes $r$ memberless, so
-  $\bigstar_2$ does not overwrite --- and current \code{main} refutes it
-  instantly. The diagnosis really is the overwrite.
-\item \textbf{C} is Example~3 of~\cite{MRT17} verbatim; both configurations
-  handle it, because it needs no closure-only edges.
-\item \textbf{D} checks that the patch does not \emph{over}-infer: there is no
-  path from 1 to 4, the problem is satisfiable, and both configurations say
-  \textsf{sat}.
-\item \textbf{E} shows the effect is not specific to a two-edge path.
+\item \textbf{B} isolates the \code{members.size() > 0} guard inside
+  \fn{buildTCGraphForRel}. Moving the one base membership into the closure makes
+  $r$ memberless, so a rebuild would store nothing and could not overwrite
+  anything; the closure edges survive with or without protection.
+\item \textbf{C} is Example~3 of~\cite{MRT17} verbatim: all edges are base
+  edges, so no closure-only edge is ever at risk.
+\item \textbf{D} checks that neither configuration \emph{over}-infers: there is
+  no path from 1 to 4, the problem is satisfiable, and both say \textsf{sat}.
+\item \textbf{E} is the same interaction over a four-edge path, i.e.\ with two
+  closure edges to preserve rather than one.
 \end{itemize}
 
-\subsection{The in-tree regression that PR \#7515 had to disable}
+\subsection{The in-tree regression that used to be disabled}
 \label{sec:reltc7}
 
-The strongest evidence is already in the repository.
 \file{test/regress/cli/\allowbreak{}regress0/rels/\allowbreak{}rel\_tc\_7.cvc.smt2}
-is
+is the same interaction reached through a join:
 
 \begin{lstlisting}[style=smt]
 ; EXPECT: unsat
@@ -1494,7 +1470,7 @@ is
 \end{lstlisting}
 
 \noindent
-and \file{test/regress/cli/CMakeLists.txt} contains, in
+until recently \file{test/regress/cli/CMakeLists.txt} listed it in
 \code{regression\_disabled\_tests}:
 
 \begin{lstlisting}[style=smt,language=]
@@ -1504,36 +1480,32 @@ and \file{test/regress/cli/CMakeLists.txt} contains, in
 
 \noindent
 \code{git show 3bcc47a3c -- test/regress/CMakeLists.txt} shows that this very
-line was added by PR~\#7515 --- the same commit that removed the Phase~B guard
-and thereby created the second \fn{buildTCGraphForRel} call. The PR description
-says as much: \emph{``It disables a regression that times out after these
-fixes.''}
+line was added by PR~\#7515, whose description says as much: \emph{``It disables
+a regression that times out after these fixes.''} The join and the outer closure
+put memberships into both $x$'s class and $\tc{x}$'s class, which is benchmark~A
+again, so protecting the closure edges is exactly what the test needs.
 
 \begin{center}\small
 \begin{tabular}{@{}lll@{}}
 \toprule
 Configuration & \code{rel\_tc\_7.cvc.smt2} & Time\\
 \midrule
-\emph{unguarded} (\code{8dd659a3a}) & \textbf{timeout} & $>300$\,s\\
-\emph{guarded} (\code{c851f83bf})   & \textbf{unsat}   & 0.01\,s\\
-\emph{once} (\code{8bcdf3239})      & \textbf{unsat}   & 0.01\,s\\
+\code{main} (\code{5cc03f4b9}) & \textbf{unsat} & 0.01\,s\\
+once (\code{8bcdf3239})        & \textbf{unsat} & 0.01\,s\\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent
-This benchmark has the same shape as A: the join and the outer closure put
-memberships into both $x$'s class and $\tc{x}$'s class, so $\bigstar_2$ throws
-the closure edges away. Either fix makes it pass, so the credit for reviving it
-belongs to whichever landed first, which is PR~\#12793 --- but nobody had noticed
-that it was revived. Commit \code{8bcdf3239} therefore also moves it out of
-\code{regression\_disabled\_tests} into \code{regress\_0\_tests}, where it now
-passes in 0.13\,s under \fn{ctest} and also under \code{--check-proofs},
+It has been passing since PR~\#12793 landed, but nobody noticed, so it stayed
+disabled. Commit \code{8bcdf3239} moves it out of
+\code{regression\_disabled\_tests} into \code{regress\_0\_tests}, where it passes
+in 0.13\,s under \fn{ctest} and also under \code{--check-proofs},
 \code{--check-unsat-cores} and \code{--produce-proofs
 --proof-granularity=theory-rewrite}, which is what the other CI configurations
 run. Nothing else in the disabled list changes:
-\code{regress1/rels/garbage\_collect.cvc.smt2} still times out in every
-configuration.
+\code{regress1/rels/garbage\_collect.cvc.smt2} still times out in both
+configurations.
 
 \section{The patch}
 
@@ -1543,9 +1515,8 @@ configuration.
   closure term once (Phase~0 of Algorithm~\ref{alg:check}).
 \item Delete $\bigstar_1$ from \fn{applyTCRule} (and the now-pointless
   \code{d\_rel\_nodes.insert(tc\_rel)}).
-\item Delete $\bigstar_2$ from Phase~B, \emph{including its \#12793 guard}: with
-  Phase~0 in place the guard is not a safety net, it is the last thing keeping a
-  destructive call alive (Section~\ref{sec:mergehazard}).
+\item Delete $\bigstar_2$ from Phase~B --- the whole branch, guard included, so
+  that Phase~B no longer has a \textsc{tclosure} case at all.
 \item While there: make \fn{buildTCGraphForRel} look the membership list up
   with \code{find} instead of \code{operator[]}, so that it stops inserting
   empty entries into the two maps Phase~A iterates, and drop the unused
@@ -1600,79 +1571,47 @@ no longer true of either map.
 Ordering matters: the pass must run \emph{before} Phase~A, because
 \fn{applyTCRule} consults \code{d\_rRep\_tcGraph} through \fn{isTCReachable} to
 decide whether to skip the expensive splitting lemma, and it appends to
-\code{d\_tcr\_tcGraph}. Building afterwards would both weaken the guard and be
-overwritten again.
-
-A pleasant side effect: the representative mismatch noted in
-Section~\ref{sec:tcrule} (\code{find(tc\_rel[0])} versus
-\code{getRepresentative(tc\_rel[0])}) disappears, because the new pass does not
-test it at all.
-
-\subsection{A smaller alternative, and why it is worse}
-
-One could keep the lazy build and merely stop $\bigstar_2$ from clobbering,
-e.g.\ by guarding Phase~B with
-\code{if (d\_tcr\_tcGraph.find(*term\_it) == d\_tcr\_tcGraph.end())} or by making
-\fn{buildTCGraphForRel} merge instead of assign. That fixes the divergence, but
-it is strictly weaker than the up-front pass:
-
-\begin{itemize}[leftmargin=*,itemsep=1pt]
-\item It leaves the $\bigstar_1$ guard's representative bug in place. When
-  \code{tc\_rel[0]} is not its own representative, $\bigstar_1$ does not fire, so
-  \fn{isTCReachable} sees no graph during Phase~A and \fn{applyTCRule} emits a
-  \textsc{TClos Down} splitting lemma for a membership that the graph would have
-  discharged.
-\item It keeps two call sites and a four-clause condition to reason about,
-  where the up-front pass reduces the invariant to ``built once, before any
-  rule, then only added to''.
-\item It saves nothing: Phase~B already visits every closure term, so the
-  up-front pass does no extra work.
-\end{itemize}
-
-\section{A merge hazard, measured}\label{sec:mergehazard}
-
-The two fixes are individually sufficient and jointly \emph{not} composable in
-the obvious way. Rebasing the Phase~0 patch onto \code{c851f83bf} produces a
-textual conflict in exactly one place: the Phase~B \textsc{tclosure} branch,
-which the patch deletes and which \#12793 has meanwhile rewritten. Resolving it
-by keeping \#12793's branch and dropping only its \emph{guard} --- the natural
-reading of ``Phase~0 already built everything, so the guard is redundant'' ---
-restores the destructive call in full, and the resulting solver is exactly as
-divergent as \code{8dd659a3a}:
-
-\begin{center}\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-Benchmark & \emph{guarded} & Phase~0 \emph{plus} unguarded $\bigstar_2$ & \emph{once}\\
-\midrule
-\code{tc-overwrite-bug.smt2} & unsat & \textbf{timeout} & unsat\\
-A \code{repro}               & unsat & \textbf{timeout} & unsat\\
-E \code{chain4}              & unsat & \textbf{timeout} & unsat\\
-\code{rel\_tc\_7.cvc.smt2}   & unsat & \textbf{timeout} & unsat\\
-\bottomrule
-\end{tabular}
-\end{center}
+\code{d\_tcr\_tcGraph}.
 
 \noindent
-Measured on a Debug build with a 15\,s wall limit; the three controls
-(B, C, D) answer correctly in all three configurations, which is what makes the
-diagnosis specific. The reason the redundancy argument fails is
-Observation~\ref{obs:destroy}: the second call is not idempotent with respect to
-the first, because \fn{applyTCRule} has run in between. A Phase~0 pass makes the
-\emph{first} build unnecessary, never the overwrite harmless.
+Deleting the Phase~B branch \emph{entirely} matters, rather than keeping it and
+dropping its now-apparently-redundant guard. Phase~0 makes the \emph{build}
+redundant; it never makes the overwrite harmless, because \fn{applyTCRule} has
+run in between (Observation~\ref{obs:destroy}). A call site protected only by
+bookkeeping state is an invitation to exactly that mistake, which is the
+strongest argument for not having one.
 
-\section{Measurement versus the unguarded code}\label{sec:measure}
+\subsection{Why not keep the guards?}\label{sec:whynotguards}
+
+\code{main}'s arrangement --- keep both lazy call sites, protect the graph with
+the \code{d\_rel\_nodes} and \code{d\_rRep\_tcGraph} markers --- is the smaller
+change, and it works. Three things make the up-front pass the better resting
+place:
+
+\begin{itemize}[leftmargin=*,itemsep=1pt]
+\item It removes the $\bigstar_1$ guard's representative bug. That guard tests
+  \code{d\_rReps\_memberReps\_cache.find(tc\_rel[0])} while
+  \fn{buildTCGraphForRel} looks up $\rep{\code{tc\_rel[0]}}$, so when $r$ is not
+  its own representative $\bigstar_1$ does not fire: \fn{isTCReachable} sees no
+  graph during Phase~A and \fn{applyTCRule} emits a \textsc{TClos Down} splitting
+  lemma for a membership the graph would have discharged. Phase~0 always has the
+  graph in place before the first membership is processed.
+\item It replaces two call sites and a four-clause condition, whose correctness
+  depends on Phase~A preceding Phase~B, with ``built once, before any rule, then
+  only added to'' --- Invariant~\ref{inv:complete}, for every closure term rather
+  than one per base representative.
+\item It saves the redundant build and the per-membership guard lookups
+  (Observation~\ref{obs:destroy}). Phase~B visited every closure term anyway, so
+  nothing new is computed.
+\end{itemize}
+
+\section{Measurement}\label{sec:measure}
 
 \subsection{Setup}
 
-This section compares \emph{once} against the \emph{unguarded} configuration,
-which is what \code{main} looked like when the investigation started;
-Section~\ref{sec:measure-vs-guarded} repeats the exercise against the
-\emph{guarded} \code{main} that exists today.
-
-Both configurations were built from \code{8dd659a3a} (branch \code{main}) with
-the repository's existing \code{build/} tree
+What has to be shown is the opposite of a win: that replacing the guards with
+Phase~0 changes \emph{nothing} observable. Both binaries were built in the same
+tree, \code{5cc03f4b9} for \code{main} and \code{8bcdf3239} for once
 (\code{CMAKE\_BUILD\_TYPE=Debug}, \code{ENABLE\_TRACING=ON}, Apple clang on
 macOS/arm64). Absolute times are therefore much larger than a production build
 would give; only the comparison between the two columns is meaningful.
@@ -1690,127 +1629,6 @@ identical. Each configuration must be snapshotted together with
 an ad-hoc \code{codesign} afterwards on macOS).
 \end{sidenote}
 
-\subsection{Regression suite}
-
-All 295 benchmarks under \file{test/regress/cli/*/rels/} and
-\file{test/regress/cli/*/sets/}, 30\,s timeout each, expected results taken
-from the \code{; EXPECT:} headers.
-
-\begin{center}\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-& two calls (\code{main}) & once, up front\\
-\midrule
-benchmarks run                       & 295 & 295\\
-answers differing between the two    & \multicolumn{2}{c}{1 (\code{rel\_tc\_7.cvc.smt2})}\\
-disagreements with \code{; EXPECT:}  & 2   & \textbf{1}\\
-correctness regressions              & \multicolumn{2}{c}{\textbf{0}}\\
-correctness improvements             & \multicolumn{2}{c}{\textbf{1}}\\
-total wall time                      & 125.6\,s & \textbf{96.8\,s}\\
-total wall time, excluding the 4 timeouts & 5.6\,s & 6.7\,s\\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\noindent
-Reading the table:
-
-\begin{itemize}[leftmargin=*,itemsep=1pt]
-\item \textbf{Exactly one benchmark changes answer}, and it changes from
-  \textsf{timeout} to \textsf{unsat}: the disabled \code{rel\_tc\_7} of
-  Section~\ref{sec:reltc7}. Every other benchmark returns the same answer.
-\item The remaining disagreement with \code{; EXPECT:} in both configurations is
-  \code{regress1/rels/garbage\_collect.cvc.smt2}, which is in
-  \code{regression\_disabled\_tests} and times out in this Debug build either
-  way ($>180$\,s).
-\item The 29\,s difference in total wall time is entirely the \code{rel\_tc\_7}
-  timeout. Excluding all timeouts, the two configurations are within
-  $\pm 1.1$\,s of each other over 291 benchmarks --- i.e.\ inside the noise of a
-  Debug build. The saved second pass over the members is real but too small to
-  measure here; the win is not a speedup, it is not diverging.
-\item Per-inference statistics (\code{--stats-all},
-  \code{theory::sets::inferencesLemma}) are \emph{identical} on all 18 in-tree
-  benchmarks that mention \code{rel.tclosure} and that both configurations
-  solve. The patch does not perturb inference behaviour where the overwrite was
-  not destroying anything.
-\end{itemize}
-
-\subsection{Differential fuzzing against an exact oracle}
-
-The in-tree suite barely exercises the failing combination, so a targeted
-random test was added. Formulas have the shape
-\begin{center}\small
-$\{\tup{u_i,v_i}\in x\}_{i\in I}\;\cup\;\{\tup{u_j,v_j}\in\tc{x}\}_{j\in J}
- \;\cup\; \{\tup{a,b}\notin\tc{x}\}$
-\end{center}
-over pairwise-distinct integer constants, with $2$--$5$ nodes and $1$--$5$
-edges, biased so that both labels usually occur.
-
-\paragraph{The oracle is exact.} Let $E$ be the union of both edge sets. In any
-model, each asserted $x$-edge is in $x$ and each asserted $\tc{x}$-edge
-$\tup{u,v}$ forces some $x$-path $u\leadsto v$; hence $b$ reachable from $a$ in
-$E$ (in $\ge 1$ steps) implies $\tup{a,b}\in\tc{x}$, so the formula is
-unsatisfiable. Conversely, taking $x$ to be the asserted $x$-edges plus one
-direct edge per asserted $\tc{x}$-edge gives $\tc{x} = $ the transitive closure
-of $E$, which is a model whenever $b$ is \emph{not} reachable from $a$ in $E$.
-So
-\[
-  \text{formula unsatisfiable} \iff b \text{ reachable from } a \text{ in } E
-  \text{ in } \ge 1 \text{ steps},
-\]
-which a five-line depth-first search decides.
-
-\paragraph{Result} 250 random instances, seed 7, 8\,s limit each; 202 of them
-mention both an $x$-edge and a $\tc{x}$-edge.
-
-\begin{center}\small
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-& two calls (\code{main}) & once, up front\\
-\midrule
-matches the oracle       & 235 & \textbf{250}\\
-timeout                  & \textbf{15}  & 0\\
-\emph{wrong answer}      & \textbf{0}   & \textbf{0}\\
-\midrule
-answers differing between the two & \multicolumn{2}{c}{15}\\
-\quad of which: \code{main} times out, once solves & \multicolumn{2}{c}{15}\\
-\quad of which: once times out, \code{main} solves & \multicolumn{2}{c}{0}\\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\noindent
-Every divergence is in the same direction: current \code{main} fails to refute
-an unsatisfiable instance that the one-call configuration refutes in
-milliseconds. Critically, \textbf{neither configuration ever produced a wrong
-answer} --- in particular the extra inferences enabled by the patch never turned
-a satisfiable instance into \textsf{unsat}, which is the failure mode one would
-worry about when strengthening a rule. A representative instance
-($1\to 2$ and $0\to 1$ in $x$, $2\to 0$ in $\tc{x}$, so
-$1\to 2\to 0\to 1$ and $\tup{1,0}\in\tc{x}$ is forced):
-
-\begin{lstlisting}[style=smt]
-(set-logic ALL)
-(declare-fun x () (Relation Int Int))
-(assert (set.member (tuple 0 1) x))
-(assert (set.member (tuple 2 0) (rel.tclosure x)))
-(assert (set.member (tuple 2 1) (rel.tclosure x)))
-(assert (set.member (tuple 1 2) x))
-(assert (not (set.member (tuple 1 0) (rel.tclosure x))))
-(check-sat)          ; main: timeout      once: unsat
-\end{lstlisting}
-
-\section{Measurement versus the guarded code}\label{sec:measure-vs-guarded}
-
-Once PR~\#12793 landed, the interesting question changed. The divergences of
-Section~\ref{sec:measure} are gone from \code{main} on their own, so what has to
-be shown is the opposite of a win: that replacing the guards with Phase~0
-changes \emph{nothing} observable. Both binaries here were built from
-\code{5cc03f4b9} (\code{main}, which contains \code{c851f83bf}) in the same
-Debug tree, snapshotted as described in the sidenote above.
-
 \subsection{Answers and inference counts}
 
 The sharpest available check is not pass/fail but the per-inference counters:
@@ -1826,7 +1644,7 @@ line and the whole
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{@{}lc@{}}
 \toprule
-& \emph{guarded} vs \emph{once}\\
+& \code{main} vs once\\
 \midrule
 benchmarks compared                          & 167\\
 \quad of which return a definitive answer    & 165\\
@@ -1862,7 +1680,7 @@ subsection.
 \renewcommand{\arraystretch}{1.15}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-Family, $N=64$ & \emph{guarded} & \emph{once} & ratio\\
+Family, $N=64$ & \code{main} & once & ratio\\
 \midrule
 \code{base-chain}    & 0.210\,s & 0.208\,s & 1.01\\
 \code{closure-chain} & 0.231\,s & 0.234\,s & 0.99\\
@@ -1884,14 +1702,13 @@ one wasted rebuild per closure term whose base relation has members, against a
 solve time dominated by the $O(N^2)$ \textsc{TClos Up} lemmas that
 \fn{doTCInference} emits either way.
 
-\subsection{The one case where \emph{once} could do more work}
+\subsection{The one case where once could do more work}
 
-\emph{once} builds one graph per closure \emph{term}; \emph{guarded} builds at
-most one per base \emph{representative} (Section~\ref{sec:12793}). Where several
-closure terms sit over provably equal base relations, \emph{once} therefore
-populates \code{d\_tcr\_tcGraph} for all of them and \fn{doTCInference} walks
-each --- $k$ times the forward inferences instead of one. Two probes bound the
-risk:
+Phase~0 builds one graph per closure \emph{term}; \code{main}'s guards admit at
+most one build per base \emph{representative}. Where several closure terms sit
+over provably equal base relations, Phase~0 therefore populates
+\code{d\_tcr\_tcGraph} for all of them and \fn{doTCInference} walks each --- $k$
+times the forward inferences instead of one. Two probes bound the risk:
 
 \begin{itemize}[leftmargin=*,itemsep=2pt]
 \item Three families were generated with $k$ closure terms over base relations
@@ -1914,20 +1731,43 @@ risk:
 \noindent
 So the case is real in principle and did not occur once in anything measurable.
 Should it ever matter, the fix is to key Phase~0 by base representative, which
-recovers exactly \emph{guarded}'s work profile without reintroducing a second
-call site.
+recovers \code{main}'s work profile without reintroducing a second call site.
 
-\subsection{Differential fuzzing, repeated}
+\subsection{Differential fuzzing against an exact oracle}
 
-The oracle-based fuzzer of Section~\ref{sec:measure} was re-run against the
-guarded baseline, with the generator widened to $2$--$7$ nodes and $1$--$10$
-edges: 900 instances over seeds 1--3.
+The in-tree suite barely exercises the combination of a base edge and a closure
+edge in the same graph, so a targeted random test was added. Formulas have the
+shape
+\begin{center}\small
+$\{\tup{u_i,v_i}\in x\}_{i\in I}\;\cup\;\{\tup{u_j,v_j}\in\tc{x}\}_{j\in J}
+ \;\cup\; \{\tup{a,b}\notin\tc{x}\}$
+\end{center}
+over pairwise-distinct integer constants, with $2$--$7$ nodes and $1$--$10$
+edges, biased so that both labels usually occur.
+
+\paragraph{The oracle is exact.} Let $E$ be the union of both edge sets. In any
+model, each asserted $x$-edge is in $x$ and each asserted $\tc{x}$-edge
+$\tup{u,v}$ forces some $x$-path $u\leadsto v$; hence $b$ reachable from $a$ in
+$E$ (in $\ge 1$ steps) implies $\tup{a,b}\in\tc{x}$, so the formula is
+unsatisfiable. Conversely, taking $x$ to be the asserted $x$-edges plus one
+direct edge per asserted $\tc{x}$-edge gives $\tc{x} = $ the transitive closure
+of $E$, which is a model whenever $b$ is \emph{not} reachable from $a$ in $E$.
+So
+\[
+  \text{formula unsatisfiable} \iff b \text{ reachable from } a \text{ in } E
+  \text{ in } \ge 1 \text{ steps},
+\]
+which a five-line depth-first search decides. \emph{Any} disagreement with it is
+a bug in one of the two configurations, so this test does not merely compare
+them against each other.
+
+\paragraph{Result} 900 instances over seeds 1--3, 8\,s limit each.
 
 \begin{center}\small
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{@{}lcc@{}}
 \toprule
-& \emph{guarded} & \emph{once}\\
+& \code{main} & once\\
 \midrule
 matches the oracle & 900 & 900\\
 timeout            & 0   & 0\\
@@ -1938,45 +1778,41 @@ answers differing between the two & \multicolumn{2}{c}{\textbf{0}}\\
 \end{center}
 
 \noindent
-Both configurations now decide every instance the oracle decides. That is the
-expected outcome, and it is worth recording that it is also a check on
-\#12793: the guard fixes the same family of formulas the up-front pass does.
+Both configurations decide every instance the oracle decides, and neither ever
+produced a wrong answer --- in particular, having the closure edges present never
+turned a satisfiable instance into \textsf{unsat}, which is the failure mode to
+worry about when a rule gets more to work with.
 
 \section{Conclusion of the investigation}
 
-\textbf{Building once, immediately after \fn{collectRelsInfo}, is better} --- but
-the argument has to be stated against the right baseline, and it is no longer an
-argument about divergence, because PR~\#12793 has already removed that. Against
-the \emph{guarded} \code{main} the measurements say plainly: same answers, same
-inference histograms, same run times to within noise
-(Section~\ref{sec:measure-vs-guarded}). What remains is structural, and it is
-worth stating in that order:
+\textbf{Building once, immediately after \fn{collectRelsInfo}, is better}, but
+not for the reason one might expect: it is not a speedup and not a bug fix.
+Against \code{main} the measurements say plainly that nothing observable changes
+--- same answers, same inference histograms, same run times to within noise
+(Section~\ref{sec:measure}). The case is structural:
 
 \begin{enumerate}[leftmargin=*,itemsep=2pt]
 \item \textbf{The invariant becomes checkable by inspection.}
   Invariant~\ref{inv:complete} --- ``$G_T$ is built exactly once, before any rule
   runs, and is only ever added to afterwards'' --- holds by construction, for
-  every closure term. \emph{guarded} establishes something weaker (per base
+  every closure term. \code{main} establishes something weaker (per base
   representative, and only because Phase~A happens to precede Phase~B), and it
   spends two call sites and a four-clause condition doing it.
 \item \textbf{It removes the coupling of correctness to bookkeeping state.}
   \code{d\_rel\_nodes} and \code{d\_rRep\_tcGraph} stop doubling as
-  ``already built'' markers. Section~\ref{sec:mergehazard} is the concrete cost
-  of that coupling: the guard is invisible protection, so the next person to
-  touch Phase~B can delete it as redundant and reintroduce a divergence, which
-  is what happened while this branch was being rebased.
+  ``already built'' markers. That coupling is the kind that fails quietly: the
+  protection is invisible at the call site, so the next person to work on
+  Phase~B can reasonably conclude the condition is a redundant optimisation and
+  drop it, and no test they are likely to run will complain until a formula
+  asserts memberships in both $r$ and $\tc{r}$.
 \item \textbf{It removes a latent representative bug} in the $\bigstar_1$ guard
-  (Section~\ref{sec:tcrule}), and stops \fn{buildTCGraphForRel} from mutating the
-  membership maps through \code{operator[]}.
-\item \textbf{Against the pre-\#12793 code it is also a large correctness win},
-  which is what Section~\ref{sec:measure} measured and what
-  \code{rel\_tc\_7.cvc.smt2} demonstrates; that test is re-enabled here.
+  (Section~\ref{sec:whynotguards}), and stops \fn{buildTCGraphForRel} from
+  mutating the membership maps through \code{operator[]}.
+\item \textbf{It revives an in-tree regression.}
+  \code{rel\_tc\_7.cvc.smt2} has been passing since PR~\#12793 and is re-enabled
+  here (Section~\ref{sec:reltc7}), which puts the interaction under CI in every
+  configuration rather than in a benchmark directory.
 \end{enumerate}
-
-\noindent
-Not claimed: a speedup. The second pass over the members is pure waste, and
-removing waste is the right default, but at the sizes the relational solver
-handles it is unmeasurable against the cost of the lemmas themselves.
 
 \noindent
 The only argument for keeping a lazy build is to avoid constructing graphs for
@@ -2017,9 +1853,8 @@ will trip over them.
 \section{Quick reference: file map}
 
 All line numbers in this document refer to \file{src/theory/sets/theory\_sets\_rels.cpp}
-at commit \code{8bcdf3239} (branch \code{build-trc-graph-once}), except where a
-passage explicitly discusses the earlier \code{8dd659a3a} or \code{c851f83bf}
-code.
+at commit \code{8bcdf3239} (branch \code{build-trc-graph-once}), except in
+Part~\ref{part:tc} where a passage quotes \code{main} (\code{5cc03f4b9}).
 
 \begin{center}\small
 \renewcommand{\arraystretch}{1.1}
@@ -2080,17 +1915,13 @@ snapshot() {                      # $1 = destination directory
 
 git stash                                       # baseline = main
 ninja -C build cvc5-bin && snapshot /tmp/base
-git stash pop                                   # patched
+git stash pop                                   # once
 ninja -C build cvc5-bin && snapshot /tmp/once
 
-# Against 8dd659a3a (unguarded): the divergence is the visible signal.
-/tmp/base/cvc5 --tlimit=20000 A-repro.smt2   # -> timeout
-/tmp/once/cvc5 --tlimit=20000 A-repro.smt2   # -> unsat
-
-# Against c851f83bf (guarded): both answer everything, so compare the answers
-# *and* the per-InferenceId histograms, which is the sensitive check.
-python3 rels-guide/benchmarks/gen_stress.py /tmp/stress   # 47 + 32 benchmarks
-for f in test/regress/cli/regress[01]/rels/*.smt2; do
+# Both configurations answer everything, so compare the answers *and* the
+# per-InferenceId histograms, which is the sensitive check.
+python3 rels-guide/benchmarks/gen_stress.py /tmp/stress    # 67 benchmarks
+for f in test/regress/cli/regress[01]/rels/*.smt2 /tmp/stress/*.smt2; do
   a=$(/tmp/base/cvc5 --tlimit=20000 --stats $f 2>&1 \
         | grep -E '^(sat|unsat|unknown)|theory::sets::inferences' | sort)
   b=$(/tmp/once/cvc5 --tlimit=20000 --stats $f 2>&1 \

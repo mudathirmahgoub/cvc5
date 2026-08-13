@@ -74,6 +74,35 @@ void TheorySetsRels::check(Theory::Effort level)
 
 void TheorySetsRels::check()
 {
+  // Build the transitive closure graph of every RELATION_TCLOSURE term before
+  // any rule is applied.
+  //
+  // buildTCGraphForRel reads only d_rReps_memberReps_cache,
+  // d_rReps_memberReps_exp_cache and the equality engine. The two caches are
+  // filled by collectRelsInfo above and are not written by any rule, and the
+  // rules only queue pending lemmas (see sendInfer), so representatives do not
+  // change either. The graphs built here are therefore exactly the graphs the
+  // rules below would have built lazily.
+  //
+  // Building them here, once per tc term, is what makes the graphs stable:
+  // applyTCRule adds the memberships of TC(r) itself to d_tcr_tcGraph, and any
+  // later call to buildTCGraphForRel would overwrite that graph with the base
+  // members of r alone, so those edges would never reach doTCInference and the
+  // TCLOSURE-UP II (transitivity) inferences would be lost.
+  for (const std::pair<const Node, std::map<Kind, std::vector<Node> > >& t :
+       d_terms_cache)
+  {
+    std::map<Kind, std::vector<Node> >::const_iterator tc_it =
+        t.second.find(Kind::RELATION_TCLOSURE);
+    if (tc_it != t.second.end())
+    {
+      for (const Node& tc_rel : tc_it->second)
+      {
+        buildTCGraphForRel(tc_rel);
+      }
+    }
+  }
+
   MEM_IT m_it = d_rReps_memberReps_cache.begin();
 
   while (m_it != d_rReps_memberReps_cache.end())
@@ -179,22 +208,6 @@ void TheorySetsRels::check()
         while (term_it != k_t_it->second.end())
         {
           computeMembersForUnaryOpRel(*term_it);
-          ++term_it;
-        }
-      }
-      else if (k_t_it->first == Kind::RELATION_TCLOSURE)
-      {
-        while (term_it != k_t_it->second.end())
-        {
-          // Protect d_tcr_tcGraph from being overwritten,
-          // if it already exists
-          if (d_rel_nodes.find(*term_it) == d_rel_nodes.end()
-              && d_rRep_tcGraph.find(getRepresentative((*term_it)[0]))
-                     == d_rRep_tcGraph.end())
-          {
-            buildTCGraphForRel(*term_it);
-            d_rel_nodes.insert(*term_it);
-          }
           ++term_it;
         }
       }
@@ -642,16 +655,9 @@ void TheorySetsRels::applyTCRule(Node mem_rep,
                       << tc_rel << ", its representative = " << tc_rel_rep
                       << " with member rep = " << mem_rep
                       << " and explanation = " << exp << std::endl;
-  MEM_IT mem_it = d_rReps_memberReps_cache.find(tc_rel[0]);
-
-  if (mem_it != d_rReps_memberReps_cache.end()
-      && d_rel_nodes.find(tc_rel) == d_rel_nodes.end()
-      && d_rRep_tcGraph.find(getRepresentative(tc_rel[0]))
-             == d_rRep_tcGraph.end())
-  {
-    buildTCGraphForRel(tc_rel);
-    d_rel_nodes.insert(tc_rel);
-  }
+  // Note the TC graph of tc_rel has already been built by check() for every tc
+  // term, before any rule was applied, so it must not be rebuilt here: the
+  // edges added below would be discarded by the rebuild.
 
   // mem_rep is a member of tc_rel[0] or mem_rep can be infered by TC_Graph of
   // tc_rel[0], thus skip
@@ -828,7 +834,13 @@ void TheorySetsRels::buildTCGraphForRel(Node tc_rel)
 
   Node rel_rep = getRepresentative(tc_rel[0]);
   Node tc_rel_rep = getRepresentative(tc_rel);
-  const std::vector<Node>& members = d_rReps_memberReps_cache[rel_rep];
+  MEM_IT mem_it = d_rReps_memberReps_cache.find(rel_rep);
+  if (mem_it == d_rReps_memberReps_cache.end())
+  {
+    // tc_rel[0] has no asserted members, nothing to build
+    return;
+  }
+  const std::vector<Node>& members = mem_it->second;
   const std::vector<Node>& exps = d_rReps_memberReps_exp_cache[rel_rep];
 
   for (size_t i = 0, msize = members.size(); i < msize; i++)

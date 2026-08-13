@@ -130,21 +130,17 @@ class TheorySetsRels : protected EnvObj
    * representation of the known members of a binary relation, i.e. a map
    * from element representative a to the set of element representatives b
    * such that the pair (a, b) is currently asserted to be a member. These
-   * graphs are built lazily during a full-effort check (see
-   * buildTCGraphForRel) and cleared at the end of each such check; they are
-   * caches for a single call to check(Theory::Effort), not context-dependent
-   * data structures.
+   * graphs are built once per full-effort check, in the loop at the top of
+   * check() that visits every rel.tclosure term (see buildTCGraphForRel), and
+   * cleared at the end of that check; they are caches for a single call to
+   * check(Theory::Effort), not context-dependent data structures.
    */
   /**
    * Mapping between the representative of a base relation r (the argument of a
    * rel.tclosure term) and the TC graph induced by the asserted members of r
    * only. Used by isTCReachable to recognize memberships of TC(r) that are
    * already derivable from the members of r, in which case applyTCRule
-   * skips sending a redundant lemma. Also serves as a "graph already built"
-   * marker: check() and applyTCRule test this map before calling
-   * buildTCGraphForRel, which protects the entries in d_tcr_tcGraph from
-   * being overwritten (buildTCGraphForRel would discard the edges that
-   * applyTCRule has added there in the meantime).
+   * skips sending a redundant lemma.
    */
   std::map<Node, std::map<Node, std::unordered_set<Node> > > d_rRep_tcGraph;
   /**
@@ -239,9 +235,13 @@ class TheorySetsRels : protected EnvObj
    * currently asserted members of r, with all nodes and edges expressed in
    * terms of representatives. If r has at least one member, the graph is stored
    * in d_rRep_tcGraph (keyed by r's representative) and in d_tcr_tcGraph /
-   * d_tcr_tcGraph_exps (keyed by tc_rel), overwriting any existing entries;
-   * callers must check d_rRep_tcGraph and d_rel_nodes first so that edges
-   * previously added to d_tcr_tcGraph by applyTCRule are not lost.
+   * d_tcr_tcGraph_exps (keyed by tc_rel); otherwise nothing is stored.
+   *
+   * This overwrites any existing entries, so it must be called before any rule
+   * is applied: applyTCRule adds the closure edges of TC(r) to d_tcr_tcGraph,
+   * and rebuilding the graph afterwards would discard them and thereby lose
+   * the transitivity inferences that doTCInference draws from them. check()
+   * therefore calls this exactly once per rel.tclosure term, up front.
    */
   void buildTCGraphForRel(Node tc_rel);
   /**

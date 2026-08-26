@@ -269,11 +269,6 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
   d_false = nodeManager()->mkConst(false);
   d_zero = nodeManager()->mkConstInt(Rational(0));
   d_one = nodeManager()->mkConstInt(Rational(1));
-  // Proofs are produced lazily; allocate the generator only when needed.
-  if (env.isTheoryProofProducing())
-  {
-    d_proofGen.reset(new LiaStarProofGenerator(env, env.getUserContext()));
-  }
 }
 
 LiaStarExtension::~LiaStarExtension() {}
@@ -382,24 +377,16 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
     if (options().arith.arithLiaStarAssumeNonnegative)
     {
       Node nonnegativeLemma = literal.impNode(nonnegative);
-      if (d_proofGen != nullptr)
-      {
-        d_proofGen->registerNonnegative(nonnegativeLemma, literal);
-      }
       d_im.addPendingLemma(nonnegativeLemma,
                            InferenceId::ARITH_LIA_STAR_NONNEGATIVE,
-                           d_proofGen.get());
+                           nullptr);
     }
 
     // (2) Split on whether v itself satisfies p: if so, v is a single-summand
     // member of S* and the literal holds directly.
     Node split = vectorPredicate.orNode(vectorPredicate.notNode());
-    if (d_proofGen != nullptr)
-    {
-      d_proofGen->registerSplit(split, vectorPredicate);
-    }
     d_im.addPendingLemma(
-        split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+        split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
     d_im.doPendingLemmas();
     if (d_im.hasSentLemma())
     {
@@ -507,12 +494,8 @@ void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
   star = rewrite(star);
   Node lemma = literal.eqNode(star);
   Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
-  if (d_proofGen != nullptr)
-  {
-    d_proofGen->registerContainsReduce(lemma, literal, star);
-  }
   d_im.addPendingLemma(
-      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, d_proofGen.get());
+      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
   d_processedStarTerms.push_back(literal);
   d_im.doPendingLemmas();
 }
@@ -1057,24 +1040,16 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   if (hintIt != d_lastHint.end())
   {
     Node deactivate = hintIt->second.notNode();
-    if (d_proofGen != nullptr)
-    {
-      d_proofGen->registerGuardDeactivate(deactivate);
-    }
     d_im.addPendingLemma(
-        deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+        deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   }
   Node d = d_nm->mkDummySkolem("liastarHint", d_nm->booleanType());
   d = d_astate.getValuation().ensureLiteral(d);
   d_im.preferPhase(d, true);
   d_lastHint[literal] = d;
   Node split = d.orNode(d.notNode());
-  if (d_proofGen != nullptr)
-  {
-    d_proofGen->registerSplit(split, d);
-  }
   d_im.addPendingLemma(
-      split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+      split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   d_im.addPendingLemma(d.impNode(hint), InferenceId::ARITH_LIA_STAR_HINT);
   d_im.doPendingLemmas();
   // Hand the witness to the SAT solver as forced decisions (guard first,
@@ -1628,12 +1603,8 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   en.guard = g;
   en.firstGuard = g;
   en.split = g.orNode(g.notNode());
-  if (d_proofGen != nullptr)
-  {
-    d_proofGen->registerSplit(en.split, g);
-  }
   d_im.addPendingLemma(
-      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   // the guarded predicate: guard => base
   Node seed = g.impNode(base);
   en.lemmas.push_back(seed);
@@ -1913,12 +1884,8 @@ void LiaStarExtension::mainSolverCheckStar(
   // within one user context the lemma cache drops the duplicates, and after
   // a pop (which retracts the lemmas but not this non-context state) they
   // are re-sent.
-  if (d_proofGen != nullptr)
-  {
-    d_proofGen->registerSplit(en.split, en.firstGuard);
-  }
   d_im.addPendingLemma(
-      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   for (const Node& lemma : en.lemmas)
   {
     addEnumLemma(lemma);
@@ -2111,12 +2078,8 @@ void LiaStarExtension::processDisjunct(Node literal,
   if (guardIt != d_lastGuard.end())
   {
     Node deactivate = guardIt->second.notNode();
-    if (d_proofGen != nullptr)
-    {
-      d_proofGen->registerGuardDeactivate(deactivate);
-    }
     d_im.addPendingLemma(
-        deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+        deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
     d_lastGuard.erase(guardIt);
   }
 
@@ -2141,24 +2104,16 @@ void LiaStarExtension::processDisjunct(Node literal,
     g = d_astate.getValuation().ensureLiteral(g);
     d_im.preferPhase(g, true);
     Node split = g.orNode(g.notNode());
-    if (d_proofGen != nullptr)
-    {
-      d_proofGen->registerSplit(split, g);
-    }
     d_im.addPendingLemma(
-        split, InferenceId::ARITH_LIA_STAR_SPLIT, d_proofGen.get());
+        split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
     lemma = g.impNode(literal.eqNode(star));
     // Remember this guard so it can be deactivated once a later, larger
     // under-approximation subsumes it.
     d_lastGuard[literal] = g;
   }
   Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
-  if (d_proofGen != nullptr)
-  {
-    d_proofGen->registerContainsReduce(lemma, literal, star);
-  }
   d_im.addPendingLemma(
-      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, d_proofGen.get());
+      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
   // Keep refining (do not mark the term processed) until every disjunct of the
   // predicate has been covered by a cone.
   if (complete)

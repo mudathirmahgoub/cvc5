@@ -27,7 +27,6 @@
 #include "smt/env_obj.h"
 #include "proof/unsat_core.h"
 #include "smt/solver_engine.h"
-#include "theory/arith/liastar/liastar_proof_generator.h"
 #include "theory/arith/liastar/liastar_stats.h"
 #include "theory/decision_strategy.h"
 #include "theory/ext_theory.h"
@@ -644,12 +643,6 @@ class LiaStarExtension : EnvObj
    * tentative reduction is active per literal.
    */
   std::map<Node, Node> d_lastGuard;
-
-  /**
-   * Lazy proof generator for the lia* lemmas (split, non-negativity, and
-   * STAR_CONTAINS reduction). Allocated only when proofs are enabled.
-   */
-  std::unique_ptr<LiaStarProofGenerator> d_proofGen;
 
   /**
    * The incremental subsolver for each lambda (STAR_CONTAINS predicate). Each

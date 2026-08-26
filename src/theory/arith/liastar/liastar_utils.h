@@ -84,7 +84,9 @@ class LiaStarUtils
    * @return an equivalent ite-free, negation-free predicate whose atoms are
    *   positive linear comparisons
    */
-  static Node removeItesAndNots(Node n, Env* e);
+  static Node removeItesAndNots(Node n,
+                                Env* e,
+                                LiaStarStatistics* stats = nullptr);
 
   /**
    * Normalize a QF_LIA predicate into flat disjunctive normal form: first
@@ -97,7 +99,7 @@ class LiaStarUtils
    * @param e the environment
    * @return an equivalent predicate in flat DNF
    */
-  static Node toDNF(Node n, Env* e);
+  static Node toDNF(Node n, Env* e, LiaStarStatistics* stats = nullptr);
 
   /**
    * Distribute AND over OR to reach disjunctive normal form (a step of
@@ -105,7 +107,7 @@ class LiaStarUtils
    * unsatisfiable (via `areAssertionsUnsat`) are pruned eagerly, which avoids
    * building cones for empty cells.
    */
-  static Node distribute(Node n, Env* e);
+  static Node distribute(Node n, Env* e, LiaStarStatistics* stats = nullptr);
 
   /**
    * Collapse nested associative operators one level deep, e.g.
@@ -125,7 +127,8 @@ class LiaStarUtils
    */
   static Result cvc5CheckSat(const std::vector<Node>& freeVariables,
                              Node assertion,
-                             Env* e);
+                             Env* e,
+                             LiaStarStatistics* stats = nullptr);
 
   /**
    * Render a single convex cell into Normaliz "symbolic" constraint strings.
@@ -341,7 +344,7 @@ class LiaStarUtils
    * are lifted out via `removeIntegerItes` and recombined into a disjunction
    * of guarded comparisons.
    */
-  static Node removeItes(Node n, Env* e);
+  static Node removeItes(Node n, Env* e, LiaStarStatistics* stats = nullptr);
 
   /**
    * Lift integer if-then-elses out of an integer term. Each returned pair is
@@ -349,7 +352,8 @@ class LiaStarUtils
    * condition holds, and the conditions are mutually exclusive and exhaustive.
    * A term without ites yields the single pair (true, n).
    */
-  static std::vector<std::pair<Node, Node>> removeIntegerItes(Node n, Env* e);
+  static std::vector<std::pair<Node, Node>> removeIntegerItes(
+      Node n, Env* e, LiaStarStatistics* stats = nullptr);
 
   /**
    * Convert an ite-free predicate to negation normal form and fold every
@@ -357,7 +361,7 @@ class LiaStarUtils
    * becomes `(>= a b)` and the disequality `(not (= a b))` becomes
    * `(or (> a b) (< a b))`. The result contains no NOT nodes.
    */
-  static Node removeNot(Node n, Env* e);
+  static Node removeNot(Node n, Env* e, LiaStarStatistics* stats = nullptr);
 
   /**
    * Decide whether a conjunction of literals is unsatisfiable; used by
@@ -367,7 +371,8 @@ class LiaStarUtils
    * arithLiaStarSubSolver option is off (the caller then keeps the conjunct).
    */
   static Result areAssertionsUnsat(const std::vector<Node>& assertions,
-                                   Env* e);
+                                   Env* e,
+                                   LiaStarStatistics* stats = nullptr);
 
   /**
    * Use Normaliz as a satisfiability oracle for a single conjunction of
@@ -380,7 +385,8 @@ class LiaStarUtils
    */
   static Result normalizCheckSat(Node variables,
                                  Node assertion,
-                                 bool assumeNonnegative);
+                                 bool assumeNonnegative,
+                                 LiaStarStatistics* stats = nullptr);
 
   /**
    * Print a linear polynomial in Normaliz syntax, mapping the i-th variable

@@ -194,12 +194,8 @@ if(NOT DEFINED JAVA_HOME AND NOT DEFINED JNI_HOME AND NOT WIN32)
   # set the JAVA_HOME variable.
   # This approach works properly on Unix systems but
   # not on Windows.
-  # Note: we query the "properties" settings rather than "runtime".
-  # The "runtime" suboption does not exist on all JDKs (e.g. it was
-  # removed in JDK 26), whereas "properties" reports java.home on all
-  # supported versions.
   execute_process(
-    COMMAND ${Java_JAVA_EXECUTABLE} -XshowSettings:properties -version
+    COMMAND ${Java_JAVA_EXECUTABLE} -XshowSettings:runtime -version
     OUTPUT_VARIABLE java_settings
     ERROR_VARIABLE java_settings
     OUTPUT_STRIP_TRAILING_WHITESPACE

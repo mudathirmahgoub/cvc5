@@ -851,12 +851,6 @@ class CVC5_EXPORT SolverEngine
    * Get the enviornment from this solver engine.
    */
   Env& getEnv();
-
-  /**
-   * Get the underlying SMT solver, which provides access to the theory
-   * engine and propositional engine. For internal use only.
-   */
-  smt::SmtSolver* getSmtSolver();
   /* .......................................................................  */
  private:
   /* .......................................................................  */

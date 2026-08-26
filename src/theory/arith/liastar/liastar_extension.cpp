@@ -497,6 +497,7 @@ void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
   d_im.addPendingLemma(
       lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
   d_processedStarTerms.push_back(literal);
+  ++d_stats.d_starTermsReduced;
   d_im.doPendingLemmas();
 }
 
@@ -528,7 +529,7 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
   // constrains its summands only through the lambda. Restricting the
   // enumeration unconditionally would under-approximate the star set by every
   // cell with a negative coordinate.
-  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env);
+  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env, &d_stats);
   std::vector<Node> conjuncts{base};
   if (options().arith.arithLiaStarAssumeNonnegative)
   {
@@ -1235,6 +1236,7 @@ std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
 LiaStarExtension::getCones(
     Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
 {
+  TimerStat::CodeTimer conesTimer(d_stats.d_getConesTime);
   // Eager path: build a cone for every DNF disjunct (`pairs`) and accumulate
   // the star constraints over all of them. Returns (cones, starConstraints):
   // the cones (paired with their predicate node) are used to build the
@@ -1262,8 +1264,10 @@ LiaStarExtension::getCones(
     {
       // an infeasible disjunct contributes nothing to the star
       Trace("liastar-ext") << "empty cone" << std::endl;
+      ++d_stats.d_conesEmpty;
       continue;
     }
+    ++d_stats.d_conesNonempty;
 
     for (const auto& generator : getConeGenerators(cone, dimension))
     {
@@ -1320,8 +1324,10 @@ void LiaStarExtension::addCone(
   if (LiaStarUtils::isEmptyCone(cone))
   {
     Trace("liastar-ext") << "empty cone" << std::endl;
+    ++d_stats.d_conesEmpty;
     return;
   }
+  ++d_stats.d_conesNonempty;
   cones.push_back({pair.second, cone});
 }
 
@@ -1459,6 +1465,7 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
 std::vector<std::pair<Node, Node>> LiaStarExtension::getMembershipDisjuncts(
     Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones)
 {
+  TimerStat::CodeTimer liaTimer(d_stats.d_getLiaTime);
   // Build the *membership* encoding (used only for the liastar-ext-smt debug
   // trace): one disjunct per (cone, module generator) stating that the vector
   // is a single element `g + sum_k l_k h_k` of that cone, with the multipliers
@@ -1536,13 +1543,18 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
 
   traceSmtPreamble(variables);
 
-  Node dnf = LiaStarUtils::toDNF(predicate, &d_env);
+  Node dnf = LiaStarUtils::toDNF(predicate, &d_env, &d_stats);
 
   Trace("liastar-ext") << "predicate in dnf: " << dnf << std::endl;
   Trace("liastar-ext") << "lia constraint: " << std::endl;
 
+  d_stats.d_getMatricesTime.start();
   std::vector<std::pair<std::vector<std::string>, Node>> pairs =
       LiaStarUtils::getMatrices(variables, dnf);
+  d_stats.d_getMatricesTime.stop();
+  ++d_stats.d_dnfCalls;
+  d_stats.d_dnfDisjuncts += pairs.size();
+  d_stats.d_dnfDisjunctsMax.maxAssign(pairs.size());
   return pairs;
 }
 
@@ -1561,7 +1573,7 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   // The base is the membership predicate (with ites and negations eliminated),
   // conjoined with the non-negativity of the lambda's variables only under
   // arithLiaStarAssumeNonnegative (see `getSubsolver`).
-  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env);
+  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env, &d_stats);
   std::vector<Node> conjuncts{base};
   if (options().arith.arithLiaStarAssumeNonnegative)
   {
@@ -1930,7 +1942,7 @@ void LiaStarExtension::mainSolverCheckStar(
   // Normalize the cell like `processDisjunct` stores it in `d_lazyCones`
   // (negations folded into positive comparisons), so the re-harvest check
   // below compares like with like.
-  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env);
+  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env, &d_stats);
   // Guard against re-harvesting a known cell (its negation lemma may not
   // have reached the solver before this model was produced).
   for (const auto& pair : pairs)
@@ -2003,7 +2015,7 @@ void LiaStarExtension::processDisjunct(Node literal,
   // The disjunct is a conjunction of arithmetic facts in the solver's normal
   // form, which can represent strict inequalities as negations (e.g.
   // (not (>= a b))). Normalize away the negations before building the matrix.
-  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env);
+  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env, &d_stats);
 
   Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
 
@@ -2119,6 +2131,7 @@ void LiaStarExtension::processDisjunct(Node literal,
   if (complete)
   {
     d_processedStarTerms.push_back(literal);
+  ++d_stats.d_starTermsReduced;
   }
   d_im.doPendingLemmas();
 }

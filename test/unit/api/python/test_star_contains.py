@@ -1,7 +1,4 @@
 ###############################################################################
-# Top contributors (to current version):
-#   Mudathir Mohamed
-#
 # This file is part of the cvc5 project.
 #
 # Copyright (c) 2009-2026 by the authors listed in the file AUTHORS
@@ -27,6 +24,7 @@ def solver(tm):
 
 
 def test_disjoint_union_unsat(tm, solver):
+    solver.setLogic("HO_ALL")
     solver.setOption("produce-models", "true")
     solver.setOption("trace", "liastar-ext")
     integer = tm.getIntegerSort()

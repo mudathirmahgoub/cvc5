@@ -20,6 +20,7 @@
 
 #include "expr/node.h"
 #include "libnormaliz/libnormaliz.h"
+#include "theory/arith/liastar/liastar_stats.h"
 #include "smt/env.h"
 #include "smt/solver_engine.h"
 #include "theory/arith/linear/normal_form.h"
@@ -157,16 +158,26 @@ class LiaStarUtils
    *
    * This is the one place that talks to libnormaliz. The constraint strings
    * are in Normaliz "symbolic" form, as produced by `getMatrix`/`getMatrices`.
-   * The cone is restricted to the non-negative orthant and uses exact
-   * (infinite-precision) integer arithmetic.
+   * The cone uses exact (infinite-precision) integer arithmetic. It is
+   * restricted to the non-negative orthant only when `assumeNonnegative` is
+   * true; otherwise every coordinate is declared sign-unrestricted, since
+   * int.star-contains does not itself constrain the sign of the summands --
+   * the lambda under the star carries the user's constraints.
    *
    * @param dimension the ambient dimension (the number of star variables; the
    *   Normaliz "amb_space")
    * @param constraints the rows of the cone, one symbolic constraint each
+   * @param assumeNonnegative restrict the cone to the non-negative orthant
+   *   (the arithLiaStarAssumeNonnegative option)
+   * @param stats optional statistics sink for the Normaliz input/compute
+   *   timers and the cone/Hilbert-basis counters
    * @return the computed cone (Hilbert basis and module generators available)
    */
   static libnormaliz::Cone<Integer> buildCone(
-      size_t dimension, const std::vector<std::string>& constraints);
+      size_t dimension,
+      const std::vector<std::string>& constraints,
+      bool assumeNonnegative,
+      LiaStarStatistics* stats = nullptr);
 
   /**
    * @param cone a cone computed by `buildCone`
@@ -176,6 +187,21 @@ class LiaStarUtils
    *   because querying the affine dimension may trigger its computation.
    */
   static bool isEmptyCone(libnormaliz::Cone<Integer>& cone);
+
+  /**
+   * Normaliz's `getHilbertBasis()` covers only the *pointed* part of a cone:
+   * for a cone containing a line it is relative to the cone's maximal subspace
+   * (its lineality space), so non-negative combinations of it miss lattice
+   * points. This appends the maximal subspace to complete it.
+   *
+   * @param cone the cone
+   * @param numPointed set to how many leading entries came from
+   *   `getHilbertBasis()`, and so must keep a non-negative multiplier; the
+   *   trailing lineality entries must not
+   * @return the Hilbert basis of `cone` itself
+   */
+  static std::vector<std::vector<Integer>> getHilbertBasisWithLineality(
+      libnormaliz::Cone<Integer>& cone, size_t& numPointed);
 
   /**
    * Checks the incremental subsolver `smte` (which must already have the
@@ -230,7 +256,7 @@ class LiaStarUtils
   static void getGeneratorBody(
       size_t dimension,
       const std::vector<Integer>& generator,
-      const std::vector<std::vector<Integer>>& hilbertBasis,
+      libnormaliz::Cone<Integer>& cone,
       bool star,
       bool useSkolems,
       NodeManager* nm,
@@ -345,11 +371,16 @@ class LiaStarUtils
 
   /**
    * Use Normaliz as a satisfiability oracle for a single conjunction of
-   * linear constraints: the conjunction is satisfiable over the non-negative
-   * integers iff its cone is non-empty. Only the UNSAT verdict is meaningful;
-   * a non-empty cone yields an unknown Result.
+   * linear constraints: the conjunction is satisfiable iff its cone is
+   * non-empty. Only the UNSAT verdict is meaningful; a non-empty cone yields
+   * an unknown Result. The search domain is the non-negative orthant when
+   * `assumeNonnegative` is true and all of Z^n otherwise -- passing true when
+   * the constraints admit negative solutions makes the oracle report UNSAT
+   * for a satisfiable conjunction, which would prune live DNF branches.
    */
-  static Result normalizCheckSat(Node variables, Node assertion);
+  static Result normalizCheckSat(Node variables,
+                                 Node assertion,
+                                 bool assumeNonnegative);
 
   /**
    * Print a linear polynomial in Normaliz syntax, mapping the i-th variable

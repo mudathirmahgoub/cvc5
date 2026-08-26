@@ -28,6 +28,7 @@
 #include "proof/unsat_core.h"
 #include "smt/solver_engine.h"
 #include "theory/arith/liastar/liastar_proof_generator.h"
+#include "theory/arith/liastar/liastar_stats.h"
 #include "theory/decision_strategy.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
@@ -546,6 +547,8 @@ class LiaStarExtension : EnvObj
   ExtTheory d_extTheory;
   /** Do we have any liaStar terms? */
   context::CDO<bool> d_hasLiaStarTerms;
+  /** Statistics for the liastar extension */
+  LiaStarStatistics d_stats;
   /**
    * The STAR_CONTAINS literals already fully reduced: eagerly reduced
    * literals, and lazily reduced literals whose cone coverage is complete. No
@@ -563,8 +566,11 @@ class LiaStarExtension : EnvObj
       d_lazyCones;
 
   /**
-   * The per-cone starLia constraints computed so far for each lambda node
-   * (`n[0]`). `getStarConstraints` only generates the skolems and constraints
+   * The per-cone starLia constraints computed so far for each STAR_CONTAINS
+   * literal (`n`, not the lambda `n[0]`: literals over one lambda share the
+   * cone list but must not share the multiplier skolems, or their sum
+   * constraints would force their vectors equal).
+   * `getStarConstraints` only generates the skolems and constraints
    * for cones in `d_lazyCones` that have not been processed yet, appending
    * them here, so previously computed constraints (and their skolems) are
    * reused across refinement rounds. These are the constraints that are
@@ -574,12 +580,13 @@ class LiaStarExtension : EnvObj
    */
   std::map<Node, std::vector<Node>> d_starConstraints;
   /**
-   * The (point, rays) contributions computed so far for each lambda node,
+   * The (point, rays) contributions computed so far for each literal,
    * kept in step with `d_starConstraints`. They are used to rebuild the sum
    * constraints over all cones on each call to `getStarConstraints`.
    */
   std::map<Node, std::vector<std::pair<Vector, std::vector<Vector>>>> d_lambdas;
-  /** The number of cones in `d_lazyCones[n[0]]` already processed. */
+  /** The number of cones in `d_lazyCones[n[0]]` already processed, per
+   * literal: each literal builds its own multipliers over the shared list. */
   std::map<Node, size_t> d_processedCones;
 
   /**
@@ -605,7 +612,7 @@ class LiaStarExtension : EnvObj
 
   /**
    * Partial-sums encoding (option arith-liastar-partial-sums): the current
-   * partial-sum skolems P_k for each lambda, one per coordinate of the star
+   * partial-sum skolems P_k for each literal, one per coordinate of the star
    * vector. P_k[i] equals the sum of every discovered cone's contribution to
    * coordinate i, via the definitions in `d_partialSumDefs`, so the star
    * formula is just `v = P_k`.
@@ -613,7 +620,7 @@ class LiaStarExtension : EnvObj
   std::map<Node, std::vector<Node>> d_partialSums;
 
   /**
-   * Partial-sums encoding: every definitional lemma for each lambda -- the
+   * Partial-sums encoding: every definitional lemma for each literal -- the
    * per-cone multiplier constraints and the partial-sum definitions
    * `P_k[i] = P_{k-1}[i] + contribution_k[i]`. Emitted unguarded by
    * `processDisjunct` and re-queued each round (the user-context lemma cache

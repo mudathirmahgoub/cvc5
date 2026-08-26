@@ -91,6 +91,7 @@
 #include <algorithm>
 
 #include "expr/node_algorithm.h"
+#include "expr/skolem_manager.h"
 #include "liastar_utils.h"
 #include "options/arith_options.h"
 #include "options/smt_options.h"
@@ -260,7 +261,8 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
       d_checkCounter(0),
       d_extTheoryCb(),
       d_extTheory(env, d_extTheoryCb, d_im),
-      d_hasLiaStarTerms(context(), false)
+      d_hasLiaStarTerms(context(), false),
+      d_stats(statisticsRegistry())
 {
   d_extTheory.addFunctionKind(Kind::STAR_CONTAINS);
   d_true = nodeManager()->mkConst(true);
@@ -315,15 +317,18 @@ void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
     {
       continue;
     }
-    // The predicate argument is normally a LAMBDA, but a *constant* lambda is
-    // rewritten into a FUNCTION_ARRAY_CONST (no children). Rebuild the atom
-    // with the lambda form so every structural access below (lambda[0],
-    // lambda[1], ...) is well-defined. The rebuilt atom rewrites back to the
-    // original, so the reduction lemma still attaches to the asserted literal.
+    // The predicate argument is normally a LAMBDA, but two rewrites can hide
+    // it: a *constant* lambda is rewritten into a FUNCTION_ARRAY_CONST (no
+    // children), and since STAR_CONTAINS is not a closure kind, lambda lifting
+    // may purify the argument into a skolem. Rebuild the atom with the lambda
+    // form so every structural access below (lambda[0], lambda[1], ...) is
+    // well-defined. The rebuilt atom rewrites back to the original, so the
+    // reduction lemma still attaches to the asserted literal.
     if (atom[0].getKind() != Kind::LAMBDA)
     {
       std::vector<Node> children;
-      children.push_back(uf::FunctionConst::toLambda(atom[0]));
+      children.push_back(uf::FunctionConst::toLambda(
+          SkolemManager::getOriginalForm(atom[0])));
       children.insert(children.end(), atom.begin() + 1, atom.end());
       atom = d_nm->mkNode(Kind::STAR_CONTAINS, children);
     }
@@ -338,6 +343,8 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
   // Last-call effort check: for each STAR_CONTAINS assertion emit the necessary
   // lemmas and, if the current model does not already satisfy the literal,
   // refine via the eager or lazy star reduction.
+  TimerStat::CodeTimer checkTimer(d_stats.d_checkFullEffortTime);
+  ++d_stats.d_checkRuns;
   Trace("liastar-ext") << "interceptModel: do model-based refinement"
                        << std::endl;
   Trace("liastar-ext") << " model is : " << arithModel << std::endl;
@@ -347,24 +354,42 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
   // get the assertions
   std::vector<Node> assertions;
   getAssertions(assertions);
+  d_stats.d_starContainsLiterals += assertions.size();
 
   Trace("liastar-ext") << "liastar assertions: " << assertions << std::endl;
   NodeManager* nm = nodeManager();
   for (const auto& literal : assertions)
   {
-    Node lambda = literal[0];
     Assert(literal.getKind() == Kind::STAR_CONTAINS);
+    // getAssertions above rebuilds the atom in lambda form, but recover it
+    // defensively here too: STAR_CONTAINS is not a closure kind, so the
+    // argument may have been purified by lambda lifting.
+    Node lambda =
+        uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(literal[0]));
+    Assert(!lambda.isNull() && lambda.getKind() == Kind::LAMBDA)
+        << "Expected a lambda as the first child of " << literal << std::endl;
     // vectorPredicate = p[v] (v satisfies p) and nonnegative = (and (>= v_i 0)).
     auto [vectorPredicate, nonnegative] =
         LiaStarUtils::getVectorPredicate(literal, nm);
 
-    // (1) Membership in S* requires v to be in the non-negative orthant.
-    if (d_proofGen != nullptr)
+    // (1) Under arithLiaStarAssumeNonnegative the summands -- and hence v --
+    // are taken to lie in the non-negative orthant. That only holds where the
+    // originating literal holds, so guard the lemma with it: an unguarded
+    // lemma would be treated as globally valid by the SAT solver, forcing
+    // v >= 0 in branches where the literal is false and corrupting unsat
+    // cores. Without the option int.star-contains constrains the sign of its
+    // summands only through the lambda, so no such lemma is emitted.
+    if (options().arith.arithLiaStarAssumeNonnegative)
     {
-      d_proofGen->registerNonnegative(nonnegative, literal);
+      Node nonnegativeLemma = literal.impNode(nonnegative);
+      if (d_proofGen != nullptr)
+      {
+        d_proofGen->registerNonnegative(nonnegativeLemma, literal);
+      }
+      d_im.addPendingLemma(nonnegativeLemma,
+                           InferenceId::ARITH_LIA_STAR_NONNEGATIVE,
+                           d_proofGen.get());
     }
-    d_im.addPendingLemma(
-        nonnegative, InferenceId::ARITH_LIA_STAR_NONNEGATIVE, d_proofGen.get());
 
     // (2) Split on whether v itself satisfies p: if so, v is a single-summand
     // member of S* and the literal holds directly.
@@ -387,6 +412,8 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       // the predicate p[v] (or the last computed star under-approximation),
       // then the literal holds in this model and no further refinement is
       // needed this round.
+      TimerStat::CodeTimer modelValueTimer(d_stats.d_modelValueTime);
+      ++d_stats.d_modelValueChecks;
       std::vector<Node> keys;
       std::vector<Node> values;
 
@@ -412,13 +439,19 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
 
       if (value == d_true)
       {
+        ++d_stats.d_modelValueSolved;
         Trace("liastar-ext-debug")
             << "----------------------------------------" << std::endl;
         Trace("liastar-ext-debug")
             << literal << " is satisfied in the current model" << std::endl;
         Trace("liastar-ext-debug")
             << "----------------------------------------" << std::endl;
-        return;
+        // `continue`, not `return`: this literal needs no refinement, but the
+        // remaining star literals still do. Returning here left every later
+        // literal unreduced -- and hence unconstrained -- for the whole check,
+        // which reports sat for unsatisfiable inputs with two or more star
+        // literals (see regress1/arith/liastar/two-star-predicates.smt2).
+        continue;
       }
     }
     // (3) Refine: reduce the star literal to its cone/Hilbert-basis encoding.
@@ -506,12 +539,20 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
   sub.engine->setOption("incremental", "true");
 
   // The base assertion is the membership predicate (with ites and negations
-  // eliminated) conjoined with the non-negativity of the lambda's variables.
+  // eliminated). Under arithLiaStarAssumeNonnegative it is additionally
+  // conjoined with the non-negativity of the lambda's variables; otherwise the
+  // cells must be enumerated over all of Z^n, since int.star-contains
+  // constrains its summands only through the lambda. Restricting the
+  // enumeration unconditionally would under-approximate the star set by every
+  // cell with a negative coordinate.
   Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env);
   std::vector<Node> conjuncts{base};
-  for (Node var : lambda[0])
+  if (options().arith.arithLiaStarAssumeNonnegative)
   {
-    conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
+    for (Node var : lambda[0])
+    {
+      conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
+    }
   }
   base =
       conjuncts.size() == 1 ? conjuncts[0] : d_nm->mkNode(Kind::AND, conjuncts);
@@ -1237,7 +1278,11 @@ LiaStarExtension::getCones(
     Trace("liastar-ext") << "Cone for node " << i << std::endl
                          << pair.second << std::endl;
 
-    Cone<Integer> cone = LiaStarUtils::buildCone(dimension, pair.first);
+    Cone<Integer> cone = LiaStarUtils::buildCone(
+        dimension,
+        pair.first,
+        options().arith.arithLiaStarAssumeNonnegative,
+        &d_stats);
     if (LiaStarUtils::isEmptyCone(cone))
     {
       // an infeasible disjunct contributes nothing to the star
@@ -1256,7 +1301,7 @@ LiaStarExtension::getCones(
       std::vector<Vector> rays;
       LiaStarUtils::getGeneratorBody(dimension,
                                      generator,
-                                     cone.getHilbertBasis(),
+                                     cone,
                                      /*star=*/true,
                                      /*useSkolems=*/true,
                                      d_nm,
@@ -1292,7 +1337,11 @@ void LiaStarExtension::addCone(
   Trace("liastar-ext") << "Cone for node " << std::endl
                        << pair.second << std::endl;
 
-  Cone<Integer> cone = LiaStarUtils::buildCone(dimension, pair.first);
+  Cone<Integer> cone = LiaStarUtils::buildCone(
+      dimension,
+      pair.first,
+      options().arith.arithLiaStarAssumeNonnegative,
+      &d_stats);
   if (LiaStarUtils::isEmptyCone(cone))
   {
     Trace("liastar-ext") << "empty cone" << std::endl;
@@ -1304,9 +1353,15 @@ void LiaStarExtension::addCone(
 std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
 {
   // Lazy path: return the star constraints over all cones accumulated so far in
-  // `d_lazyCones[n[0]]`. The per-cone constraints (and their fresh skolems) are
-  // computed only once per cone (so the skolems are stable across refinement
-  // rounds). Two encodings (option arith-liastar-partial-sums):
+  // `d_lazyCones[n[0]]`. The cone list is shared by every star literal over the
+  // same lambda (the cones depend only on the predicate), but the multiplier
+  // skolems and the constraints built over them are per *literal* (`n`, not
+  // `n[0]`): two literals over one lambda constrain different vectors, and
+  // sharing their multipliers would make the sum constraints `v1 = sum` and
+  // `v2 = sum` force `v1 = v2`. The per-cone constraints (and their fresh
+  // skolems) are computed once per cone per literal (so the skolems are stable
+  // across refinement rounds). Two encodings (option
+  // arith-liastar-partial-sums):
   // - default: the per-cone constraints are cached in
   //   `d_starConstraints`/`d_lambdas` and folded into every star formula, and
   //   the sum constraints, which span all cones, are rebuilt on each call --
@@ -1326,10 +1381,9 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   // The per-cone constraints and lambdas computed in previous calls. We only
   // compute new constraints (and fresh skolems) for cones that have not been
   // processed yet, and append them here.
-  std::vector<Node>& starConstraints = d_starConstraints[n[0]];
-  std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas =
-      d_lambdas[n[0]];
-  size_t& processed = d_processedCones[n[0]];
+  std::vector<Node>& starConstraints = d_starConstraints[n];
+  std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas = d_lambdas[n];
+  size_t& processed = d_processedCones[n];
   bool partialSums = options().arith.arithLiaStarPartialSums;
   bool newCones = processed < cones.size();
   // the contribution of the newly processed cones to each coordinate
@@ -1348,7 +1402,7 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
       std::vector<Vector> rays;
       LiaStarUtils::getGeneratorBody(dimension,
                                      generator,
-                                     cone.getHilbertBasis(),
+                                     cone,
                                      /*star=*/true,
                                      /*useSkolems=*/true,
                                      d_nm,
@@ -1361,7 +1415,7 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
       {
         // The per-cone constraints become definitional lemmas, emitted once;
         // the generator's terms are folded into the running contribution.
-        std::vector<Node>& defs = d_partialSumDefs[n[0]];
+        std::vector<Node>& defs = d_partialSumDefs[n];
         defs.insert(defs.end(), constraints.begin(), constraints.end());
         for (size_t i = 0; i < dimension; i++)
         {
@@ -1398,10 +1452,10 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   // Advance the partial sums by the new cones' contribution: fresh skolems
   // P_k with the definitions P_k[i] = P_{k-1}[i] + contribution[i] (just
   // contribution[i] for the first cones).
-  std::vector<Node>& sums = d_partialSums[n[0]];
+  std::vector<Node>& sums = d_partialSums[n];
   if (newCones)
   {
-    std::vector<Node>& defs = d_partialSumDefs[n[0]];
+    std::vector<Node>& defs = d_partialSumDefs[n];
     std::vector<Node> next;
     for (size_t i = 0; i < dimension; i++)
     {
@@ -1453,7 +1507,7 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getMembershipDisjuncts(
       std::vector<Vector> rays;
       LiaStarUtils::getGeneratorBody(dimension,
                                      generator,
-                                     cone.getHilbertBasis(),
+                                     cone,
                                      /*star=*/false,
                                      /*useSkolems=*/false,
                                      d_nm,
@@ -1529,13 +1583,17 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   }
   MainEnum& en = d_mainEnums[lambda];
 
-  // The base is the membership predicate (with ites and negations eliminated)
-  // conjoined with the non-negativity of the lambda's variables.
+  // The base is the membership predicate (with ites and negations eliminated),
+  // conjoined with the non-negativity of the lambda's variables only under
+  // arithLiaStarAssumeNonnegative (see `getSubsolver`).
   Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env);
   std::vector<Node> conjuncts{base};
-  for (Node var : lambda[0])
+  if (options().arith.arithLiaStarAssumeNonnegative)
   {
-    conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
+    for (Node var : lambda[0])
+    {
+      conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
+    }
   }
   base =
       conjuncts.size() == 1 ? conjuncts[0] : d_nm->mkNode(Kind::AND, conjuncts);
@@ -2006,7 +2064,7 @@ void LiaStarExtension::processDisjunct(Node literal,
     // round: within one user context the lemma cache drops the duplicates,
     // and after a user pop they are re-sent, so the star formulas emitted
     // below never reference undefined partial-sum skolems.
-    for (const Node& def : d_partialSumDefs[literal[0]])
+    for (const Node& def : d_partialSumDefs[literal])
     {
       if (!rewrite(def).isConst())
       {

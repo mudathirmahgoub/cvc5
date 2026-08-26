@@ -50,6 +50,7 @@
 
 #include "expr/algorithm/flatten.h"
 #include "expr/node_algorithm.h"
+#include "expr/skolem_manager.h"
 #include "libnormaliz/input.h"
 #include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
@@ -102,11 +103,14 @@ std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
   // necessary condition for membership in the star set (the set lives in the
   // non-negative orthant).
   Assert(n.getKind() == Kind::STAR_CONTAINS);
-  // The predicate argument is normally a LAMBDA, but a *constant* lambda
-  // (e.g. `lambda x. x = 31`, the function true at a single point) is
-  // rewritten by the UF rewriter into a FUNCTION_ARRAY_CONST with no
-  // children. Convert it back to a lambda before indexing into it.
-  Node lambda = uf::FunctionConst::toLambda(n[0]);
+  // The predicate argument is normally a LAMBDA, but two rewrites can hide it:
+  // a *constant* lambda (e.g. `lambda x. x = 31`, the function true at a
+  // single point) is turned by the UF rewriter into a FUNCTION_ARRAY_CONST
+  // with no children, and STAR_CONTAINS is not a closure kind, so lambda
+  // lifting may purify the argument into a skolem. Undo both before indexing
+  // into it.
+  Node lambda =
+      uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(n[0]));
   std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
   std::vector<Node> vecElements(n.begin() + 1, n.end());
 
@@ -620,7 +624,10 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
     // single cone; an empty cone means unsat).
     Node variables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
     assertion = expr::algorithm::flatten(nm, assertion);
-    return normalizCheckSat(variables, assertion);
+    return normalizCheckSat(
+        variables,
+        assertion,
+        e->getOptions().arith.arithLiaStarAssumeNonnegative);
   }
   else
   {
@@ -958,11 +965,15 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
                                   Node assertion,
                                   Env* e)
 {
-  // Check the satisfiability of `assertion` with a fresh cvc5 subsolver. All
-  // variables are constrained to be non-negative (the star set lives in the
-  // non-negative orthant). Genuine bound variables are existentially quantified;
-  // free constants are left in place (checking a formula with free constants is
-  // the same as checking its existential closure).
+  // Check the satisfiability of `assertion` with a fresh cvc5 subsolver. The
+  // variables are constrained to be non-negative only under
+  // arithLiaStarAssumeNonnegative; by default the star-contains lambda body
+  // (part of `assertion`) carries the user's constraints, and adding
+  // non-negativity here would make this oracle report UNSAT for conjunctions
+  // that are satisfiable over Z^n, pruning live DNF branches. Genuine bound
+  // variables are existentially quantified; free constants are left in place
+  // (checking a formula with free constants is the same as checking its
+  // existential closure).
   Options subOptions;
   SubsolverSetupInfo ssi(*e, subOptions);
 
@@ -975,10 +986,15 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
   {
     NodeManager* nm = e->getNodeManager();
     Node zero = nm->mkConstInt(Rational(0));
+    const bool assumeNonnegative =
+        e->getOptions().arith.arithLiaStarAssumeNonnegative;
     std::vector<Node> boundVariables;
     for (Node var : freeVariables)
     {
-      assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
+      if (assumeNonnegative)
+      {
+        assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
+      }
       if (var.getKind() == Kind::BOUND_VARIABLE)
       {
         boundVariables.push_back(var);
@@ -998,13 +1014,19 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
 }
 
 Cone<Integer> LiaStarUtils::buildCone(
-    size_t dimension, const std::vector<std::string>& constraints)
+    size_t dimension,
+    const std::vector<std::string>& constraints,
+    bool assumeNonnegative,
+    LiaStarStatistics* stats)
 {
+  if (stats)
+  {
+    stats->d_dimensionMax.maxAssign(dimension);
+  }
   // The single point of contact with libnormaliz. Render the constraint rows
   // into a Normaliz "symbolic constraints" input block over `dimension`-many
-  // variables, restricted to the non-negative orthant, asking for the Hilbert
-  // basis and the module generators. Then construct the cone and compute those
-  // two properties.
+  // variables, asking for the Hilbert basis and the module generators. Then
+  // construct the cone and compute those two properties.
   libnormaliz::OptionsHandler options;
 
   std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
@@ -1021,7 +1043,25 @@ Cone<Integer> LiaStarUtils::buildCone(
   {
     ss << constraint << std::endl;
   }
-  ss << "nonnegative" << std::endl;
+  if (assumeNonnegative)
+  {
+    ss << "nonnegative" << std::endl;
+  }
+  else
+  {
+    // Normaliz's constraint-only input defaults to the non-negative orthant,
+    // which would silently drop the summands with a negative coordinate. Since
+    // int.star-contains constrains its summands only through the lambda under
+    // the star, declare every coordinate sign-unrestricted instead.
+    // `signs` takes entries in {-1, 0, 1}: 1 at position i means x_i >= 0, -1
+    // means x_i <= 0, and 0 imposes no inequality.
+    ss << "signs" << std::endl;
+    for (size_t sj = 0; sj < dimension; sj++)
+    {
+      ss << (sj == 0 ? "" : " ") << "0";
+    }
+    ss << std::endl;
+  }
   ss << "HilbertBasis" << std::endl;
   ss << "ModuleGenerators" << std::endl;
   Trace("liastar-ext") << "normaliz input:" << std::endl;
@@ -1031,19 +1071,48 @@ Cone<Integer> LiaStarUtils::buildCone(
   // because libnormaliz.so only has implementation for
   // readNormalizInput<mpq_class>
   std::map<Type::InputType, libnormaliz::Matrix<mpq_class>> input;
+  if (stats) stats->d_normalizInputTime.start();
   input = libnormaliz::readNormalizInput<mpq_class>(ss,
                                                     options,
                                                     num_param_input,
                                                     bool_param_input,
                                                     poly_param_input,
                                                     number_field_ref);
+  if (stats) stats->d_normalizInputTime.stop();
+  if (stats)
+  {
+    ++stats->d_normalizCalls;
+    stats->d_normalizComputeTime.start();
+  }
   Cone<Integer> cone(input);
-  cone.setNonnegative(true);
+  cone.setNonnegative(assumeNonnegative);
   // always use infinite precision for integers
   cone.deactivateChangeOfPrecision();
   cone.compute(ConeProperty::HilbertBasis);
   cone.compute(ConeProperty::ModuleGenerators);
+  // completes the Hilbert basis for a non-pointed cone
+  cone.compute(ConeProperty::MaximalSubspace);
+  if (stats) stats->d_normalizComputeTime.stop();
+  if (stats)
+  {
+    stats->d_hilbertBasisTotal += cone.getHilbertBasis().size();
+    stats->d_hilbertBasisMax.maxAssign(cone.getHilbertBasis().size());
+    stats->d_moduleGeneratorsTotal += cone.getModuleGenerators().size();
+    stats->d_moduleGeneratorsMax.maxAssign(cone.getModuleGenerators().size());
+  }
   return cone;
+}
+
+std::vector<std::vector<Integer>> LiaStarUtils::getHilbertBasisWithLineality(
+    Cone<Integer>& cone, size_t& numPointed)
+{
+  std::vector<std::vector<Integer>> basis = cone.getHilbertBasis();
+  numPointed = basis.size();
+  for (const std::vector<Integer>& generator : cone.getMaximalSubspace())
+  {
+    basis.push_back(generator);
+  }
+  return basis;
 }
 
 bool LiaStarUtils::isEmptyCone(Cone<Integer>& cone)
@@ -1057,12 +1126,15 @@ bool LiaStarUtils::isEmptyCone(Cone<Integer>& cone)
   return false;
 }
 
-Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
+Result LiaStarUtils::normalizCheckSat(Node variables,
+                                     Node assertion,
+                                     bool assumeNonnegative)
 {
   // Use Normaliz as a satisfiability oracle for a single conjunction of linear
-  // constraints: the conjunction is satisfiable over the non-negative integers
-  // iff the corresponding cone is non-empty. Only the UNSAT verdict is
-  // meaningful here; otherwise an unknown Result is returned.
+  // constraints: the conjunction is satisfiable iff the corresponding cone is
+  // non-empty. Only the UNSAT verdict is meaningful here; otherwise an unknown
+  // Result is returned. The domain is the non-negative orthant when
+  // `assumeNonnegative` is set and all of Z^n otherwise.
   Trace("liastar-normalizCheckSat")
       << "---------------------------" << std::endl;
   Trace("liastar-normalizCheckSat")
@@ -1070,7 +1142,8 @@ Result LiaStarUtils::normalizCheckSat(Node variables, Node assertion)
 
   const std::vector<std::pair<std::vector<std::string>, Node>>& matrices =
       getMatrices(variables, assertion);
-  Cone<Integer> cone = buildCone(variables.getNumChildren(), matrices[0].first);
+  Cone<Integer> cone = buildCone(
+      variables.getNumChildren(), matrices[0].first, assumeNonnegative);
 
   Result result;
   if (isEmptyCone(cone))
@@ -1227,7 +1300,7 @@ std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)
 void LiaStarUtils::getGeneratorBody(
     size_t dimension,
     const std::vector<Integer>& generator,
-    const std::vector<std::vector<Integer>>& hilbertBasis,
+    Cone<Integer>& cone,
     bool star,
     bool useSkolems,
     NodeManager* nm,
@@ -1237,8 +1310,10 @@ void LiaStarUtils::getGeneratorBody(
     std::vector<std::vector<Node>>& rays)
 {
   // Encode one module generator `g` of a cone whose recession cone is generated
-  // by `hilbertBasis = {h_1, ..., h_m}`. The integer points reachable from this
-  // generator are `g + sum_j l_j * h_j` for non-negative integers l_j. There
+  // by the cone's Hilbert basis `{h_1, ..., h_m}`. The integer points reachable
+  // from this generator are `g + sum_j l_j * h_j`, where l_j is non-negative
+  // for the pointed part and unrestricted in sign for a lineality direction
+  // (which is available in both directions). There
   // are two flavours:
   //
   //   membership (star == false): the contribution of this generator is the
@@ -1285,6 +1360,9 @@ void LiaStarUtils::getGeneratorBody(
   }
 
   // one ray l_j * h_j per Hilbert basis element h_j
+  size_t numPointed = 0;
+  const std::vector<std::vector<Integer>> hilbertBasis =
+      getHilbertBasisWithLineality(cone, numPointed);
   for (size_t index = 0; index < hilbertBasis.size(); index++)
   {
     const std::vector<Integer>& basis = hilbertBasis[index];
@@ -1292,8 +1370,11 @@ void LiaStarUtils::getGeneratorBody(
     Node l = useSkolems ? nm->mkDummySkolem(name, nm->integerType())
                         : nm->mkBoundVar(name, nm->integerType());
     vars.push_back(l);
-    // (>= l 0)
-    constraints.push_back(nm->mkNode(Kind::GEQ, l, zero));
+    if (index < numPointed)
+    {
+      // (>= l 0); a lineality direction is unrestricted in sign
+      constraints.push_back(nm->mkNode(Kind::GEQ, l, zero));
+    }
     if (star)
     {
       // (=> (= mu 0) (= l 0)): a ray may only be used if its generator is.

@@ -85,6 +85,8 @@ libcvc5_add_sources(
   preprocessing/passes/fun_def_fmf.h
   preprocessing/passes/global_negate.cpp
   preprocessing/passes/global_negate.h
+  preprocessing/passes/rels_axioms.cpp
+  preprocessing/passes/rels_axioms.h
   preprocessing/passes/ho_elim.cpp
   preprocessing/passes/ho_elim.h
   preprocessing/passes/int_to_bv.cpp

@@ -19,6 +19,7 @@
 #include "options/sets_options.h"
 #include "preprocessing/assertion_pipeline.h"
 #include "preprocessing/preprocessing_pass_context.h"
+#include "proof/trust_id.h"
 
 namespace cvc5::internal {
 namespace preprocessing {
@@ -149,7 +150,10 @@ PreprocessingPassResult RelsAxioms::applyInternal(
     added.push_back(c);
     // Replace the axiom by its conjunction with the constraint, so that the
     // constraint depends on the axiom (unsat cores, proofs).
-    assertionsToPreprocess->replace(i, nm->mkNode(Kind::AND, q, c));
+    assertionsToPreprocess->replace(i,
+                                    rewrite(nm->mkNode(Kind::AND, q, c)),
+                                    nullptr,
+                                    TrustId::PREPROCESS_RELS_AXIOMS);
   }
   return PreprocessingPassResult::NO_CONFLICT;
 }

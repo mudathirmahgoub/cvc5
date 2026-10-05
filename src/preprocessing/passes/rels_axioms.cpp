@@ -145,8 +145,7 @@ PreprocessingPassResult RelsAxioms::applyInternal(
     {
       continue;
     }
-    Trace("rels-axioms") << "rels-axioms: " << q << " gives " << c
-                         << std::endl;
+    Trace("rels-axioms") << "rels-axioms: " << q << " gives " << c << std::endl;
     added.push_back(c);
     // Replace the axiom by its conjunction with the constraint, so that the
     // constraint depends on the axiom (unsat cores, proofs).

@@ -71,6 +71,46 @@ name   = "Sets Theory"
   help = "Rotation and inclusion."
 
 [[option]]
+  name       = "relsTcSubset"
+  category   = "expert"
+  long       = "rels-tc-subset"
+  type       = "bool"
+  default    = "false"
+  help       = "closure induction: from (a,b) in (rel.tclosure R) infer (a,b) in S for every transitive superset S of R, where S is a product A x B or a closure or iden that R is asserted to be a subset of, a relation T with R subset T and T;T subset T asserted (in particular R itself when R is transitive), or (rel.tclosure X) when R is syntactically included in it"
+
+[[option]]
+  name       = "relsAcyclicFlattenUnion"
+  category   = "expert"
+  long       = "rels-acyclic-flatten-union"
+  type       = "bool"
+  default    = "false"
+  help       = "for a negated (rel.acyclic (tuple R)) whose single relation R is a union, build the cycle witness over the operands of the union (sound: the union of the operands is R), which gives the witness the alternating structure the minimality rules exploit"
+
+[[option]]
+  name       = "relsAcyclicSelfLoop"
+  category   = "expert"
+  long       = "rels-acyclic-self-loop"
+  type       = "bool"
+  default    = "false"
+  help       = "for a negated (rel.acyclic (tuple R)) with a single relation R, replace the unrolled cycle witness by a fresh self-loop (s,s) in (rel.tclosure R), which is equivalent since (rel.tclosure R) is transitive"
+
+[[option]]
+  name       = "relsTcDownLazy"
+  category   = "expert"
+  long       = "rels-tc-down-lazy"
+  type       = "bool"
+  default    = "false"
+  help       = "apply the TCLOSURE_DOWN case split, which introduces fresh elements, only at last-call effort for closure memberships that the known members of the base relation do not explain, instead of at every full-effort check"
+
+[[option]]
+  name       = "relsFunctionalAxioms"
+  category   = "expert"
+  long       = "rels-functional-axioms"
+  type       = "bool"
+  default    = "false"
+  help       = "preprocessing: for a quantified axiom stating that a binary relation J is functional (forall x y z. (x,y) in J and (x,z) in J => y = z) or injective, add the relational constraint (rel.join (rel.transpose J) J) subset (rel.iden universe) (resp. with J and its transpose swapped), which the relations solver can use, e.g. to see that J;J^T is transitive"
+
+[[option]]
   name       = "relsAcyclicBackwardChords"
   category   = "expert"
   long       = "rels-acyclic-backward-chords"

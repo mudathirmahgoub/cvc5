@@ -445,6 +445,9 @@ const char* toString(InferenceId i)
     case InferenceId::SETS_RELS_SPLIT_CYCLE_LEN:
       return "SETS_RELS_SPLIT_CYCLE_LEN";
     case InferenceId::SETS_RELS_UNROLL_CYCLE: return "SETS_RELS_UNROLL_CYCLE";
+    case InferenceId::SETS_RELS_TCLOSURE_SUBSET: return "SETS_RELS_TCLOSURE_SUBSET";
+    case InferenceId::SETS_RELS_ACYCLIC_FLATTEN: return "SETS_RELS_ACYCLIC_FLATTEN";
+    case InferenceId::SETS_RELS_ACYCLIC_SELF_LOOP: return "SETS_RELS_ACYCLIC_SELF_LOOP";
     case InferenceId::SETS_RELS_TRANSPOSE_EQ: return "SETS_RELS_TRANSPOSE_EQ";
     case InferenceId::SETS_RELS_TRANSPOSE_REV: return "SETS_RELS_TRANSPOSE_REV";
     case InferenceId::SETS_RELS_TUPLE_REDUCTION:

@@ -364,6 +364,40 @@ class TheorySetsRels : protected EnvObj
    */
   void applyTCRule(Node mem, Node rel, Node rel_rep, Node exp);
   /**
+   * The TCLOSURE_DOWN case split for the closure membership exp of tc_rel
+   * (extracted from applyTCRule so that it can also be sent at last call in
+   * the lazy mode, see --rels-tc-down-lazy).
+   */
+  void sendTCDownSplit(Node tc_rel, Node exp);
+  /**
+   * Closure induction (--rels-tc-subset). For the closure membership exp of
+   * tc_rel = (rel.tclosure R), infer that the pair is also a member of every
+   * transitive superset S of R known in the current context: TC(R) is the
+   * least transitive relation containing R, so R subset S and S transitive
+   * entail TC(R) subset S. Candidates S are
+   *   - (rel.tclosure X) for every closure term in the context such that R is
+   *     syntactically included in it (isSyntacticallyInTC);
+   *   - every P with R subset P asserted (as the rewritten equality
+   *     (set.union R P) = P) whose class contains a product, a closure or an
+   *     identity term, or for which P;P subset P is asserted;
+   *   - R itself when R;R subset R is asserted.
+   */
+  void applyTCSubsetRules(Node tc_rel, Node exp);
+  /**
+   * Returns true if the equivalence class of pRep (with chosen term p) is
+   * known to be transitive: it contains a product, closure or identity term,
+   * or (rel.join p p) subset p is asserted. The equalities that justify this
+   * are appended to reason.
+   */
+  bool isTransitiveClass(Node pRep, Node p, std::vector<Node>& reason);
+  /** Whether the TC checks run at last-call effort (lazy TC down). */
+  bool d_tcLastCall = false;
+  /** Self-loop witnesses (--rels-acyclic-self-loop): relation list -> s. */
+  std::map<std::vector<Node>, Node> d_selfLoops;
+  /** Negated acyclicity constraints already flattened
+   * (--rels-acyclic-flatten-union). */
+  std::set<Node> d_flattenSent;
+  /**
    * Sends a conflict for a transitive-closure membership mem_rep in
    * tc_rel that is not reachable via members of tc_rel[0]. Introduces no
    * fresh skolems.

@@ -498,7 +498,8 @@ bool TheorySetsPrivate::hasOpenCycleObligation() const
 
 bool TheorySetsPrivate::needsTCGroundingLastCall() const
 {
-  return d_tc_enabled && options().sets.relsAcyclicHammer;
+  return d_tc_enabled
+         && (options().sets.relsAcyclicHammer || options().sets.relsTcDownLazy);
 }
 
 bool TheorySetsPrivate::needsJoinGroundingLastCall() const

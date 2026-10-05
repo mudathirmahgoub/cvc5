@@ -1907,6 +1907,8 @@ set(regress_0_tests
   regress0/rels/qgu-fuzz-relations-1.smt2
   regress0/rels/qgu-fuzz-relations-1-dd.smt2
   regress0/rels/rel_1tup_0.cvc.smt2
+  regress0/rels/rel_acyclic_flatten_union.smt2
+  regress0/rels/rel_acyclic_self_loop.smt2
   regress0/rels/rel_complex_0.cvc.smt2
   regress0/rels/rel_complex_1.cvc.smt2
   regress0/rels/rel_conflict_0.cvc.smt2
@@ -1936,6 +1938,11 @@ set(regress_0_tests
   regress0/rels/rel_tc_3.cvc.smt2
   regress0/rels/rel_tc_7.cvc.smt2
   regress0/rels/rel_tc_8.cvc.smt2
+  regress0/rels/rel_tc_down_lazy_sat.smt2
+  regress0/rels/rel_tc_down_lazy_unsat.smt2
+  regress0/rels/rel_tc_subset_disjoint.smt2
+  regress0/rels/rel_tc_subset_functional.smt2
+  regress0/rels/rel_tc_subset_transitive.smt2
   regress0/rels/rel_tp_3_1.cvc.smt2
   regress0/rels/rel_tp_join_0.cvc.smt2
   regress0/rels/rel_tp_join_1.cvc.smt2
@@ -3503,6 +3510,8 @@ set(regress_1_tests
   regress1/quantifiers/z3.855483_dio_nl.smt2
   regress1/rels/cycles/acyclic-by-inclusion.smt2
   regress1/rels/cycles/acyclic-down-exp-tuple.smt2
+  regress1/rels/cycles/acyclic-ltts-plsc-1-th-nofmf.smt2
+  regress1/rels/cycles/acyclic-ltts-plsc-2-th-just-rf-nofmf.smt2
   regress1/rels/cycles/acyclic-ltts-sc-1-th.smt2
   regress1/rels/cycles/acyclic1.smt2
   regress1/rels/cycles/acyclic2.smt2
@@ -4263,6 +4272,7 @@ set(regress_2_tests
   regress2/quantifiers/nunchaku2309663.nun.min.smt2
   regress2/quantifiers/small-bug1-fixpoint-3.smt2
   regress2/quantifiers/syn874-1.smt2
+  regress2/rels/acyclic-ltts-sc-2-th-nofmf.smt2
   regress2/seq/err-model-soundness.smt2
   regress2/simplify.javafe.ast.ArrayInit.35_without_quantification2.smt2
   regress2/strings/bidir_star.smt2

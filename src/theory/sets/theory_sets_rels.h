@@ -224,7 +224,7 @@ class TheorySetsRels : protected EnvObj
    * (rel.is_functional R) that are asserted (positively) for a relation R in
    * its equivalence class.
    */
-  std::map<Node, std::vector<Node> > d_functional_cache;
+  std::map<Node, std::vector<Node>> d_functional_cache;
   /** (rel.is_functional R) atoms asserted false for which we sent a witness */
   std::unordered_set<Node> d_notFunctionalSent;
 

@@ -16,7 +16,6 @@
 
 #include "expr/algorithm/flatten.h"
 #include "expr/node_algorithm.h"
-#include "expr/skolem_manager.h"
 #include "libnormaliz/input.h"
 #include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
@@ -42,11 +41,10 @@ using libnormaliz::operator<<;
 std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
 {
   Assert(n.getKind() == Kind::STAR_CONTAINS);
-  // The first child may have been purified into a skolem by lambda
-  // lifting, and the rewriter may normalize a constant lambda to a
-  // function array constant; recover the lambda from either form.
-  Node lambda =
-      uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(n[0]));
+  // Lambdas are not lifted during preprocessing, but the rewriter may
+  // normalize a constant lambda to a function array constant; recover the
+  // lambda from either form.
+  Node lambda = uf::FunctionConst::toLambda(n[0]);
   Assert(!lambda.isNull() && lambda.getKind() == Kind::LAMBDA)
       << "Expected a lambda as the first child of " << n << std::endl;
   std::vector<Node> vars(lambda[0].begin(), lambda[0].end());

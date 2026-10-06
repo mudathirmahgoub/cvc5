@@ -47,8 +47,8 @@ class LiaStarUtils
    * Destructure a star-contains atom into the predicate its vector must
    * satisfy, by instantiating the lambda with the vector elements.
    *
-   * The first child may be a purified skolem or a function array constant
-   * rather than a syntactic lambda; both are resolved.
+   * The first child may be a function array constant rather than a
+   * syntactic lambda; both are resolved.
    *
    * @param n a node of the form
    * (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) y_1 ... y_n)

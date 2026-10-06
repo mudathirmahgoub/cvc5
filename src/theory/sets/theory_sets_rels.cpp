@@ -1529,6 +1529,20 @@ bool TheorySetsRels::isTransitiveClass(Node pRep,
           continue;
         }
         Node pRepP = getRepresentative(P), qRep = getRepresentative(Q);
+        // In both cases (rel.join P Q) is P;P^T modulo equality, which is
+        // transitive if P is functional. An asserted (rel.is_functional P')
+        // with P' ~ P states this directly.
+        auto fcIt = d_functional_cache.find(pRepP);
+        if (fcIt != d_functional_cache.end())
+        {
+          Node atom = fcIt->second[0];
+          reason.push_back(atom);
+          if (atom[0] != P) reason.push_back(atom[0].eqNode(P));
+          if (sj != p) reason.push_back(sj.eqNode(p));
+          if (pt && P[0] != Q) reason.push_back(P[0].eqNode(Q));
+          if (qt && Q[0] != P) reason.push_back(Q[0].eqNode(P));
+          return true;
+        }
         // find a join term f = (rel.join Q' P') with Q' ~ Q and P' ~ P
         for (const auto& te : d_terms_cache)
         {

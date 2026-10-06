@@ -436,6 +436,11 @@ RewriteResponse TheorySetsRewriter::postRewriteRelations(TNode node)
       {
         return RewriteResponse(REWRITE_AGAIN, node[0][0]);
       }
+      if (node[0].getKind() == Kind::RELATION_IDEN)
+      {
+        // an identity relation is symmetric
+        return RewriteResponse(REWRITE_DONE, node[0]);
+      }
 
       if (node[0].getKind() == Kind::SET_EMPTY)
       {
@@ -610,6 +615,14 @@ RewriteResponse TheorySetsRewriter::postRewriteRelations(TNode node)
       {
         return RewriteResponse(REWRITE_DONE,
                                nm->mkConst(EmptySet(node.getType())));
+      }
+      if (node[0].getKind() == Kind::RELATION_IDEN)
+      {
+        // an identity relation is transitive, so it is its own closure.
+        // Without this rewrite, a membership (x, y) in (rel.tclosure
+        // (rel.iden A)) with x != y is refuted by no finite number of
+        // closure splits.
+        return RewriteResponse(REWRITE_DONE, node[0]);
       }
       else if (node[0].isConst())
       {

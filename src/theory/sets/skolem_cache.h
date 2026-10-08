@@ -61,10 +61,10 @@ class SkolemCache
     // not acyclic(R1,...,Rm) => exists k. exists s1,...,sk. forall i in [1,k).
     //                           (si, s(i+1)) in R1 V ... V (si, s(i+1)) in Rm
     SK_CYCLE_LEN,
-    // (rel.is_functional R) => exists f. forall x y. (x, y) in R => y = f(x)
+    // (rel.is-functional R) => exists f. forall x y. (x, y) in R => y = f(x)
     // This is cached by the node R.
     SK_FUNCTIONAL,
-    // not (rel.is_functional R) => exists k1 k2 k3.
+    // not (rel.is-functional R) => exists k1 k2 k3.
     //   (k1, k2) in R ^ (k1, k3) in R ^ k2 != k3
     // These are cached by the node R.
     SK_NOT_FUNCTIONAL1,

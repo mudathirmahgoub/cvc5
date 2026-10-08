@@ -1248,7 +1248,7 @@ TypeNode RelIsFunctionalTypeRule::computeType(NodeManager* nodeManager,
     {
       if (errOut)
       {
-        (*errOut) << "rel.is_functional operates on non-relation";
+        (*errOut) << "rel.is-functional operates on non-relation";
       }
       return TypeNode::null();
     }
@@ -1256,7 +1256,7 @@ TypeNode RelIsFunctionalTypeRule::computeType(NodeManager* nodeManager,
     {
       if (errOut)
       {
-        (*errOut) << "rel.is_functional operates on non-binary relations";
+        (*errOut) << "rel.is-functional operates on non-binary relations";
       }
       return TypeNode::null();
     }

@@ -5,8 +5,8 @@
 ; DISABLE-TESTER: cpc
 ;
 ; plsc-2-th-just-rf of rachelcleaveland/relational-solver-benchmarks (finite model finding off) with the
-; functionality axioms of po, po^T and address stated with rel.is_functional. Closure
-; induction uses (rel.is_functional address) to see that loc = address;address^T is
+; functionality axioms of po, po^T and address stated with rel.is-functional. Closure
+; induction uses (rel.is-functional address) to see that loc = address;address^T is
 ; transitive, without the rels-axioms pass.
 ;; ==== mcm: Toy ====
 (set-logic ALL)
@@ -75,8 +75,8 @@
 ;;      predecessor, acyclic; same-thread events are po-ordered ----
 (assert (set.subset po (rel.product Event Event)))
 ;; REDUCTION change of po unique child definition
-(assert (rel.is_functional po))
-(assert (rel.is_functional (rel.transpose po)))
+(assert (rel.is-functional po))
+(assert (rel.is-functional (rel.transpose po)))
 (assert (forall ((x Atom) (y Atom))
   (=> (and (set.member (tuple x) Event) (set.member (tuple y) Event)
            (= (thread x) (thread y)))
@@ -86,7 +86,7 @@
 
 ;; ---- address (each MEMORY event accesses one address); loc = same-address ----
 (assert (set.subset address (rel.product MemEvent Address)))
-(assert (rel.is_functional address))
+(assert (rel.is-functional address))
 (assert (forall ((e1 Atom)) (=> (set.member (tuple e1) MemEvent)
   (exists ((a Atom)) (set.member (tuple e1 a) address)))))
 (assert (= loc (rel.join address (rel.transpose address))))

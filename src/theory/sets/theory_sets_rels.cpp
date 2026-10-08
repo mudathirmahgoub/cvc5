@@ -889,7 +889,7 @@ void TheorySetsRels::applyIdenRule(Node mem_rep, Node iden_term, Node exp)
 /*
  * RELATION_IS_FUNCTIONAL, mode uf (default):
  *
- *   (rel.is_functional R)    (x, y) IS_IN R
+ *   (rel.is-functional R)    (x, y) IS_IN R
  *   ---------------------------------------
  *              y = f_R(x)
  *
@@ -902,7 +902,7 @@ void TheorySetsRels::applyIdenRule(Node mem_rep, Node iden_term, Node exp)
  *
  * Mode pairs:
  *
- *   (rel.is_functional R)    (x1, y1) IS_IN R    (x2, y2) IS_IN R
+ *   (rel.is-functional R)    (x1, y1) IS_IN R    (x2, y2) IS_IN R
  *   -------------------------------------------------------------
  *                    x1 = x2 => y1 = y2
  *
@@ -994,7 +994,7 @@ void TheorySetsRels::applyFunctionalRules()
 /*
  * NOT RELATION_IS_FUNCTIONAL:
  *
- *             not (rel.is_functional R)
+ *             not (rel.is-functional R)
  *   -----------------------------------------------
  *   (k1, k2) IS_IN R ^ (k1, k3) IS_IN R ^ k2 != k3
  *
@@ -1506,7 +1506,7 @@ bool TheorySetsRels::isTransitiveClass(Node pRep,
         }
         Node pRepP = getRepresentative(P), qRep = getRepresentative(Q);
         // In both cases (rel.join P Q) is P;P^T modulo equality, which is
-        // transitive if P is functional. An asserted (rel.is_functional P')
+        // transitive if P is functional. An asserted (rel.is-functional P')
         // with P' ~ P states this directly.
         auto fcIt = d_functional_cache.find(pRepP);
         if (fcIt != d_functional_cache.end())

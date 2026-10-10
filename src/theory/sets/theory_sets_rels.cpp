@@ -2398,7 +2398,19 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
   // every lemma about the witness.
   std::vector<Node> rels;
   collectUnionOperands(atom[0], rels);
-  d_cycleAtoms.emplace(rels, atom);
+  auto ins = d_cycleAtoms.emplace(rels, atom);
+  if (ins.first->second != atom)
+  {
+    // Another atom has the same operands, with the unions nested differently
+    // (e.g. A U (B U C) and (A U B) U C). The two unions are equal, so the two
+    // atoms are equivalent. The witness of these operands is built for the
+    // first atom, which is the reason of its lemmas; reduce this atom to it.
+    Node conc = ins.first->second;
+    Trace("rels-cycles") << "CyclicSameOperands: " << conc << " from " << atom
+                         << std::endl;
+    sendInfer(conc, InferenceId::SETS_RELS_INST_CYCLE, atom);
+    return;
+  }
   Node exp = cyclicAtom(rels);
   if (d_cycle_sequences.find(rels) != d_cycle_sequences.end())
   {

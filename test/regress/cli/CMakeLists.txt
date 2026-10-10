@@ -3539,6 +3539,8 @@ set(regress_1_tests
   regress1/rels/cycles/acyclic6.smt2
   regress1/rels/cycles/acyclic7.smt2
   regress1/rels/cycles/acyclic10.smt2
+  regress1/rels/cycles/cyclic-same-operands.smt2
+  regress1/rels/cycles/cyclic-same-operands-sat.smt2
   regress1/rels/cycles/acyclic_multi_rel.smt2
   regress1/rels/cycles/acyclic_union_single.smt2
   regress1/rels/cycles/acyclic_union_single_tc.smt2

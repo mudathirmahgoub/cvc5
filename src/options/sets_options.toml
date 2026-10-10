@@ -61,21 +61,21 @@ name   = "Sets Theory"
   category   = "expert"
   long       = "rels-acyclic-anchor=MODE"
   type       = "RelsAcyclicAnchorMode"
-  default    = "ROTATION"
-  help       = "how the cycle witness of a negated relation-acyclicity constraint is anchored with the asserted (positive) acyclicity constraints"
+  default    = "BRANCH"
+  help       = "how the cycle witness of a (rel.cyclic R) constraint is anchored with the asserted acyclicity constraints (not (rel.cyclic S))"
   help_mode  = "Anchoring modes for relation-acyclicity cycle witnesses."
 [[option.mode.NONE]]
   name = "none"
   help = "No anchoring."
-[[option.mode.ROTATION]]
-  name = "rotation"
-  help = "Default. For one positive constraint acyclic(S), rotate the witness so that its first edge is not in TC(S)."
+[[option.mode.BRANCH]]
+  name = "branch"
+  help = "For every asserted (not (rel.cyclic S)), once the candidate model fixes the length of the witness (at last call), one of the edges of the witness is not in TC(S)."
 [[option.mode.INCLUSION]]
   name = "inclusion"
-  help = "For every positive constraint acyclic(S), introduce an edge of the cyclic relation that is not in TC(S). May introduce fresh elements and slow down finite model finding."
+  help = "For every asserted (not (rel.cyclic S)), introduce an edge of the cyclic relation that is not in TC(S). May introduce fresh elements and slow down finite model finding."
 [[option.mode.BOTH]]
   name = "both"
-  help = "Rotation and inclusion."
+  help = "Branch and inclusion."
 
 [[option]]
   name       = "relsTcSubset"

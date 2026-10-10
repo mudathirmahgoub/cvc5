@@ -2825,7 +2825,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
   options::RelsAcyclicAnchorMode mode = options().sets.relsAcyclicAnchor;
   bool doIncl = mode == options::RelsAcyclicAnchorMode::INCLUSION
                 || mode == options::RelsAcyclicAnchorMode::BOTH;
-  bool doRot = mode == options::RelsAcyclicAnchorMode::ROTATION
+  bool doBranch = mode == options::RelsAcyclicAnchorMode::BRANCH
                || mode == options::RelsAcyclicAnchorMode::BOTH;
   if (mode == options::RelsAcyclicAnchorMode::NONE)
   {
@@ -2833,10 +2833,10 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
   }
   Node relUnion = mkRelUnion(rels);
   TypeNode tt = relUnion.getType().getSetElementType();
-  // Collect the applicable positive constraints. For the rotation (which may
-  // anchor on one S only) prefer an S that is itself one of the relations of
-  // the witness, the earliest in the tuple; the rotation is then most likely
-  // to force an edge of another relation (e.g. an rf edge leaving po+).
+  // Collect the applicable acyclicity constraints. The lemmas are sent in
+  // this order: first for the S that are themselves operands of the witness's
+  // relation, earliest operand first, so that the edges that must leave TC(S)
+  // are those of the other operands (e.g. an rf edge leaving po+).
   std::vector<Node> positives;
   for (const auto& entry : d_acyclic_cache)
   {
@@ -2918,7 +2918,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
       // the witness may already have been unrolled beyond it. Sent at most
       // once per (R, S) and length, since the length may change between
       // last-call checks.
-      if (doRot && concreteLen >= 2)
+      if (doBranch && concreteLen >= 2)
       {
         Assert(s.size() >= static_cast<size_t>(concreteLen));
         std::pair<std::pair<Node, Node>, size_t> branchKey(
@@ -2942,7 +2942,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
           Node branchReason =
               lenEq.isNull() ? reason
                              : nm->mkNode(Kind::AND, acyc_exp, acyc, lenEq);
-          Trace("rels-cycles") << "AcyclicAnchor (rotation/branch): " << conc
+          Trace("rels-cycles") << "AcyclicAnchor (branch): " << conc
                                << " from " << branchReason << std::endl;
           sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, branchReason);
         }

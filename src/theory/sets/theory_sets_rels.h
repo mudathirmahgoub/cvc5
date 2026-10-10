@@ -186,7 +186,7 @@ class TheorySetsRels : protected EnvObj
 
   std::unordered_set<Node> d_rel_nodes;
   /** a map from tuples to their elements' representatives*/
-  std::map<Node, std::vector<Node>> d_tuple_reps;
+  std::map<Node, std::vector<Node> > d_tuple_reps;
   /** a map from relation terms to their member tuples*/
   std::map<Node, TupleTrie> d_membership_trie;
 
@@ -194,26 +194,24 @@ class TheorySetsRels : protected EnvObj
   std::unordered_set<Node> d_symbolic_tuples;
 
   /** Mapping between relation and its member representatives */
-  std::map<Node, std::vector<Node>> d_rReps_memberReps_cache;
+  std::map<Node, std::vector<Node> > d_rReps_memberReps_cache;
 
   /** Mapping between relation and its member representatives explanation */
-  std::map<Node, std::vector<Node>> d_rReps_memberReps_exp_cache;
+  std::map<Node, std::vector<Node> > d_rReps_memberReps_exp_cache;
 
   /** Mapping between a relation representative and its equivalent relations
    * involving relational operators */
-  std::map<Node, std::map<Kind, std::vector<Node>>> d_terms_cache;
+  std::map<Node, std::map<Kind, std::vector<Node> > > d_terms_cache;
 
   /** Mapping from acyclic relation representative to its explanation(s) */
   std::map<Node, std::vector<Node>> d_acyclic_cache;
-  /** (R, S) pairs for which the inclusion / rotation anchor lemmas were sent */
+  /** (R, S) pairs for which the inclusion anchor lemma was sent */
   std::set<std::pair<Node, Node>> d_anchorInclusionSent;
-  std::set<std::pair<Node, Node>> d_anchorRotationSent;
-  // EXPERIMENT: ((R, S), concreteLen) triples for which the branching anchor
-  // lemma (the fixed replacement for the old, unsound "rotation" lemma -- see
-  // the comment on applyAcyclicAnchorRules) has already been sent. Keeping
-  // concreteLen in the key, rather than reusing d_anchorRotationSent's (R, S)
-  // key, lets the lemma be resent (soundly) if the witness's model-determined
-  // length changes across last-call checks.
+  /**
+   * ((R, S), length) for which the branching anchor lemma was sent; the
+   * length is part of the key since the length of the witness in the
+   * candidate model may change between last-call checks.
+   */
   std::set<std::pair<std::pair<Node, Node>, size_t>> d_anchorBranchSent;
 
   /** Mapping from acyclic relation representatives to the cycle-witness
@@ -255,7 +253,7 @@ class TheorySetsRels : protected EnvObj
    * already derivable from the members of r, in which case applyTCRule
    * skips sending a redundant lemma.
    */
-  std::map<Node, std::map<Node, std::unordered_set<Node>>> d_rRep_tcGraph;
+  std::map<Node, std::map<Node, std::unordered_set<Node> > > d_rRep_tcGraph;
   /**
    * Mapping between a transitive closure term TC(r) = (rel.tclosure r) and its
    * TC graph. Seeded by buildTCGraphForRel with the asserted members of r, and
@@ -264,7 +262,7 @@ class TheorySetsRels : protected EnvObj
    * Once per full-effort check, doTCInference() closes each of these graphs
    * transitively and infers the implied memberships.
    */
-  std::map<Node, std::map<Node, std::unordered_set<Node>>> d_tcr_tcGraph;
+  std::map<Node, std::map<Node, std::unordered_set<Node> > > d_tcr_tcGraph;
   /**
    * Maps a transitive closure term TC(r) to the explanations of the edges in
    * its TC graph. Each edge (a, b) is keyed by the pair tuple
@@ -273,7 +271,7 @@ class TheorySetsRels : protected EnvObj
    * edge. doTCInference conjoins these explanations along a path to form the
    * reason for each inferred membership.
    */
-  std::map<Node, std::map<Node, Node>> d_tcr_tcGraph_exps;
+  std::map<Node, std::map<Node, Node> > d_tcr_tcGraph_exps;
 
  private:
   /** Send infer
@@ -482,21 +480,18 @@ class TheorySetsRels : protected EnvObj
    */
   void doCycleInference();
   /**
-   * Constrain the cycle witness (rels, s) of a negated acyclicity constraint
-   * (acyc_exp) with the asserted positive acyclicity constraints: see the
-   * comment at the definition.
+   * Constrain the cycle witness (rels, s) of a cyclicity constraint
+   * (acyc_exp) with the asserted acyclicity constraints: see the comment at
+   * the definition.
    *
-   * EXPERIMENT: concreteLen, if non-negative, is the witness's full,
-   * model-determined length (s.size() >= concreteLen; only the first
-   * concreteLen elements are used); the branching anchor lemma (the
-   * replacement for the old "rotation" lemma) is only sent when this is
-   * known, since it needs to range over every edge of the witness. lenEq, if
-   * not null, is the literal (= l concreteLen) for the symbolic length l of
-   * the witness; it is added to the premises of the branching lemma, which
-   * is then a consequence of the UnrollCycle lemmas. Callers that cannot
-   * supply a concrete length (full-effort calls, where the model value of the
-   * symbolic length is not yet available) should pass -1, in which case only
-   * the (unconditionally sound) inclusion lemma is considered.
+   * concreteLen, if non-negative, is the length of the witness in the
+   * candidate model (s.size() >= concreteLen; only the first concreteLen
+   * elements are used); the branching anchor lemma is only sent when it is
+   * known, since it ranges over every edge of the witness. lenEq, if not
+   * null, is the literal (= l concreteLen) for the length l of the witness,
+   * which is added to the premises of the branching lemma. Full-effort
+   * callers, for which the length is not known yet, pass -1: then only the
+   * inclusion lemma is considered.
    */
   void applyAcyclicAnchorRules(const std::vector<Node>& rels,
                                const std::vector<Node>& s,
@@ -522,7 +517,7 @@ class TheorySetsRels : protected EnvObj
    * rel_tc_graph_exps maps each edge of the graph to its explanation, as in
    * d_tcr_tcGraph_exps.
    */
-  void doTCInference(std::map<Node, std::unordered_set<Node>> rel_tc_graph,
+  void doTCInference(std::map<Node, std::unordered_set<Node> > rel_tc_graph,
                      std::map<Node, Node> rel_tc_graph_exps,
                      Node tc_rel);
   /**
@@ -538,7 +533,7 @@ class TheorySetsRels : protected EnvObj
    */
   void doTCInference(Node tc_rel,
                      std::vector<Node> reasons,
-                     std::map<Node, std::unordered_set<Node>>& tc_graph,
+                     std::map<Node, std::unordered_set<Node> >& tc_graph,
                      std::map<Node, Node>& rel_tc_graph_exps,
                      Node start_node_rep,
                      Node cur_node_rep,
@@ -580,7 +575,7 @@ class TheorySetsRels : protected EnvObj
   void isTCReachable(Node start,
                      Node dest,
                      std::unordered_set<Node>& hasSeen,
-                     std::map<Node, std::unordered_set<Node>>& tc_graph,
+                     std::map<Node, std::unordered_set<Node> >& tc_graph,
                      bool& isReachable);
   /**
    * True if mem_rep is justified by currently-known members of join_rel[0] and
@@ -598,7 +593,7 @@ class TheorySetsRels : protected EnvObj
   Node getRepresentative(Node t);
   inline void addToMembershipDB(Node, Node, Node);
   inline Node constructPair(Node tc_rep, Node a, Node b);
-  bool safelyAddToMap(std::map<Node, std::vector<Node>>&, Node, Node);
+  bool safelyAddToMap(std::map<Node, std::vector<Node> >&, Node, Node);
   bool isRel(Node n)
   {
     return n.getType().isSet() && n.getType().getSetElementType().isTuple();

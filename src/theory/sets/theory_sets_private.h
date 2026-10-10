@@ -352,7 +352,7 @@ class TheorySetsPrivate : protected EnvObj
   /** Run the relations subsolver, if relational constraints are present. */
   void checkRelations();
   /**
-   * Run the acyclicity subsolver, if not-acyclicity constraints are present.
+   * Run the acyclicity subsolver, if (rel.cyclic R) constraints are present.
    * See TheorySetsRels::checkAcyclicity.
    */
   void checkAcyclicity();

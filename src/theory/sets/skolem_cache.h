@@ -55,11 +55,11 @@ class SkolemCache
     // (a,b) in join(A,B) => exists k. (a,k) in A ^ (k,b) in B
     // This is cached by the nodes corresponding to (a,b) and join(A,B).
     SK_JOIN,
-    // not acyclic(R1,...,Rm) => exists k1,...,kn. forall i in [1,n).
-    //                           (ki, k(i+1)) in R1 V ... V (ki, k(i+1)) in Rm
+    // (rel.cyclic (R1 U ... U Rm)) => exists k1,...,kn. forall i in [1,n).
+    //   (ki, k(i+1)) in TC(R1) V ... V (ki, k(i+1)) in TC(Rm)
     SK_CYCLE_ELEM,
-    // not acyclic(R1,...,Rm) => exists k. exists s1,...,sk. forall i in [1,k).
-    //                           (si, s(i+1)) in R1 V ... V (si, s(i+1)) in Rm
+    // (rel.cyclic (R1 U ... U Rm)) => exists k. exists s1,...,sk.
+    //   forall i in [1,k). (si, s(i+1)) in TC(R1) V ... V (si, s(i+1)) in TC(Rm)
     SK_CYCLE_LEN,
     // (rel.is-functional R) => exists f. forall x y. (x, y) in R => y = f(x)
     // This is cached by the node R.

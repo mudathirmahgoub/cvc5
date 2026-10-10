@@ -199,11 +199,19 @@ More details can be found in :cite:`MengRTB17`.
 +----------------------+----------------------------------------------+------------------------------------------------------------------------------------+
 | Functional           | ``(rel.is-functional X)``                    | ``Term t = solver.mkTerm(Kind::RELATION_IS_FUNCTIONAL, {X});``                     |
 +----------------------+----------------------------------------------+------------------------------------------------------------------------------------+
+| Cyclic               | ``(rel.cyclic X)``                           | ``Term t = solver.mkTerm(Kind::RELATION_CYCLIC, {X});``                            |
++----------------------+----------------------------------------------+------------------------------------------------------------------------------------+
 
 The predicate ``(rel.is-functional X)`` holds if the binary relation ``X`` is
 functional (right-unique), i.e., if ``(x, y)`` and ``(x, z)`` in ``X`` imply
 ``y = z``; ``X`` need not be total. The solver reasons about it directly, which
 is usually much cheaper than stating the same property with a quantifier.
+
+The predicate ``(rel.cyclic X)`` holds if the binary relation ``X`` has a
+cycle, i.e., if ``(x, x)`` is in ``(rel.tclosure X)`` for some ``x``; its
+negation states that ``X`` is acyclic. For a union
+``(rel.cyclic (set.union X Y))``, the solver searches for a cycle whose edges
+alternate between the transitive closures of the operands.
 
 Example:
 

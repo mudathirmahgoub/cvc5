@@ -34,14 +34,14 @@ namespace cvc5::internal {
 namespace theory {
 namespace sets {
 
-typedef std::map<Node, std::vector<Node>>::iterator MEM_IT;
+typedef std::map<Node, std::vector<Node> >::iterator MEM_IT;
 typedef context::CDHashMap<std::vector<Node>,
                            std::pair<std::vector<Node>, Node>,
                            VectorNodeHashFunction>::iterator CYC_IT;
-typedef std::map<Kind, std::vector<Node>>::iterator KIND_TERM_IT;
-typedef std::map<Node, std::unordered_set<Node>>::iterator TC_GRAPH_IT;
-typedef std::map<Node, std::map<Kind, std::vector<Node>>>::iterator TERM_IT;
-typedef std::map<Node, std::map<Node, std::unordered_set<Node>>>::iterator
+typedef std::map<Kind, std::vector<Node> >::iterator KIND_TERM_IT;
+typedef std::map<Node, std::unordered_set<Node> >::iterator TC_GRAPH_IT;
+typedef std::map<Node, std::map<Kind, std::vector<Node> > >::iterator TERM_IT;
+typedef std::map<Node, std::map<Node, std::unordered_set<Node> > >::iterator
     TC_IT;
 
 TheorySetsRels::TheorySetsRels(Env& env,
@@ -55,12 +55,9 @@ TheorySetsRels::TheorySetsRels(Env& env,
       d_skCache(skc),
       d_treg(treg),
       d_shared_terms(userContext()),
-      // ===== TEMP CHANGE (cycle-ext): construct CD map with SAT context =====
-      // NEW CODE: context() = SAT search context, so entries roll back on every
-      // decision/backtrack (unlike userContext() used for d_shared_terms
-      // above).
+      // the cycle witnesses depend on the SAT context: they are rolled back
+      // on backtracking (unlike d_shared_terms)
       d_cycle_sequences(context())
-// ===== END TEMP CHANGE =====
 {
   d_trueNode = nodeManager()->mkConst(true);
   d_falseNode = nodeManager()->mkConst(false);
@@ -104,7 +101,7 @@ void TheorySetsRels::check()
     {
       Node mem = d_rReps_memberReps_cache[rel_rep][i];
       Node exp = d_rReps_memberReps_exp_cache[rel_rep][i];
-      std::map<Kind, std::vector<Node>>& kind_terms = d_terms_cache[rel_rep];
+      std::map<Kind, std::vector<Node> >& kind_terms = d_terms_cache[rel_rep];
 
       if (kind_terms.find(Kind::RELATION_TRANSPOSE) != kind_terms.end())
       {
@@ -200,39 +197,6 @@ void TheorySetsRels::check()
         {
           computeMembersForBinOpRel(*term_it);
           ++term_it;
-          // bool is_true_eq = eqc_rep.getConst<bool>();
-
-          // // collect membership info
-          // if (eqc_node.getKind() == Kind::SET_MEMBER
-          //     && eqc_node[1].getType().getSetElementType().isTuple())
-          // {
-          //   Node tup_rep = getRepresentative( eqc_node[0] );
-          //   Node rel_rep = getRepresentative( eqc_node[1] );
-
-          //   if( eqc_node[0].isVar() ){
-          //     reduceTupleVar( eqc_node );
-          //   }
-
-          //   Node reason        = is_true_eq ? eqc_node : eqc_node.negate();
-
-          //   if( is_true_eq ) {
-          //     if( safelyAddToMap(d_rReps_memberReps_cache, rel_rep, tup_rep)
-          //     ) {
-          //       d_rReps_memberReps_exp_cache[rel_rep].push_back(reason);
-          //       computeTupleReps(tup_rep);
-          //       d_membership_trie[rel_rep].addTerm(tup_rep,
-          //       d_tuple_reps[tup_rep]);
-          //     }
-          //   }
-          // }
-          // else if (eqc_node.getKind() == Kind::RELATION_CYCLIC)
-          // {
-          //   Trace("rels-acyclic") << "[Theory::Rels] Collecting acyclic
-          //   terms!"
-          //                         << eqc_node << is_true_eq << std::endl;
-          //   d_acyclic_cache[eqc_node] = is_true_eq;
-          // }
-          // collect relational terms info
         }
       }
       else if (k_t_it->first == Kind::RELATION_TRANSPOSE)
@@ -281,8 +245,6 @@ void TheorySetsRels::clearCaches()
   d_tcr_tcGraph_exps.clear();
   d_tcr_tcGraph.clear();
   d_acyclic_cache.clear();
-
-  // d_cycle_sequences.clear();
 }
 
 void TheorySetsRels::checkAcyclicity()
@@ -445,7 +407,7 @@ void TheorySetsRels::checkTransitiveClosureDown()
        ++m_it)
   {
     Node rel_rep = m_it->first;
-    std::map<Kind, std::vector<Node>>& kind_terms = d_terms_cache[rel_rep];
+    std::map<Kind, std::vector<Node> >& kind_terms = d_terms_cache[rel_rep];
     if (kind_terms.find(Kind::RELATION_TCLOSURE) == kind_terms.end())
     {
       continue;
@@ -1857,7 +1819,7 @@ void TheorySetsRels::isTCReachable(
     Node start,
     Node dest,
     std::unordered_set<Node>& hasSeen,
-    std::map<Node, std::unordered_set<Node>>& tc_graph,
+    std::map<Node, std::unordered_set<Node> >& tc_graph,
     bool& isReachable)
 {
   if (hasSeen.find(start) == hasSeen.end())
@@ -1927,7 +1889,7 @@ void TheorySetsRels::buildTCGraphForRel(Node tc_rel)
   // collectRelsInfo maintains these two as parallel vectors
   Assert(members.size() == exps.size());
 
-  std::map<Node, std::unordered_set<Node>>& rel_tc_graph =
+  std::map<Node, std::unordered_set<Node> >& rel_tc_graph =
       d_rRep_tcGraph[rel_rep];
   for (size_t i = 0, msize = members.size(); i < msize; i++)
   {
@@ -1943,7 +1905,7 @@ void TheorySetsRels::buildTCGraphForRel(Node tc_rel)
 }
 
 void TheorySetsRels::doTCInference(
-    std::map<Node, std::unordered_set<Node>> rel_tc_graph,
+    std::map<Node, std::unordered_set<Node> > rel_tc_graph,
     std::map<Node, Node> rel_tc_graph_exps,
     Node tc_rel)
 {
@@ -1984,7 +1946,7 @@ void TheorySetsRels::doTCInference(
 void TheorySetsRels::doTCInference(
     Node tc_rel,
     std::vector<Node> reasons,
-    std::map<Node, std::unordered_set<Node>>& tc_graph,
+    std::map<Node, std::unordered_set<Node> >& tc_graph,
     std::map<Node, Node>& rel_tc_graph_exps,
     Node start_node_rep,
     Node cur_node_rep,
@@ -2444,10 +2406,8 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
     Trace("rels-cycles") << "SelfLoop: exp = " << exp << ", conc = " << conc
                          << std::endl;
     sendInfer(conc, InferenceId::SETS_RELS_ACYCLIC_SELF_LOOP, exp);
-    // EXPERIMENT: self-loop witnesses are always fully-formed (length 2), so
-    // the branching anchor rule can fire immediately -- it reduces to the
-    // single-edge case, same as the old rotation lemma (sound here regardless,
-    // since there is only one edge to begin with).
+    // A self-loop witness is complete: its only edge is (s1, s1), so the
+    // branching anchor lemma can be sent at once (it has one disjunct).
     applyAcyclicAnchorRules(rels, {s1, s1}, exp, 2);
     return;
   }
@@ -2628,8 +2588,8 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
  *                         ---------------------------------------
  *                           (s[q],s[r]) NOT IN RELATION_TCLOSURE(Rb)
  *
- * Given that the cycle (R,(s_1,...,s_cnt),l) is in C (i.e., NOT ACYCLIC(R) in
- * S), and by definition (s_1,...,s_cnt) is a minimal cycle in R1 U ... U Rk, no
+ * Given that the cycle (R,(s_1,...,s_cnt),l) is in C (i.e., (rel.cyclic R) is
+ * asserted), and by definition (s_1,...,s_cnt) is a minimal cycle in R1 U ... U Rk, no
  * "shortcut" edge may exist between two non-adjacent nodes of the cycle, i.e.
  * we forbid (s_q,s_r) IN TC(R) for every 1 <= q < r - 1 <= cnt - 1. Also, we
  * forbid s_q = s_r for every 1 <= q < r <= cnt, except for the one allowed by
@@ -2783,37 +2743,12 @@ void TheorySetsRels::applyAcyclicDownRule(Node mem_rep,
 
   NodeManager* nm = nodeManager();
 
-  // Reason is that mem_rep is in tc_rel_rep, and that some relation
-  // equivalent to tc_rel0_rep is acyclic
-  // Node reason = nodeManager()->mkNode(
-  //     Kind::AND, exp_tc, exp_acyc);
-
-  // If the membership explanation involves a relation that is not tc_rel,
-  // update the reason to include the equality of these relations
-  // if (tc_rel != exp_tc[1])
-  // {
-  //   reason = nm->mkNode(Kind::AND, reason,
-  //                       nm->mkNode(Kind::EQUAL, tc_rel, exp_tc[1]));
-  // }
-
-  // If the acyclic relation is not the tc one, then we must assert
-  // the equality of these two relations
-  // if (exp_acyc[0] != tc_rel[0])
-  // {
-  //   reason = nodeManager()->mkNode(
-  //       Kind::AND,
-  //       reason,
-  //       nodeManager()->mkNode(Kind::EQUAL, exp_acyc[0],
-  //       tc_rel[0]));
-  // }
-
-  // Here is a cleaner way of doing the above:
+  // The reason: the membership, the acyclicity constraint, and the equalities
+  // relating the closure of the membership to tc_rel and the relation of the
+  // constraint to tc_rel[0]. exp_acyc is the literal (not (rel.cyclic u)).
   std::vector<Node> reasons{exp_tc, exp_acyc};
   if (tc_rel != exp_tc[1])
     reasons.push_back(nm->mkNode(Kind::EQUAL, tc_rel, exp_tc[1]));
-  // x in the rule is the union of the acyclic tuple's relations; relate it to
-  // tc_rel[0].
-  // exp_acyc is the literal (not (rel.cyclic u))
   Node u = exp_acyc[0][0];
   if (u != tc_rel[0]) reasons.push_back(nm->mkNode(Kind::EQUAL, u, tc_rel[0]));
   Node reason =
@@ -2843,7 +2778,7 @@ void TheorySetsRels::doCycleInference()
   for (const auto& sl : d_selfLoops)
   {
     Node acyc_exp = cyclicAtom(sl.first);
-    // EXPERIMENT: see the comment at the other self-loop call site above.
+    // complete witnesses, see applyInstCycleRule
     applyAcyclicAnchorRules(sl.first, {sl.second, sl.second}, acyc_exp, 2);
   }
   CYC_IT c_it = d_cycle_sequences.begin();
@@ -2889,35 +2824,17 @@ void TheorySetsRels::doCycleInference()
  *      every edge of R is a path of S, or when the edges of R outside S are
  *      excluded by the templates of the benchmark.
  *
- *  (2) ROTATION:
- *      EXPERIMENT: the original form of this rule was
- *        cyclic(R) /\ NOT cyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
- *      sent as soon as the witness reached length 2, on the premise that "the
- *      witness also contains an edge outside TC(S); rotating a shortest cycle
- *      preserves all its properties, so we may assume its first edge is such
- *      an edge." That is a choice of numbering (symmetry breaking), not a
- *      consequence of the premises: it refutes satisfiable branches, e.g.
- *      R1 = {(a,b)}, R2 = {(b,c),(c,a)}, S = {(a,b),(b,c)}, where the branch
- *      in which UnrollCycle picks (s_1,s_2) in R1+ is satisfiable but
- *      (a,b) is in TC(S). It preserves satisfiability only as long as it is
- *      the only choice about the numbering and every other witness lemma is
- *      invariant under rotation, so it does not compose with arbitrary other
- *      rules (kept for reference as the commented-out block in
- *      applyAcyclicAnchorRules).
- *
- *      NEW: once the model gives the witness's length l = len (so every edge
- *      of the witness, not just a prefix, can be named, with s_len = s_1),
- *      branch over all of them instead of committing to the first:
+ *  (2) BRANCH: once the candidate model gives the length of the witness,
+ *      l = len (so that every edge of the witness can be named, with
+ *      s_len = s_1), one of its edges is not in TC(S):
  *        cyclic(R) /\ NOT cyclic(S) /\ l = len  =>
  *          (s_1,s_2) NOT IN TC(S)  \/  (s_2,s_3) NOT IN TC(S)  \/  ...  \/
  *          (s_{len-1},s_len) NOT IN TC(S)
- *      This is implied by the very same argument used for INCLUSION, applied
- *      to the witness's own edges instead of a fresh witness: with l = len
- *      they form the whole cycle, and a cycle using only TC(S)-edges would be
- *      a cycle of TC(S) too, so at least one of them must escape TC(S), with
- *      no dependence on which UnrollCycle branch produced the witness. The
- *      premise l = len is needed: for a longer witness the listed edges are
- *      only its first part and may all lie in TC(S).
+ *      This is the argument of INCLUSION applied to the edges of the witness:
+ *      with l = len they form the whole cycle. The premise l = len is needed,
+ *      since for a longer witness the listed edges are only a part of it. The
+ *      lemma is sent at last call (checkAcyclicityLastCall), and at once for a
+ *      self-loop witness.
  */
 void TheorySetsRels::collectUnionOperands(Node r, std::vector<Node>& parts)
 {
@@ -3067,31 +2984,10 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
           sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
         }
       }
-      // EXPERIMENT: ROTATION, fixed. OLD (unsound -- see the comment above
-      // this function):
-      // // The rotation may only be applied for ONE positive constraint S per
-      // // witness: different S may be left by different edges of the cycle.
-      // // We anchor on the first S encountered for this witness.
-      // std::pair<Node, Node> rotKey(relUnion, Node::null());
-      // bool rotUsed =
-      //     d_anchorRotationSent.find(rotKey) != d_anchorRotationSent.end();
-      // if (doRot && s.size() >= 2 && !rotUsed)
-      // {
-      //   d_anchorRotationSent.insert(rotKey);
-      //   d_anchorRotationSent.insert(key);
-      //   Node firstEdge =
-      //       TupleUtils::constructTupleFromElements(tt, {s[0], s[1]}, 0, 1);
-      //   Node conc = nm->mkNode(Kind::SET_MEMBER, firstEdge, tcS).negate();
-      //   sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
-      // }
-      //
-      // NEW: only fires once the witness's full length is concretely known
-      // (concreteLen >= 0, s.size() >= (size_t)concreteLen: the witness may
-      // already have been unrolled beyond the length of the current model);
-      // branches over every edge of the witness instead of committing to the
-      // first one. Still at most one branching lemma per (R, S) pair, but
-      // keyed on concreteLen too so it can be resent if the model-determined
-      // length changes across last-call checks.
+      // BRANCH: only once the length of the witness is known (concreteLen);
+      // the witness may already have been unrolled beyond it. Sent at most
+      // once per (R, S) and length, since the length may change between
+      // last-call checks.
       if (doRot && concreteLen >= 2)
       {
         Assert(s.size() >= static_cast<size_t>(concreteLen));
@@ -3185,10 +3081,9 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
         applySplitCycleLenRule(rels, s, l);
         applyContrMinimalRule(rels, s, l, acyc_exp);
       }
-      // EXPERIMENT: the witness is now fully unrolled to its model-determined
-      // length N, so the branching anchor rule (the sound replacement for the
-      // old rotation lemma -- see the comment above applyAcyclicAnchorRules)
-      // can fire here, where it could not at full effort.
+      // The witness is now unrolled to its length N in the candidate model, so
+      // the branching anchor lemma, which needs every edge of the witness, can
+      // be sent (see applyAcyclicAnchorRules).
       if (N >= 2)
       {
         Node lenEq =
@@ -3206,17 +3101,6 @@ void TheorySetsRels::doTCInference()
   Trace("rels-debug")
       << "[Theory::Rels] ****** Finalizing transitive closure inferences!"
       << std::endl;
-
-  // --- TEMP DEBUG: dump the whole TC graph ---
-  for (const auto& relEntry : d_tcr_tcGraph)
-  {
-    Trace("rels-tcgraph") << "[TCGraph] " << relEntry.first << ":" << std::endl;
-    for (const auto& adj : relEntry.second)  // from-vertex -> {to-vertices}
-      for (const Node& to : adj.second)
-        Trace("rels-tcgraph")
-            << "    " << adj.first << " -> " << to << std::endl;
-  }
-  // --- end TEMP DEBUG ---
 
   TC_IT tc_graph_it = d_tcr_tcGraph.begin();
   while (tc_graph_it != d_tcr_tcGraph.end())
@@ -3624,11 +3508,11 @@ bool TheorySetsRels::areEqual(Node a, Node b)
 /*
  * Make sure duplicate members are not added in map
  */
-bool TheorySetsRels::safelyAddToMap(std::map<Node, std::vector<Node>>& map,
+bool TheorySetsRels::safelyAddToMap(std::map<Node, std::vector<Node> >& map,
                                     Node rel_rep,
                                     Node member)
 {
-  std::map<Node, std::vector<Node>>::iterator mem_it = map.find(rel_rep);
+  std::map<Node, std::vector<Node> >::iterator mem_it = map.find(rel_rep);
   if (mem_it == map.end())
   {
     std::vector<Node> members;

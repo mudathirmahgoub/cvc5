@@ -469,10 +469,9 @@ void TheorySetsPrivate::checkRelations()
 
 void TheorySetsPrivate::checkAcyclicity()
 {
-  // The acyclicity check creates fresh skolem sequences representing cycles for
-  // constraints of the form (rel.cyclic R), case splits on the
-  // length of the cycles, and unrolls a fresh edge of the cycle.
-  // via applyInstCycleRule, applySplitCycleLenRule, and applyUnrollCycleRule.
+  // The acyclicity check unrolls the cycle witnesses of the constraints
+  // (rel.cyclic R) by one edge and splits on their length (applyUnrollCycle,
+  // applySplitCycleLenRule).
   if (d_rels_enabled)
   {
     d_rels->checkAcyclicity();

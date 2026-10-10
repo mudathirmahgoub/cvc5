@@ -2455,7 +2455,11 @@ void TheorySetsRels::applyInstCycleRule(Node relTuple, Node exp)
     Trace("rels-cycles") << "SelfLoop: exp = " << exp << ", conc = " << conc
                          << std::endl;
     sendInfer(conc, InferenceId::SETS_RELS_ACYCLIC_SELF_LOOP, exp);
-    applyAcyclicAnchorRules(rels, {s1, s1}, exp);
+    // EXPERIMENT: self-loop witnesses are always fully-formed (length 2), so
+    // the branching anchor rule can fire immediately -- it reduces to the
+    // single-edge case, same as the old rotation lemma (sound here regardless,
+    // since there is only one edge to begin with).
+    applyAcyclicAnchorRules(rels, {s1, s1}, exp, 2);
     return;
   }
 
@@ -2855,7 +2859,8 @@ void TheorySetsRels::doCycleInference()
     Node acyc_exp = nodeManager()
                         ->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(sl.first))
                         .negate();
-    applyAcyclicAnchorRules(sl.first, {sl.second, sl.second}, acyc_exp);
+    // EXPERIMENT: see the comment at the other self-loop call site above.
+    applyAcyclicAnchorRules(sl.first, {sl.second, sl.second}, acyc_exp, 2);
   }
   CYC_IT c_it = d_cycle_sequences.begin();
   int64_t maxUnroll = options().sets.relsAcyclicUnrollMax;
@@ -2902,13 +2907,42 @@ void TheorySetsRels::doCycleInference()
  *      every edge of R is a path of S, or when the edges of R outside S are
  *      excluded by the templates of the benchmark.
  *
- *  (2) ROTATION: the witness (a shortest cycle of TC(R1) U ... U TC(Rk), see
- *      ContrMinimal) also contains an edge outside TC(S); rotating a shortest
- *      cycle preserves all its properties, so we may assume its first edge is
- *      such an edge:
- *        NOT acyclic(R) /\ acyclic(S)  =>  (s_1, s_2) NOT IN TC(S).
- *      This breaks the rotational symmetry of the witness and anchors the
- *      search at an edge of R that leaves S.
+ *  (2) ROTATION:
+ *      EXPERIMENT: the original form of this rule was unsound. It asserted
+ *      NOT acyclic(R) /\ acyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
+ *      unconditionally once the witness reached length 2, on the premise
+ *      that "the witness also contains an edge outside TC(S); rotating a
+ *      shortest cycle preserves all its properties, so we may assume its
+ *      first edge is such an edge." That premise is false once UnrollCycle
+ *      has already committed (s_1, s_2) to a specific R_b: if R_b happens to
+ *      be included in TC(S), the lemma contradicts a perfectly satisfiable
+ *      branch (e.g. R1 = {(a,b)}, R2 = {(b,c),(c,a)}, S = {(a,b),(b,c)}: the
+ *      branch where UnrollCycle picks (s_1,s_2) in R1+ is satisfiable, but
+ *      the old lemma refutes it, since (a,b) is in TC(S)). The actual cvc5
+ *      search still finds sat on that example, because UnrollCycle's R2
+ *      branch survives -- but that is a fact about this search strategy
+ *      (backtracking across UnrollCycle's sibling branches), not about this
+ *      rule in isolation, so it does not establish the rule is
+ *      satisfiability-preserving on its own, which is the property needed to
+ *      compose it with the other, independently-sound rules here.
+ *
+ *      OLD (unsound, kept for reference -- see the commented-out block in
+ *      applyAcyclicAnchorRules):
+ *        NOT acyclic(R) /\ acyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
+ *
+ *      NEW (sound): once the witness's length is concretely known (so every
+ *      edge of the witness, not just a prefix, can be named), branch over
+ *      all of them instead of committing to the first:
+ *        NOT acyclic(R) /\ acyclic(S)  =>
+ *          (s_1,s_2) NOT IN TC(S)  \/  (s_2,s_3) NOT IN TC(S)  \/  ...  \/
+ *          (s_{len-1},s_len) NOT IN TC(S)
+ *      This is sound because it is implied by the very same argument used
+ *      for INCLUSION, applied to the witness's own edges instead of a fresh
+ *      witness: a cycle using only TC(S)-edges would be a cycle of TC(S)
+ *      too, so at least one of the witness's own edges must escape TC(S) --
+ *      in every model, not just some rotation of one, so this is now a true
+ *      disjunction entailed unconditionally by the premises, with no
+ *      dependence on which UnrollCycle branch produced the witness.
  */
 void TheorySetsRels::collectUnionOperands(Node r, std::vector<Node>& parts)
 {
@@ -2961,7 +2995,8 @@ bool TheorySetsRels::isSyntacticallyInTC(Node x, Node s)
 
 void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
                                              const std::vector<Node>& s,
-                                             Node acyc_exp)
+                                             Node acyc_exp,
+                                             int64_t concreteLen)
 {
   NodeManager* nm = nodeManager();
   options::RelsAcyclicAnchorMode mode = options().sets.relsAcyclicAnchor;
@@ -3056,22 +3091,53 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
           sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
         }
       }
-      // The rotation may only be applied for ONE positive constraint S per
-      // witness: different S may be left by different edges of the cycle.
-      // We anchor on the first S encountered for this witness.
-      std::pair<Node, Node> rotKey(relUnion, Node::null());
-      bool rotUsed =
-          d_anchorRotationSent.find(rotKey) != d_anchorRotationSent.end();
-      if (doRot && s.size() >= 2 && !rotUsed)
+      // EXPERIMENT: ROTATION, fixed. OLD (unsound -- see the comment above
+      // this function):
+      // // The rotation may only be applied for ONE positive constraint S per
+      // // witness: different S may be left by different edges of the cycle.
+      // // We anchor on the first S encountered for this witness.
+      // std::pair<Node, Node> rotKey(relUnion, Node::null());
+      // bool rotUsed =
+      //     d_anchorRotationSent.find(rotKey) != d_anchorRotationSent.end();
+      // if (doRot && s.size() >= 2 && !rotUsed)
+      // {
+      //   d_anchorRotationSent.insert(rotKey);
+      //   d_anchorRotationSent.insert(key);
+      //   Node firstEdge =
+      //       TupleUtils::constructTupleFromElements(tt, {s[0], s[1]}, 0, 1);
+      //   Node conc = nm->mkNode(Kind::SET_MEMBER, firstEdge, tcS).negate();
+      //   sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
+      // }
+      //
+      // NEW: only fires once the witness's full length is concretely known
+      // (concreteLen >= 0, s.size() == (size_t)concreteLen); branches over
+      // every edge of the witness instead of committing to the first one.
+      // Still at most one branching lemma per (R, S) pair, but keyed on
+      // concreteLen too so it can be resent if the model-determined length
+      // changes across last-call checks.
+      if (doRot && concreteLen >= 2)
       {
-        d_anchorRotationSent.insert(rotKey);
-        d_anchorRotationSent.insert(key);
-        Node firstEdge =
-            TupleUtils::constructTupleFromElements(tt, {s[0], s[1]}, 0, 1);
-        Node conc = nm->mkNode(Kind::SET_MEMBER, firstEdge, tcS).negate();
-        Trace("rels-cycles") << "AcyclicAnchor (rotation): " << conc << " from "
-                             << reason << std::endl;
-        sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
+        Assert(s.size() == static_cast<size_t>(concreteLen));
+        std::pair<std::pair<Node, Node>, size_t> branchKey(
+            key, static_cast<size_t>(concreteLen));
+        if (d_anchorBranchSent.find(branchKey) == d_anchorBranchSent.end())
+        {
+          d_anchorBranchSent.insert(branchKey);
+          std::vector<Node> disjuncts;
+          for (size_t i = 0; i + 1 < static_cast<size_t>(concreteLen); i++)
+          {
+            Node edge = TupleUtils::constructTupleFromElements(
+                tt, {s[i], s[i + 1]}, 0, 1);
+            disjuncts.push_back(
+                nm->mkNode(Kind::SET_MEMBER, edge, tcS).negate());
+          }
+          Node conc = disjuncts.size() == 1
+                          ? disjuncts[0]
+                          : nm->mkNode(Kind::OR, disjuncts);
+          Trace("rels-cycles") << "AcyclicAnchor (rotation/branch): " << conc
+                               << " from " << reason << std::endl;
+          sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
+        }
       }
     }
   }
@@ -3128,15 +3194,24 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
       Trace("rels-debug") << "[Theory::Rels] checkAcyclicityLastCall: "
                           << "catching up cnt from " << s.size() << " to " << N
                           << " (l = " << l << ")" << std::endl;
+      Node acyc_exp =
+          nm->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels)).negate();
       // Ensure that all cycle-unrolling lemmas have been applied up to the
       // model's current value of l.
       while (s.size() < N)
       {
-        Node acyc_exp =
-            nm->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels)).negate();
         s = applyUnrollCycle(rels, s, l);
         applySplitCycleLenRule(rels, s, l);
         applyContrMinimalRule(rels, s, l, acyc_exp);
+      }
+      // EXPERIMENT: the witness is now fully unrolled to its model-determined
+      // length N, so the branching anchor rule (the sound replacement for the
+      // old rotation lemma -- see the comment above applyAcyclicAnchorRules)
+      // can fire here, where it could not at full effort.
+      if (N >= 2)
+      {
+        applyAcyclicAnchorRules(
+            rels, s, acyc_exp, static_cast<int64_t>(N));
       }
     }
     ++c_it;

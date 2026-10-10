@@ -208,6 +208,13 @@ class TheorySetsRels : protected EnvObj
   /** (R, S) pairs for which the inclusion / rotation anchor lemmas were sent */
   std::set<std::pair<Node, Node>> d_anchorInclusionSent;
   std::set<std::pair<Node, Node>> d_anchorRotationSent;
+  // EXPERIMENT: ((R, S), concreteLen) triples for which the branching anchor
+  // lemma (the fixed replacement for the old, unsound "rotation" lemma -- see
+  // the comment on applyAcyclicAnchorRules) has already been sent. Keeping
+  // concreteLen in the key, rather than reusing d_anchorRotationSent's (R, S)
+  // key, lets the lemma be resent (soundly) if the witness's model-determined
+  // length changes across last-call checks.
+  std::set<std::pair<std::pair<Node, Node>, size_t>> d_anchorBranchSent;
 
   /** Mapping from acyclic relation representatives to the cycle-witness
    * elements created so far (s1,...,s_cnt) and the symbolic eventual length of
@@ -471,10 +478,20 @@ class TheorySetsRels : protected EnvObj
    * Constrain the cycle witness (rels, s) of a negated acyclicity constraint
    * (acyc_exp) with the asserted positive acyclicity constraints: see the
    * comment at the definition.
+   *
+   * EXPERIMENT: concreteLen, if non-negative, is the witness's full,
+   * model-determined length (s.size() == concreteLen); the branching anchor
+   * lemma (the sound replacement for the old "rotation" lemma) is only sent
+   * when this is known, since it needs to range over every edge of the
+   * witness. Callers that cannot supply a concrete length (full-effort calls,
+   * where the model value of the symbolic length is not yet available) should
+   * pass -1, in which case only the (unconditionally sound) inclusion lemma
+   * is considered.
    */
   void applyAcyclicAnchorRules(const std::vector<Node>& rels,
                                const std::vector<Node>& s,
-                               Node acyc_exp);
+                               Node acyc_exp,
+                               int64_t concreteLen = -1);
   /** Flatten the set.union operands of r into parts. */
   void collectUnionOperands(Node r, std::vector<Node>& parts);
   /** Is x a subset of TC(s) in every interpretation, by its shape? */

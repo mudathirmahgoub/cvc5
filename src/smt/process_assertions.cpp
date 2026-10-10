@@ -21,7 +21,6 @@
 #include "options/ff_options.h"
 #include "options/quantifiers_options.h"
 #include "options/sep_options.h"
-#include "options/sets_options.h"
 #include "options/smt_options.h"
 #include "options/strings_options.h"
 #include "preprocessing/assertion_pipeline.h"
@@ -249,11 +248,6 @@ bool ProcessAssertions::apply(AssertionPipeline& ap)
   {
     // remove rewrite rules, apply pre-skolemization to existential quantifiers
     applyPass("quantifiers-preprocess", ap);
-    if (options().sets.relsFunctionalAxioms)
-    {
-      // relational constraints implied by functionality axioms
-      applyPass("rels-axioms", ap);
-    }
 
     // fmf-fun : assume admissible functions, applying preprocessing reduction
     // to FMF

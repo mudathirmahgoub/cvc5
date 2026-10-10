@@ -75,7 +75,6 @@ const char* toString(TrustId id)
     case TrustId::PREPROCESS_SORT_INFER: return "PREPROCESS_SORT_INFER";
     case TrustId::PREPROCESS_SORT_INFER_LEMMA:
       return "PREPROCESS_SORT_INFER_LEMMA";
-    case TrustId::PREPROCESS_RELS_AXIOMS: return "PREPROCESS_RELS_AXIOMS";
     case TrustId::PREPROCESS_STRINGS_EAGER_PP:
       return "PREPROCESS_STRINGS_EAGER_PP";
     // other

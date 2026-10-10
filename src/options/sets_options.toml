@@ -91,7 +91,7 @@ name   = "Sets Theory"
   long       = "rels-tc-subset"
   type       = "bool"
   default    = "false"
-  help       = "closure induction: from (a,b) in (rel.tclosure R) infer (a,b) in S for every transitive superset S of R, where S is a product A x B or a closure or iden that R is asserted to be a subset of, a relation T with R subset T and T;T subset T asserted (in particular R itself when R is transitive), or (rel.tclosure X) when R is syntactically included in it"
+  help       = "closure induction: from (a,b) in (rel.tclosure R) infer (a,b) in S for every transitive superset S of R, where S is a product A x B or a closure or iden that R is asserted to be a subset of, a relation T with R subset T and T;T subset T asserted (in particular R itself when R is transitive), J;J^T with (rel.is-functional J) asserted, or (rel.tclosure X) when R is syntactically included in it"
 
 [[option]]
   name       = "relsTcDownLazy"
@@ -100,14 +100,6 @@ name   = "Sets Theory"
   type       = "bool"
   default    = "false"
   help       = "apply the TCLOSURE_DOWN case split, which introduces fresh elements, only at last-call effort for closure memberships that the known members of the base relation do not explain, instead of at every full-effort check"
-
-[[option]]
-  name       = "relsFunctionalAxioms"
-  category   = "expert"
-  long       = "rels-functional-axioms"
-  type       = "bool"
-  default    = "false"
-  help       = "preprocessing: for a quantified axiom stating that a binary relation J is functional (forall x y z. (x,y) in J and (x,z) in J => y = z) or injective, add the relational constraint (rel.join (rel.transpose J) J) subset (rel.iden universe) (resp. with J and its transpose swapped), which the relations solver can use, e.g. to see that J;J^T is transitive"
 
 [[option]]
   name       = "relsAcyclicBackwardChords"

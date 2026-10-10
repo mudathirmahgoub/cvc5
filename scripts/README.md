@@ -7,7 +7,7 @@ litmus-template benchmarks of relational-solver-benchmarks. They are not part of
 | file | what it does |
 |---|---|
 | `portfolio.py` | runs the seven configurations as a **virtual** portfolio (every configuration on every file, the fastest one counts) and as a **real** portfolio (all configurations started together per file, the first sat/unsat wins and the others are killed); writes `runs.json` and `summary.md` per mode |
-| `configs-acyclic.json` | the same seven configurations for builds that know `rel.acyclic` (#7, #8): the rules also contain `--rels-acyclic-flatten-union` |
+| `configs-acyclic.json` | the same seven configurations for builds that know `rel.acyclic` (#7, #8): the rules also contain `--rels-acyclic-flatten-union` and `--rels-functional-axioms`, which this branch removed |
 | `ablate.py` | reruns selected (file, configuration) pairs with extra options, to attribute a difference between two runs to an option |
 | `compare_runs.py` | compares several runs: per file the virtual best of each run, solved files per configuration (markdown; LaTeX table and cactus plot) |
 | `pr_report.py` | the charts (cactus plots with time on x, bar chart) and markdown tables of the PR description; needs matplotlib |
@@ -28,7 +28,7 @@ from the root of the cvc5 checkout.
 | nofmf-unsat-rules (noFMF+R) | noFMF + R + `--rels-tc-down-lazy` |
 | nofmf-unsat-hammer (noFMF+H) | noFMF + R + `--rels-acyclic-hammer` |
 
-R = `--prenex-quant=none --rels-tc-subset --rels-functional-axioms`. A different set can be
+R = `--prenex-quant=none --rels-tc-subset`. A different set can be
 given with `--configs-file` (JSON: `{name: {"opts": [...], "nofmf": bool, "desc": "..."}}`)
 and a subset with `--configs`; `--benchmarks` restricts the files.
 
@@ -50,7 +50,7 @@ directory.
 
 **2. #8 and #7 (`rel.acyclic`).** Build their branches separately, then run them on the files
 of relational-solver-benchmarks#1, with the configurations that include
-`--rels-acyclic-flatten-union`:
+`--rels-acyclic-flatten-union` and `--rels-functional-axioms`:
 
 ```sh
 python3 scripts/portfolio.py --cvc5 /path/to/pr8/build/bin/cvc5 --workdir portfolio-work-acyclic \

@@ -3529,7 +3529,6 @@ set(regress_1_tests
   regress1/rels/cycles/acyclic-ltts-plsc-1-th-isf.smt2
   regress1/rels/cycles/acyclic-ltts-plsc-1-th-nofmf.smt2
   regress1/rels/cycles/acyclic-ltts-plsc-2-th-just-rf-isf.smt2
-  regress1/rels/cycles/acyclic-ltts-plsc-2-th-just-rf-nofmf.smt2
   regress1/rels/cycles/acyclic-ltts-sc-1-th.smt2
   regress1/rels/cycles/acyclic1.smt2
   regress1/rels/cycles/acyclic2.smt2

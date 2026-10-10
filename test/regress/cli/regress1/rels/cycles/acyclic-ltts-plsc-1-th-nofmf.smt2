@@ -1,6 +1,6 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
-; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy --rels-functional-axioms --no-check-unsat-cores
+; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy --no-check-unsat-cores
 ; EXPECT: unsat
 ; DISABLE-TESTER: cpc
 ;

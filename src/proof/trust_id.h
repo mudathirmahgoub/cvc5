@@ -97,8 +97,6 @@ enum class TrustId : uint32_t
   /** SortInferencePass preprocessing pass */
   PREPROCESS_SORT_INFER,
   PREPROCESS_SORT_INFER_LEMMA,
-  /** A preprocessing lemma from rels-axioms */
-  PREPROCESS_RELS_AXIOMS,
   /** StringsEagerPp preprocessing pass */
   PREPROCESS_STRINGS_EAGER_PP,
   /** A step from the distinct extension */

@@ -1169,7 +1169,8 @@ void TheorySetsRels::sendTCDownSplit(Node tc_rel, Node exp)
  *      in the current context, and S known to be transitive because its
  *      equivalence class contains a product A x B (so TC(R) SUBSET A x B is a
  *      typing rule: the first and last edges of a path are in A x B), a closure
- *      or an identity relation, or because (rel.join S S) SUBSET S is asserted.
+ *      or an identity relation, or J;J^T with (rel.is-functional J) asserted,
+ *      or because (rel.join S S) SUBSET S is asserted.
  *  (3) S = R when (rel.join R R) SUBSET R is asserted (R transitive, so
  *      TC(R) = R).
  * These rules do not introduce fresh elements. They replace, for the
@@ -1421,10 +1422,11 @@ bool TheorySetsRels::isTransitiveClass(Node pRep,
   }
   const std::map<Node, std::map<Node, Node>>& uidx =
       d_state.getBinaryOpIndex(Kind::SET_UNION);
-  // J ; J^T (or J^T ; J) with J functional (resp. injective): the class of p
-  // contains (rel.join P Q) where one of P, Q is the transpose of the other,
-  // and (rel.join Q P) subset I is asserted for an identity relation I. Then
-  // (P;Q);(P;Q) = P;(Q;P);Q subset P;I;Q = P;Q.
+  // J ; J^T with J functional: the class of p contains (rel.join P Q) where
+  // one of P, Q is the transpose of the other, so that (rel.join P Q) is
+  // P;P^T modulo equality, and (rel.is-functional P') is asserted for some
+  // P' ~ P. Then (P;P^T);(P;P^T) = P;(P^T;P);P^T, and P^T;P only relates
+  // equal elements, so this is a subset of P;P^T.
   if (tcIt != d_terms_cache.end())
   {
     auto jIt = tcIt->second.find(Kind::RELATION_JOIN);
@@ -1441,79 +1443,18 @@ bool TheorySetsRels::isTransitiveClass(Node pRep,
         {
           continue;
         }
-        Node pRepP = getRepresentative(P), qRep = getRepresentative(Q);
-        // In both cases (rel.join P Q) is P;P^T modulo equality, which is
-        // transitive if P is functional. An asserted (rel.is-functional P')
-        // with P' ~ P states this directly.
-        auto fcIt = d_functional_cache.find(pRepP);
-        if (fcIt != d_functional_cache.end())
+        auto fcIt = d_functional_cache.find(getRepresentative(P));
+        if (fcIt == d_functional_cache.end())
         {
-          Node atom = fcIt->second[0];
-          reason.push_back(atom);
-          if (atom[0] != P) reason.push_back(atom[0].eqNode(P));
-          if (sj != p) reason.push_back(sj.eqNode(p));
-          if (pt && P[0] != Q) reason.push_back(P[0].eqNode(Q));
-          if (qt && Q[0] != P) reason.push_back(Q[0].eqNode(P));
-          return true;
+          continue;
         }
-        // find a join term f = (rel.join Q' P') with Q' ~ Q and P' ~ P
-        for (const auto& te : d_terms_cache)
-        {
-          auto fIt = te.second.find(Kind::RELATION_JOIN);
-          if (fIt == te.second.end())
-          {
-            continue;
-          }
-          for (const Node& f : fIt->second)
-          {
-            if (getRepresentative(f[0]) != qRep
-                || getRepresentative(f[1]) != pRepP)
-            {
-              continue;
-            }
-            Node fRep = getRepresentative(f);
-            auto u1 = uidx.find(fRep);
-            if (u1 == uidx.end())
-            {
-              continue;
-            }
-            for (const auto& u2 : u1->second)
-            {
-              Node u = u2.second;
-              Node iRep = u2.first;
-              if (getRepresentative(u) != iRep)
-              {
-                continue;
-              }
-              auto iIt = d_terms_cache.find(iRep);
-              if (iIt == d_terms_cache.end())
-              {
-                continue;
-              }
-              auto idIt = iIt->second.find(Kind::RELATION_IDEN);
-              if (idIt == iIt->second.end() || idIt->second.empty())
-              {
-                continue;
-              }
-              Node idenTerm = idIt->second[0];
-              Node iSide = getRepresentative(u[0]) == fRep ? u[1] : u[0];
-              Node fSide = iSide == u[1] ? u[0] : u[1];
-              reason.push_back(nm->mkNode(Kind::EQUAL, u, iSide));
-              if (iSide != idenTerm)
-                reason.push_back(nm->mkNode(Kind::EQUAL, iSide, idenTerm));
-              if (fSide != f)
-                reason.push_back(nm->mkNode(Kind::EQUAL, fSide, f));
-              if (sj != p) reason.push_back(nm->mkNode(Kind::EQUAL, sj, p));
-              if (f[0] != Q) reason.push_back(nm->mkNode(Kind::EQUAL, f[0], Q));
-              if (f[1] != P) reason.push_back(nm->mkNode(Kind::EQUAL, f[1], P));
-              if (pt && P[0] != Q)
-                reason.push_back(nm->mkNode(Kind::EQUAL, P[0], Q));
-              if (qt && Q[0] != P)
-                reason.push_back(nm->mkNode(Kind::EQUAL, Q[0], P));
-              return true;
-            }
-          }
-        }
+        Node atom = fcIt->second[0];
+        reason.push_back(atom);
+        if (atom[0] != P) reason.push_back(atom[0].eqNode(P));
+        if (sj != p) reason.push_back(sj.eqNode(p));
+        if (pt && P[0] != Q) reason.push_back(P[0].eqNode(Q));
+        if (qt && Q[0] != P) reason.push_back(Q[0].eqNode(P));
+        return true;
       }
     }
   }

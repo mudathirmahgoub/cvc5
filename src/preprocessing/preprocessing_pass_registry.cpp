@@ -48,7 +48,6 @@
 #include "preprocessing/passes/pseudo_boolean_processor.h"
 #include "preprocessing/passes/quantifiers_preprocess.h"
 #include "preprocessing/passes/real_to_int.h"
-#include "preprocessing/passes/rels_axioms.h"
 #include "preprocessing/passes/rewrite.h"
 #include "preprocessing/passes/sep_skolem_emp.h"
 #include "preprocessing/passes/sort_infer.h"
@@ -128,7 +127,6 @@ PreprocessingPassRegistry::PreprocessingPassRegistry()
   registerPassInfo("static-learning", callCtor<StaticLearning>);
   registerPassInfo("ite-simp", callCtor<ITESimp>);
   registerPassInfo("global-negate", callCtor<GlobalNegate>);
-  registerPassInfo("rels-axioms", callCtor<RelsAxioms>);
   registerPassInfo("int-to-bv", callCtor<IntToBV>);
   registerPassInfo("bv-to-int", callCtor<BVToInt>);
   registerPassInfo("ff-bitsum", callCtor<FfBitsum>);

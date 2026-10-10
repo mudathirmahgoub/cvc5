@@ -85,15 +85,17 @@ BENCH_SET_FILE = "benchmark_set_ltts"
 # without (set-option :finite-model-find true).
 #   default, fmf-unsat, nofmf-unsat, stoponly: the recipes of PR #4;
 #   *-rules, *-hammer: the same recipes plus the inference rules of PR #6
-#     (closure induction, functionality axioms, no prenexing).
+#     (closure induction, no prenexing).
 # Before rel.cyclic the rules also included --rels-acyclic-flatten-union,
-# which rel.cyclic does always; configs-acyclic.json has those
-# configurations, for builds that know rel.acyclic.
+# which rel.cyclic does always, and --rels-functional-axioms, a preprocessing
+# pass that is redundant with rel.is-functional (both options are removed);
+# configs-acyclic.json has those configurations, for builds that know
+# rel.acyclic.
 PR4_FMF = ["--e-matching", "--inst-when=full-delay",
            "--rels-acyclic-anchor=inclusion", "--rels-acyclic-backward-chords"]
 PR4_NOFMF = ["--rels-acyclic-anchor=inclusion", "--inst-when=full-delay",
              "--rels-acyclic-backward-chords"]
-PR6_RULES = ["--prenex-quant=none", "--rels-tc-subset", "--rels-functional-axioms"]
+PR6_RULES = ["--prenex-quant=none", "--rels-tc-subset"]
 CONFIGS = OrderedDict([
     ("default", dict(
         opts=[], nofmf=False,
@@ -109,7 +111,7 @@ CONFIGS = OrderedDict([
         desc="PR #4: SAT decisions by MiniSat, justification engine only stops early")),
     ("fmf-unsat-rules", dict(
         opts=PR4_FMF + PR6_RULES + ["--rels-tc-down-lazy"], nofmf=False,
-        desc="PR #6: fmf-unsat + closure induction, functionality axioms, no prenexing, lazy closure split")),
+        desc="PR #6: fmf-unsat + closure induction, no prenexing, lazy closure split")),
     ("nofmf-unsat-rules", dict(
         opts=PR4_NOFMF + PR6_RULES + ["--rels-tc-down-lazy"], nofmf=True,
         desc="PR #6: nofmf-unsat + the same rules and lazy closure split")),

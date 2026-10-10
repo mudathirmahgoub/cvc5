@@ -2723,22 +2723,11 @@ void TheorySetsRels::doCycleInference()
     applyAcyclicAnchorRules(sl.first, {sl.second, sl.second}, acyc_exp, 2);
   }
   CYC_IT c_it = d_cycle_sequences.begin();
-  int64_t maxUnroll = options().sets.relsAcyclicUnrollMax;
-
   while (c_it != d_cycle_sequences.end())
   {
     std::vector<Node> rels = c_it->first;
     std::vector<Node> s = c_it->second.first;
     Node l = c_it->second.second;
-    if (maxUnroll >= 0 && s.size() >= static_cast<size_t>(maxUnroll))
-    {
-      // Set by --rels-acyclic-unroll-max: defer unrolling this obligation
-      // further so that shorter cycles are prioritized during full effort
-      // solving. checkAcyclicityLastCall makes sure that full cycle inference
-      // is performed before a model is accepted.
-      ++c_it;
-      continue;
-    }
     Node acyc_exp = cyclicAtom(rels);
     // applyUnrollCycle returns the extended vector with the newly-created
     // element appended.
@@ -3006,10 +2995,9 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
     }
     else
     {
-      // --rels-acyclic-unroll-max limits the number of cycle elements that can
-      // be unrolled during the full effort check. If the model's current value
-      // of l is larger than that, we must complete full cycle inference before
-      // accepting a model.
+      // The full-effort check unrolls the witness by one element per round,
+      // so the value of l in the candidate model may exceed the number of
+      // unrolled elements: complete the witness before the model is accepted.
       Trace("rels-debug") << "[Theory::Rels] checkAcyclicityLastCall: "
                           << "catching up cnt from " << s.size() << " to " << N
                           << " (l = " << l << ")" << std::endl;

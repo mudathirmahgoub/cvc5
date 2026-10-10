@@ -475,8 +475,7 @@ class TheorySetsRels : protected EnvObj
   /**
    * Unroll every tracked cycle-witness sequence in d_cycle_sequences by one
    * element (applyUnrollCycle), then apply applySplitCycleLenRule and
-   * applyContrMinimalRule to the extended sequence. Obligations that have
-   * reached --rels-acyclic-unroll-max are reported as incomplete instead.
+   * applyContrMinimalRule to the extended sequence.
    */
   void doCycleInference();
   /**

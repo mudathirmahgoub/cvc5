@@ -225,7 +225,7 @@ void TheorySetsRels::check()
           //     }
           //   }
           // }
-          // else if (eqc_node.getKind() == Kind::RELATION_ACYCLIC)
+          // else if (eqc_node.getKind() == Kind::RELATION_CYCLIC)
           // {
           //   Trace("rels-acyclic") << "[Theory::Rels] Collecting acyclic
           //   terms!"
@@ -290,7 +290,7 @@ void TheorySetsRels::checkAcyclicity()
   Trace("rels")
       << "\n[sets-rels] *********** Start acyclicity check ***********\n"
       << std::endl;
-  // The cycle-witness sequences of the asserted (not (rel.acyclic R))
+  // The cycle-witness sequences of the asserted (rel.cyclic R)
   // constraints were created (applyInstCycleRule) by collectRelsInfo, which
   // check(Theory::Effort) ran earlier in this pass. Here we unroll each of
   // them by one element and apply the split/minimality rules.
@@ -547,19 +547,19 @@ void TheorySetsRels::collectRelsInfo()
             }
           }
         }
-        // collect acyclic info
-        else if (eqc_node.getKind() == Kind::RELATION_ACYCLIC)
+        // collect cyclicity info
+        else if (eqc_node.getKind() == Kind::RELATION_CYCLIC)
         {
-          if (is_true_eq)
+          if (!is_true_eq)
           {
-            // acyclic((R1,...,Rk)) is acyclic(R1 ∪ ... ∪ Rk); key by the
-            // union's representative so the acyclic down rule (a membership in
-            // TC(union)) finds it directly.
-            Node u = mkRelUnion(TupleUtils::getTupleElements(eqc_node[0]));
-            d_acyclic_cache[getRepresentative(u)].push_back(eqc_node);
+            // (not (rel.cyclic R)), i.e., R is acyclic. Key by the
+            // representative of R so that the acyclic down rule (a membership
+            // in TC(R)) finds it directly. The cache holds the literal
+            // (not (rel.cyclic R)).
+            Node u = eqc_node[0];
+            d_acyclic_cache[getRepresentative(u)].push_back(eqc_node.negate());
 
-            // The acyclic-down rule contradicts reflexive memberships in TC(u)
-            // (for u = R1 U ... U Rk, and acyclic((R1,...,Rk)) a constraint).
+            // The acyclic-down rule contradicts reflexive memberships in TC(u).
             // Such memberships are only ever materialized if (a) u itself is
             // a registered relation whose members are populated in the
             // solver's data structures, and (b) (rel.tclosure u) is processed
@@ -567,8 +567,8 @@ void TheorySetsRels::collectRelsInfo()
             // (rel.tclosure u), nothing registers them, the cycle is never
             // derived, and we wrongly answer sat.
             //
-            // Solution: emit the vacuous lemma acyclic(u) => u <= TC(u) to
-            // register u and TC(u) as terms.
+            // Solution: emit the vacuous lemma (not (rel.cyclic u)) =>
+            // u <= TC(u) to register u and TC(u) as terms.
             //
             // NOTE: the consequent must SURVIVE rewriting to actually register
             // the terms. A reflexive equality TC(u) = TC(u) does not -- the
@@ -577,36 +577,11 @@ void TheorySetsRels::collectRelsInfo()
             // collapsing rewrite, so the terms survive into the registered set.
             Node tc = nodeManager()->mkNode(Kind::RELATION_TCLOSURE, u);
             Node reg = nodeManager()->mkNode(Kind::SET_SUBSET, u, tc);
-            sendInfer(reg, InferenceId::SETS_RELS_ACYCLIC_DOWN, eqc_node);
+            sendInfer(reg, InferenceId::SETS_RELS_ACYCLIC_DOWN, eqc_node.negate());
           }
           else
           {
-            std::vector<Node> rels = TupleUtils::getTupleElements(eqc_node[0]);
-            if (options().sets.relsAcyclicFlattenUnion && rels.size() == 1
-                && rels[0].getKind() == Kind::SET_UNION)
-            {
-              // RELATION_ACYCLIC_FLATTEN: a cycle of R1 U ... U Rn is a cycle
-              // of the relation list (R1, ..., Rn) and vice versa; the list
-              // form gives the witness its alternating structure.
-              if (d_flattenSent.insert(eqc_node).second)
-              {
-                std::vector<Node> parts;
-                collectUnionOperands(rels[0], parts);
-                Node conc =
-                    nodeManager()
-                        ->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(parts))
-                        .negate();
-                Trace("rels-cycles") << "AcyclicFlatten: " << conc << " from "
-                                     << eqc_node.negate() << std::endl;
-                sendInfer(conc,
-                          InferenceId::SETS_RELS_ACYCLIC_FLATTEN,
-                          eqc_node.negate());
-              }
-            }
-            else
-            {
-              applyInstCycleRule(eqc_node[0], eqc_node.negate());
-            }
+            applyInstCycleRule(eqc_node);
           }
         }
         // collect relational terms info
@@ -2031,7 +2006,7 @@ void TheorySetsRels::doTCInference(
   // holds in the current context. Previously tc_rel[0] = S was always added;
   // when S was in fact a (purified) term equal to tc_rel, that antecedent was
   // false, the forward lemma could never fire, and cycles in the base relation
-  // went undetected (wrong "sat" answers against rel.acyclic constraints).
+  // went undetected (wrong "sat" answers against acyclicity constraints).
   auto addSetEq = [&](Node s) {
     if (s == tc_rel || s == tc_rel[0])
     {
@@ -2387,20 +2362,16 @@ void TheorySetsRels::applyTransposeRule(Node tp_rel, Node tp_rel_rep, Node exp)
 }
 
 /*
- * RELATION_INST_CYCLE:   NOT RELATION_ACYCLIC(x)  (x,_,_) NOT IN C
+ * RELATION_INST_CYCLE:   RELATION_CYCLIC(x)      (x,_,_) NOT IN C
  *                         ---------------------------------------------------------
  *                                              C := C U {(x,<s1>,l)}
  * for s1 and l fresh variables.
  */
-Node TheorySetsRels::mkRelTuple(const std::vector<Node>& rels)
+Node TheorySetsRels::cyclicAtom(const std::vector<Node>& rels) const
 {
-  std::vector<TypeNode> relTypes;
-  for (const Node& r : rels)
-  {
-    relTypes.push_back(r.getType());
-  }
-  return TupleUtils::constructTupleFromElements(
-      nodeManager()->mkTupleType(relTypes), rels, 0, rels.size() - 1);
+  auto it = d_cycleAtoms.find(rels);
+  Assert(it != d_cycleAtoms.end());
+  return it->second;
 }
 
 Node TheorySetsRels::mkRelUnion(const std::vector<Node>& rels)
@@ -2414,14 +2385,21 @@ Node TheorySetsRels::mkRelUnion(const std::vector<Node>& rels)
   return rewrite(u);
 }
 
-void TheorySetsRels::applyInstCycleRule(Node relTuple, Node exp)
+void TheorySetsRels::applyInstCycleRule(Node atom)
 {
+  Assert(atom.getKind() == Kind::RELATION_CYCLIC);
   Trace("rels-debug") << "\n[Theory::Rels] *********** Applying "
-                         "RELATION_INST_CYCLE rule on relation tuple = "
-                      << relTuple << " and explanation " << exp << std::endl;
-  // The acyclic argument is a tuple of relations; split it into the vector of
-  // component relations used as the d_cycle_sequences key.
-  std::vector<Node> rels = TupleUtils::getTupleElements(relTuple);
+                         "RELATION_INST_CYCLE rule on "
+                      << atom << std::endl;
+  // (rel.cyclic R) holds iff R has a cycle. If R is a union R1 U ... U Rk, a
+  // cycle of R is a cycle of the list (R1, ..., Rk); the witness below is
+  // built over the operands, which gives it its alternating structure. The
+  // operands are the d_cycle_sequences key, and the atom is the reason of
+  // every lemma about the witness.
+  std::vector<Node> rels;
+  collectUnionOperands(atom[0], rels);
+  d_cycleAtoms.emplace(rels, atom);
+  Node exp = cyclicAtom(rels);
   if (d_cycle_sequences.find(rels) != d_cycle_sequences.end())
   {
     return;
@@ -2429,13 +2407,12 @@ void TheorySetsRels::applyInstCycleRule(Node relTuple, Node exp)
 
   NodeManager* nm = nodeManager();
 
-  if (options().sets.relsAcyclicSelfLoop && rels.size() == 1)
+  if (rels.size() == 1)
   {
-    // RELATION_ACYCLIC_SELF_LOOP: NOT acyclic((R)) iff some (s,s) IN TC(R),
-    // since TC(R) is transitive: a cycle of R of any length closes into a
-    // self-loop of TC(R). The unrolled witness (one element per round plus
-    // the length split and the minimality lemmas) is replaced by this single
-    // membership; the anchor rules still apply to it (doCycleInference).
+    // RELATION_CYCLIC (definition): (rel.cyclic R) iff some (s,s) IN TC(R).
+    // For a relation that is not a union, the definition is applied directly:
+    // a fresh s with (s,s) IN TC(R); the closure rules do the rest. The
+    // anchor rules still apply to it (doCycleInference).
     if (d_selfLoops.find(rels) != d_selfLoops.end())
     {
       return;
@@ -2516,11 +2493,7 @@ void TheorySetsRels::applySplitCycleLenRule(const std::vector<Node>& rels,
   Node conc = nm->mkNode(Kind::OR, case_1, case_2);
 
   Node l_geq_cnt = nm->mkNode(Kind::GEQ, l, cnt_node);
-  Node exp = nm->mkNode(
-      Kind::AND,
-      nm->mkNode(Kind::NOT,
-                 nm->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels))),
-      l_geq_cnt);
+  Node exp = nm->mkNode(Kind::AND, cyclicAtom(rels), l_geq_cnt);
 
   Trace("rels-cycles") << "SplitCycleLen: " << conc << std::endl;
 
@@ -2594,7 +2567,7 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
   // prunes the choice of the relation of every unrolled edge immediately.
   if (cnt >= 2)
   {
-    Node acyc = nm->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels)).negate();
+    Node acyc = cyclicAtom(rels);
     Node reasonA = nm->mkNode(Kind::AND, acyc, exp);
     Node reasonB = nm->mkNode(
         Kind::AND,
@@ -2769,7 +2742,7 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
 }
 
 /*
- * RELATION_ACYLIC_DOWN:   (a, b) IS_IN RELATION_TCLOSURE(x) RELATION_ACYCLIC(x)
+ * RELATION_ACYCLIC_DOWN:  (a, b) IS_IN RELATION_TCLOSURE(x)  NOT RELATION_CYCLIC(x)
  *                         ---------------------------------------------------------
  *                                              a != b
  */
@@ -2780,7 +2753,7 @@ void TheorySetsRels::applyAcyclicDownRule(Node mem_rep,
   Node tc_rel0_rep = getRepresentative(tc_rel[0]);
 
   Trace("rels-debug") << "\n[Theory::Rels] *********** Applying "
-                         "RELATION_ACYCLIC rule on member"
+                         "ACYCLIC_DOWN rule on member"
                       << mem_rep << ", transitively closed term = " << tc_rel
                       << " and its representative = " << tc_rel0_rep
                       << ", with explanation = " << exp_tc << std::endl;
@@ -2828,7 +2801,8 @@ void TheorySetsRels::applyAcyclicDownRule(Node mem_rep,
     reasons.push_back(nm->mkNode(Kind::EQUAL, tc_rel, exp_tc[1]));
   // x in the rule is the union of the acyclic tuple's relations; relate it to
   // tc_rel[0].
-  Node u = mkRelUnion(TupleUtils::getTupleElements(exp_acyc[0]));
+  // exp_acyc is the literal (not (rel.cyclic u))
+  Node u = exp_acyc[0][0];
   if (u != tc_rel[0]) reasons.push_back(nm->mkNode(Kind::EQUAL, u, tc_rel[0]));
   Node reason =
       reasons.size() == 1 ? reasons[0] : nm->mkNode(Kind::AND, reasons);
@@ -2856,9 +2830,7 @@ void TheorySetsRels::doCycleInference()
   // every round because positive acyclicity constraints may appear later.
   for (const auto& sl : d_selfLoops)
   {
-    Node acyc_exp = nodeManager()
-                        ->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(sl.first))
-                        .negate();
+    Node acyc_exp = cyclicAtom(sl.first);
     // EXPERIMENT: see the comment at the other self-loop call site above.
     applyAcyclicAnchorRules(sl.first, {sl.second, sl.second}, acyc_exp, 2);
   }
@@ -2879,9 +2851,7 @@ void TheorySetsRels::doCycleInference()
       ++c_it;
       continue;
     }
-    Node acyc_exp = nodeManager()
-                        ->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels))
-                        .negate();
+    Node acyc_exp = cyclicAtom(rels);
     // applyUnrollCycle returns the extended vector with the newly-created
     // element appended.
     s = applyUnrollCycle(rels, s, l);
@@ -2894,55 +2864,48 @@ void TheorySetsRels::doCycleInference()
 }
 
 /*
- * Use the asserted (positive) acyclicity constraints to constrain the cycle
- * witness of a negated one. Let R = R1 U ... U Rk be the relation of the
- * witness and let acyclic(S) hold for S = S1 U ... U Sm of the same type.
- * A cycle of R that used only edges of TC(S) would be a cycle of TC(S), which
- * acyclic(S) forbids. Hence:
+ * Use the asserted acyclicity constraints (NOT cyclic(S)) to constrain the
+ * cycle witness of a cyclicity constraint. Let R = R1 U ... U Rk be the
+ * relation of the witness and let NOT cyclic(S) hold for S = S1 U ... U Sm of
+ * the same type. A cycle of R that used only edges of TC(S) would be a cycle
+ * of TC(S), which NOT cyclic(S) forbids. Hence:
  *
  *  (1) INCLUSION: some edge of R is not in TC(S):
- *        NOT acyclic(R) /\ acyclic(S)  =>  t IN R /\ t NOT IN TC(S)
+ *        cyclic(R) /\ NOT cyclic(S)  =>  t IN R /\ t NOT IN TC(S)
  *      for a fresh tuple t (one per pair (R,S)). This usually admits a local
  *      refutation that does not depend on the length of the cycle, e.g. when
  *      every edge of R is a path of S, or when the edges of R outside S are
  *      excluded by the templates of the benchmark.
  *
  *  (2) ROTATION:
- *      EXPERIMENT: the original form of this rule was unsound. It asserted
- *      NOT acyclic(R) /\ acyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
- *      unconditionally once the witness reached length 2, on the premise
- *      that "the witness also contains an edge outside TC(S); rotating a
- *      shortest cycle preserves all its properties, so we may assume its
- *      first edge is such an edge." That premise is false once UnrollCycle
- *      has already committed (s_1, s_2) to a specific R_b: if R_b happens to
- *      be included in TC(S), the lemma contradicts a perfectly satisfiable
- *      branch (e.g. R1 = {(a,b)}, R2 = {(b,c),(c,a)}, S = {(a,b),(b,c)}: the
- *      branch where UnrollCycle picks (s_1,s_2) in R1+ is satisfiable, but
- *      the old lemma refutes it, since (a,b) is in TC(S)). The actual cvc5
- *      search still finds sat on that example, because UnrollCycle's R2
- *      branch survives -- but that is a fact about this search strategy
- *      (backtracking across UnrollCycle's sibling branches), not about this
- *      rule in isolation, so it does not establish the rule is
- *      satisfiability-preserving on its own, which is the property needed to
- *      compose it with the other, independently-sound rules here.
+ *      EXPERIMENT: the original form of this rule was
+ *        cyclic(R) /\ NOT cyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
+ *      sent as soon as the witness reached length 2, on the premise that "the
+ *      witness also contains an edge outside TC(S); rotating a shortest cycle
+ *      preserves all its properties, so we may assume its first edge is such
+ *      an edge." That is a choice of numbering (symmetry breaking), not a
+ *      consequence of the premises: it refutes satisfiable branches, e.g.
+ *      R1 = {(a,b)}, R2 = {(b,c),(c,a)}, S = {(a,b),(b,c)}, where the branch
+ *      in which UnrollCycle picks (s_1,s_2) in R1+ is satisfiable but
+ *      (a,b) is in TC(S). It preserves satisfiability only as long as it is
+ *      the only choice about the numbering and every other witness lemma is
+ *      invariant under rotation, so it does not compose with arbitrary other
+ *      rules (kept for reference as the commented-out block in
+ *      applyAcyclicAnchorRules).
  *
- *      OLD (unsound, kept for reference -- see the commented-out block in
- *      applyAcyclicAnchorRules):
- *        NOT acyclic(R) /\ acyclic(S)  =>  (s_1, s_2) NOT IN TC(S)
- *
- *      NEW (sound): once the witness's length is concretely known (so every
- *      edge of the witness, not just a prefix, can be named), branch over
- *      all of them instead of committing to the first:
- *        NOT acyclic(R) /\ acyclic(S)  =>
+ *      NEW: once the model gives the witness's length l = len (so every edge
+ *      of the witness, not just a prefix, can be named, with s_len = s_1),
+ *      branch over all of them instead of committing to the first:
+ *        cyclic(R) /\ NOT cyclic(S) /\ l = len  =>
  *          (s_1,s_2) NOT IN TC(S)  \/  (s_2,s_3) NOT IN TC(S)  \/  ...  \/
  *          (s_{len-1},s_len) NOT IN TC(S)
- *      This is sound because it is implied by the very same argument used
- *      for INCLUSION, applied to the witness's own edges instead of a fresh
- *      witness: a cycle using only TC(S)-edges would be a cycle of TC(S)
- *      too, so at least one of the witness's own edges must escape TC(S) --
- *      in every model, not just some rotation of one, so this is now a true
- *      disjunction entailed unconditionally by the premises, with no
- *      dependence on which UnrollCycle branch produced the witness.
+ *      This is implied by the very same argument used for INCLUSION, applied
+ *      to the witness's own edges instead of a fresh witness: with l = len
+ *      they form the whole cycle, and a cycle using only TC(S)-edges would be
+ *      a cycle of TC(S) too, so at least one of them must escape TC(S), with
+ *      no dependence on which UnrollCycle branch produced the witness. The
+ *      premise l = len is needed: for a longer witness the listed edges are
+ *      only its first part and may all lie in TC(S).
  */
 void TheorySetsRels::collectUnionOperands(Node r, std::vector<Node>& parts)
 {
@@ -2996,7 +2959,8 @@ bool TheorySetsRels::isSyntacticallyInTC(Node x, Node s)
 void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
                                              const std::vector<Node>& s,
                                              Node acyc_exp,
-                                             int64_t concreteLen)
+                                             int64_t concreteLen,
+                                             Node lenEq)
 {
   NodeManager* nm = nodeManager();
   options::RelsAcyclicAnchorMode mode = options().sets.relsAcyclicAnchor;
@@ -3019,7 +2983,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
   {
     for (const Node& acyc : entry.second)
     {
-      Node sUnion = mkRelUnion(TupleUtils::getTupleElements(acyc[0]));
+      Node sUnion = acyc[0][0];
       if (sUnion.getType() != relUnion.getType() || sUnion == relUnion)
       {
         continue;
@@ -3030,7 +2994,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
   std::stable_sort(
       positives.begin(), positives.end(), [&](const Node& a, const Node& b) {
         auto rank = [&](const Node& ac) {
-          Node su = mkRelUnion(TupleUtils::getTupleElements(ac[0]));
+          Node su = ac[0][0];
           for (size_t i = 0; i < rels.size(); i++)
           {
             if (rels[i] == su) return i;
@@ -3042,7 +3006,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
   for (const Node& acyc : positives)
   {
     {
-      Node sUnion = mkRelUnion(TupleUtils::getTupleElements(acyc[0]));
+      Node sUnion = acyc[0][0];
       Node reason = nm->mkNode(Kind::AND, acyc_exp, acyc);
       Node tcS = nm->mkNode(Kind::RELATION_TCLOSURE, sUnion);
       std::pair<Node, Node> key(relUnion, sUnion);
@@ -3110,14 +3074,15 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
       // }
       //
       // NEW: only fires once the witness's full length is concretely known
-      // (concreteLen >= 0, s.size() == (size_t)concreteLen); branches over
-      // every edge of the witness instead of committing to the first one.
-      // Still at most one branching lemma per (R, S) pair, but keyed on
-      // concreteLen too so it can be resent if the model-determined length
-      // changes across last-call checks.
+      // (concreteLen >= 0, s.size() >= (size_t)concreteLen: the witness may
+      // already have been unrolled beyond the length of the current model);
+      // branches over every edge of the witness instead of committing to the
+      // first one. Still at most one branching lemma per (R, S) pair, but
+      // keyed on concreteLen too so it can be resent if the model-determined
+      // length changes across last-call checks.
       if (doRot && concreteLen >= 2)
       {
-        Assert(s.size() == static_cast<size_t>(concreteLen));
+        Assert(s.size() >= static_cast<size_t>(concreteLen));
         std::pair<std::pair<Node, Node>, size_t> branchKey(
             key, static_cast<size_t>(concreteLen));
         if (d_anchorBranchSent.find(branchKey) == d_anchorBranchSent.end())
@@ -3134,9 +3099,14 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
           Node conc = disjuncts.size() == 1
                           ? disjuncts[0]
                           : nm->mkNode(Kind::OR, disjuncts);
+          // With l = concreteLen, the listed edges are the whole cycle
+          // (s_l = s_1), so one of them must leave TC(S).
+          Node branchReason =
+              lenEq.isNull() ? reason
+                             : nm->mkNode(Kind::AND, acyc_exp, acyc, lenEq);
           Trace("rels-cycles") << "AcyclicAnchor (rotation/branch): " << conc
-                               << " from " << reason << std::endl;
-          sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
+                               << " from " << branchReason << std::endl;
+          sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, branchReason);
         }
       }
     }
@@ -3194,8 +3164,7 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
       Trace("rels-debug") << "[Theory::Rels] checkAcyclicityLastCall: "
                           << "catching up cnt from " << s.size() << " to " << N
                           << " (l = " << l << ")" << std::endl;
-      Node acyc_exp =
-          nm->mkNode(Kind::RELATION_ACYCLIC, mkRelTuple(rels)).negate();
+      Node acyc_exp = cyclicAtom(rels);
       // Ensure that all cycle-unrolling lemmas have been applied up to the
       // model's current value of l.
       while (s.size() < N)
@@ -3210,8 +3179,10 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
       // can fire here, where it could not at full effort.
       if (N >= 2)
       {
+        Node lenEq =
+            nm->mkNode(Kind::EQUAL, l, nm->mkConstInt(Rational(N)));
         applyAcyclicAnchorRules(
-            rels, s, acyc_exp, static_cast<int64_t>(N));
+            rels, s, acyc_exp, static_cast<int64_t>(N), lenEq);
       }
     }
     ++c_it;
@@ -3590,7 +3561,7 @@ bool TheorySetsRels::isRelationKind(Kind k)
   return k == Kind::RELATION_TRANSPOSE || k == Kind::RELATION_PRODUCT
          || k == Kind::RELATION_JOIN || k == Kind::RELATION_TABLE_JOIN
          || k == Kind::RELATION_TCLOSURE || k == Kind::RELATION_IDEN
-         || k == Kind::RELATION_JOIN_IMAGE || k == Kind::RELATION_ACYCLIC
+         || k == Kind::RELATION_JOIN_IMAGE || k == Kind::RELATION_CYCLIC
          || k == Kind::RELATION_RCLOSURE || k == Kind::RELATION_RTCLOSURE
          || k == Kind::RELATION_IS_FUNCTIONAL;
 }

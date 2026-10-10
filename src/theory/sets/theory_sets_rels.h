@@ -107,12 +107,12 @@ class TheorySetsRels : protected EnvObj
   void check(Theory::Effort e);
   /**
    * The acyclicity check creates fresh skolem sequences representing cycles
-   * for constraints of the form (not (rel.acyclic R)), case splits on the
+   * for constraints of the form (rel.cyclic R), case splits on the
    * length of the cycles, and unrolls a fresh edge of the cycle, via
    * applyInstCycleRule, applySplitCycleLenRule, and applyUnrollCycle.
    * Requires the caches collected by check(Theory::Effort) earlier in the
    * same check (which is where applyInstCycleRule is invoked for new
-   * (not (rel.acyclic R)) constraints).
+   * (rel.cyclic R) constraints).
    */
   void checkAcyclicity();
   /**
@@ -318,9 +318,14 @@ class TheorySetsRels : protected EnvObj
                              Node l,
                              Node exp);
   void applyAcyclicDownRule(Node mem, Node rel, Node exp);
-  void applyInstCycleRule(Node rel_rep, Node exp);
-  /** Build a tuple term whose elements are the given relations. */
-  Node mkRelTuple(const std::vector<Node>& rels);
+  /**
+   * Apply the rules for an asserted (rel.cyclic R): the definition (a fresh
+   * self-loop of TC(R)) if R is not a union, otherwise the cycle witness over
+   * the operands of R.
+   */
+  void applyInstCycleRule(Node atom);
+  /** The (rel.cyclic R) atom whose witness is keyed by the relations rels. */
+  Node cyclicAtom(const std::vector<Node>& rels) const;
   /** Build the (rewritten) union of the given relations. */
   Node mkRelUnion(const std::vector<Node>& rels);
   /**
@@ -420,11 +425,13 @@ class TheorySetsRels : protected EnvObj
   bool isTransitiveClass(Node pRep, Node p, std::vector<Node>& reason);
   /** Whether the TC checks run at last-call effort (lazy TC down). */
   bool d_tcLastCall = false;
-  /** Self-loop witnesses (--rels-acyclic-self-loop): relation list -> s. */
+  /** Self-loop witnesses ((rel.cyclic R), R not a union): relations -> s. */
   std::map<std::vector<Node>, Node> d_selfLoops;
-  /** Negated acyclicity constraints already flattened
-   * (--rels-acyclic-flatten-union). */
-  std::set<Node> d_flattenSent;
+  /**
+   * The (rel.cyclic R) atom for each witness key (the operands of R). The
+   * atom is the reason of every lemma about that witness.
+   */
+  std::map<std::vector<Node>, Node> d_cycleAtoms;
   /**
    * Sends a conflict for a transitive-closure membership mem_rep in
    * tc_rel that is not reachable via members of tc_rel[0]. Introduces no
@@ -480,18 +487,22 @@ class TheorySetsRels : protected EnvObj
    * comment at the definition.
    *
    * EXPERIMENT: concreteLen, if non-negative, is the witness's full,
-   * model-determined length (s.size() == concreteLen); the branching anchor
-   * lemma (the sound replacement for the old "rotation" lemma) is only sent
-   * when this is known, since it needs to range over every edge of the
-   * witness. Callers that cannot supply a concrete length (full-effort calls,
-   * where the model value of the symbolic length is not yet available) should
-   * pass -1, in which case only the (unconditionally sound) inclusion lemma
-   * is considered.
+   * model-determined length (s.size() >= concreteLen; only the first
+   * concreteLen elements are used); the branching anchor lemma (the
+   * replacement for the old "rotation" lemma) is only sent when this is
+   * known, since it needs to range over every edge of the witness. lenEq, if
+   * not null, is the literal (= l concreteLen) for the symbolic length l of
+   * the witness; it is added to the premises of the branching lemma, which
+   * is then a consequence of the UnrollCycle lemmas. Callers that cannot
+   * supply a concrete length (full-effort calls, where the model value of the
+   * symbolic length is not yet available) should pass -1, in which case only
+   * the (unconditionally sound) inclusion lemma is considered.
    */
   void applyAcyclicAnchorRules(const std::vector<Node>& rels,
                                const std::vector<Node>& s,
                                Node acyc_exp,
-                               int64_t concreteLen = -1);
+                               int64_t concreteLen = -1,
+                               Node lenEq = Node::null());
   /** Flatten the set.union operands of r into parts. */
   void collectUnionOperands(Node r, std::vector<Node>& parts);
   /** Is x a subset of TC(s) in every interpretation, by its shape? */

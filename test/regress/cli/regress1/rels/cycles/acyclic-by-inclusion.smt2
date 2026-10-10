@@ -15,6 +15,6 @@
 (declare-fun po () (Relation Atom Atom))
 (declare-fun A () (Set (Tuple Atom)))
 (declare-fun B () (Set (Tuple Atom)))
-(assert (rel.acyclic (tuple po)))
-(assert (not (rel.acyclic (tuple (set.union (rel.join (rel.iden A) po) (rel.join (rel.join (rel.iden B) po) (rel.iden A)))))))
+(assert (not (rel.cyclic po)))
+(assert (rel.cyclic (set.union (rel.join (rel.iden A) po) (rel.join (rel.join (rel.iden B) po) (rel.iden A)))))
 (check-sat)

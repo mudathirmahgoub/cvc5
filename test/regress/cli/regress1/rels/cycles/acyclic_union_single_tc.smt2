@@ -24,5 +24,5 @@
 ; vacuously true; its only purpose is to register the term (rel.tclosure R)
 (assert (set.subset R (rel.tclosure R)))
 
-(assert (rel.acyclic (tuple R)))
+(assert (not (rel.cyclic R)))
 (check-sat)

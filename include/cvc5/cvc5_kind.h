@@ -3941,11 +3941,18 @@ enum ENUM(Kind)
    */
   EVALUE(RELATION_RTCLOSURE),
   /**
-   * Relation acyclic predicate.
+   * Relation cyclicity predicate.
+   *
+   * \rst
+   * ``(rel.cyclic R)`` holds iff :math:`(x, x) \in R^+` for some :math:`x`,
+   * where :math:`R^+` is the transitive closure of the binary relation
+   * :math:`R`, i.e., iff :math:`R` has a cycle. Acyclicity of :math:`R` is
+   * ``(not (rel.cyclic R))``.
+   * \endrst
    *
    * - Arity: ``1``
    *
-   *   - ``1:`` Term of tuple Sort whose elements are binary relation Sorts
+   *   - ``1:`` Term of binary relation Sort whose two columns have the same Sort
    *
    * - Create Term of this Kind with:
    *
@@ -3956,7 +3963,7 @@ enum ENUM(Kind)
    *
    *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
    */
-  EVALUE(RELATION_ACYCLIC),
+  EVALUE(RELATION_CYCLIC),
   /**
    * Relation join image.
    *

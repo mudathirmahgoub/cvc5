@@ -80,7 +80,7 @@
 )
 
 (define-fun not_sc_mcm () Bool
-  (not (rel.acyclic (tuple rf po co fr)))
+  (rel.cyclic (set.union rf (set.union po (set.union co fr))))
 )
 
 (assert (forall ((a Atom) (b Atom)) (and
@@ -146,7 +146,7 @@
       (total co (set.inter (rel.join (set.singleton a) (rel.transpose address)) Write)))))
 
 ;; Litmus test templates (same-address "po-loc" form, restored from the source):
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 (assert (irreflexive (rel.join
   (set.inter (rel.tclosure po) (rel.join address (rel.transpose address)))
   rf)))

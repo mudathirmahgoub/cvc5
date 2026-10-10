@@ -23,6 +23,6 @@
 (assert (set.member (tuple a b) R))            ; a -> b in R
 (assert (set.member (tuple b a) S))            ; b -> a in S
 
-(assert (rel.acyclic (tuple R S)))             ; ... yet we claim R u S is acyclic
+(assert (not (rel.cyclic (set.union R S))))             ; ... yet we claim R u S is acyclic
 
 (check-sat)

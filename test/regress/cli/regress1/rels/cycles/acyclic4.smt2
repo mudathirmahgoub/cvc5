@@ -15,7 +15,7 @@
 (assert (forall ((x Atom)) (not (set.member (tuple x x) (rel.tclosure R)))))
 
 ; ... yet R is not acyclic
-(assert (not (rel.acyclic (tuple R))))
+(assert (rel.cyclic R))
 
 (assert (= R (set.insert a c (set.singleton b))))
 

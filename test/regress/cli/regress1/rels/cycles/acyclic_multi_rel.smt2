@@ -10,5 +10,5 @@
 ; passes --check-unsat-cores and --check-proofs cleanly.
 (set-info :status unsat)
 
-(assert (rel.acyclic (tuple (set.singleton (tuple 1 2)) (set.singleton (tuple 2 1)))))
+(assert (not (rel.cyclic (set.union (set.singleton (tuple 1 2)) (set.singleton (tuple 2 1))))))
 (check-sat)

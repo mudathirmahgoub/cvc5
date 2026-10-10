@@ -1,6 +1,6 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
-; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-flatten-union --rels-tc-down-lazy --rels-functional-axioms --no-check-unsat-cores
+; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy --rels-functional-axioms --no-check-unsat-cores
 ; EXPECT: unsat
 ; DISABLE-TESTER: cpc
 ;
@@ -53,7 +53,7 @@
          (=> (and (not (= e1 e2))
                   (set.member (tuple e1) bag) (set.member (tuple e2) bag))
              (set.member (tuple e1 e2) (set.union r (rel.transpose r)))))
-       (rel.acyclic (tuple r))))
+       (not (rel.cyclic r))))
 (define-fun lone_set ((r (Set (Tuple Atom)))) Bool
   (or (set.is_singleton r) (= r (as set.empty (Set (Tuple Atom))))))
 
@@ -120,12 +120,12 @@
 ;; ---- memory consistency model (conjunction of checks) ----
 (define-fun mcm () Bool
   (and
-    (rel.acyclic (tuple ghb))   ; sc-per-loc
+    (not (rel.cyclic ghb))   ; sc-per-loc
     (irreflexive com)   ; no-self-com
   ))
 
 ;; ==== litmus templates: Unknown ====
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 (assert (irreflexive (rel.join (rel.tclosure po-loc) rf)))
 (assert (irreflexive (rel.join (rel.join (rel.join (rel.tclosure po-loc) rf) (rel.tclosure po-loc)) rf)))
 

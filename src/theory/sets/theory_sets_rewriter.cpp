@@ -422,7 +422,7 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node)
     case Kind::SET_ALL: return postRewriteAll(node);
     case Kind::SET_SOME: return postRewriteSome(node);
     case Kind::SET_FOLD: return postRewriteFold(node);
-    case Kind::RELATION_ACYCLIC: return postRewriteAcyclic(node);
+    case Kind::RELATION_CYCLIC: return postRewriteCyclic(node);
     case Kind::RELATION_RCLOSURE: return postRewriteRClosure(node);
     case Kind::RELATION_RTCLOSURE: return postRewriteRTClosure(node);
     case Kind::RELATION_TABLE_JOIN:
@@ -911,47 +911,39 @@ RewriteResponse TheorySetsRewriter::postRewriteTableJoin(TNode n)
   return RewriteResponse(REWRITE_DONE, n);
 }
 
-RewriteResponse TheorySetsRewriter::postRewriteAcyclic(TNode n)
+RewriteResponse TheorySetsRewriter::postRewriteCyclic(TNode n)
 {
-  Assert(n.getKind() == Kind::RELATION_ACYCLIC);
+  Assert(n.getKind() == Kind::RELATION_CYCLIC);
   NodeManager* nm = nodeManager();
-  // acyclic((R1,...,Rk)) is acyclic(R1 union ... union Rk). If every component
-  // relation is constant, decide it directly: the union's edge set is acyclic
-  // iff its transitive closure contains no self-loop (a,a). Otherwise leave the
-  // term for the solver.
-  std::vector<Node> rels = TupleUtils::getTupleElements(n[0]);
-  std::set<Node> rel_mems;
-  for (const Node& r : rels)
+  Node r = n[0];
+  // the empty relation has no cycle
+  if (r.getKind() == Kind::SET_EMPTY)
   {
-    if (!r.isConst())
-    {
-      return RewriteResponse(REWRITE_DONE, n);
-    }
-    if (r.getKind() != Kind::SET_EMPTY)
-    {
-      std::set<Node> m = NormalForm::getElementsFromNormalConstant(r);
-      rel_mems.insert(m.begin(), m.end());
-    }
+    return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
   }
-  if (rel_mems.empty())
+  // a single pair (x, y) is a cycle iff it is a self-loop
+  if (r.getKind() == Kind::SET_SINGLETON)
   {
-    // the empty union is acyclic
-    return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+    Node x = TupleUtils::nthElementOfTuple(r[0], 0);
+    Node y = TupleUtils::nthElementOfTuple(r[0], 1);
+    return RewriteResponse(REWRITE_AGAIN_FULL, x.eqNode(y));
   }
-  // rels[0] is only a type carrier for constructing the closure pairs
-  std::set<Node> tc_rel_mems = RelsUtils::computeTC(rel_mems, rels[0]);
-  bool acyclic = true;
-  for (const Node& tuple : tc_rel_mems)
+  // a constant relation is cyclic iff its transitive closure has a self-loop
+  if (r.isConst())
   {
-    Node x = TupleUtils::nthElementOfTuple(tuple, 0);
-    Node y = TupleUtils::nthElementOfTuple(tuple, 1);
-    if (x == y)
+    std::set<Node> mems = NormalForm::getElementsFromNormalConstant(r);
+    std::set<Node> tc = RelsUtils::computeTC(mems, r);
+    for (const Node& tuple : tc)
     {
-      acyclic = false;
-      break;
+      if (TupleUtils::nthElementOfTuple(tuple, 0)
+          == TupleUtils::nthElementOfTuple(tuple, 1))
+      {
+        return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+      }
     }
+    return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
   }
-  return RewriteResponse(REWRITE_AGAIN_FULL, nm->mkConst(acyclic));
+  return RewriteResponse(REWRITE_DONE, n);
 }
 
 RewriteResponse TheorySetsRewriter::postRewriteRClosure(TNode n)

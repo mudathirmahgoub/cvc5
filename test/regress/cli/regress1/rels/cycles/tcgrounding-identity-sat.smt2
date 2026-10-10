@@ -106,7 +106,7 @@
 
 (define-fun not_sc_mcm () Bool
   ;; === CHANGED FOR FULL: SC = acyclic(rf U po U co U fr)  (was rf U po) ===
-  (not (rel.acyclic (tuple rf po co fr)))
+  (rel.cyclic (set.union rf (set.union po (set.union co fr))))
 )
 
 
@@ -185,7 +185,7 @@
 ;; === END ADDED ===
 
 ;; Litmus test templates (same-address "po-loc" form, restored from the source):
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 ;; === CHANGED FOR FULL: each template is  irreflexive( (po+ ∩ same-address) ; X )
 ;;     for X in {rf, co, fr}.  (acyclic9 used the simpler  irreflexive(po+ ; rf).) ===
 (assert (irreflexive (rel.join

@@ -26,7 +26,7 @@
  )
 
 (assert (irreflexive (rel.tclosure R)))
-(assert (not (rel.acyclic (tuple R))))
+(assert (rel.cyclic R))
 
 
 (check-sat)

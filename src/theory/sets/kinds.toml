@@ -312,10 +312,10 @@ typerule = "::cvc5::internal::theory::sets::RelReflTransClosureTypeRule"
 
 [[kinds]]
 type     = "operator"
-name     = "RELATION_ACYCLIC"
+name     = "RELATION_CYCLIC"
 children = 1
-comment  = "relation acyclic"
-typerule = "::cvc5::internal::theory::sets::RelAcyclicTypeRule"
+comment  = "relation cyclic: (rel.cyclic R) iff (x, x) in (rel.tclosure R) for some x"
+typerule = "::cvc5::internal::theory::sets::RelCyclicTypeRule"
 
 [[kinds]]
 type     = "operator"

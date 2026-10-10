@@ -52,7 +52,7 @@
          (=> (and (not (= e1 e2))
                   (set.member (tuple e1) bag) (set.member (tuple e2) bag))
              (set.member (tuple e1 e2) (set.union r (rel.transpose r)))))
-       (rel.acyclic (tuple r))))
+       (not (rel.cyclic r))))
 (define-fun lone_set ((r (Set (Tuple Atom)))) Bool
   (or (set.is_singleton r) (= r (as set.empty (Set (Tuple Atom))))))
 (assert (set.subset (set.union (set.union fr rf) co)
@@ -62,10 +62,10 @@
 (define-fun ghb () (Set (Tuple Atom Atom)) (set.union po-loc com))
 (define-fun mcm () Bool
   (and
-    (rel.acyclic (tuple ghb))   
+    (not (rel.cyclic ghb))   
     (irreflexive com)   
   ))
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 (declare-fun th0 () (Tuple Thread))
 (assert (not mcm))
 (declare-fun r () Atom)

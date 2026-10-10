@@ -11,6 +11,6 @@
 (assert (forall ((x Int)) (not (set.member (tuple x x) (rel.tclosure R)))))
 
 ; ... yet R is not acyclic
-(assert (not (rel.acyclic (tuple R))))
+(assert (rel.cyclic R))
 
 (check-sat)

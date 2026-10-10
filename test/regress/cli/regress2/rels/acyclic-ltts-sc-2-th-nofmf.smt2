@@ -1,6 +1,6 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
-; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-flatten-union --rels-acyclic-hammer --rels-functional-axioms --no-check-unsat-cores
+; COMMAND-LINE: --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer --rels-functional-axioms --no-check-unsat-cores
 ; EXPECT: unsat
 ; DISABLE-TESTER: cpc
 ;
@@ -76,7 +76,7 @@
             (set.member (tuple e1 e2) (set.union r (rel.transpose r)))
         )
     )
-    (rel.acyclic (tuple r))
+    (not (rel.cyclic r))
   )
 )
 ;; === END ADDED ===
@@ -87,7 +87,7 @@
 
 (define-fun not_sc_mcm () Bool
   ;; === CHANGED FOR FULL: SC = acyclic(rf U po U co U fr)  (was rf U po) ===
-  (not (rel.acyclic (tuple rf po co fr)))
+  (rel.cyclic (set.union rf (set.union po (set.union co fr))))
 )
 
 
@@ -170,7 +170,7 @@
 ;; === END ADDED ===
 
 ;; Litmus test templates (same-address "po-loc" form, restored from the source):
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 ;; === CHANGED FOR FULL: each template is  irreflexive( (po+ ∩ same-address) ; X )
 ;;     for X in {rf, co, fr}.  (acyclic9 used the simpler  irreflexive(po+ ; rf).) ===
 (assert (irreflexive (rel.join

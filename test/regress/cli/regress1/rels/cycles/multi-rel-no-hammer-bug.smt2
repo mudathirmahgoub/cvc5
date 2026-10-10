@@ -51,5 +51,5 @@
                    (or (set.member (tuple c b) rf) (set.member (tuple c b) po)))))
 
 ; so any cycle in rf u po must have length >= 3, i.e. must use all of a,b,c
-(assert (not (rel.acyclic (tuple rf po))))
+(assert (rel.cyclic (set.union rf po)))
 (check-sat)

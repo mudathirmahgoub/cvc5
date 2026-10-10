@@ -43,7 +43,7 @@ void Strategy::initializeStrategy()
   addStrategyStep(Step::SETS_CHECK_BASIC);
   addStrategyStep(Step::SETS_CHECK_RELATIONS);
   // Relation acyclicity: unroll the cycle witnesses of the asserted
-  // (not (rel.acyclic R)) constraints collected by SETS_CHECK_RELATIONS.
+  // (rel.cyclic R) constraints collected by SETS_CHECK_RELATIONS.
   addStrategyStep(Step::SETS_CHECK_ACYCLICITY);
   // The transitive-closure down and up rules share the closure graph the down
   // rule builds, so they run back-to-back in the same pass (no BREAK between

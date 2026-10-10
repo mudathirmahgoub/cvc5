@@ -1,6 +1,6 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
-; COMMAND-LINE: --rels-acyclic-flatten-union --rels-tc-subset
+; COMMAND-LINE: --rels-tc-subset
 ; EXPECT: unsat
 ; DISABLE-TESTER: cpc
 ;
@@ -16,5 +16,5 @@
 (assert (set.subset R (rel.product X Y)))
 (assert (set.subset S (rel.product X Y)))
 (assert (= (set.inter X Y) (as set.empty (Set (Tuple A)))))
-(assert (not (rel.acyclic (tuple (set.union R S)))))
+(assert (rel.cyclic (set.union R S)))
 (check-sat)

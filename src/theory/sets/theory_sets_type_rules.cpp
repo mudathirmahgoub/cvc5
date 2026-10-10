@@ -1062,61 +1062,47 @@ TypeNode RelReflTransClosureTypeRule::computeType(NodeManager* nodeManager,
   return setType;
 }
 
-TypeNode RelAcyclicTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,
-                                            CVC5_UNUSED TNode n)
+TypeNode RelCyclicTypeRule::preComputeType(NodeManager* nm,
+                                           CVC5_UNUSED TNode n)
 {
-  return TypeNode::null();
+  return nm->booleanType();
 }
-TypeNode RelAcyclicTypeRule::computeType(NodeManager* nodeManager,
-                                         TNode n,
-                                         bool check,
-                                         std::ostream* errOut)
+TypeNode RelCyclicTypeRule::computeType(NodeManager* nodeManager,
+                                        TNode n,
+                                        bool check,
+                                        std::ostream* errOut)
 {
-  Assert(n.getKind() == Kind::RELATION_ACYCLIC);
-  TypeNode argType = n[0].getTypeOrNull();
+  Assert(n.getKind() == Kind::RELATION_CYCLIC);
   if (check)
   {
-    if (!argType.isTuple())
+    TypeNode relType = n[0].getTypeOrNull();
+    if (!relType.isRelation())
     {
       if (errOut)
       {
-        (*errOut) << "acyclic predicate operates on a non-tuple argument";
+        (*errOut) << "rel.cyclic operates on a non-relation";
       }
       return TypeNode::null();
     }
-    // The argument is a tuple of relations; each element must be a binary
-    // relation with comparable element types.
-    for (const TypeNode& relType : argType.getTupleTypes())
+    std::vector<TypeNode> tupleTypes = relType[0].getTupleTypes();
+    if (tupleTypes.size() != 2)
     {
-      if (!relType.isRelation())
+      if (errOut)
       {
-        if (errOut)
-        {
-          (*errOut) << "acyclic predicate tuple element is not a relation";
-        }
-        return TypeNode::null();
+        (*errOut) << "rel.cyclic operates on a non-binary relation";
       }
-      std::vector<TypeNode> tupleTypes = relType[0].getTupleTypes();
-      if (tupleTypes.size() != 2)
+      return TypeNode::null();
+    }
+    if (!tupleTypes[0].isComparableTo(tupleTypes[1]))
+    {
+      if (errOut)
       {
-        if (errOut)
-        {
-          (*errOut) << "acyclic predicate operates on non-binary relation";
-        }
-        return TypeNode::null();
+        (*errOut) << "rel.cyclic operates on a binary relation whose columns "
+                     "have different types";
       }
-      if (!tupleTypes[0].isComparableTo(tupleTypes[1]))
-      {
-        if (errOut)
-        {
-          (*errOut)
-              << "acyclic predicate operates on incompatible binary relation";
-        }
-        return TypeNode::null();
-      }
+      return TypeNode::null();
     }
   }
-
   return nodeManager->booleanType();
 }
 

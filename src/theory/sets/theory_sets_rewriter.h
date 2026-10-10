@@ -104,15 +104,14 @@ class TheorySetsRewriter : public TheoryRewriter
   RewriteResponse postRewriteComprehension(TNode n);
   RewriteResponse postRewriteTableJoin(TNode n);
   /**
-   *  rewrites for n include:
-   *  - (rel.acyclic (as set.empty (Relation T T))) = true
-   *  - (rel.acyclic (set.singleton (tuple x y))) = (distinct x y)
-   *  - (rel.acyclic (set.union A B)) = if A and B are const, check if
-   *    (rel.tclosure (set.union A B)) intersect iden != empty, then
-   *    return false, otherwise true.
-   *    If A or B are not const, return the original node.
+   *  rewrites for n = (rel.cyclic R):
+   *  - (rel.cyclic (as set.empty (Relation T T))) = false
+   *  - (rel.cyclic (set.singleton (tuple x y))) = (= x y)
+   *  - (rel.cyclic R) for a constant R: true iff (rel.tclosure R) contains a
+   *    pair (a, a).
+   *  Otherwise n is returned unchanged.
    */
-  RewriteResponse postRewriteAcyclic(TNode n);
+  RewriteResponse postRewriteCyclic(TNode n);
   /**
    *  rewrites for n include:
    *  - (rel.rclosure (as set.empty (Relation T T))) = (as set.empty (Relation T

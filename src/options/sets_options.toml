@@ -94,22 +94,6 @@ name   = "Sets Theory"
   help       = "closure induction: from (a,b) in (rel.tclosure R) infer (a,b) in S for every transitive superset S of R, where S is a product A x B or a closure or iden that R is asserted to be a subset of, a relation T with R subset T and T;T subset T asserted (in particular R itself when R is transitive), or (rel.tclosure X) when R is syntactically included in it"
 
 [[option]]
-  name       = "relsAcyclicFlattenUnion"
-  category   = "expert"
-  long       = "rels-acyclic-flatten-union"
-  type       = "bool"
-  default    = "false"
-  help       = "for a negated (rel.acyclic (tuple R)) whose single relation R is a union, build the cycle witness over the operands of the union (sound: the union of the operands is R), which gives the witness the alternating structure the minimality rules exploit"
-
-[[option]]
-  name       = "relsAcyclicSelfLoop"
-  category   = "expert"
-  long       = "rels-acyclic-self-loop"
-  type       = "bool"
-  default    = "false"
-  help       = "for a negated (rel.acyclic (tuple R)) with a single relation R, replace the unrolled cycle witness by a fresh self-loop (s,s) in (rel.tclosure R), which is equivalent since (rel.tclosure R) is transitive"
-
-[[option]]
   name       = "relsTcDownLazy"
   category   = "expert"
   long       = "rels-tc-down-lazy"
@@ -131,4 +115,4 @@ name   = "Sets Theory"
   long       = "rels-acyclic-backward-chords"
   type       = "bool"
   default    = "false"
-  help       = "in the minimality rule of the cycle witness of a negated rel.acyclic constraint, also forbid backward chords, i.e. closure edges from a later to an earlier element of the witness; sound, and needed by unsat proofs that rely on a totality axiom over one of the relations, but it slows down finite model finding"
+  help       = "in the minimality rule of the cycle witness of a (rel.cyclic R) constraint, also forbid backward chords, i.e. closure edges from a later to an earlier element of the witness; sound, and needed by unsat proofs that rely on a totality axiom over one of the relations, but it slows down finite model finding"

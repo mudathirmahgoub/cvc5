@@ -14,5 +14,5 @@
 
 (assert (distinct a b))
 (assert (= r (set.insert (tuple a b) (set.singleton (tuple b a)))))
-(assert (not (rel.acyclic (tuple r))))
+(assert (rel.cyclic r))
 (check-sat)

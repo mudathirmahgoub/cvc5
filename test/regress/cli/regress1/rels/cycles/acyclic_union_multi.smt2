@@ -20,6 +20,6 @@
 (assert (set.member (tuple a a) (rel.tclosure (set.union R S))))
 
 ; ... yet we claim the union (R, S) is acyclic
-(assert (rel.acyclic (tuple R S)))
+(assert (not (rel.cyclic (set.union R S))))
 
 (check-sat)

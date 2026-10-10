@@ -1,6 +1,6 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
-; COMMAND-LINE: --rels-acyclic-self-loop --rels-tc-subset
+; COMMAND-LINE: --rels-tc-subset
 ; EXPECT: unsat
 ; DISABLE-TESTER: cpc
 ;
@@ -15,5 +15,5 @@
 (declare-fun Y () (Set (Tuple A)))
 (assert (set.subset R (rel.product X Y)))
 (assert (= (set.inter X Y) (as set.empty (Set (Tuple A)))))
-(assert (not (rel.acyclic (tuple R))))
+(assert (rel.cyclic R))
 (check-sat)

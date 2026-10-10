@@ -23,5 +23,5 @@
              (set.union (set.singleton (tuple b c))
              (set.union (set.singleton (tuple c d))
                         (set.singleton (tuple d a)))))))
-(assert (rel.acyclic (tuple r)))
+(assert (not (rel.cyclic r)))
 (check-sat)

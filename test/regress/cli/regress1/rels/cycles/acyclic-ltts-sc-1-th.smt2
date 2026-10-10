@@ -63,7 +63,7 @@
             (set.member (tuple e1 e2) (set.union r (rel.transpose r)))
         )
     )
-    (rel.acyclic (tuple r))
+    (not (rel.cyclic r))
   )
 )
 (define-fun lone_set ((r (Set (Tuple Atom)))) Bool
@@ -71,7 +71,7 @@
 )
 (define-fun not_sc_mcm () Bool
   ;; === CHANGED FOR FULL: SC = acyclic(rf U po U co U fr)  (was rf U po) ===
-  (not (rel.acyclic (tuple rf po co fr)))
+  (rel.cyclic (set.union rf (set.union po (set.union co fr))))
 )
 (assert (forall ((a Atom) (b Atom)) (and
   (=> (set.member (tuple a b) iden) (and (= a b) (set.member (tuple a) univ)))
@@ -129,7 +129,7 @@
 (assert (forall ((a (Tuple Atom)))
   (=> (set.member a Address)
       (total co (set.inter (rel.join (set.singleton a) (rel.transpose address)) Write)))))
-(assert (rel.acyclic (tuple po)))
+(assert (not (rel.cyclic po)))
 (assert (irreflexive (rel.join
   (set.inter (rel.tclosure po) (rel.join address (rel.transpose address)))
   rf)))

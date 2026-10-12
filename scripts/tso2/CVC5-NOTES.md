@@ -127,3 +127,18 @@ Ideas not tried yet:
    which needs the solver to prove `fr;co ⊆ fr` from the definition of `fr`.
 3. Proving the run lemma of `PROOF.md` once (as an SMT query) and adding it as a template-like
    assertion, which would change the benchmark, not the solver.
+
+## tso-2-th solved by bounded queries (DECOMPOSITION.md)
+
+`cyclic(ghb)` is unsat by a lemma (a finite relation is acyclic if it has no cycle of at most K
+edges and no chord-free path of K elements) and K + 1 cvc5 queries on `split/t2-B3-min.smt2`:
+the 9-element chord-free path is unsat in 26.8 s, the cycles of 1 to 9 edges in 0.1 to 879 s
+(about 23 minutes in total). With atomicity (0.1 s) and SC per location (29 s), `tso-2-th` is
+unsat. The assertions build agrees (path: 33 s; cycles 1 to 7 edges: up to 142 s).
+
+As a single query it does not finish: the witness refutes the lengths one by one inside one
+search, ×4-6 per length with plain edges (`--rels-cycle-plain-edges`: 3.1, 18.5, 79 s for
+cycles up to 3, 4, 5 edges; about 11 h extrapolated), and the default closure edges stay at
+5-edge cycles for more than 80 minutes. The explicit queries grow ×3 per edge and are
+independent. So it is the search strategy, not a missing rule: a bound found once by a
+length-independent query, then one small search per length.

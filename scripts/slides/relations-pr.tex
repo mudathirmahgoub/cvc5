@@ -1334,7 +1334,7 @@
     plsc-2-th & 53-79 s & \textbf{unsat, 11 s} \\
     tso-1-th & 6.8 s & 1.1 s \\
     tso-2-th: atomicity / SC per location & 0.1 s / timeout & 0.1 s / \textbf{29 s} \\
-    tso-2-th: \sm{cyclic(ghb)} & timeout & \bad{timeout} (3600 s) \\
+    tso-2-th: \sm{cyclic(ghb)} & timeout & \textbf{unsat by bounded queries} (23 min) \\
     \bottomrule
   \end{tabular}
   \end{center}
@@ -1349,25 +1349,80 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Still open: the \sm{ghb} part of \sm{tso-2-th}}
+\begin{frame}{\sm{tso-2-th} is unsat: a proof by bounded cvc5 queries}
+  \begin{columns}[T]
+  \begin{column}{0.5\textwidth}
+    \footnotesize
+    \textbf{Lemma.} A finite relation $G$ is acyclic if
+    \begin{itemize}
+      \item[(a)] no $n \le K$ distinct elements form a cycle $e_0 \to \dots \to e_{n-1} \to e_0$
+        of $G$ edges, and
+      \item[(b)] no $K$ distinct elements form a $G$ path $p_0 \to \dots \to p_{K-1}$ with no
+        other $G$ edge between any two of them.
+    \end{itemize}
+    \emph{Proof.} Take a shortest cycle, $m$ edges. $m \le K$: (a). $m > K$: $K$ consecutive
+    elements of it satisfy (b), since any other edge would shortcut the cycle or close a shorter
+    one. $\square$
+    \medskip
+
+    With $G =$ \sm{ghb}, $K = 9$, on the axioms and the 44 templates of the proof (fewer
+    assumptions than the benchmark), each query is a cvc5 run. With atomicity (0.1 s) and SC per
+    location (29 s): \textbf{\sm{tso-2-th} is unsat}, in about 23 min of cvc5 time (15 min in
+    parallel). The assertions build agrees.
+  \end{column}
+  \begin{column}{0.46\textwidth}
+    \centering\footnotesize
+    \begin{tabular}{@{}lr@{}}
+      \toprule
+      query & result \\
+      \midrule
+      (b) path of 9 elements & \textbf{unsat, 26.8 s} \\
+      (a) cycles of 1, 2, 3, 4 edges & unsat, $\le$ 3.5 s \\
+      5 edges & unsat, 11.9 s \\
+      6 edges & unsat, 43.2 s \\
+      7 edges & unsat, 95.5 s \\
+      8 edges & unsat, 305.6 s \\
+      9 edges & \textbf{unsat, 879.4 s} \\
+      \bottomrule
+    \end{tabular}
+    \medskip
+
+    \scriptsize \sm{scripts/tso2/decompose.py} writes and runs the queries;
+    \sm{scripts/tso2/DECOMPOSITION.md}.
+  \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why the single query does not finish: the search, not the calculus}
   \footnotesize
   \begin{itemize}
-    \item The witness has \textbf{four operands} (\sm{ppo}, \sm{co;sm}, \sm{fr;sm},
-      \sm{rfe;sm}): every edge is a choice among four closures, so the number of shapes grows
-      exponentially with the length; for \sm{just-rf} there are two operands and one shape per
-      length.
-    \item Every single shape is quick: explicit cycles with 3 and 4 communication edges (beyond
-      the templates, refuted by the run argument) take about 1 s.
-    \item The proof bounds the length only at about 10 edges: five pairwise non-adjacent
-      elements contain three of one thread, $x \mathrel{po+} y \mathrel{po+} z$, and then $y$ is
-      both a read (after $x$) and a write (before $z$).
-    \item Lengths up to 5 are refuted within a minute; then the search stays at 6. Tried, all
-      time out (5-60 min): the hammer, no length decisions, all \sm{--decision} modes, two
-      operands, full flattening, without the quantifiers the proof does not use.
+    \item \textbf{No rule is missing}: every bounded query above is decided with the existing
+      rules, in seconds to minutes.
+    \item \textbf{The single query must find the bound itself.} The witness is unrolled by
+      iterative deepening: all lengths are refuted in one CDCL search that re-derives the same
+      facts at every position, splitting on the operand of every edge and the thread of every
+      element:
   \end{itemize}
-  \textbf{Next}: a witness rule for the pigeonhole argument (three pairwise non-adjacent
-  elements in one total order give a chord), or fewer communication operands
-  (\sm{(fr} $\cup$ \sm{co)} is transitive once \sm{fr;co} $\subseteq$ \sm{fr} is known).
+  \begin{center}
+  \begin{tabular}{@{}lrrrrrr@{}}
+    \toprule
+    length (edges) & 3 & 4 & 5 & 6 & 8 & 9 \\
+    \midrule
+    explicit cycle query & 0.8 s & 3.5 s & 11.9 s & 43 s & 306 s & 879 s \\
+    plain-edge witness, cycles refuted up to & 3.1 s & 18.5 s & 79 s & $\approx$6 min$^*$ & $\approx$2 h$^*$ & $\approx$9 h$^*$ \\
+    closure-edge witness (default) & 9.7 s & 48 s & $>$80 min & & & \\
+    \bottomrule
+  \end{tabular}\\[1mm]
+  \scriptsize $^*$extrapolated ($\times 4.5$ per edge); with the 9-element prefix conflict, which
+  covers all longer witnesses, about 11 h in total.
+  \end{center}
+  \begin{itemize}
+    \item Explicit queries: about $\times 3$ per edge, independent. Witness: $\times 4$-6 per
+      length; closure edges make it far slower.
+    \item \textbf{What a solver strategy should do}: establish a length bound once with a
+      length-independent query (the chord-free path), then refute each bounded length in its own
+      search, possibly in parallel. That is what the decomposition does, in about 15 minutes.
+  \end{itemize}
 \end{frame}
 
 %=====================================================================
@@ -1393,7 +1448,7 @@
       (virtual and real), no wrong answer.
     \item On the two-thread TSO benchmarks (branch \sm{cycle-ext-tso2}): a hand proof of both;
       seven prototype options that make the witness search work; \sm{tso-2-th-just-rf} unsat in
-      3 s; \sm{tso-2-th} still open.
+      3 s; \sm{tso-2-th} unsat by bounded cvc5 queries (23 min), not yet as a single query.
   \end{itemize}
 \end{frame}
 

@@ -11,6 +11,8 @@ Work on the two benchmarks that rachelcleaveland/relational-solver-benchmarks ad
 | `pretty.py` | prints the definitions and templates of a benchmark in relational notation |
 | `minimize.py` | keeps only given templates (e.g. the ones the proof uses) and replaces the goal |
 | `run15.py` | runs every file of `benchmarks-ltts` with one configuration |
+| `DECOMPOSITION.md` | tso-2-th is unsat by bounded cvc5 queries: the lemma, the queries, the results |
+| `decompose.py` | writes and runs those queries for any relation and bound |
 
 ## The configuration that solves tso-2-th-just-rf
 

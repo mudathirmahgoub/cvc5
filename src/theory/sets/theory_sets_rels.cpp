@@ -2818,7 +2818,10 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
     // Ri_tclos = (rel.tclosure Ri)
     Node tup =
         TupleUtils::constructTupleFromElements(tt, {sPrev, newElem}, 0, 1);
-    Node Ri_tclos = nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
+    // PROTOTYPE (--rels-cycle-plain-edges): edges in Ri itself
+    Node Ri_tclos = options().sets.relsCyclePlainEdges
+                        ? Ri
+                        : nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
     disjs.push_back(nm->mkNode(Kind::SET_MEMBER, tup, Ri_tclos));
   }
 
@@ -2845,7 +2848,8 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
   // ContrMinimal implies these constraints only indirectly (via a chord that
   // the transitive-closure rules first have to infer); stating them here
   // prunes the choice of the relation of every unrolled edge immediately.
-  if (cnt >= 2)
+  // with plain edges, consecutive edges may lie in the same operand
+  if (cnt >= 2 && !options().sets.relsCyclePlainEdges)
   {
     Node acyc = cyclicAtom(rels);
     // reasonA = (and (rel.cyclic R) (< cnt l))
@@ -2934,7 +2938,11 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
   {
     TypeNode tt = Ri.getType().getSetElementType();
     // Ri_tc = (rel.tclosure Ri); exp = (rel.cyclic R)
-    Node Ri_tc = nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
+    // with plain edges the witness is a shortest cycle of the union, so a
+    // chord is an edge of Ri itself
+    Node Ri_tc = options().sets.relsCyclePlainEdges
+                     ? Ri
+                     : nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
     for (size_t r = 2; r <= cnt; ++r)
     {
       Node sr = s[r - 1];  // Adjust for 0-based indexing

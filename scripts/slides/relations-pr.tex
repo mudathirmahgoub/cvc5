@@ -1128,6 +1128,249 @@
 \end{frame}
 
 %=====================================================================
+\section{Two threads under TSO}
+
+\begin{frame}{Two new benchmarks: two threads under X86-TSO}
+  \small
+  \sm{tso-2-th} and \sm{tso-2-th-just-rf} (relational-solver-benchmarks \sm{ad1980d}): a candidate
+  execution with \textbf{two threads}; 45 (5 in \sm{just-rf}) new template assertions over \emph{pairs} of
+  communication edges, e.g.\ \sm{irr(ppo+;rf;ppo+;fr)}; the goal \sm{(not mcm)} asks for an
+  execution that TSO forbids and no template excludes. Both are unsat.
+  \medskip
+
+  \textbf{Before this work} (branch of \#9):
+  \begin{itemize}
+    \item every configuration of the portfolio: timeout at 300 s; noFMF+R and noFMF+H: timeout
+      at 3600 s;
+    \item splitting \sm{(not mcm)} by the condition it violates:
+  \end{itemize}
+  \begin{center}\footnotesize
+  \begin{tabular}{@{}llr@{}}
+    \toprule
+    benchmark & violated condition & result \\
+    \midrule
+    \sm{just-rf} & \sm{cyclic(rf)} & unsat, 0.0 s \\
+    \sm{just-rf} & \sm{cyclic(ghb)}, \sm{ghb = ppo} $\cup$ \sm{rfe;sm} & \bad{timeout} \\
+    \sm{tso-2-th} & atomicity, \sm{rmw} $\cap$ \sm{fre;coe} $\ne \emptyset$ & unsat, 0.1 s \\
+    \sm{tso-2-th} & SC per location, \sm{cyclic(po-loc} $\cup$ \sm{rf} $\cup$ \sm{fr} $\cup$ \sm{co)} & \bad{timeout} \\
+    \sm{tso-2-th} & \sm{cyclic(ghb)}, \sm{ghb = ppo} $\cup$ \sm{(rfe} $\cup$ \sm{fr} $\cup$ \sm{co);sm} & \bad{timeout} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Why they are unsat (\sm{scripts/tso2/PROOF.md})}
+  \begin{columns}[T]
+  \begin{column}{0.56\textwidth}
+    \footnotesize
+    \begin{enumerate}
+      \item \sm{po}, \sm{po}$^{-1}$ functional, \sm{po} acyclic, same-thread events
+        \sm{po+}-related: \textbf{at most two chains}, and then chain $=$ thread.
+      \item Take a \sm{ghb} cycle with the \textbf{fewest communication edges}; a \emph{run}
+        is a maximal arc of \sm{ppo} edges. For $x \mathrel{po+} y$ in different runs of one
+        chain, $(x,y)\in$ \sm{ppo} would be a shortcut; \sm{ppo} $\supseteq$ R \sm{po+} R,
+        M \sm{po+} W, so $x \in W$, $y \in R$.
+      \item So a chain holds \textbf{at most a write run, then a read run}: at most 4 runs.
+      \item $\le 2$ communication edges: excluded by the templates.
+      \item 3 or 4: a read run is left by an \sm{fr} edge (only \sm{fr} starts at a read) into the
+        write run before it: $(w, w) \in$ \sm{po-loc;fr}, excluded by \sm{irr(po-loc+;fr)}.
+        \sm{just-rf} has no \sm{fr}: at most 2.
+    \end{enumerate}
+    SC per location: the same with \sm{po-loc}.
+  \end{column}
+  \begin{column}{0.42\textwidth}
+    \centering
+    \begin{tikzpicture}[x=1cm,y=1cm]
+      \draw[gray,thick] (-0.4,1.6) -- (4.2,1.6) node[right,lab]{A};
+      \draw[gray,thick] (-0.4,0) -- (4.2,0) node[right,lab]{B};
+      \node[box,fill=blue!8,minimum width=1.1cm] (U) at (0.6,1.6) {\scriptsize W W};
+      \node[box,fill=green!10,minimum width=1.1cm] (V) at (2.9,1.6) {\scriptsize R R};
+      \node[box,fill=gray!10,minimum width=1.1cm] (X) at (1.75,0) {\scriptsize run};
+      \draw[->,gray] (1.25,1.6) -- node[lab,below]{\sm{po}} (2.25,1.6);
+      \draw[arr] (U.south) -- node[lab,left]{\sm{rfe}/\sm{co}} (X.north west);
+      \draw[arr] (X.north east) -- node[lab,right]{\sm{rfe}} (V.south);
+      \draw[arr,red!70!black,dashed] (V.north) to[bend right=50] node[lab,above=1pt]{\sm{fr}} (U.north);
+    \end{tikzpicture}
+    \medskip
+
+    \scriptsize $m = 3$: the read run of chain A returns by \sm{fr} to the write run before it,
+    at the same address: a \sm{po-loc;fr} cycle.
+  \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The same argument in cvc5's witness (\sm{just-rf})}
+  \begin{columns}[T]
+  \begin{column}{0.44\textwidth}
+    \footnotesize
+    With the operands \sm{ppo} and \sm{rfe;sm}, witness edges alternate: $l = 2k+1$.
+    \begin{itemize}
+      \item $l = 3$, $l = 5$: \sm{irr(ppo+;rf)}, \sm{irr(ppo+;rf;ppo+;rf)}.
+      \item $l \ge 7$: $s_1, s_3, s_5$ are reads, two threads, so two of them are in one thread
+        (pigeonhole); \sm{po} totality orders them, and R \sm{po+} R $\subseteq$ \sm{ppo} gives a
+        \rn{Chord} or a \rn{Backward} edge: a conflict on the prefix $s_1..s_5$ that holds
+        \emph{for every} $l \ge 7$.
+    \end{itemize}
+    \textbf{Every rule this needs was in the calculus.} Given explicitly, the cycles are
+    refuted in 0.1-10 s, the prefix $s_1..s_5$ with its minimality constraints in 0.1 s.
+    \textbf{The search never got there.}
+  \end{column}
+  \begin{column}{0.54\textwidth}
+    \centering
+    \begin{tikzpicture}[x=1.55cm,y=1cm]
+      \foreach \i/\c in {1/blue,3/orange,5/blue} {
+        \node[ev,fill=\c!20] (s\i) at (\i-1,0) {$s_{\i}$};
+      }
+      \foreach \i in {2,4} { \node[ev] (s\i) at (\i-1,0) {$s_{\i}$}; }
+      \draw[arr] (s1) -- node[lab,above]{\sm{ppo+}} (s2);
+      \draw[arr] (s2) -- node[lab,above]{\sm{rfe}} (s3);
+      \draw[arr] (s3) -- node[lab,above]{\sm{ppo+}} (s4);
+      \draw[arr] (s4) -- node[lab,above]{\sm{rfe}} (s5);
+      \draw[arr,dashed,red!70!black] (s1) to[bend right=35] node[lab,below]{chord: R \sm{po+} R} (s5);
+    \end{tikzpicture}
+    \medskip
+
+    \scriptsize Reads in color, one color per thread: $s_1$ and $s_5$ share a thread, so
+    $(s_1, s_5)$ or $(s_5, s_1)$ is in \sm{ppo}: a chord, or a backward edge closing a shorter
+    cycle. Both are forbidden by minimality.
+  \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why cvc5 could not solve them (1/2): the witness search}
+  \footnotesize
+  \begin{enumerate}
+    \item \textbf{The witness is reset by backtracking.} The witness is SAT-context dependent and
+      grows by one element per full-effort round. Conflicts unrelated to the cycle undo those
+      rounds, so it restarts at $s_2$: in 60 s it reached five elements twice.
+    \item \textbf{Unrolling starves the quantifiers.} Kept across backtracking, the witness grows
+      every round (196 elements in 60 s), every round sends a new lemma, and
+      \sm{--inst-when=full-delay} waits for a quiet round that never comes: no conflict at all.
+      But \sm{iden}, \sm{int}, \sm{po} totality are quantified: every template conflict needs
+      instances.
+    \item \textbf{The operands do not match the templates.} \sm{ghb} was flattened into the five
+      components of \sm{ppo} and \sm{com;sm}; witness edges are in $\TC(\text{component})$, the
+      templates speak about \sm{ppo+} $= \TC(\text{\sm{ppo}})$. (A declared \sm{ppo} is worse:
+      closure induction no longer sees \sm{ppo} $\subseteq$ \sm{po+}.)
+  \end{enumerate}
+  \centering
+  \begin{tikzpicture}[x=0.2cm,y=0.35cm]
+    \draw[->,gray] (0,0) -- (32,0) node[right,lab]{rounds};
+    \draw[->,gray] (0,0) -- (0,5) node[above,lab]{elements};
+    \draw[thick,red!70!black] (0,1) -- (2,2) -- (3,3) -- (3.5,2) -- (5,3) -- (5.5,2) -- (7,3)
+      -- (8,4) -- (8.5,2) -- (10,3) -- (10.5,2) -- (12,3) -- (13,4) -- (14,5) -- (14.5,2)
+      -- (16,3) -- (16.5,2) -- (18,3) -- (19,4) -- (19.5,2) -- (21,3) -- (21.5,2) -- (23,3)
+      -- (23.5,2) -- (25,3) -- (26,4) -- (26.5,2) -- (28,3) -- (28.5,2) -- (30,3);
+    \node[lab,red!70!black,anchor=west] at (31,3) {witness length (traced)};
+  \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Why cvc5 could not solve them (2/2): cost and a missing fact}
+  \footnotesize
+  \begin{enumerate}\setcounter{enumi}{3}
+    \item \textbf{Quadratic lemma volume.} \sm{po} totality is instantiated for every pair of
+      same-thread events, so $\TC(\text{\sm{po}})$ gets a member for almost every pair;
+      \rn{TC-Up} sends one lemma per path prefix with the whole path as explanation, also for pairs
+      that are already members: \textbf{134k lemmas in one minute}. The products
+      \sm{Event} $\times$ \sm{Event} (in \sm{irreflexive}, \sm{int}, \sm{ext}) are composed for all
+      pairs: \textbf{46k lemmas in one minute}.
+    \item \textbf{A fact closure induction cannot see.} The witness of length 2,
+      $(s,s) \in \TC(\text{\sm{co;sm}})$, is refuted by \sm{co;sm} $\subseteq$ \sm{co}, which holds
+      because \sm{sm} $\subseteq$ \sm{iden}; but \sm{iden} is a declared constant defined by a
+      quantifier. Without it \rn{TC-Down} descends forever along \sm{co} chains.
+  \end{enumerate}
+  \medskip
+  \begin{center}
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    one-minute run of \sm{just-rf} \sm{cyclic(ghb)}, \#9 configuration noFMF+R & \\
+    \midrule
+    SAT decisions / conflicts & 474\,302 / 33 \\
+    witness elements unrolled & 12 \\
+    time in the sets solver & 43.5 of 60 s \\
+    equality-engine terms / merges & 94\,561 / 1\,420\,331 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+\end{frame}
+
+\begin{frame}{What \sm{cycle-ext-tso2} adds (options, off by default)}
+  \scriptsize\renewcommand{\arraystretch}{1.05}
+  \begin{tabular}{@{}cL{4.6cm}L{9.0cm}@{}}
+    \toprule
+    & option & change \\
+    \midrule
+    1 & \sm{cycle-keep-prefix} & continue a witness from its longest prefix \\
+    2 & \sm{cycle-len-decide}, \sm{cycle-unroll-guard} & decide $l \le 2, 3, \dots$; stop unrolling there: quiet rounds \\
+    3 & \sm{cycle-flatten-keep-tc} & keep a union $X$ with a term $\TC(X)$ as one operand; split $(A\cup B);C$ \\
+    4 & \sm{tc-up-skip-known}, \sm{product-lazy} & no lemma for a known member; products only at last call \\
+    5 & \sm{tc-subset-split} & decide $X;Y \subseteq T$ for $\TC(X;Y)$ (rule below) \\
+    \bottomrule
+  \end{tabular}
+  \medskip
+
+  \footnotesize\mprset{sep=1.0em}
+  \begin{mathpar}
+    \inferrule*[right=\rn{Subset-Split}]{\TC(X;Y) \text{ is a term}}
+      {\text{decide } X;Y \subseteq T}
+    \and
+    \inferrule*[right=\rn{TC-Subset}]{(a,b)\in\TC(X;Y) \\ X;Y \subseteq T}{(a,b)\in T}
+  \end{mathpar}
+  $T = X$ if $X$ is transitive, else $\TC(X)$. So \sm{TC(co;sm)} $\subseteq$ \sm{co},
+  \sm{TC(fr;sm)} $\subseteq$ \sm{TC(fr)} $=$ \sm{fr}, \sm{TC(rfe;sm)} $\subseteq$ \sm{rf}: each
+  communication edge of the witness becomes a plain \sm{rf}/\sm{fr}/\sm{co} membership, and the
+  templates apply. The decision is a case split, true first.
+\end{frame}
+
+\begin{frame}{Results}
+  \footnotesize
+  New configuration: noFMF+R $+$ the options of the previous slide and of \#11.
+  \begin{center}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    benchmark & before & after \\
+    \midrule
+    \textbf{tso-2-th-just-rf} & timeout (3600 s) & \textbf{unsat, 2.5-2.9 s} (4.5 s with assertions) \\
+    plsc-2-th & 53-79 s & \textbf{unsat, 11 s} \\
+    tso-1-th & 6.8 s & 1.1 s \\
+    tso-2-th: atomicity / SC per location & 0.1 s / timeout & 0.1 s / \textbf{29 s} \\
+    tso-2-th: \sm{cyclic(ghb)} & timeout & \bad{timeout} (3600 s) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \begin{itemize}
+    \item On the 15 files: 10 of the 12 unsat files; not sc-2-th (noFMF+H solves it in 4 s) nor
+      tso-2-th; not the satisfiable \sm{no-ltts} files (unsat-oriented configuration; the FMF
+      configurations solve them). A portfolio with it would solve \textbf{14 of 15}.
+    \item Relations regressions with all new options, assertions on: 137 runs, \textbf{no wrong
+      answer}; 2 timeouts (\sm{garbage\_collect.cvc}, as on \#9, and one hammer regression).
+    \item Ablation (minimal \sm{just-rf} problem): without lazy products or without length
+      decisions: timeout; without keep-prefix: 3$\times$ slower.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Still open: the \sm{ghb} part of \sm{tso-2-th}}
+  \footnotesize
+  \begin{itemize}
+    \item The witness has \textbf{four operands} (\sm{ppo}, \sm{co;sm}, \sm{fr;sm},
+      \sm{rfe;sm}): every edge is a choice among four closures, so the number of shapes grows
+      exponentially with the length; for \sm{just-rf} there are two operands and one shape per
+      length.
+    \item Every single shape is quick: explicit cycles with 3 and 4 communication edges (beyond
+      the templates, refuted by the run argument) take about 1 s.
+    \item The proof bounds the length only at about 10 edges: five pairwise non-adjacent
+      elements contain three of one thread, $x \mathrel{po+} y \mathrel{po+} z$, and then $y$ is
+      both a read (after $x$) and a write (before $z$).
+    \item Lengths up to 5 are refuted within a minute; then the search stays at 6. Tried, all
+      time out (5-60 min): the hammer, no length decisions, all \sm{--decision} modes, two
+      operands, full flattening, without the quantifiers the proof does not use.
+  \end{itemize}
+  \textbf{Next}: a witness rule for the pigeonhole argument (three pairwise non-adjacent
+  elements in one total order give a chord), or fewer communication operands
+  (\sm{(fr} $\cup$ \sm{co)} is transitive once \sm{fr;co} $\subseteq$ \sm{fr} is known).
+\end{frame}
+
+%=====================================================================
 \section{Summary}
 
 \begin{frame}{Contributions}
@@ -1148,6 +1391,9 @@
       at last call.
     \item On the 13 litmus-template benchmarks: \textbf{13 of 13} solved by the portfolio
       (virtual and real), no wrong answer.
+    \item On the two-thread TSO benchmarks (branch \sm{cycle-ext-tso2}): a hand proof of both;
+      seven prototype options that make the witness search work; \sm{tso-2-th-just-rf} unsat in
+      3 s; \sm{tso-2-th} still open.
   \end{itemize}
 \end{frame}
 
@@ -1156,6 +1402,8 @@
   \begin{itemize}
     \item PR to cvc5 main: \sm{mudathirmahgoub/cvc5\#17} (branch \sm{cycle-ext-cyclic}); the same
       branch is \sm{rachelcleaveland/cvc5\#9}, stacked on the earlier \sm{cycle-ext} PRs.
+    \item Two-thread TSO: branch \sm{cycle-ext-tso2} (on top of \sm{rachelcleaveland/cvc5\#11});
+      proof, notes and test files in \sm{scripts/tso2/}.
     \item Benchmarks: \sm{rachelcleaveland/relational-solver-benchmarks}, directories
       \sm{benchmarks-ltts} and \sm{benchmarks-ltts-nofmf}.
     \item Temporary, to be deleted before merging: \sm{scripts/} (portfolio runner, ablation,

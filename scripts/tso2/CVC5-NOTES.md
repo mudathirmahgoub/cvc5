@@ -113,6 +113,11 @@ wrong answer; `unknown` on 7 regressions that need product composition (without 
   shape per length.
 * Removing the quantified `co` totality and the definition of the initial reads (not used by the
   proof of Theorem B) does not help.
+* The full `tso-2-th` with the new configuration, lazy split or hammer: timeout at 3600 s.
+* Two operands (`--rels-cycle-flatten-top`) or the default full flattening on the minimal problem:
+  timeout at 1200 s. All `--decision` modes: timeout at 300 s.
+* The assertions build agrees on the solved files (`tso-2-th-just-rf` unsat in 4.5 s) and on the
+  relations regressions (137 runs, no wrong answer, 2 timeouts, no assertion failure).
 
 Ideas not tried yet:
 1. A witness rule for the pigeonhole argument: three pairwise non-adjacent witness elements

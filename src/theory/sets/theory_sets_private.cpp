@@ -548,6 +548,15 @@ void TheorySetsPrivate::checkJoinLastCall()
   {
     d_rels->checkJoinLastCall(d_hasEnabledCard);
   }
+  if (needsProductLastCall() && !d_im.hasPendingLemma())
+  {
+    d_rels->checkProductLastCall();
+  }
+}
+
+bool TheorySetsPrivate::needsProductLastCall() const
+{
+  return d_rels_enabled && options().sets.relsProductLazy;
 }
 
 void TheorySetsPrivate::checkFilters()

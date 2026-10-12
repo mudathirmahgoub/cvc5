@@ -54,6 +54,7 @@ const char* toString(IncompleteId i)
     case IncompleteId::SETS_RELS_JOIN_GROUNDING_UNKNOWN:
       return "SETS_RELS_JOIN_GROUNDING_UNKNOWN";
     case IncompleteId::SETS_RELS_RCLOSURE: return "SETS_RELS_RCLOSURE";
+    case IncompleteId::SETS_RELS_PRODUCT_LAZY: return "SETS_RELS_PRODUCT_LAZY";
     case IncompleteId::STRINGS_LOOP_SKIP: return "STRINGS_LOOP_SKIP";
     case IncompleteId::STRINGS_REGEXP_NO_SIMPLIFY:
       return "STRINGS_REGEXP_NO_SIMPLIFY";

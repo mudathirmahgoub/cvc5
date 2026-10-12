@@ -118,6 +118,62 @@ name   = "Sets Theory"
   help       = "(prototype) decide the length l of every cycle witness from small to large (l <= 2, l <= 3, ...)"
 
 [[option]]
+  name       = "relsCycleKeepPrefix"
+  category   = "expert"
+  long       = "rels-cycle-keep-prefix"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) when a cycle witness is created again after backtracking, start from the longest prefix unrolled so far (its lemmas are permanent) instead of from s1"
+
+[[option]]
+  name       = "relsCycleFlattenTop"
+  category   = "expert"
+  long       = "rels-cycle-flatten-top"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) the cycle witness of (rel.cyclic (set.union A B)) uses the two operands A and B, without flattening nested unions"
+
+[[option]]
+  name       = "relsProductLazy"
+  category   = "expert"
+  long       = "rels-product-lazy"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype, for unsat problems) do not compose the members of products; a model with an incomplete product is reported unsound (unknown)"
+
+[[option]]
+  name       = "relsTcUpSkipKnown"
+  category   = "expert"
+  long       = "rels-tc-up-skip-known"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) TCLOSURE_UP and the join/product composition send no lemma for a tuple that is already a member"
+
+[[option]]
+  name       = "relsCycleFlattenKeepTc"
+  category   = "expert"
+  long       = "rels-cycle-flatten-keep-tc"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) when flattening the union of a cycle witness, keep a nested union X as one operand if (rel.tclosure X) is a term"
+
+[[option]]
+  name       = "relsTcSubsetSplit"
+  category   = "expert"
+  long       = "rels-tc-subset-split"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) for a closure TC(X;Y), decide (true first) the atom X;Y subset X (X transitive) or X;Y subset TC(X), so that closure induction applies"
+
+[[option]]
+  name       = "relsProductLazyCompose"
+  category   = "expert"
+  long       = "rels-product-lazy-compose"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) with --rels-product-lazy, compose the missing members of products at last call instead of reporting the model unsound"
+
+[[option]]
   name       = "relsAcyclicBackwardChords"
   category   = "expert"
   long       = "rels-acyclic-backward-chords"

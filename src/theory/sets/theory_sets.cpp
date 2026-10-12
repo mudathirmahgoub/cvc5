@@ -112,7 +112,8 @@ bool TheorySets::needsCheckLastEffort()
 {
   return d_internal->hasOpenCycleObligation()
          || d_internal->needsTCGroundingLastCall()
-         || d_internal->needsJoinGroundingLastCall();
+         || d_internal->needsJoinGroundingLastCall()
+         || d_internal->needsProductLastCall();
 }
 
 void TheorySets::notifyFact(TNode atom,

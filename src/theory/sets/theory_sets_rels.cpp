@@ -2735,8 +2735,8 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
         return n + 1;
       };
     }
-    d_cycleLenStrategies.emplace_back(new CycleLenDecisionStrategy(
-        d_env, d_state.getValuation(), l, maxLen));
+    d_cycleLenStrategies.emplace_back(
+        new CycleLenDecisionStrategy(d_env, d_state.getValuation(), l, maxLen));
     d_im.getDecisionManager()->registerStrategy(
         DecisionManager::STRAT_SETS_CYCLE_LEN,
         d_cycleLenStrategies.back().get(),
@@ -2999,8 +2999,10 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
         // (and (rel.cyclic R) (< r l)). Its atom (>= l r+1) is a bound, which
         // arithmetic propagates from a lower bound on l at once; the equality
         // atom (= r l) is falsified only once l equals a constant.
-        reason_not_closing = nm->mkNode(
-            Kind::AND, exp, nm->mkNode(Kind::LT, nm->mkConstInt(Rational(r)), l));
+        reason_not_closing =
+            nm->mkNode(Kind::AND,
+                       exp,
+                       nm->mkNode(Kind::LT, nm->mkConstInt(Rational(r)), l));
       }
       for (size_t q = 1; q < r; ++q)
       {

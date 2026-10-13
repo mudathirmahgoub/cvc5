@@ -81,6 +81,10 @@ the level-0 trail all along. So the run had in fact refuted the per-location cyc
 | 3a | `--arith-unate-prop-prev-diseq` | unate propagation of a new bound also implies the disequality at the value of the previous bound (lower bounds, upper bounds, equalities) |
 | 3b | `--arith-unate-lemmas-search` | an equality atom created during the search gets the unate lemmas relating it to its nearest bounds (`l = c ⇒ l >= c'`, `l = c ⇒ l <= c''`), as presolve gives the input atoms |
 
+Fix 3a is a bug fix for cvc5 itself; it is also on branch `arith-unate-prop-prev-diseq` (based on
+`main`, unconditional, with a regression), draft PR mudathirmahgoub/cvc5#20. Alone, it makes `sc-2-th`
+unsat in 6 s (108 conflicts).
+
 Fix 3a on a 5-line example (`l >= 4`, then `l >= 5`, atom `l = 4`, `--no-arith-rewrite-equalities`
 so that the equality atom stays): without the option the unate propagation of `l >= 5` stops next to
 `¬(l = 4)`; with it, `l >= 5` implies `¬(l = 4)`.

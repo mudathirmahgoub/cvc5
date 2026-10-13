@@ -76,7 +76,10 @@ python3 scripts/tso2/decompose.py build/bin/cvc5 scripts/tso2/split/t2-B3-min.sm
   witness needs 3, 19, 79 s to refute lengths up to 4, 5, 6 (×4-6 per length; about 11 hours
   extrapolated to length 10, where the 9-element prefix conflict covers all longer lengths); the
   closure-edge witness (the default) stays at length 6 for more than 80 minutes. The explicit
-  queries grow by ×3 per edge and are independent.
+  queries grow by ×3 per edge and are independent. Run without a time limit (`LONG-RUN.md`),
+  the plain-edge witness ruled out ghb cycles up to 9 edges in 2 h 43 min, then got stuck at
+  8 h on a propagation gap (the per-location witness length was enumerated one value at a time
+  until the run used 161 GB); that gap is a bug to fix, not a limit of the calculus.
 * So it is an **algorithmic / scalability** problem of the search, not of the calculus: what
   the decomposition does by hand is (1) establish a length bound once, by a query that does
   not depend on the length (the chord-free path), and (2) refute each length in its own small

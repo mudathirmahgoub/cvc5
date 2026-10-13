@@ -13,6 +13,7 @@ Work on the two benchmarks that rachelcleaveland/relational-solver-benchmarks ad
 | `run15.py` | runs every file of `benchmarks-ltts` with one configuration |
 | `DECOMPOSITION.md` | tso-2-th is unsat by bounded cvc5 queries: the lemma, the queries, the results |
 | `decompose.py` | writes and runs those queries for any relation and bound |
+| `LONG-RUN.md` | tso-2-th as one query without a time limit: 9 hours, then a runaway length enumeration (cause and fixes) |
 
 ## The configuration that solves tso-2-th-just-rf
 

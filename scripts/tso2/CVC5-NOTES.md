@@ -142,3 +142,13 @@ cycles up to 3, 4, 5 edges; about 11 h extrapolated), and the default closure ed
 5-edge cycles for more than 80 minutes. The explicit queries grow ×3 per edge and are
 independent. So it is the search strategy, not a missing rule: a bound found once by a
 length-independent query, then one small search per length.
+
+## tso-2-th as one query: the 9-hour run (LONG-RUN.md)
+
+With no time limit, the plain-edge run ruled out ghb cycles up to 9 edges by 2 h 43 min and
+per-location cycles up to 5 by 7 h 20 min. From about 8 h 05 min it enumerated the per-location
+witness length one integer at a time (34 M values, 161 GB) and was killed at 9 h. The cause is
+not the search but a propagation gap: arithmetic does not falsify `l = c` from `l >= 7`, and the
+Distinct premise is written `r <= l ∧ ¬(r = l)`, so a conflict that already holds at level 0 is
+found only after each decision `l <= K` and is blamed on it. Writing that premise as `r < l` (and
+bounding the length strategy) should end such runs with unsat.

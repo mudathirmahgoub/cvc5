@@ -102,6 +102,22 @@ name   = "Sets Theory"
   help       = "(prototype) for (rel.cyclic R) with R a union, also assert (s1, s1) in TC(R)"
 
 [[option]]
+  name       = "relsCycleLtPremise"
+  category   = "expert"
+  long       = "rels-cycle-lt-premise"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) state the premise 'r is not the closing position' of the distinctness lemmas as r < l instead of r <= l and not (r = l)"
+
+[[option]]
+  name       = "relsCycleLenDecideBound"
+  category   = "expert"
+  long       = "rels-cycle-len-decide-bound"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) with --rels-cycle-len-decide, decide l <= k only for k at most the number of unrolled witness elements plus one"
+
+[[option]]
   name       = "relsCycleUnrollGuard"
   category   = "expert"
   long       = "rels-cycle-unroll-guard"

@@ -59,30 +59,54 @@ The conflict follows from `l ≠ 2`, ..., `l ≠ 6`, and these follow from `l >=
 the level-0 trail all along. So the run had in fact refuted the per-location cycle at level 0
 (that part is unsat in 29 s on its own), but did not see it. Three gaps combine:
 
-* **Arithmetic does not falsify `l = c` from a lower bound `l >= K > c`.** It propagates bound atoms
-  (`l >= j`) but falsifies an equality atom only when `l` is merged with a constant. Unate lemmas
-  (`--unate-lemmas=all`, the default) would cover this, but they are generated before the search,
-  and `cyclen_10` and its atoms are created during it.
+* **Arithmetic does not falsify `l = c` from a lower bound `l >= K > c`.** Unate propagation of a
+  new lower bound `l >= c+1` walks down the constraints of `l` and stops at the previous lower bound
+  `l >= c`; the disequality `l ≠ c` sits at that same value, so it is skipped, although `l >= c+1`
+  implies it (`l >= c` does not). A bound that rises one value at a time therefore never falsifies
+  the equalities it passes (`unatePropLowerBound`, likewise for upper bounds and equalities in
+  `constraint.cpp`). Unate lemmas (`--unate-lemmas=all`, the default) would also cover it, but they
+  are generated before the search, and `cyclen_10` and its atoms are created during it.
 * **The Distinct premise uses an equality atom:** `r <= l ∧ ¬(r = l)` instead of `r < l`.
 * **The decision strategy is unbounded** (`mkLiteral(i)` always returns `l <= i+2`). Every decision
   is refuted during propagation, so the SAT solver never reaches a full assignment: no full-effort
   or last-call check runs, the relations solver sends no lemma, and nothing ever generalises
   `l >= K+1`.
 
-## Fixes (not implemented yet)
+## Fixes (implemented as options, off by default)
 
-1. Write the "not the closing element" premises with an inequality, `r < l` (an atom that
-   arithmetic propagates at level 0), instead of `r <= l ∧ ¬(r = l)`. With it, `l >= 7` gives
-   `s1 ≠ s_r` at level 0, and the conflict above becomes a level-0 conflict, i.e. unsat. Check the
-   other rules whose premises contain `(= r l)` or `(not (= r l))` the same way.
-2. Bound the length strategy: return no literal beyond the unrolled prefix (for example
-   `i + 2 > |s| + 1`), so that the search reaches full effort and the unroll and minimality rules run
-   between decisions.
-3. In general: when the solver introduces integer terms during the search, their equality atoms
-   need the unate implications (`l = c ⇒ l <= c ∧ l >= c`) that preprocessing adds only for input
-   atoms.
+| fix | option | change |
+|---|---|---|
+| 1 | `--rels-cycle-lt-premise` | the Distinct premise "s_r is not the closing element" is `r < l` (a bound atom) instead of `r <= l ∧ ¬(r = l)` |
+| 2 | `--rels-cycle-len-decide-bound` | the length strategy decides `l <= k` only for `k` at most one more than the number of unrolled elements; when that grows, the strategy resumes |
+| 3a | `--arith-unate-prop-prev-diseq` | unate propagation of a new bound also implies the disequality at the value of the previous bound (lower bounds, upper bounds, equalities) |
+| 3b | `--arith-unate-lemmas-search` | an equality atom created during the search gets the unate lemmas relating it to its nearest bounds (`l = c ⇒ l >= c'`, `l = c ⇒ l <= c''`), as presolve gives the input atoms |
 
-Fix 1 is the direct one: the same propagations would then run at level 0, so this run should
-have ended with unsat at about 8 h (not tested). It would not change
-the 2.7 h needed to rule out ghb cycles up to 9 edges; `DECOMPOSITION.md` remains the fast route
-(about 23 minutes).
+Fix 3a on a 5-line example (`l >= 4`, then `l >= 5`, atom `l = 4`, `--no-arith-rewrite-equalities`
+so that the equality atom stays): without the option the unate propagation of `l >= 5` stops next to
+`¬(l = 4)`; with it, `l >= 5` implies `¬(l = 4)`.
+
+A first version of 3b gave lemmas to every atom created during the search (bounds too). That
+changed the integer and nonlinear search: three regress0 files (`nl/dd.sin-cos-346-b-chunk-0210`,
+`proofs/issue12240-cyclic-proof`, `proofs/issue12631-check-proofs-arith`) went from at most 1.6 s to
+timeouts (571 unate lemmas for branch-and-bound and nonlinear atoms in one of them). Restricted to
+equality atoms, they are back to 0.0 to 1.6 s.
+
+### Results (snapshot `v11`)
+
+* **sc-2-th was stuck in the same loop.** With the configuration of `README.md` it times out; in 30 s
+  it makes 467k conflicts for 714k decisions and grows to 2.6 GB. With any one of fix 1, fix 2 or
+  fix 3 it is **unsat in 6.5 s** (fix 1: 108 conflicts, 87 MB).
+* **The 15 benchmarks** (300 s, configuration of `README.md` plus the four options): all 12 unsat
+  files are solved except `tso-2-th` (sc-2-th 6.1 s, plsc-2-th 8.9 s, tso-2-th-just-rf 2.8 s, the
+  others at most 1.3 s); the 3 sat files time out as before (unsat-oriented configuration).
+* **Relations regressions** (assertions build, the configuration plus the four options, with and
+  without plain edges): no wrong answer, no assertion failure; 136 and 135 of 137. The others fail
+  without the options too: `garbage_collect.cvc` (a type error with the flattening options, also
+  with `v9`) and one hammer regression (timeout).
+* **regress0 and the arithmetic regressions of regress1 and regress2** (2818 files, 1879 runs with an
+  expected sat/unsat answer, assertions build, fix 3 options): no wrong answer, no assertion failure.
+  The 59 runs without the expected answer: 51 need CoCoA or CryptoMiniSat (not in this build), 5 check
+  printed output or reject expert options in safe mode, and 3 (`issue7984-quant-trans`: unknown,
+  `miplib-opt1217--27` twice: timeout) do the same without the options.
+* **The single query** is running again with the four options (`tso2/single-v11` of the analysis
+  directory); see below when it ends.

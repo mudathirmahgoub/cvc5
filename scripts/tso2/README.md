@@ -13,7 +13,7 @@ Work on the two benchmarks that rachelcleaveland/relational-solver-benchmarks ad
 | `run15.py` | runs every file of `benchmarks-ltts` with one configuration |
 | `DECOMPOSITION.md` | tso-2-th is unsat by bounded cvc5 queries: the lemma, the queries, the results |
 | `decompose.py` | writes and runs those queries for any relation and bound |
-| `LONG-RUN.md` | tso-2-th as one query without a time limit: 9 hours, then a runaway length enumeration (cause and fixes) |
+| `LONG-RUN.md` | tso-2-th as one query without a time limit: 9 hours, then a runaway length enumeration; its cause, the four fix options and their tests |
 
 ## The configuration that solves tso-2-th-just-rf
 
@@ -31,6 +31,10 @@ options of this branch and of rachelcleaveland/cvc5#11, all off by default. On t
 `benchmarks-ltts` this configuration solves 10 of the 12 unsat files (`tso-2-th-just-rf` in 3 s,
 `plsc-2-th` in 11 s instead of 53-79 s); it does not solve `sc-2-th` (the hammer configuration
 does, in 4 s), `tso-2-th`, or the satisfiable `no-ltts` files (finite model finding does).
+
+With the four options of `LONG-RUN.md` added (`--rels-cycle-lt-premise --rels-cycle-len-decide-bound
+--arith-unate-prop-prev-diseq --arith-unate-lemmas-search`) it also solves `sc-2-th` (6 s), so 11 of
+the 12 unsat files.
 
 ## Reproducing the split files
 

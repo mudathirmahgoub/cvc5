@@ -13,6 +13,7 @@
 #include "theory/sets/theory_sets_rels.h"
 
 #include <algorithm>
+#include <functional>
 
 #include "expr/dtype.h"
 #include "expr/dtype_cons.h"
@@ -40,12 +41,25 @@ namespace {
 class CycleLenDecisionStrategy : public DecisionStrategyFmf
 {
  public:
-  CycleLenDecisionStrategy(Env& env, Valuation valuation, Node l)
-      : DecisionStrategyFmf(env, valuation), d_len(l)
+  /**
+   * maxLen, if set, returns the largest k for which l <= k may be decided
+   * (--rels-cycle-len-decide-bound); it may grow during the search.
+   */
+  CycleLenDecisionStrategy(Env& env,
+                           Valuation valuation,
+                           Node l,
+                           std::function<size_t()> maxLen)
+      : DecisionStrategyFmf(env, valuation), d_len(l), d_maxLen(maxLen)
   {
   }
   Node mkLiteral(unsigned i) override
   {
+    // literal i is l <= i + 2; a null literal is not cached, so it is asked
+    // for again once the bound has grown
+    if (d_maxLen && i + 2 > d_maxLen())
+    {
+      return Node::null();
+    }
     NodeManager* nm = nodeManager();
     return nm->mkNode(Kind::LEQ, d_len, nm->mkConstInt(Rational(i + 2)));
   }
@@ -53,6 +67,7 @@ class CycleLenDecisionStrategy : public DecisionStrategyFmf
 
  private:
   Node d_len;
+  std::function<size_t()> d_maxLen;
 };
 }  // namespace
 
@@ -2697,8 +2712,31 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
   makeSharedTerm(l);
   if (options().sets.relsCycleLenDecide)
   {
-    d_cycleLenStrategies.emplace_back(
-        new CycleLenDecisionStrategy(d_env, d_state.getValuation(), l));
+    // PROTOTYPE (--rels-cycle-len-decide-bound): decide l <= k only up to one
+    // more than the number of unrolled elements. Otherwise, when every
+    // decision l <= k is refuted during propagation, the strategy decides
+    // l <= k + 1, l <= k + 2, ... forever and the full-effort check, which
+    // unrolls the witness, is never reached.
+    std::function<size_t()> maxLen;
+    if (options().sets.relsCycleLenDecideBound)
+    {
+      maxLen = [this, rels]() {
+        size_t n = 1;
+        auto it = d_cycle_sequences.find(rels);
+        if (it != d_cycle_sequences.end())
+        {
+          n = std::max(n, (*it).second.first.size());
+        }
+        auto pit = d_cyclePrefixes.find(rels);
+        if (pit != d_cyclePrefixes.end())
+        {
+          n = std::max(n, (*pit).second.size());
+        }
+        return n + 1;
+      };
+    }
+    d_cycleLenStrategies.emplace_back(new CycleLenDecisionStrategy(
+        d_env, d_state.getValuation(), l, maxLen));
     d_im.getDecisionManager()->registerStrategy(
         DecisionManager::STRAT_SETS_CYCLE_LEN,
         d_cycleLenStrategies.back().get(),
@@ -2955,6 +2993,15 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
       Node r_neq_l =
           nm->mkNode(Kind::EQUAL, nm->mkConstInt(Rational(r)), l).notNode();
       Node reason_not_closing = nm->mkNode(Kind::AND, reason, r_neq_l);
+      if (options().sets.relsCycleLtPremise)
+      {
+        // PROTOTYPE (--rels-cycle-lt-premise): the same premise as
+        // (and (rel.cyclic R) (< r l)). Its atom (>= l r+1) is a bound, which
+        // arithmetic propagates from a lower bound on l at once; the equality
+        // atom (= r l) is falsified only once l equals a constant.
+        reason_not_closing = nm->mkNode(
+            Kind::AND, exp, nm->mkNode(Kind::LT, nm->mkConstInt(Rational(r)), l));
+      }
       for (size_t q = 1; q < r; ++q)
       {
         Node sq = s[q - 1];  // Adjust for 0-based indexing

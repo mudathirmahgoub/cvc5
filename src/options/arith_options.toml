@@ -23,6 +23,22 @@ name   = "Arithmetic Theory"
   help  = "Do not add unate lemmas."
 
 [[option]]
+  name       = "arithUnatePropPrevDiseq"
+  category   = "expert"
+  long       = "arith-unate-prop-prev-diseq"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) unate propagation of a new bound also implies the disequality at the value of the previous bound"
+
+[[option]]
+  name       = "arithUnateLemmasSearch"
+  category   = "expert"
+  long       = "arith-unate-lemmas-search"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) equality atoms set up after presolve (during the search) get the unate lemmas relating them to their nearest bounds, as --unate-lemmas gives the input atoms"
+
+[[option]]
   name       = "arithPropagationMode"
   category   = "expert"
   long       = "arith-prop=MODE"

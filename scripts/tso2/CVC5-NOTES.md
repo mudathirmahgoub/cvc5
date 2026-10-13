@@ -150,5 +150,9 @@ per-location cycles up to 5 by 7 h 20 min. From about 8 h 05 min it enumerated t
 witness length one integer at a time (34 M values, 161 GB) and was killed at 9 h. The cause is
 not the search but a propagation gap: arithmetic does not falsify `l = c` from `l >= 7`, and the
 Distinct premise is written `r <= l ∧ ¬(r = l)`, so a conflict that already holds at level 0 is
-found only after each decision `l <= K` and is blamed on it. Writing that premise as `r < l` (and
-bounding the length strategy) should end such runs with unsat.
+found only after each decision `l <= K` and is blamed on it.
+
+The fixes are options now (`--rels-cycle-lt-premise`, `--rels-cycle-len-decide-bound`,
+`--arith-unate-prop-prev-diseq`, `--arith-unate-lemmas-search`; `LONG-RUN.md`). The third one fixes
+a bug in arithmetic unate propagation. `sc-2-th` was stuck in the same loop: any one of the fixes
+makes it unsat in 6.5 s, so the configuration now solves 11 of the 12 unsat files.

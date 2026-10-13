@@ -1254,6 +1254,17 @@ class ConstraintDatabase : protected EnvObj
   void outputUnateInequalityLemmas(std::vector<TrustNode>& lemmas,
                                    ArithVar v) const;
 
+  /**
+   * PROTOTYPE (--arith-unate-lemmas-search): outputs the unate lemmas that
+   * relate c and its negation, added after presolve, to their nearest
+   * constraints on the same variable (inequality chain if ineqs, equality to
+   * bound implications if eqs).
+   */
+  void outputUnateLemmasForNewConstraint(std::vector<TrustNode>& out,
+                                         ConstraintP c,
+                                         bool ineqs,
+                                         bool eqs) const;
+
   void unatePropLowerBound(ConstraintP curr, ConstraintP prev);
   void unatePropUpperBound(ConstraintP curr, ConstraintP prev);
   void unatePropEquality(ConstraintP curr,

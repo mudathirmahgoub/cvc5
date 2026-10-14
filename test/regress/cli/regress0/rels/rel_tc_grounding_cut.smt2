@@ -1,6 +1,7 @@
 ; REQUIRES: no-safe-mode
 ; REQUIRES: no-stable-mode
 ; COMMAND-LINE: --rels-acyclic-hammer
+; COMMAND-LINE: --rels-acyclic-hammer --rels-tc-down-lazy
 ; EXPECT: unsat
 ; Closure grounding conflict of --rels-acyclic-hammer: the premise is the cut
 ; a /= d, b /= d (no member leaves {a, b}) and b /= c (c is not reached), not

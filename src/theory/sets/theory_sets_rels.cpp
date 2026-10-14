@@ -337,7 +337,12 @@ void TheorySetsRels::checkTransitiveClosureLastCall(bool cardinalityUsed)
         ensureTCGraphBuilt(tc_rel);
         if (!isTCReachable(mem, tc_rel))
         {
-          if (options().sets.relsTcDownLazy)
+          // With --rels-acyclic-hammer, applyTCRule never splits, so the
+          // lazy split must not replace the grounding conflict: the
+          // membership would stay unexplained and the model would be
+          // accepted (a wrong sat).
+          if (options().sets.relsTcDownLazy
+              && !options().sets.relsAcyclicHammer)
           {
             // Lazy TC down: send the deferred case split now, for exactly the
             // memberships that are still unexplained.

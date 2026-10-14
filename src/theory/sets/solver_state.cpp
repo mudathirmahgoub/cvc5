@@ -31,6 +31,7 @@ SolverState::SolverState(Env& env, Valuation val, SkolemCache& skc)
       d_groupTerms(env.getUserContext()),
       d_mapSkolemElements(env.getUserContext()),
       d_members(env.getContext()),
+      d_memberRepStamp(env.getContext(), 0),
       d_partElementSkolems(env.getUserContext())
 {
   d_true = nodeManager()->mkConst(true);
@@ -539,22 +540,69 @@ bool SolverState::isMember(TNode x, TNode s) const
 {
   Assert(hasTerm(s) && getRepresentative(s) == s);
   NodeIntMap::const_iterator mem_i = d_members.find(s);
-  if (mem_i != d_members.end())
+  if (mem_i == d_members.end())
   {
-    std::map<Node, std::vector<Node>>::const_iterator itd =
-        d_members_data.find(s);
-    Assert(itd != d_members_data.end());
-    const std::vector<Node>& members = itd->second;
-    Assert((*mem_i).second <= members.size());
-    for (size_t i = 0, nmem = (*mem_i).second; i < nmem; i++)
+    return false;
+  }
+  std::map<Node, std::vector<Node>>::const_iterator itd =
+      d_members_data.find(s);
+  Assert(itd != d_members_data.end());
+  const std::vector<Node>& members = itd->second;
+  Assert((*mem_i).second <= members.size());
+  size_t nmem = (*mem_i).second;
+  if (options().sets.setsMemberIndex)
+  {
+    // PROTOTYPE (--sets-member-index): discard the cache if backtracking
+    // undid a change to it, build the set of s on first use, look up x
+    if (d_memberRepStamp.get() != d_memberRepCurrent)
+    {
+      d_memberRepCache.clear();
+      touchMemberRepCache();
+    }
+    std::map<Node, std::unordered_set<Node>>::iterator itc =
+        d_memberRepCache.find(s);
+    if (itc == d_memberRepCache.end())
+    {
+      std::unordered_set<Node>& reps = d_memberRepCache[s];
+      for (size_t i = 0; i < nmem; i++)
+      {
+        reps.insert(getRepresentative(members[i][0]));
+      }
+      touchMemberRepCache();
+      itc = d_memberRepCache.find(s);
+    }
+    Node xr = getRepresentative(x);
+    if (itc->second.find(xr) != itc->second.end())
+    {
+      return true;
+    }
+    for (size_t i = 0; i < nmem; i++)
     {
       if (areEqual(members[i][0], x))
       {
+        itc->second.insert(xr);
+        touchMemberRepCache();
         return true;
       }
     }
+    return false;
+  }
+  for (size_t i = 0; i < nmem; i++)
+  {
+    if (areEqual(members[i][0], x))
+    {
+      return true;
+    }
   }
   return false;
+}
+
+void SolverState::touchMemberRepCache() const
+{
+  // a new stamp, recorded in the current SAT context: backtracking below it
+  // restores the previous stamp, which then differs from d_memberRepCurrent
+  d_memberRepCurrent = ++d_memberRepCounter;
+  d_memberRepStamp.set(d_memberRepCurrent);
 }
 
 void SolverState::addMember(TNode r, TNode atom)

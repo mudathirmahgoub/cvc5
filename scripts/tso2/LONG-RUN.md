@@ -112,5 +112,49 @@ equality atoms, they are back to 0.0 to 1.6 s.
   The 59 runs without the expected answer: 51 need CoCoA or CryptoMiniSat (not in this build), 5 check
   printed output or reject expert options in safe mode, and 3 (`issue7984-quant-trans`: unknown,
   `miplib-opt1217--27` twice: timeout) do the same without the options.
-* **The single query** is running again with the four options (`tso2/single-v11` of the analysis
-  directory); see below when it ends.
+* **The single query** with the four options: see the next section.
+
+## The single query with the four options (snapshot `v11`)
+
+Same options as the first run plus the four options, started 2026-10-13 12:21 CDT (`tso2/single-v11`
+of the analysis directory).
+
+| step | first run | this run |
+|---|---|---|
+| ghb cycles up to 8 / 9 edges ruled out | 22 min / 2 h 43 min | 29 min / 4 h 52 min |
+| per-location cycles up to 4 / 5 ruled out | 4 h 18 min / 7 h 20 min | 7 h 18 min / 11 h 47 min |
+| after that | runaway enumeration of the length from about 8 h 05 min, 161 GB at 9 h | no runaway: memory flat at 2.9 GB; no further step after 11 h 47 min |
+
+Every step took 1.5 to 1.9 times as long as in the first run. The fixes removed the runaway (no
+length literals are created, memory stays at 2.9 GB), but the run did not end with unsat where the
+first run had looped: the search took another path and, from 11 h 47 min on, stays inside the sets
+solver.
+
+**Where it stays (lldb on the running process at 17 h).** All CPU samples are in
+`TheorySetsPrivate::checkUpwardsClosure` → `SolverState::isMember` → `areEqual`. In 90 seconds:
+no SAT decision, no conflict, no lemma, and no new round of the upward closure (one round takes
+more than 90 s), but 10,504 sets inferences (5,252 facts asserted). So the sets solver is still adding
+facts, slowly, without returning to the search.
+
+**Sizes** (read from the solver's index and membership lists):
+
+| | |
+|---|---|
+| binary set terms | 825 union pairs (25 first arguments), 823 intersection pairs (10), 4 differences |
+| memberships | 20,611 over 2,582 equivalence classes |
+| largest classes | 3,030, 2,078, 1,976, 1,213, 993 members; 28 classes with at least 100, 4 with at least 1,000 |
+
+3,030 is about 55², a closure that is almost complete over some 55 elements (the events and the
+elements introduced by the witnesses and the join splits).
+
+**Why it is slow.** `isMember(x, s)` scans the member list of `s` and calls `areEqual` on each
+member. The upward closure calls it for every member of the first argument of every union and
+intersection term, so a round costs about the sum over the binary terms of (members of the
+argument) × (members of the result): with about 800 union pairs and classes of 1,000 to 3,000 members,
+in the order of 10^9 equality tests per round.
+
+**What would help (not tried).** A membership test by representative (a hash set of the member
+representatives of each class, rebuilt at the start of each round, since representatives change
+with the context) makes each test O(1). Independently, materialising closures over all pairs of
+55 elements is what makes the classes large; the bounded queries of `DECOMPOSITION.md` avoid it.
+

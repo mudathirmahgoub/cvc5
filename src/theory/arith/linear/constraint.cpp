@@ -2614,10 +2614,16 @@ void ConstraintDatabase::unatePropLowerBound(ConstraintP curr, ConstraintP prev)
 
     const ValueCollection& vc = scm_i->second;
 
-    // If it has the previous element, do nothing and stop!
+    // If it has the previous element, stop: the constraints below it were
+    // handled when it was propagated. Its own disequality was not, since
+    // (>= p c) does not imply (not (= p c)), but curr does, as c < curr.
     if (hasPrev && vc.hasConstraintOfType(prev->getType())
         && vc.getConstraintOfType(prev->getType()) == prev)
     {
+      if (prev->getType() == LowerBound && vc.hasDisequality())
+      {
+        handleUnateProp(curr, vc.getDisequality());
+      }
       break;
     }
 
@@ -2661,10 +2667,15 @@ void ConstraintDatabase::unatePropUpperBound(ConstraintP curr, ConstraintP prev)
   {
     const ValueCollection& vc = scm_i->second;
 
-    // If it has the previous element, do nothing and stop!
+    // If it has the previous element, stop, after its own disequality (see
+    // unatePropLowerBound).
     if (hasPrev && vc.hasConstraintOfType(prev->getType())
         && vc.getConstraintOfType(prev->getType()) == prev)
     {
+      if (prev->getType() == UpperBound && vc.hasDisequality())
+      {
+        handleUnateProp(curr, vc.getDisequality());
+      }
       break;
     }
     // Don't worry about implying the negation of upperbound.
@@ -2713,7 +2724,15 @@ void ConstraintDatabase::unatePropEquality(ConstraintP curr,
   {
     scm_i = prevLB->d_variablePosition;
     if (scm_i != scm_curr)
-    {  // If this does not move this past scm_curr, move it one forward
+    {
+      // The disequality at the value of the previous lower bound is implied by
+      // curr but not by prevLB (see unatePropLowerBound).
+      if (prevLB->getType() == LowerBound && scm_i->second.hasDisequality()
+          && handleUnateProp(curr, scm_i->second.getDisequality()))
+      {
+        return;
+      }
+      // If this does not move this past scm_curr, move it one forward
       ++scm_i;
     }
   }
@@ -2776,6 +2795,13 @@ void ConstraintDatabase::unatePropEquality(ConstraintP curr,
         return;
       }
     }
+  }
+  // The disequality at the value of the previous upper bound is implied by
+  // curr but not by prevUB (see unatePropLowerBound).
+  if (hasPrevUB && scm_last != scm_curr && prevUB->getType() == UpperBound
+      && scm_last->second.hasDisequality())
+  {
+    handleUnateProp(curr, scm_last->second.getDisequality());
   }
 }
 

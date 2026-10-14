@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; COMMAND-LINE: --unate-lemmas=none --no-arith-rewrite-equalities --simplification=none
 ; COMMAND-LINE: --no-arith-rewrite-equalities
 ; EXPECT: unsat

@@ -965,6 +965,10 @@ set(regress_0_tests
   regress0/fmf/fc-unsat-pent.smt2
   regress0/fmf/fc-unsat-tot-2.smt2
   regress0/fmf/fd-false.smt2
+  regress0/fmf/fmc-set-member-dt.smt2
+  regress0/fmf/fmc-set-member-tuple.smt2
+  regress0/fmf/fmc-set-member-unary.smt2
+  regress0/fmf/fmc-set-member-unsat.smt2
   regress0/fmf/fmc_unsound_model.smt2
   regress0/fmf/fmf-strange-bounds-2.smt2
   regress0/fmf/forall_unit_data2.smt2

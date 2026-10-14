@@ -736,6 +736,14 @@ name   = "Quantifiers"
   help       = "find models for recursively defined functions, assumes functions are admissible, allows empty type when function is irrelevant"
 
 [[option]]
+  name       = "fmfSetMembership"
+  category   = "expert"
+  long       = "fmf-set-membership"
+  type       = "bool"
+  default    = "false"
+  help       = "in the full model checker, check a membership (set.member t S) of a term t with bound variables in a ground set S symbolically, from the model value of S, as for an uninterpreted predicate"
+
+[[option]]
   name       = "fmfMbqiMode"
   category   = "expert"
   long       = "fmf-mbqi=MODE"

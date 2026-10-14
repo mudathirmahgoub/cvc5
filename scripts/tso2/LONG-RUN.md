@@ -153,6 +153,9 @@ intersection term, so a round costs about the sum over the binary terms of (memb
 argument) × (members of the result): with about 800 union pairs and classes of 1,000 to 3,000 members,
 in the order of 10^9 equality tests per round.
 
+**End.** Stopped at 23 h 52 min (2026-10-14 12:13) without an answer: no step after 11 h 47 min,
+memory 2.9 GB throughout.
+
 **What would help (not tried).** A membership test by representative (a hash set of the member
 representatives of each class, rebuilt at the start of each round, since representatives change
 with the context) makes each test O(1). Independently, materialising closures over all pairs of

@@ -2038,9 +2038,13 @@ set(regress_0_tests
   regress0/rels/rel_tc_3.cvc.smt2
   regress0/rels/rel_tc_7.cvc.smt2
   regress0/rels/rel_tc_8.cvc.smt2
+  regress0/rels/rel_tc_grounding_cut.smt2
+  regress0/rels/rel_tc_grounding_cut_sat.smt2
   regress0/rels/rel_tc_down_lazy_sat.smt2
   regress0/rels/rel_tc_down_lazy_unsat.smt2
+  regress0/rels/rel_join_grounding_alias.smt2
   regress0/rels/rel_join_grounding_distinct.smt2
+  regress0/rels/rel_join_grounding_key.smt2
   regress0/rels/rel_join_grounding_merge.smt2
   regress0/rels/rel_rclosure_union.smt2
   regress0/rels/rel_tc_subset_disjoint.smt2

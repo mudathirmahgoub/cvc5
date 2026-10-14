@@ -1744,100 +1744,118 @@ bool TheorySetsRels::isTransitiveClass(Node pRep,
   return false;
 }
 
+namespace {
+/** (not (= x y)), with the two sides ordered so that duplicates are shared */
+Node mkDiseq(NodeManager* nm, Node x, Node y)
+{
+  return x < y ? nm->mkNode(Kind::EQUAL, x, y).notNode()
+               : nm->mkNode(Kind::EQUAL, y, x).notNode();
+}
+}  // namespace
+
+Node TheorySetsRels::mkKnownMembers(Node rel, std::vector<Node>& members)
+{
+  // members = the known members of rel (tuples of representatives)
+  // value   = (set.union (set.singleton m1) ... (set.singleton mn)), or
+  //           (as set.empty ...) if there is none
+  NodeManager* nm = nodeManager();
+  Node value;
+  MEM_IT mem_it = d_rReps_memberReps_cache.find(getRepresentative(rel));
+  if (mem_it != d_rReps_memberReps_cache.end())
+  {
+    for (const Node& m : mem_it->second)
+    {
+      members.push_back(m);
+      Node singleton = nm->mkNode(Kind::SET_SINGLETON, m);
+      value = value.isNull() ? singleton
+                             : nm->mkNode(Kind::SET_UNION, value, singleton);
+    }
+  }
+  return value.isNull() ? d_treg.getEmptySet(rel.getType()) : value;
+}
+
 void TheorySetsRels::applyTCGroundingConflict(Node mem_rep,
                                               Node tc_rel,
                                               Node exp)
 {
   Trace("rels-debug") << "[Theory::Rels] *********** Applying "
-                         "RELATION_TCLOSURE grounding conflict on a tc term "
-                         "= "
+                         "RELATION_TCLOSURE grounding conflict on a tc term = "
                       << tc_rel << " with member rep = " << mem_rep
                       << " and explanation = " << exp << std::endl;
 
   NodeManager* nm = nodeManager();
-  // tc_rel  = (rel.tclosure R), rel = R
-  // mem_rep = (tuple a b) (representatives)
-  // exp     = (set.member (tuple a' b') S), S ~ tc_rel
+  // exp    = (set.member t S), S ~ tc_rel, t ~ mem_rep = (tuple a b)
+  // tc_rel = (rel.tclosure R)
+  Node t = exp[0];
+  Node S = exp[1];
+  Node a = TupleUtils::nthElementOfTuple(t, 0);
+  Node b = TupleUtils::nthElementOfTuple(t, 1);
   Node rel = tc_rel[0];
-  Node rel_rep = getRepresentative(rel);
+  std::vector<Node> members;
+  Node known = mkKnownMembers(rel, members);
 
-  // Build the set containing exactly rel's currently-known positive
-  // members, and collect each component of each member of R and their
-  // representatives.
-  Node relValue;
-  std::map<Node, Node> memMap;   // original term -> representative
-  std::set<Node> memComponents;  // representatives of the member components
-  MEM_IT mem_it = d_rReps_memberReps_cache.find(rel_rep);
-  if (mem_it != d_rReps_memberReps_cache.end())
+  // The members reached from a (modulo the current equalities) and the
+  // terms whose values are reached: a and the targets of the reached members.
+  // E.g. for (a, c) in TC(R) with R = {(a, b), (d, c)}: (a, b) is reached,
+  // reachedTerms = [a, b], targets = [b].
+  std::unordered_set<Node> reachedReps{getRepresentative(a)};
+  std::vector<Node> reachedTerms{a};
+  std::vector<Node> targets;
+  std::vector<bool> taken(members.size(), false);
+  for (bool changed = true; changed;)
   {
-    for (const Node& m : mem_it->second)
+    changed = false;
+    for (size_t i = 0, n = members.size(); i < n; ++i)
     {
-      // m        = (tuple x y), a known member of R
-      // relValue = (set.union (set.union (set.singleton m1) (set.singleton m2))
-      //                       ...)
-      Node singleton = nm->mkNode(Kind::SET_SINGLETON, m);
-      relValue = relValue.isNull()
-                     ? singleton
-                     : nm->mkNode(Kind::SET_UNION, relValue, singleton);
-      Node srcTerm = TupleUtils::nthElementOfTuple(m, 0);
-      Node srcRep = getRepresentative(srcTerm);
-      Node sinkTerm = TupleUtils::nthElementOfTuple(m, 1);
-      Node sinkRep = getRepresentative(sinkTerm);
-      memMap.emplace(srcTerm, srcRep);
-      memMap.emplace(sinkTerm, sinkRep);
-      memComponents.insert(srcRep);
-      memComponents.insert(sinkRep);
+      Node src = TupleUtils::nthElementOfTuple(members[i], 0);
+      if (!taken[i] && reachedReps.count(getRepresentative(src)) > 0)
+      {
+        Node dst = TupleUtils::nthElementOfTuple(members[i], 1);
+        taken[i] = true;
+        changed = true;
+        targets.push_back(dst);
+        reachedTerms.push_back(dst);
+        reachedReps.insert(getRepresentative(dst));
+      }
     }
   }
-  if (relValue.isNull())
+  // The cut: no member leaves the reached terms, and b is not a reached
+  // target. In the example: a != d, b != d (for (d, c)) and b != c.
+  std::set<Node> diseqs;
+  for (size_t i = 0, n = members.size(); i < n; ++i)
   {
-    // no known member: relValue = (as set.empty (Relation T T))
-    relValue = d_treg.getEmptySet(rel.getType());
-  }
-
-  // encode the model into the lemma's antecedent. Include the tc(R)-membership,
-  // the known members of R, and assert equality between each member component
-  // and its representative. Also assert that the representatives of the member
-  // components are distinct.
-  // lemma: (and exp (= R relValue) (= a0 rep(a0)) ... (distinct reps)) => false
-  // e.g.   (and (set.member (tuple a c) (rel.tclosure R))
-  //             (= R (set.singleton (tuple a b)))
-  //             (distinct a b c))
-  //        => false
-  Node a0 = TupleUtils::nthElementOfTuple(mem_rep, 0);
-  Node aRep = getRepresentative(a0);
-  Node b0 = TupleUtils::nthElementOfTuple(mem_rep, 1);
-  Node bRep = getRepresentative(b0);
-  std::vector<Node> reasonConjuncts;
-  reasonConjuncts.push_back(exp);
-  reasonConjuncts.push_back(nm->mkNode(Kind::EQUAL, rel, relValue));
-  if (a0 != aRep)
-  {
-    reasonConjuncts.push_back(nm->mkNode(Kind::EQUAL, a0, aRep));
-  }
-  if (b0 != bRep)
-  {
-    reasonConjuncts.push_back(nm->mkNode(Kind::EQUAL, b0, bRep));
-  }
-  for (const auto& [memTerm, memRep] : memMap)
-  {
-    if (memTerm != memRep)
+    if (taken[i])
     {
-      reasonConjuncts.push_back(nm->mkNode(Kind::EQUAL, memTerm, memRep));
+      continue;
+    }
+    Node src = TupleUtils::nthElementOfTuple(members[i], 0);
+    for (const Node& u : reachedTerms)
+    {
+      diseqs.insert(mkDiseq(nm, u, src));
     }
   }
-  memComponents.insert(aRep);
-  memComponents.insert(bRep);
-
-  if (memComponents.size() >= 2)
+  for (const Node& q : targets)
   {
-    std::vector<Node> distinctReps(memComponents.begin(), memComponents.end());
-    reasonConjuncts.push_back(nm->mkNode(Kind::DISTINCT, distinctReps));
+    Assert(getRepresentative(q) != getRepresentative(b));
+    diseqs.insert(mkDiseq(nm, q, b));
   }
 
-  Node reason = reasonConjuncts.size() == 1
-                    ? reasonConjuncts[0]
-                    : nm->mkNode(Kind::AND, reasonConjuncts);
+  // reason = (and exp (= S tc_rel) (= R known) diseqs), where the
+  //          equality is omitted if S is tc_rel
+  std::vector<Node> conj{exp};
+  if (S != tc_rel)
+  {
+    conj.push_back(nm->mkNode(Kind::EQUAL, S, tc_rel));
+  }
+  Node eqKnown = nm->mkNode(Kind::EQUAL, rel, known);
+  conj.push_back(eqKnown);
+  conj.insert(conj.end(), diseqs.begin(), diseqs.end());
+  // The conflict is satisfied by merging elements (falsifying a disequality),
+  // or by a member of R outside the known ones. Prefer the former: a fresh
+  // member is unconstrained and leads to the next conflict with one more
+  // member, and a chain of these need not end.
+  d_im.addPendingPhaseRequirement(rewrite(eqKnown), true);
+  Node reason = nm->mkNode(Kind::AND, conj);
 
   Trace("rels-cycles") << "TCGroundingConflict: " << reason << " => false"
                        << std::endl;
@@ -1857,64 +1875,89 @@ void TheorySetsRels::applyJoinGroundingConflict(Node mem_rep,
                       << " and explanation = " << exp << std::endl;
 
   NodeManager* nm = nodeManager();
-  // the components of a tuple with their representatives
-  std::map<Node, Node> compMap;
-  std::set<Node> compReps;
-  auto addComponents = [&](const Node& tup) {
-    for (size_t i = 0, n = tup.getType().getTupleLength(); i < n; i++)
-    {
-      Node t = TupleUtils::nthElementOfTuple(tup, i);
-      Node r = getRepresentative(t);
-      compMap.emplace(t, r);
-      compReps.insert(r);
-    }
-  };
-  // the set of the currently known members of rel
-  // knownValue(A) = (set.union ... (set.singleton m1) ... (set.singleton mn))
-  //                 for the known members mi = (tuple ...) of A, or
-  //                 (as set.empty ...) if there is none
-  auto knownValue = [&](Node rel) {
-    Node value;
-    MEM_IT mem_it = d_rReps_memberReps_cache.find(getRepresentative(rel));
-    if (mem_it != d_rReps_memberReps_cache.end())
-    {
-      for (const Node& m : mem_it->second)
-      {
-        addComponents(m);
-        Node singleton = nm->mkNode(Kind::SET_SINGLETON, m);
-        value = value.isNull() ? singleton
-                               : nm->mkNode(Kind::SET_UNION, value, singleton);
-      }
-    }
-    return value.isNull() ? d_treg.getEmptySet(rel.getType()) : value;
-  };
-  // join_rel = (rel.join A B), r1 = A, r2 = B
-  // exp      = (set.member (tuple x z) S), S ~ join_rel
-  // mem_rep  = (tuple x z) (representatives)
-  // lemma: (and exp (= A knownValue(A)) (= B knownValue(B))
-  //             (= t rep(t)) ... (distinct reps))
-  //        => false
+  // exp      = (set.member t S), S ~ join_rel, t ~ mem_rep
+  // join_rel = (rel.join A B), A of arity n, B of arity m, and
+  // t        = (tuple x1 ... x(n-1) z1 ... z(m-1))
+  Node t = exp[0];
+  Node S = exp[1];
   Node r1 = join_rel[0];
   Node r2 = join_rel[1];
-  std::vector<Node> conj{exp,
-                         nm->mkNode(Kind::EQUAL, r1, knownValue(r1)),
-                         nm->mkNode(Kind::EQUAL, r2, knownValue(r2))};
-  addComponents(mem_rep);
-  // As in applyTCGroundingConflict, the elements must be distinct: otherwise
-  // a later merge of two of them (e.g. b = d for (a, c) in A;B with
-  // A = {(a, b)} and B = {(d, c)}) justifies the membership.
-  for (const auto& [t, r] : compMap)
+  size_t n1 = r1.getType().getSetElementType().getTupleLength();
+  size_t n2 = r2.getType().getSetElementType().getTupleLength();
+  std::vector<Node> members1, members2;
+  Node known1 = mkKnownMembers(r1, members1);
+  Node known2 = mkKnownMembers(r2, members2);
+  auto comp = [](const Node& tup, size_t k) {
+    return TupleUtils::nthElementOfTuple(tup, k);
+  };
+
+  // One disequality per way of deriving t. E.g. for (a, c) in A;B with
+  // A = {(a, b)} and B = {(d, c)}: the prefix a and the suffix c match, so the
+  // only way is the pair ((a, b), (d, c)), and it needs b = d: D = {b != d}.
+  std::set<Node> diseqs;
+  // a member of A whose prefix differs from (x1 ... x(n-1)) derives nothing
+  std::vector<Node> live1, live2;
+  for (const Node& m : members1)
   {
-    if (t != r)
+    bool live = true;
+    for (size_t k = 0; k + 1 < n1 && live; ++k)
     {
-      conj.push_back(nm->mkNode(Kind::EQUAL, t, r));
+      if (getRepresentative(comp(m, k)) != getRepresentative(comp(t, k)))
+      {
+        diseqs.insert(mkDiseq(nm, comp(t, k), comp(m, k)));
+        live = false;
+      }
+    }
+    if (live)
+    {
+      live1.push_back(m);
     }
   }
-  if (compReps.size() >= 2)
+  // a member of B whose suffix differs from (z1 ... z(m-1)) derives nothing
+  for (const Node& m : members2)
   {
-    conj.push_back(nm->mkNode(
-        Kind::DISTINCT, std::vector<Node>(compReps.begin(), compReps.end())));
+    bool live = true;
+    for (size_t k = 1; k < n2 && live; ++k)
+    {
+      Node tk = comp(t, n1 - 2 + k);
+      if (getRepresentative(comp(m, k)) != getRepresentative(tk))
+      {
+        diseqs.insert(mkDiseq(nm, tk, comp(m, k)));
+        live = false;
+      }
+    }
+    if (live)
+    {
+      live2.push_back(m);
+    }
   }
+  // for a remaining pair, the shared element differs
+  for (const Node& m1 : live1)
+  {
+    Node y1 = comp(m1, n1 - 1);
+    for (const Node& m2 : live2)
+    {
+      Node y2 = comp(m2, 0);
+      Assert(getRepresentative(y1) != getRepresentative(y2));
+      diseqs.insert(mkDiseq(nm, y1, y2));
+    }
+  }
+
+  // reason = (and exp (= S join_rel) (= A known1) (= B known2) diseqs),
+  //          where the equality is omitted if S is join_rel
+  std::vector<Node> conj{exp};
+  if (S != join_rel)
+  {
+    conj.push_back(nm->mkNode(Kind::EQUAL, S, join_rel));
+  }
+  Node eqKnown1 = nm->mkNode(Kind::EQUAL, r1, known1);
+  Node eqKnown2 = nm->mkNode(Kind::EQUAL, r2, known2);
+  conj.push_back(eqKnown1);
+  conj.push_back(eqKnown2);
+  conj.insert(conj.end(), diseqs.begin(), diseqs.end());
+  // prefer merging elements to fresh members, see applyTCGroundingConflict
+  d_im.addPendingPhaseRequirement(rewrite(eqKnown1), true);
+  d_im.addPendingPhaseRequirement(rewrite(eqKnown2), true);
   Node reason = nm->mkNode(Kind::AND, conj);
 
   Trace("rels-cycles") << "JoinGroundingConflict: " << reason << " => false"

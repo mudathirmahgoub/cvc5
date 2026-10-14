@@ -480,28 +480,44 @@ class TheorySetsRels : protected EnvObj
   /** PROTOTYPE: the pairs (X;Y, X) whose subset atom was registered */
   std::set<std::pair<Node, Node> > d_subsetSplitSent;
   /**
-   * Grounding conflict for a membership (a, b) in TC(R), stated by exp, that
-   * the known members m1, ..., mn of R do not explain:
-   *   (a, b) in TC(R) /\ R = {m1, ..., mn} /\ distinct(a, b, elements of mi)
-   *     => false
-   * e.g. (a, c) in TC(R) /\ R = {(a, b)} /\ distinct(a, b, c) => false.
-   * The disequalities keep the lemma valid in branches where elements are
-   * merged later (with b = c above, the membership holds). The premise
-   * also contains the equalities of the elements to their representatives.
-   * Introduces no fresh element.
+   * Grounding conflict for a membership (x, z) in TC(R), stated by
+   * exp = (set.member t S) with S ~ TC(R), that the known members do not
+   * explain:
+   *   (x, z) in S   S = TC(R)   R = {(p1, q1), ..., (pn, qn)}   x in U
+   *   pi notin U \/ (qi in U /\ qi != z)   for all i
+   *   ------------------------------------------------------------------
+   *   false
+   * where U = {x} U {q | (p, q) in R, M |= p = x \/ (x, p) in TC(R)}: x and
+   * the target q of every member (p, q) of R whose source p is x or reachable
+   * from x in the current model M; p notin U is p != u for all u in U. Every
+   * edge from U stays in U and misses z. The lemma keeps, per member, the
+   * disjunct that holds. E.g. for
+   * (a, c) in TC(R) with R = {(a, b), (d, c)}: U = {a, b}, and the lemma has
+   * b != c, d != a, d != b. S = TC(R) is omitted when S is TC(R). Introduces no
+   * fresh element.
    */
   void applyTCGroundingConflict(Node mem_rep, Node tc_rel, Node exp);
   /**
    * Grounding conflict for a membership (x, z) in (rel.join A B), stated by
-   * exp, that the known members of A and B do not explain:
-   *   (x, z) in A;B /\ A = {known} /\ B = {known} /\ distinct(elements)
-   *     => false
-   * e.g. (a, c) in A;B /\ A = {(a, b)} /\ B = {(d, c)}
-   *      /\ distinct(a, b, c, d) => false
-   * (with b = d the membership holds).
-   * Introduces no fresh element.
+   * exp = (set.member t S) with S ~ A;B, that the known members do not
+   * explain:
+   *   (x, z) in S   S = A;B   A = {(x1, y1), ..}   B = {(u1, z1), ..}
+   *   xi != x \/ yi != uj \/ zj != z   for all i, j
+   *   ------------------------------------------------------------------
+   *   false
+   * no pair of members composes to (x, z). The lemma keeps, per pair, one
+   * disjunct that holds (a component disequality for a member whose prefix or
+   * suffix differs covers all its pairs). E.g. for (a, c) in A;B with
+   * A = {(a, b)} and B = {(d, c)}: only b != d. S = A;B is omitted when S is
+   * the join. Introduces no fresh element.
    */
   void applyJoinGroundingConflict(Node mem_rep, Node join_rel, Node exp);
+  /**
+   * Adds the known members of rel (tuples of representatives) to members and
+   * returns the set of them, (set.union (set.singleton m1) ...), or the empty
+   * set.
+   */
+  Node mkKnownMembers(Node rel, std::vector<Node>& members);
   /**
    * Add the edge (fst_rep, snd_rep), justified by exp, to the TC graph of
    * tc_rel. Edges are only added, never removed. If the edge is already

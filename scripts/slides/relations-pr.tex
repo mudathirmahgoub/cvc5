@@ -512,7 +512,8 @@
   \begin{itemize}
     \item \textbf{Valid lemmas}, consequences of the definitions and the premises: the closure
       rules, \rn{Acyclic-Down}, \rn{Register}, \rn{TC-Subset}, \rn{Fun-Pairs}, and the grounding
-      conflicts (thanks to the distinctness premise).
+      conflicts (their premises contain $S = \TC(R)$ or $S = A;B$ and the disequalities that
+      block every derivation).
     \item \textbf{Lemmas about skolems}, satisfiability-preserving: any model of the input
       extends to one in which the witness is a shortest cycle of the operands' closures,
       $f_R$ maps every element to its image, etc. This covers \rn{Cycle-Def}, \rn{Inst-Cycle},
@@ -921,51 +922,114 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Grounding conflicts: \rn{Ground-TC} and \rn{Ground-Join}}
+\begin{frame}{Grounding conflict: \rn{Ground-Join}}
+  \small\mprset{sep=1.2em}
+  \begin{mathpar}
+    \inferrule*[right=\rn{Ground-Join}]
+      {(x,z)\in S \\ S = A;B \\
+       A = \{(x_1,y_1),..,(x_n,y_n)\} \\ B = \{(u_1,z_1),..,(u_m,z_m)\} \\\\
+       x_i\neq x \;\lor\; y_i\neq u_j \;\lor\; z_j\neq z \quad\text{for all } i, j}
+      {\bot}
+  \end{mathpar}
+  \centering no pair of members composes to $(x,z)$
+  \medskip
+
   \begin{columns}[T]
-  \begin{column}{0.56\textwidth}
-    \footnotesize\mprset{sep=1.0em}
-    \begin{mathpar}
-      \inferrule*[right=\rn{Ground-TC}]{(a,b)\in\TC(R) \\ R = \{m_1,..,m_n\} \\
-        \mathit{distinct}(a, b, \vec e)}{\bot}
-      \\
-      \inferrule*[right=\rn{Ground-Join}]{(x,z)\in A;B \\ A = \{m_1,..,m_n\} \\
-        B = \{p_1,..,p_o\} \\ \mathit{distinct}(x, z, \vec e)}{\bot}
-    \end{mathpar}
-    $\{m_1,..,m_n\}$: the known members. $\vec e$: the representatives of the elements of the
-    $m_i$, $p_j$ (the equalities between terms and representatives are premises too).
-    \medskip
-
-    \textbf{Valid}: under the premises, $R$ is exactly the $n$ pairs, over pairwise distinct
-    elements, so $\TC(R)$ is the set of paths of that graph, and the search found none from $a$
-    to $b$. Likewise for $A;B$. No term is introduced: the SAT solver must change the model.
-
-  \end{column}
   \begin{column}{0.42\textwidth}
     \centering
     \begin{tikzpicture}[x=1cm,y=1cm]
-      \node[ev] (a) at (0,1.6) {$a$};
-      \node[ev] (b) at (1.6,1.6) {$b$};
-      \node[ev] (d) at (1.6,0.2) {$d$};
-      \node[ev] (c) at (3.2,0.2) {$c$};
+      \node[ev] (a) at (0,0) {$a$};
+      \node[ev] (b) at (1.5,0) {$b$};
+      \node[ev] (d) at (3.3,0) {$d$};
+      \node[ev] (c) at (4.8,0) {$c$};
       \draw[arr] (a) -- node[lab,above]{$A$} (b);
-      \draw[arr] (d) -- node[lab,below]{$B$} (c);
-      \draw[arr,dashed,red!70!black] (a) to[bend right=50] node[lab,below left]{$(a,c)\in A;B$?} (c);
-      \draw[thick,dotted,newc] (b) -- node[lab,right]{$b = d$?} (d);
+      \draw[arr] (d) -- node[lab,above]{$B$} (c);
+      \draw[thick,dotted,newc] (b) -- (d) node[midway,below=4pt,lab,text=newc]{$b \neq d$};
+      \draw[arr,dashed,red!70!black] (a.north) to[out=60,in=120] node[lab,above]{$(a,c)\in A;B$?} (c.north);
     \end{tikzpicture}
-    \medskip
-
+  \end{column}
+  \begin{column}{0.56\textwidth}
     \footnotesize
-    $(a,c)\in A;B$ with $A=\{(a,b)\}$, $B=\{(d,c)\}$:
-    \begin{itemize}
-      \item $a,b,c,d$ distinct: the membership is impossible, the conflict is valid;
-      \item $b = d$: the membership holds. The premise $\mathit{distinct}(a,c,b,d)$ is false,
-        so the conflict does not exclude this model.
-    \end{itemize}
-    Without it, \rn{Ground-Join} refuted $b=d$ too: a wrong \sm{unsat} (fixed in this PR;
-    \rn{Ground-TC} had it).
+    $(a,c)\in A;B$, $A = \{(a,b)\}$, $B = \{(d,c)\}$: one pair,
+    \[ \underbrace{a\neq a}_{\text{false}} \;\lor\; \new{b\neq d} \;\lor\; \underbrace{c\neq c}_{\text{false}} \]
+    The lemma keeps one true disjunct per pair:
+    \[ \neg\big((a,c)\in S \land S = A;B \land A = \{(a,b)\} \land B = \{(d,c)\} \land \new{b\neq d}\big) \]
+    Before: $\mathit{distinct}(a,b,c,d)$; every merge of two other elements (e.g.\ $a = c$)
+    needed a new conflict (12 instead of 1).
   \end{column}
   \end{columns}
+\end{frame}
+
+\begin{frame}{Grounding conflict: \rn{Ground-TC}}
+  \small\mprset{sep=1.2em}
+  \begin{mathpar}
+    \inferrule*[right=\rn{Ground-TC}]
+      {(x,z)\in S \\ S = \TC(R) \\ R = \{(p_1,q_1),..,(p_n,q_n)\} \\\\
+       p_i\notin U \;\lor\; (q_i\in U \land q_i\neq z) \quad\text{for all } i}
+      {\bot}
+  \end{mathpar}
+  \vspace{-1mm}
+  \centering
+  \begin{tabular}{@{}l@{\quad}l@{}}
+    where & $U = \{x\} \cup \{\, q \mid (p,q)\in R,\ \ M \models p = x \lor (x,p)\in\TC(R) \,\}$: \\
+          & \quad $x$ and the target $q$ of every member $(p,q)$ of $R$ whose source $p$ is $x$ or
+            reachable from $x$, \\
+          & \quad in the current model $M$; \ $p\notin U$ stands for $p\neq u$ for all $u\in U$
+  \end{tabular}
+  \par\medskip
+
+  every edge from $U$ stays in $U$ and misses $z$: $z$ is not reachable from $x$
+  \medskip
+
+  \begin{columns}[T]
+  \begin{column}{0.42\textwidth}
+    \centering
+    \begin{tikzpicture}[x=1cm,y=1cm]
+      \node[ev] (a) at (0,0) {$a$};
+      \node[ev] (b) at (1.5,0) {$b$};
+      \node[ev] (d) at (3.3,0) {$d$};
+      \node[ev] (c) at (4.8,0) {$c$};
+      \node[draw,dashed,rounded corners,newc,thick,fit=(a)(b),inner sep=5pt,
+            label={[newc]below:$U$}] {};
+      \draw[arr] (a) -- node[lab,above]{$R$} (b);
+      \draw[arr] (d) -- node[lab,above]{$R$} (c);
+      \draw[arr,dashed,red!70!black] (a.north) to[out=70,in=110] node[lab,above]{$(a,c)\in\TC(R)$?} (c.north);
+    \end{tikzpicture}
+  \end{column}
+  \begin{column}{0.56\textwidth}
+    \footnotesize
+    $(a,c)\in\TC(R)$, $R = \{(a,b),(d,c)\}$: $U = \{a, b\}$ ($b$ is reached by $(a,b)$):
+    \begin{itemize}
+      \item $(a,b)$: $a\in U$, so $b\in U \land \new{b\neq c}$;
+      \item $(d,c)$: $d\notin U$, i.e.\ $\new{d\neq a} \land \new{d\neq b}$.
+    \end{itemize}
+    Each is needed: $b = c$, $d = a$ or $d = b$ makes $(a,c)$ a member. Before:
+    $\mathit{distinct}(a,b,c,d)$, 7 conflicts instead of 1.
+  \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Grounding conflicts: the premise $S = A;B$, and the phase}
+  \small
+  \textbf{$S = A;B$}: the membership may be on a set $S$ equal to the join only in the current
+  branch:
+  \[ (a,c)\in S \qquad S = A;B \;\lor\; S = T \qquad A = \{(a,b)\} \qquad B = \{(d,c)\} \qquad
+     \mathit{distinct}(a,b,c,d) \]
+  $S = T$ is a model. The conflict without $S = A;B$,
+  $\neg\big((a,c)\in S \land \mathit{distinct}(a,b,c,d)\big)$, excluded it too: the answer was
+  \sm{unsat} (\sm{--rels-acyclic-hammer}). Now
+  $\neg\big((a,c)\in S \land S = A;B \land b\neq d\big)$: \sm{sat}. Likewise $S = \TC(R)$.
+  \medskip
+
+  \textbf{Phase}: a conflict is satisfied by a merge (a disequality becomes false) or by a fresh
+  member of $R$ ($R = \{..\}$ becomes false). cvc5 prefers $R = \{..\}$ true: a fresh member is
+  unconstrained and leads to the next conflict with one more member, and such chains need not end
+  (\sm{rel\_tc\_10\_1} with the hammer: 0.01\,s before, timeout without the preference, 0.7\,s
+  with it).
+  \medskip
+
+  Regressions: \sm{rel\_join\_grounding\_key}, \sm{rel\_join\_grounding\_alias},
+  \sm{rel\_tc\_grounding\_cut}, \sm{rel\_tc\_grounding\_cut\_sat}.
 \end{frame}
 
 \begin{frame}{Model construction: why \sm{sat} is correct}
@@ -1115,8 +1179,9 @@
       out, or free) under five option sets: no wrong answer, no error.
     \item \textbf{Bugs found on the way, fixed in this PR}:
       \begin{itemize}
-        \item the join grounding conflict refuted satisfiable branches under the hammer (missing
-          distinctness);
+        \item the join grounding conflict refuted satisfiable branches under the hammer: first
+          for lack of distinctness, then, for a membership on a set $S$ equal to the join only in
+          the current branch, for lack of the premise $S = A;B$;
         \item \sm{rel.rclosure} of a union crashed debug builds, and of a variable answered
           \sm{sat} wrongly (now \sm{unknown});
         \item the MiniSat default answered \sm{unsat} wrongly with \sm{:produce-interpolants} (a

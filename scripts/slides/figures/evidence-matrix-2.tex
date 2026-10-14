@@ -1,0 +1,16 @@
+\begin{tabular}{@{}lp{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}@{}}
+\toprule
+rule & def & FMF & noFMF & stop & FMF+R & noFMF+R & noFMF+H \\
+\midrule
+Acyclic-Down & $\cdot$ & \textbf{sc1}, \textbf{sc1r}, \bad{plsc1}, \bad{sc2r} & \textbf{sc2r} & \textbf{sc1r} & \textbf{sc1}, \bad{plsc1}, \bad{plsc2r}, \bad{sc2}, \bad{sc2r} & \textbf{plsc1}, \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc1}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Register & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ \\
+Inclusion &  & \textbf{plsc1}, \textbf{sc1}, \textbf{tso1r} & $\cdot$ &  & \textbf{tso1}, \textbf{tso1r} & \textbf{tso1}, \textbf{tso1r} & $\cdot$ \\
+TC-Sub: in TC(X) &  &  &  &  & \textbf{tso1} & $\cdot$ &  \\
+TC-Sub: R trans. &  &  &  &  & \textbf{sc2}, \textbf{tso1} & \textbf{plsc2}, \textbf{sc2} & \textbf{sc2} \\
+TC-Sub: A$\times$B &  &  &  &  & \textbf{sc2}, \textbf{tso1} & \textbf{plsc2}, \textbf{sc2} & \textbf{sc2} \\
+TC-Sub: $\cap$/$\setminus$ &  &  &  &  & \textbf{plsc2r} & \textbf{plsc2}, \textbf{plsc2r} &  \\
+TC-Sub: R$\subseteq$S &  &  &  &  & \textbf{sc1n}, \textbf{tso1n} & $\cdot$ & $\cdot$ \\
+Fun-UF & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & \textbf{sc2}, \textbf{tso1}, \bad{plsc2r} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2} & $\cdot$ \\
+all TC-Subset &  &  &  &  & \textbf{plsc2r}, \textbf{sc1n}, \textbf{sc2}, \textbf{tso1n} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2} & \textbf{sc2} \\
+\bottomrule
+\end{tabular}

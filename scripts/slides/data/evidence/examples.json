@@ -1,0 +1,102 @@
+{
+ "SETS_RELS_JOIN_COMPOSE": {
+  "pair": "sc-1-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(let ((_let_1 (rel.tclosure rf))) (=> (and (set.member (tuple cyc_9) Write) (set.member (tuple cyc_9 cyc_5) _let_1) (= rf _let_1)) (set.member (tuple cyc_5) (rel.join Write rf))))"
+ },
+ "SETS_RELS_ALT_CLOSE": {
+  "pair": "sc-1-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (=> (and (rel.cyclic (set.union po rf)) (= cyclen_6 3)) (not (and (set.member (tuple cyc_9 cyc_28) _let_1) (set.member (tuple cyc_5 cyc_9) _let_1)))))"
+ },
+ "SETS_RELS_REGISTER": {
+  "pair": "sc-1-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (=> (not (rel.cyclic po)) (= _let_1 (set.union po _let_1))))"
+ },
+ "SETS_RELS_TC_SUBSET_SUPERSET": {
+  "pair": "sc-1-th-no-ltts|fmf-unsat-rules",
+  "lemma": "(let ((_let_1 (rel.product Event Event))) (let ((_let_2 (tuple cyc_5 cyc_9))) (=> (and (set.member _let_2 (rel.tclosure po)) (= _let_1 (set.union po _let_1))) (set.member _let_2 _let_1))))"
+ },
+ "SETS_RELS_INST_CYCLE": {
+  "pair": "sc-1-th-no-ltts|default",
+  "lemma": "(=> (rel.cyclic (set.union rf (set.union po (set.union co fr)))) (>= cyclen_6 2))"
+ },
+ "SETS_RELS_UNROLL_CYCLE": {
+  "pair": "sc-1-th-no-ltts|default",
+  "lemma": "(let ((_let_1 (tuple cyc_5 cyc_9))) (=> (>= cyclen_6 2) (or (set.member _let_1 (rel.tclosure rf)) (set.member _let_1 (rel.tclosure po)) (set.member _let_1 (rel.tclosure co)) (set.member _let_1 (rel.tclosure fr)))))"
+ },
+ "SETS_RELS_TCLOSURE_DOWN": {
+  "pair": "sc-1-th-no-ltts|default",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (let ((_let_2 (tuple cyc_5 cyc_9))) (=> (set.member _let_2 _let_1) (or (set.member _let_2 po) (and (set.member (tuple cyc_5 stc1_23) po) (set.member (tuple stc2_24 cyc_9) po) (or (= stc1_23 stc2_24) (set.member (tuple stc1_23 stc2_24) _let_1)))))))"
+ },
+ "SETS_RELS_ACYCLIC_DOWN": {
+  "pair": "sc-1-th|nofmf-unsat-rules",
+  "lemma": "(=> (and (set.member (tuple cyc_9 cyc_5) (rel.tclosure po)) (not (rel.cyclic po))) (not (= cyc_5 cyc_9)))"
+ },
+ "SETS_RELS_JOIN_SPLIT_1": {
+  "pair": "sc-1-th|nofmf-unsat-rules",
+  "lemma": "(let ((_let_1 (rel.join address (rel.transpose address)))) (let ((_let_2 (set.union _let_1 (set.union co (set.union rf fr))))) (=> (and (set.member (tuple cyc_5 cyc_9) _let_2) (= _let_1 _let_2)) (set.member (tuple cyc_5 srj_22) address))))"
+ },
+ "SETS_RELS_TCLOSURE_UP": {
+  "pair": "plsc-1-th-just-rf|nofmf-unsat-rules",
+  "lemma": "(let ((_let_1 (set.inter loc (rel.tclosure po)))) (let ((_let_2 (tuple cyc_6 cyc_10))) (=> (and (set.member _let_2 _let_1) (= _let_1 _let_1)) (set.member _let_2 (rel.tclosure _let_1)))))"
+ },
+ "SETS_RELS_TCLOSURE_DOWN_LAZY": {
+  "pair": "plsc-1-th-no-ltts|fmf-unsat-rules",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (let ((_let_2 ((_ tuple.select 1) cycedge_59))) (let ((_let_3 ((_ tuple.select 0) cycedge_59))) (let ((_let_4 (tuple _let_3 _let_2))) (=> (set.member _let_4 _let_1) (or (set.member _let_4 po) (and (set.member (tuple _let_3 stc1_81) po) (set.member (tuple stc2_82 _let_2) po) (or (= stc1_81 stc2_82) (set.member (tuple stc1_81 stc2_82) _let_1)))))))))"
+ },
+ "SETS_RELS_ANCHOR_INCLUSION": {
+  "pair": "tso-1-th-just-rf|nofmf-unsat-rules",
+  "lemma": "(=> (and (rel.cyclic rf) (not (rel.cyclic po))) (and (set.member cycedge_21 rf) (not (set.member cycedge_21 (rel.tclosure po)))))"
+ },
+ "SETS_RELS_SPLIT_CYCLE_LEN": {
+  "pair": "sc-2-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(=> (and (rel.cyclic (set.union po rf)) (>= cyclen_10 2)) (or (>= cyclen_10 3) (and (= cyclen_10 2) (= cyc_9 cyc_14))))"
+ },
+ "SETS_RELS_CHORD": {
+  "pair": "sc-2-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(=> (and (rel.cyclic (set.union po rf)) (>= cyclen_10 3)) (not (set.member (tuple cyc_9 cyc_32) (rel.tclosure po))))"
+ },
+ "SETS_RELS_LAST_CALL_COMPLETION": {
+  "pair": "sc-2-th-just-rf|nofmf-unsat-hammer",
+  "lemma": "(=> (and (rel.cyclic (set.union po rf)) (>= cyclen_10 5)) (not (= cyc_14 cyc_82)))"
+ },
+ "SETS_RELS_DISTINCT": {
+  "pair": "sc-1-th-just-rf|default",
+  "lemma": "(=> (and (not (= cyclen_6 2)) (rel.cyclic (set.union po rf)) (>= cyclen_6 2)) (not (= cyc_5 cyc_9)))"
+ },
+ "SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "pair": "plsc-2-th-just-rf|nofmf-unsat-rules",
+  "lemma": "(let ((_let_1 (tuple cyc_9 cyc_14))) (=> (and (set.member _let_1 (rel.tclosure (set.inter loc (rel.tclosure po)))) (rel.is-functional address) (= loc (rel.join address (rel.transpose address)))) (set.member _let_1 loc)))"
+ },
+ "SETS_RELS_FUNCTIONAL": {
+  "pair": "plsc-2-th-just-rf|nofmf-unsat-rules",
+  "lemma": "(=> (and (rel.is-functional address) (set.member (tuple cyc_9 srj_23) address)) (= srj_23 (rfun_34 cyc_9)))"
+ },
+ "SETS_RELS_TC_SUBSET_SELF": {
+  "pair": "sc-2-th|nofmf-unsat-hammer",
+  "lemma": "(let ((_let_1 (tuple cyc_14 cyc_9))) (=> (and (set.member _let_1 (rel.tclosure co)) (= co (set.union co (rel.join co co)))) (set.member _let_1 co)))"
+ },
+ "SETS_RELS_TC_SUBSET_PRODUCT": {
+  "pair": "sc-2-th|nofmf-unsat-hammer",
+  "lemma": "(let ((_let_1 (tuple cyc_14 cyc_9))) (let ((_let_2 (rel.product Read Write))) (=> (and (set.member _let_1 (rel.tclosure fr)) (= _let_2 (set.union fr _let_2)) (= (as set.empty (Set (Tuple Atom))) (set.inter Read Write))) (set.member _let_1 fr))))"
+ },
+ "SETS_RELS_ANCHOR_BRANCH": {
+  "pair": "sc-1-th-just-rf|stoponly",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (=> (and (rel.cyclic (set.union po rf)) (not (rel.cyclic po)) (= cyclen_7 3)) (or (not (set.member (tuple cyc_6 cyc_10) _let_1)) (not (set.member (tuple cyc_10 cyc_49) _let_1)))))"
+ },
+ "SETS_RELS_BACKWARD": {
+  "pair": "sc-2-th|fmf-unsat-rules",
+  "lemma": "(=> (and (rel.cyclic (set.union rf (set.union po (set.union co fr)))) (= cyclen_10 3)) (not (set.member (tuple cyc_68 cyc_9) (rel.tclosure rf))))"
+ },
+ "SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "pair": "tso-1-th|fmf-unsat-rules",
+  "lemma": "(=> (rel.cyclic co) (set.member (tuple cyc_117 cyc_117) (rel.tclosure co)))"
+ },
+ "SETS_RELS_ALTERNATE": {
+  "pair": "tso-1-th|fmf-unsat-rules",
+  "lemma": "(let ((_let_1 (rel.tclosure co))) (=> (and (rel.cyclic (set.union co (set.union fr (set.union rf (set.inter loc (rel.tclosure po)))))) (>= cyclen_8 3)) (not (and (set.member (tuple cyc_7 cyc_10) _let_1) (set.member (tuple cyc_10 cyc_95) _let_1)))))"
+ },
+ "SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "pair": "tso-1-th|fmf-unsat-rules",
+  "lemma": "(let ((_let_1 (rel.tclosure po))) (let ((_let_2 (tuple cyc_10 cyc_95))) (=> (set.member _let_2 (rel.tclosure (set.inter loc _let_1))) (set.member _let_2 _let_1))))"
+ }
+}

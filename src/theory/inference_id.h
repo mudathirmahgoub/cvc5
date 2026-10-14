@@ -592,17 +592,52 @@ enum class InferenceId
   //-------------------- sets relations solver
   SETS_RELS_IDENTITY_DOWN,
   SETS_RELS_IDENTITY_UP,
+  // (rel.is-functional R) /\ (x, y) in R => y = f_R(x), f_R a fresh function
+  SETS_RELS_FUNCTIONAL,
+  // (rel.is-functional R) /\ (x1, y1) in R /\ (x2, y2) in R =>
+  //   (x1 = x2 => y1 = y2)
+  SETS_RELS_FUNCTIONAL_PAIR,
+  // not (rel.is-functional R) =>
+  //   (k1, k2) in R /\ (k1, k3) in R /\ k2 != k3, k1, k2, k3 fresh
+  SETS_RELS_NOT_FUNCTIONAL,
   SETS_RELS_JOIN_COMPOSE,
   SETS_RELS_JOIN_IMAGE_DOWN,
   SETS_RELS_JOIN_IMAGE_UP,
   SETS_RELS_JOIN_SPLIT_1,
   SETS_RELS_JOIN_SPLIT_2,
+  // (x, z) in (rel.join A B) not explained by the known members of A and B
+  // (last call, --rels-acyclic-hammer), e.g.
+  //   (a, c) in A;B /\ A = {(a, b)} /\ B = {(d, c)} /\ distinct(a, b, c, d)
+  //   => false
+  SETS_RELS_JOIN_GROUNDING_CONFLICT,
   SETS_RELS_TABLE_JOIN_UP,
   SETS_RELS_TABLE_JOIN_DOWN,
   SETS_RELS_PRODUCE_COMPOSE,
   SETS_RELS_PRODUCT_SPLIT,
   SETS_RELS_TCLOSURE_UP,
   SETS_RELS_TCLOSURE_DOWN,
+  // the same for (a, b) in TC(R), e.g.
+  // (a, c) in TC(R) /\ R = {(a, b)} /\ distinct(a, b, c) => false
+  SETS_RELS_TCLOSURE_GROUNDING_CONFLICT,
+  // the minimality and anchor lemmas of the cycle witness of (rel.cyclic R),
+  // e.g. for the witness s1 -> s2 -> s3 -> s1 of R1 U R2:
+  // (s1, s3) not in TC(R1)
+  SETS_RELS_CONTR_MINIMAL,
+  // (a, b) in TC(R) /\ (not (rel.cyclic R)) => a != b
+  SETS_RELS_ACYCLIC_DOWN,
+  // (rel.cyclic (R1 U ... U Rk)) => 1 < l, where l is the length of a fresh
+  // cycle witness s1, ..., sl with sl = s1
+  SETS_RELS_INST_CYCLE,
+  // (rel.cyclic R) /\ i <= l => i < l \/ (l = i /\ si = s1)
+  SETS_RELS_SPLIT_CYCLE_LEN,
+  // (rel.cyclic (R1 U ... U Rk)) /\ i < l =>
+  //   (si, s(i+1)) in TC(R1) \/ ... \/ (si, s(i+1)) in TC(Rk)
+  SETS_RELS_UNROLL_CYCLE,
+  // closure induction: (a, b) in TC(R) /\ R subset S /\ S transitive =>
+  // (a, b) in S, e.g. (a, b) in TC(R) /\ R subset A x B => (a, b) in A x B
+  SETS_RELS_TCLOSURE_SUBSET,
+  // (rel.cyclic R) => (s, s) in TC(R) for a fresh s, R not a union
+  SETS_RELS_ACYCLIC_SELF_LOOP,
   SETS_RELS_TRANSPOSE_EQ,
   SETS_RELS_TRANSPOSE_REV,
   SETS_RELS_TUPLE_REDUCTION,

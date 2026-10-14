@@ -947,6 +947,156 @@ TypeNode RelTransClosureTypeRule::computeType(NodeManager* nodeManager,
   return setType;
 }
 
+TypeNode RelReflClosureTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,
+                                                CVC5_UNUSED TNode n)
+{
+  return TypeNode::null();
+}
+TypeNode RelReflClosureTypeRule::computeType(NodeManager* nodeManager,
+                                             TNode n,
+                                             bool check,
+                                             std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::RELATION_RCLOSURE);
+  TypeNode setType = n[0].getTypeOrNull();
+  if (check)
+  {
+    if (!isMaybeRelation(setType))
+    {
+      if (errOut)
+      {
+        (*errOut) << "reflexive closure operates on non-relation";
+      }
+      return TypeNode::null();
+    }
+    if (setType.isRelation())
+    {
+      std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
+      if (tupleTypes.size() != 2)
+      {
+        if (errOut)
+        {
+          (*errOut) << "reflexive closure operates on non-binary relation";
+        }
+        return TypeNode::null();
+      }
+      if (!tupleTypes[0].isComparableTo(tupleTypes[1]))
+      {
+        if (errOut)
+        {
+          (*errOut)
+              << "reflexive closure operates on incompatible binary relation";
+        }
+        return TypeNode::null();
+      }
+    }
+  }
+  // return abstract relation if argument is ?
+  if (setType.isFullyAbstract())
+  {
+    return nodeManager->mkSetType(
+        nodeManager->mkAbstractType(Kind::TUPLE_TYPE));
+  }
+  return setType;
+}
+
+TypeNode RelReflTransClosureTypeRule::preComputeType(
+    CVC5_UNUSED NodeManager* nm, CVC5_UNUSED TNode n)
+{
+  return TypeNode::null();
+}
+TypeNode RelReflTransClosureTypeRule::computeType(NodeManager* nodeManager,
+                                                  TNode n,
+                                                  bool check,
+                                                  std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::RELATION_RTCLOSURE);
+  TypeNode setType = n[0].getTypeOrNull();
+  if (check)
+  {
+    if (!isMaybeRelation(setType))
+    {
+      if (errOut)
+      {
+        (*errOut) << "reflexive transitive closure operates on non-relation";
+      }
+      return TypeNode::null();
+    }
+    if (setType.isRelation())
+    {
+      std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
+      if (tupleTypes.size() != 2)
+      {
+        if (errOut)
+        {
+          (*errOut)
+              << "reflexive transitive closure operates on non-binary relation";
+        }
+        return TypeNode::null();
+      }
+      if (!tupleTypes[0].isComparableTo(tupleTypes[1]))
+      {
+        if (errOut)
+        {
+          (*errOut) << "reflexive transitive closure operates on incompatible "
+                       "binary relation";
+        }
+        return TypeNode::null();
+      }
+    }
+  }
+  // return abstract relation if argument is ?
+  if (setType.isFullyAbstract())
+  {
+    return nodeManager->mkSetType(
+        nodeManager->mkAbstractType(Kind::TUPLE_TYPE));
+  }
+  return setType;
+}
+
+TypeNode RelCyclicTypeRule::preComputeType(NodeManager* nm, CVC5_UNUSED TNode n)
+{
+  return nm->booleanType();
+}
+TypeNode RelCyclicTypeRule::computeType(NodeManager* nodeManager,
+                                        TNode n,
+                                        bool check,
+                                        std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::RELATION_CYCLIC);
+  if (check)
+  {
+    TypeNode relType = n[0].getTypeOrNull();
+    if (!relType.isRelation())
+    {
+      if (errOut)
+      {
+        (*errOut) << "rel.cyclic operates on a non-relation";
+      }
+      return TypeNode::null();
+    }
+    std::vector<TypeNode> tupleTypes = relType[0].getTupleTypes();
+    if (tupleTypes.size() != 2)
+    {
+      if (errOut)
+      {
+        (*errOut) << "rel.cyclic operates on a non-binary relation";
+      }
+      return TypeNode::null();
+    }
+    if (!tupleTypes[0].isComparableTo(tupleTypes[1]))
+    {
+      if (errOut)
+      {
+        (*errOut) << "rel.cyclic operates on a binary relation whose columns "
+                     "have different types";
+      }
+      return TypeNode::null();
+    }
+  }
+  return nodeManager->booleanType();
+}
+
 TypeNode JoinImageTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,
                                            CVC5_UNUSED TNode n)
 {
@@ -1054,6 +1204,41 @@ TypeNode RelIdenTypeRule::computeType(NodeManager* nodeManager,
   std::vector<TypeNode> tupleTypes = setType[0].getTupleTypes();
   tupleTypes.push_back(tupleTypes[0]);
   return nodeManager->mkSetType(nodeManager->mkTupleType(tupleTypes));
+}
+
+TypeNode RelIsFunctionalTypeRule::preComputeType(NodeManager* nm,
+                                                 CVC5_UNUSED TNode n)
+{
+  return nm->booleanType();
+}
+
+TypeNode RelIsFunctionalTypeRule::computeType(NodeManager* nodeManager,
+                                              TNode n,
+                                              bool check,
+                                              std::ostream* errOut)
+{
+  Assert(n.getKind() == Kind::RELATION_IS_FUNCTIONAL);
+  if (check)
+  {
+    TypeNode setType = n[0].getTypeOrNull();
+    if (!isMaybeRelation(setType))
+    {
+      if (errOut)
+      {
+        (*errOut) << "rel.is-functional operates on non-relation";
+      }
+      return TypeNode::null();
+    }
+    if (setType.isRelation() && setType[0].getTupleTypes().size() != 2)
+    {
+      if (errOut)
+      {
+        (*errOut) << "rel.is-functional operates on non-binary relations";
+      }
+      return TypeNode::null();
+    }
+  }
+  return nodeManager->booleanType();
 }
 
 TypeNode RelationGroupTypeRule::preComputeType(CVC5_UNUSED NodeManager* nm,

@@ -103,7 +103,11 @@ IllegalChecker::IllegalChecker(Env& e)
       d_illegalKinds.insert(Kind::RELATION_PRODUCT);
       d_illegalKinds.insert(Kind::RELATION_JOIN);
       d_illegalKinds.insert(Kind::RELATION_TCLOSURE);
+      d_illegalKinds.insert(Kind::RELATION_RCLOSURE);
+      d_illegalKinds.insert(Kind::RELATION_RTCLOSURE);
+      d_illegalKinds.insert(Kind::RELATION_CYCLIC);
       d_illegalKinds.insert(Kind::RELATION_IDEN);
+      d_illegalKinds.insert(Kind::RELATION_IS_FUNCTIONAL);
       d_illegalKinds.insert(Kind::RELATION_JOIN_IMAGE);
       d_illegalKinds.insert(Kind::RELATION_GROUP);
       d_illegalKinds.insert(Kind::RELATION_AGGREGATE);

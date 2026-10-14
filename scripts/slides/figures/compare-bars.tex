@@ -1,0 +1,9 @@
+\begin{axis}[xbar, width=5.2cm, height=6.2cm, xmode=log, log origin=infty,
+  symbolic y coords={sc-1-th,sc-1-th-just-rf,sc-1-th-no-ltts,sc-2-th,sc-2-th-just-rf,plsc-1-th,plsc-1-th-just-rf,plsc-1-th-no-ltts,plsc-2-th,plsc-2-th-just-rf,tso-1-th,tso-1-th-just-rf,tso-1-th-no-ltts}, ytick=data, y dir=reverse,
+  tick label style={font=\tiny}, xlabel={time to answer (s)}, xlabel style={font=\scriptsize},
+  xmin=0.02, xmax=400, bar width=3pt, enlarge y limits=0.05,
+  legend style={font=\tiny,at={(0.5,1.02)},anchor=south,legend columns=2}]
+\addplot[fill=black!70] coordinates {(0.091,sc-1-th) (0.049,sc-1-th-just-rf) (0.048,sc-1-th-no-ltts) (3.852,sc-2-th) (0.208,sc-2-th-just-rf) (0.957,plsc-1-th) (0.091,plsc-1-th-just-rf) (0.087,plsc-1-th-no-ltts) (76.9,plsc-2-th) (0.383,plsc-2-th-just-rf) (7.143,tso-1-th) (0.083,tso-1-th-just-rf) (1.267,tso-1-th-no-ltts)};
+\addplot[fill=purple!60] coordinates {(0.063,sc-1-th) (0.061,sc-1-th-just-rf) (0.037,sc-1-th-no-ltts) (3.857,sc-2-th) (0.187,sc-2-th-just-rf) (0.955,plsc-1-th) (0.087,plsc-1-th-just-rf) (0.087,plsc-1-th-no-ltts) (79.549,plsc-2-th) (0.355,plsc-2-th-just-rf) (6.855,tso-1-th) (0.087,tso-1-th-just-rf) (1.186,tso-1-th-no-ltts)};
+\legend{virtual best, real portfolio}
+\end{axis}

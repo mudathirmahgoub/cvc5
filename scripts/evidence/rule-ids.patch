@@ -1,0 +1,308 @@
+diff --git a/src/options/sets_options.toml b/src/options/sets_options.toml
+index 843117be06..7ae4465c11 100644
+--- a/src/options/sets_options.toml
++++ b/src/options/sets_options.toml
+@@ -93,6 +93,14 @@ name   = "Sets Theory"
+   default    = "false"
+   help       = "split a closure membership (a,b) in TC(R) into fresh elements (TCLOSURE_DOWN) only at last call, and only if the known members of R do not explain it"
+ 
++[[option]]
++  name       = "relsEvidenceDisable"
++  category   = "expert"
++  long       = "rels-evidence-disable=IDS"
++  type       = "std::string"
++  default    = "\"\""
++  help       = "(EVIDENCE) drop the relations lemmas of the given comma-separated inference ids, to measure which rules a proof needs"
++
+ [[option]]
+   name       = "relsAcyclicBackwardChords"
+   category   = "expert"
+diff --git a/src/theory/inference_id.cpp b/src/theory/inference_id.cpp
+index 4014832fd1..07b6dc5bf8 100644
+--- a/src/theory/inference_id.cpp
++++ b/src/theory/inference_id.cpp
+@@ -453,6 +453,23 @@ const char* toString(InferenceId i)
+     case InferenceId::SETS_RELS_UNROLL_CYCLE: return "SETS_RELS_UNROLL_CYCLE";
+     case InferenceId::SETS_RELS_TCLOSURE_SUBSET:
+       return "SETS_RELS_TCLOSURE_SUBSET";
++    case InferenceId::SETS_RELS_SAME_OPERANDS: return "SETS_RELS_SAME_OPERANDS";
++    case InferenceId::SETS_RELS_REGISTER: return "SETS_RELS_REGISTER";
++    case InferenceId::SETS_RELS_ALTERNATE: return "SETS_RELS_ALTERNATE";
++    case InferenceId::SETS_RELS_ALT_CLOSE: return "SETS_RELS_ALT_CLOSE";
++    case InferenceId::SETS_RELS_CHORD: return "SETS_RELS_CHORD";
++    case InferenceId::SETS_RELS_DISTINCT: return "SETS_RELS_DISTINCT";
++    case InferenceId::SETS_RELS_BACKWARD: return "SETS_RELS_BACKWARD";
++    case InferenceId::SETS_RELS_ANCHOR_INCLUSION: return "SETS_RELS_ANCHOR_INCLUSION";
++    case InferenceId::SETS_RELS_ANCHOR_BRANCH: return "SETS_RELS_ANCHOR_BRANCH";
++    case InferenceId::SETS_RELS_ANCHOR_CONFLICT: return "SETS_RELS_ANCHOR_CONFLICT";
++    case InferenceId::SETS_RELS_LAST_CALL_COMPLETION: return "SETS_RELS_LAST_CALL_COMPLETION";
++    case InferenceId::SETS_RELS_TCLOSURE_DOWN_LAZY: return "SETS_RELS_TCLOSURE_DOWN_LAZY";
++    case InferenceId::SETS_RELS_TC_SUBSET_SYNTACTIC: return "SETS_RELS_TC_SUBSET_SYNTACTIC";
++    case InferenceId::SETS_RELS_TC_SUBSET_SELF: return "SETS_RELS_TC_SUBSET_SELF";
++    case InferenceId::SETS_RELS_TC_SUBSET_PRODUCT: return "SETS_RELS_TC_SUBSET_PRODUCT";
++    case InferenceId::SETS_RELS_TC_SUBSET_INTER_MINUS: return "SETS_RELS_TC_SUBSET_INTER_MINUS";
++    case InferenceId::SETS_RELS_TC_SUBSET_SUPERSET: return "SETS_RELS_TC_SUBSET_SUPERSET";
+     case InferenceId::SETS_RELS_ACYCLIC_SELF_LOOP:
+       return "SETS_RELS_ACYCLIC_SELF_LOOP";
+     case InferenceId::SETS_RELS_TRANSPOSE_EQ: return "SETS_RELS_TRANSPOSE_EQ";
+diff --git a/src/theory/inference_id.h b/src/theory/inference_id.h
+index 6a724da1fb..9016496d6a 100644
+--- a/src/theory/inference_id.h
++++ b/src/theory/inference_id.h
+@@ -636,6 +636,24 @@ enum class InferenceId
+   // closure induction: (a, b) in TC(R) /\ R subset S /\ S transitive =>
+   // (a, b) in S, e.g. (a, b) in TC(R) /\ R subset A x B => (a, b) in A x B
+   SETS_RELS_TCLOSURE_SUBSET,
++  // EVIDENCE: finer ids of the rules above, for measuring each rule
++  SETS_RELS_SAME_OPERANDS,
++  SETS_RELS_REGISTER,
++  SETS_RELS_ALTERNATE,
++  SETS_RELS_ALT_CLOSE,
++  SETS_RELS_CHORD,
++  SETS_RELS_DISTINCT,
++  SETS_RELS_BACKWARD,
++  SETS_RELS_ANCHOR_INCLUSION,
++  SETS_RELS_ANCHOR_BRANCH,
++  SETS_RELS_ANCHOR_CONFLICT,
++  SETS_RELS_LAST_CALL_COMPLETION,
++  SETS_RELS_TCLOSURE_DOWN_LAZY,
++  SETS_RELS_TC_SUBSET_SYNTACTIC,
++  SETS_RELS_TC_SUBSET_SELF,
++  SETS_RELS_TC_SUBSET_PRODUCT,
++  SETS_RELS_TC_SUBSET_INTER_MINUS,
++  SETS_RELS_TC_SUBSET_SUPERSET,
+   // (rel.cyclic R) => (s, s) in TC(R) for a fresh s, R not a union
+   SETS_RELS_ACYCLIC_SELF_LOOP,
+   SETS_RELS_TRANSPOSE_EQ,
+diff --git a/src/theory/sets/theory_sets_rels.cpp b/src/theory/sets/theory_sets_rels.cpp
+index 23f232c1b8..ec988439fe 100644
+--- a/src/theory/sets/theory_sets_rels.cpp
++++ b/src/theory/sets/theory_sets_rels.cpp
+@@ -541,7 +541,7 @@ void TheorySetsRels::collectRelsInfo()
+             Node tc = nodeManager()->mkNode(Kind::RELATION_TCLOSURE, u);
+             Node reg = nodeManager()->mkNode(Kind::SET_SUBSET, u, tc);
+             sendInfer(
+-                reg, InferenceId::SETS_RELS_ACYCLIC_DOWN, eqc_node.negate());
++                reg, InferenceId::SETS_RELS_REGISTER, eqc_node.negate());
+           }
+           else
+           {
+@@ -1184,7 +1184,7 @@ void TheorySetsRels::sendTCDownSplit(Node tc_rel, Node exp)
+                                  RelsUtils::constructPair(tc_rel, sk_1, sk_2),
+                                  tc_rel))}));
+ 
+-  sendInfer(conc, InferenceId::SETS_RELS_TCLOSURE_DOWN, reason);
++  sendInfer(conc, (d_tcLastCall ? InferenceId::SETS_RELS_TCLOSURE_DOWN_LAZY : InferenceId::SETS_RELS_TCLOSURE_DOWN), reason);
+ }
+ 
+ /*
+@@ -1226,7 +1226,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+   // send(P, extra):
+   //   conc   = (set.member (tuple a b) P)
+   //   reason = (and baseReason extra)
+-  auto send = [&](Node target, const std::vector<Node>& extra) {
++  auto send = [&](Node target, const std::vector<Node>& extra, InferenceId kind) {
+     Node conc = nm->mkNode(Kind::SET_MEMBER, tup, target);
+     if (d_state.isEntailed(conc, true))
+     {
+@@ -1237,7 +1237,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+     Node reason = rs.size() == 1 ? rs[0] : nm->mkNode(Kind::AND, rs);
+     Trace("rels-cycles") << "TCSubset: " << conc << " from " << reason
+                          << std::endl;
+-    sendInfer(conc, InferenceId::SETS_RELS_TCLOSURE_SUBSET, reason);
++    sendInfer(conc, kind, reason);
+   };
+ 
+   // (1) closures that syntactically include R
+@@ -1258,7 +1258,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+       {
+         continue;
+       }
+-      send(tcx, {});
++      send(tcx, {}, InferenceId::SETS_RELS_TC_SUBSET_SYNTACTIC);
+     }
+   }
+ 
+@@ -1268,7 +1268,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+     std::vector<Node> extra;
+     if (isTransitiveClass(rRep, r, extra))
+     {
+-      send(r, extra);
++      send(r, extra, InferenceId::SETS_RELS_TC_SUBSET_SELF);
+     }
+   }
+   // (4) R = A x B with A and B disjoint, or R subset A x B asserted with A, B
+@@ -1391,7 +1391,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+         if (inter[0] != pt[1])
+           extra.push_back(nm->mkNode(Kind::EQUAL, inter[0], pt[1]));
+       }
+-      send(r, extra);
++      send(r, extra, InferenceId::SETS_RELS_TC_SUBSET_PRODUCT);
+       break;
+     }
+   }
+@@ -1417,7 +1417,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+       std::vector<Node> extra;
+       if (isTransitiveClass(getRepresentative(x), x, extra))
+       {
+-        send(x, extra);
++        send(x, extra, InferenceId::SETS_RELS_TC_SUBSET_INTER_MINUS);
+       }
+     }
+   }
+@@ -1461,7 +1461,7 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
+       }
+       if (isTransitiveClass(getRepresentative(p), p, extra))
+       {
+-        send(p, extra);
++        send(p, extra, InferenceId::SETS_RELS_TC_SUBSET_SUPERSET);
+       }
+     }
+   }
+@@ -2452,7 +2452,7 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
+     Node conc = ins.first->second;
+     Trace("rels-cycles") << "CyclicSameOperands: " << conc << " from " << atom
+                          << std::endl;
+-    sendInfer(conc, InferenceId::SETS_RELS_INST_CYCLE, atom);
++    sendInfer(conc, InferenceId::SETS_RELS_SAME_OPERANDS, atom);
+     return;
+   }
+   Node exp = cyclicAtom(rels);
+@@ -2661,10 +2661,10 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
+       // lemmas: reasonA => (not (and prevEdge newEdge))
+       //         reasonB => (not (and newEdge firstEdge))
+       sendInfer(nm->mkNode(Kind::AND, prevEdge, newEdge).negate(),
+-                InferenceId::SETS_RELS_CONTR_MINIMAL,
++                InferenceId::SETS_RELS_ALTERNATE,
+                 reasonA);
+       sendInfer(nm->mkNode(Kind::AND, newEdge, firstEdge).negate(),
+-                InferenceId::SETS_RELS_CONTR_MINIMAL,
++                InferenceId::SETS_RELS_ALT_CLOSE,
+                 reasonB);
+     }
+   }
+@@ -2731,7 +2731,7 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
+         // conc_diseq = (not (= s_q s_r))
+         Node conc_diseq = nm->mkNode(Kind::EQUAL, sq, sr).notNode();
+         sendInfer(
+-            conc_diseq, InferenceId::SETS_RELS_CONTR_MINIMAL, reason_pair);
++            conc_diseq, InferenceId::SETS_RELS_DISTINCT, reason_pair);
+         if (backward)
+         {
+           // III: no backward edge (s_r, s_q) that closes a shorter cycle
+@@ -2773,7 +2773,7 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
+           }
+           for (const Node& br : bwd_reasons)
+           {
+-            sendInfer(conc_bwd, InferenceId::SETS_RELS_CONTR_MINIMAL, br);
++            sendInfer(conc_bwd, InferenceId::SETS_RELS_BACKWARD, br);
+             Trace("rels-cycles") << "ContrMinimal: exp = " << br
+                                  << ", conc = " << conc_bwd << std::endl;
+           }
+@@ -2788,7 +2788,7 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
+         Node tup = TupleUtils::constructTupleFromElements(tt, {sq, sr}, 0, 1);
+         Node mem = nm->mkNode(Kind::SET_MEMBER, tup, Ri_tc);
+         Node conc = mem.notNode();
+-        sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
++        sendInfer(conc, InferenceId::SETS_RELS_CHORD, reason);
+         Trace("rels-cycles") << "ContrMinimal: exp = " << reason
+                              << ", conc = " << conc << std::endl;
+       }
+@@ -3065,7 +3065,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
+         {
+           Trace("rels-cycles") << "AcyclicAnchor (inclusion): " << conc
+                                << " from " << reason << std::endl;
+-          sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, reason);
++          sendInfer(conc, (conc.isConst() ? InferenceId::SETS_RELS_ANCHOR_CONFLICT : InferenceId::SETS_RELS_ANCHOR_INCLUSION), reason);
+         }
+       }
+       // BRANCH: only once the length of the witness is known (concreteLen);
+@@ -3100,7 +3100,7 @@ void TheorySetsRels::applyAcyclicAnchorRules(const std::vector<Node>& rels,
+                              : nm->mkNode(Kind::AND, acyc_exp, acyc, lenEq);
+           Trace("rels-cycles") << "AcyclicAnchor (branch): " << conc << " from "
+                                << branchReason << std::endl;
+-          sendInfer(conc, InferenceId::SETS_RELS_CONTR_MINIMAL, branchReason);
++          sendInfer(conc, InferenceId::SETS_RELS_ANCHOR_BRANCH, branchReason);
+         }
+       }
+     }
+@@ -3161,12 +3161,14 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
+       Node acyc_exp = cyclicAtom(rels);
+       // Ensure that all cycle-unrolling lemmas have been applied up to the
+       // model's current value of l.
++      d_evidenceLastCall = true;
+       while (s.size() < N)
+       {
+         s = applyUnrollCycle(rels, s, l);
+         applySplitCycleLenRule(rels, s, l);
+         applyContrMinimalRule(rels, s, l, acyc_exp);
+       }
++      d_evidenceLastCall = false;
+       // The witness is now unrolled to its length N in the candidate model, so
+       // the branching anchor lemma, which needs every edge of the witness, can
+       // be sent (see applyAcyclicAnchorRules).
+@@ -3814,6 +3816,48 @@ void TupleTrie::debugPrint(const char* c, Node n, unsigned depth)
+ 
+ void TheorySetsRels::sendInfer(Node fact, InferenceId id, Node reason)
+ {
++  // EVIDENCE: the witness lemmas sent by the last-call completion are counted
++  // as one rule; --rels-evidence-disable drops the given rules
++  InferenceId eff = id;
++  if (d_evidenceLastCall
++      && (id == InferenceId::SETS_RELS_UNROLL_CYCLE
++          || id == InferenceId::SETS_RELS_SPLIT_CYCLE_LEN
++          || id == InferenceId::SETS_RELS_ALTERNATE
++          || id == InferenceId::SETS_RELS_ALT_CLOSE
++          || id == InferenceId::SETS_RELS_CHORD
++          || id == InferenceId::SETS_RELS_DISTINCT
++          || id == InferenceId::SETS_RELS_BACKWARD))
++  {
++    eff = InferenceId::SETS_RELS_LAST_CALL_COMPLETION;
++  }
++  if (!d_evidenceParsed)
++  {
++    d_evidenceParsed = true;
++    std::string ids = options().sets.relsEvidenceDisable;
++    size_t start = 0;
++    while (start <= ids.size())
++    {
++      size_t comma = ids.find(',', start);
++      std::string one = ids.substr(
++          start, comma == std::string::npos ? std::string::npos : comma - start);
++      if (!one.empty())
++      {
++        d_evidenceDisabled.insert(one);
++      }
++      if (comma == std::string::npos)
++      {
++        break;
++      }
++      start = comma + 1;
++    }
++  }
++  if (!d_evidenceDisabled.empty()
++      && (d_evidenceDisabled.count(toString(id))
++          || d_evidenceDisabled.count(toString(eff))))
++  {
++    return;
++  }
++  id = eff;
+   Trace("rels-lemma") << "Rels::lemma " << fact << " from " << reason << " by "
+                       << id << std::endl;
+   Node lemma = nodeManager()->mkNode(Kind::IMPLIES, reason, fact);
+diff --git a/src/theory/sets/theory_sets_rels.h b/src/theory/sets/theory_sets_rels.h
+index babb08cb67..20e1e31638 100644
+--- a/src/theory/sets/theory_sets_rels.h
++++ b/src/theory/sets/theory_sets_rels.h
+@@ -463,6 +463,11 @@ class TheorySetsRels : protected EnvObj
+    * differently, is reduced to the first one (applyInstCycleRule).
+    */
+   std::map<std::vector<Node>, Node> d_cycleAtoms;
++  /** EVIDENCE: lemmas sent by the last-call completion of a witness */
++  bool d_evidenceLastCall = false;
++  /** EVIDENCE: the ids of --rels-evidence-disable */
++  std::unordered_set<std::string> d_evidenceDisabled;
++  bool d_evidenceParsed = false;
+   /**
+    * Grounding conflict for a membership (a, b) in TC(R), stated by exp, that
+    * the known members m1, ..., mn of R do not explain:

@@ -1,0 +1,15 @@
+\begin{tabular}{@{}p{2.2cm}p{2.0cm}p{9.6cm}@{}}
+\toprule
+rule & benchmark, configuration & a lemma it sent \\
+\midrule
+LC completion & sc2r, noFMF+H & {\ttfamily\raggedright cyc((po $\cup$ rf)) $\wedge$ cyclen10 $\ge$ 5 $\Rightarrow$ cyc14 $\ne$ cyc82} \\
+Branch & sc1r, stop & {\ttfamily\raggedright cyc((po $\cup$ rf)) $\wedge$ $\neg$(cyc(po)) $\wedge$ cyclen7 = 3 $\Rightarrow$ (cyc6,cyc10) $\notin$ po+ $\vee$ (cyc10,cyc49) $\notin$ po+} \\
+Acyclic-Down & sc1, noFMF+R & {\ttfamily\raggedright (cyc9,cyc5) $\in$ po+ $\wedge$ $\neg$(cyc(po)) $\Rightarrow$ cyc5 $\ne$ cyc9} \\
+Register & sc1r, noFMF+H & {\ttfamily\raggedright $\neg$(cyc(po)) $\Rightarrow$ po+ = (po $\cup$ po+)} \\
+Inclusion & tso1r, noFMF+R & {\ttfamily\raggedright cyc(rf) $\wedge$ $\neg$(cyc(po)) $\Rightarrow$ cycedge21 $\in$ rf $\wedge$ cycedge21 $\notin$ po+} \\
+TC-Sub: in TC(X) & tso1, FMF+R & {\ttfamily\raggedright (cyc10,cyc95) $\in$ ((loc $\cap$ po+))+ $\Rightarrow$ (cyc10,cyc95) $\in$ po+} \\
+TC-Sub: R trans. & sc2, noFMF+H & {\ttfamily\raggedright (cyc14,cyc9) $\in$ co+ $\wedge$ co = (co $\cup$ co;co) $\Rightarrow$ (cyc14,cyc9) $\in$ co} \\
+TC-Sub: A$\times$B & sc2, noFMF+H & {\ttfamily\raggedright (cyc14,cyc9) $\in$ fr+ $\wedge$ Read$\times$Write = (fr $\cup$ Read$\times$Write) $\wedge$ $\emptyset$ = (Read $\cap$ Write) $\Rightarrow$ (cyc14,cyc9) $\in$ fr} \\
+TC-Sub: $\cap$/$\setminus$ & plsc2r, noFMF+R & {\ttfamily\raggedright (cyc9,cyc14) $\in$ ((loc $\cap$ po+))+ $\wedge$ fun(address) $\wedge$ loc = address;(address)$^{-1}$ $\Rightarrow$ (cyc9,cyc14) $\in$ loc} \\
+\bottomrule
+\end{tabular}

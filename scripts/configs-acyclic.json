@@ -1,0 +1,76 @@
+{
+ "default": {
+  "opts": [],
+  "nofmf": false,
+  "desc": "options as in the file (finite model finding on)"
+ },
+ "fmf-unsat": {
+  "opts": [
+   "--e-matching",
+   "--inst-when=full-delay",
+   "--rels-acyclic-anchor=inclusion",
+   "--rels-acyclic-backward-chords"
+  ],
+  "nofmf": false,
+  "desc": "PR #4: finite model finding + eager instantiation + inclusion anchor + backward chords"
+ },
+ "nofmf-unsat": {
+  "opts": [
+   "--rels-acyclic-anchor=inclusion",
+   "--inst-when=full-delay",
+   "--rels-acyclic-backward-chords"
+  ],
+  "nofmf": true,
+  "desc": "PR #4: the same recipe on the file without finite model finding"
+ },
+ "stoponly": {
+  "opts": [
+   "--decision=stoponly"
+  ],
+  "nofmf": false,
+  "desc": "PR #4: SAT decisions by MiniSat, justification engine only stops early"
+ },
+ "fmf-unsat-rules": {
+  "opts": [
+   "--e-matching",
+   "--inst-when=full-delay",
+   "--rels-acyclic-anchor=inclusion",
+   "--rels-acyclic-backward-chords",
+   "--prenex-quant=none",
+   "--rels-tc-subset",
+   "--rels-acyclic-flatten-union",
+   "--rels-functional-axioms",
+   "--rels-tc-down-lazy"
+  ],
+  "nofmf": false,
+  "desc": "PR #6: fmf-unsat + closure induction, flattened witness, functionality pass, no prenexing, lazy closure split"
+ },
+ "nofmf-unsat-rules": {
+  "opts": [
+   "--rels-acyclic-anchor=inclusion",
+   "--inst-when=full-delay",
+   "--rels-acyclic-backward-chords",
+   "--prenex-quant=none",
+   "--rels-tc-subset",
+   "--rels-acyclic-flatten-union",
+   "--rels-functional-axioms",
+   "--rels-tc-down-lazy"
+  ],
+  "nofmf": true,
+  "desc": "PR #6: nofmf-unsat + the same rules and lazy closure split"
+ },
+ "nofmf-unsat-hammer": {
+  "opts": [
+   "--rels-acyclic-anchor=inclusion",
+   "--inst-when=full-delay",
+   "--rels-acyclic-backward-chords",
+   "--prenex-quant=none",
+   "--rels-tc-subset",
+   "--rels-acyclic-flatten-union",
+   "--rels-functional-axioms",
+   "--rels-acyclic-hammer"
+  ],
+  "nofmf": true,
+  "desc": "PR #6: nofmf-unsat + the same rules, no closure split (unsat only)"
+ }
+}

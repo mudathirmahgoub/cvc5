@@ -18,6 +18,21 @@ name   = "Sets Theory"
   help       = "enable extended symbols such as complement and universe in theory of sets"
 
 [[option]]
+  name       = "relsFunctionalMode"
+  category   = "expert"
+  long       = "rels-functional-mode=MODE"
+  type       = "RelsFunctionalMode"
+  default    = "UF"
+  help       = "how the relations solver reasons about asserted (rel.is-functional R) constraints"
+  help_mode  = "Modes for reasoning about functional relations."
+[[option.mode.UF]]
+  name = "uf"
+  help = "Infer y = f(x) for every member (x, y) of R, with f a fresh function. Linear in the members of R; pairs is used if the logic has no uninterpreted functions."
+[[option.mode.PAIRS]]
+  name = "pairs"
+  help = "Infer x1 = x2 => y1 = y2 for every two members (x1, y1) and (x2, y2) of R. Quadratic in the members of R."
+
+[[option]]
   name       = "relsExp"
   category   = "expert"
   long       = "rels-exp"
@@ -32,3 +47,56 @@ name   = "Sets Theory"
   type       = "bool"
   default    = "true"
   help       = "enable the cardinality extension of the theory of sets"
+
+[[option]]
+  name       = "relsAcyclicHammer"
+  category   = "expert"
+  long       = "rels-acyclic-hammer"
+  type       = "bool"
+  default    = "false"
+  help       = "do not split closure and join memberships into fresh elements (the TCLOSURE_DOWN and JOIN_SPLIT lemmas); instead, check at last call that every such membership is explained by known members, e.g. (a,c) in TC(R) by (a,b) and (b,c) in R; meant for unsat problems"
+
+[[option]]
+  name       = "relsAcyclicAnchor"
+  category   = "expert"
+  long       = "rels-acyclic-anchor=MODE"
+  type       = "RelsAcyclicAnchorMode"
+  default    = "BRANCH"
+  help       = "how the cycle witness of (rel.cyclic R) is constrained by each asserted (not (rel.cyclic S)): some edge of the cycle is not in TC(S)"
+  help_mode  = "Anchoring modes for relation-acyclicity cycle witnesses."
+[[option.mode.NONE]]
+  name = "none"
+  help = "No anchoring."
+[[option.mode.BRANCH]]
+  name = "branch"
+  help = "At last call, when the candidate model fixes the length N of the witness s1 -> ... -> sN = s1: one of the edges (s1,s2), ..., (s(N-1),sN) is not in TC(S)."
+[[option.mode.INCLUSION]]
+  name = "inclusion"
+  help = "A fresh pair t with t in R and t not in TC(S). May slow down finite model finding."
+[[option.mode.BOTH]]
+  name = "both"
+  help = "Branch and inclusion."
+
+[[option]]
+  name       = "relsTcSubset"
+  category   = "expert"
+  long       = "rels-tc-subset"
+  type       = "bool"
+  default    = "false"
+  help       = "closure induction: from (a,b) in TC(R), R subset S and S transitive, infer (a,b) in S; e.g. R subset (rel.product A B) gives (a,b) in A x B, and a transitive R gives (a,b) in R"
+
+[[option]]
+  name       = "relsTcDownLazy"
+  category   = "expert"
+  long       = "rels-tc-down-lazy"
+  type       = "bool"
+  default    = "false"
+  help       = "split a closure membership (a,b) in TC(R) into fresh elements (TCLOSURE_DOWN) only at last call, and only if the known members of R do not explain it"
+
+[[option]]
+  name       = "relsAcyclicBackwardChords"
+  category   = "expert"
+  long       = "rels-acyclic-backward-chords"
+  type       = "bool"
+  default    = "false"
+  help       = "in the cycle witness of (rel.cyclic R), also exclude backward edges that close a shorter cycle, e.g. (s3,s2) in the witness s1 -> s2 -> s3 -> s1; helps unsat proofs that use a totality axiom, slows down finite model finding"

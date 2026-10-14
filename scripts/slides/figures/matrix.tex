@@ -1,0 +1,21 @@
+\begin{tabular}{@{}lllllllllcl@{}}
+\toprule
+benchmark & exp. & default & FMF & noFMF & stop-only & FMF+R & noFMF+R & noFMF+H & by & fastest \\
+\midrule
+sc-1-th & unsat & \tmo & \good{unsat 0.80} & \tmo & \tmo & \good{unsat 0.39} & \best{unsat 0.09} & \tmo & 3 & 0.09 s \\
+sc-1-th-just-rf & unsat & \good{unsat 0.21} & \good{unsat 0.14} & \best{unsat 0.05} & \good{unsat 5.60} & \good{unsat 0.08} & \good{unsat 0.05} & \good{unsat 0.05} & 7 & 0.05 s \\
+sc-1-th-no-ltts & sat & \best{sat 0.05} & \good{sat 0.09} & \textcolor{orange!80!black}{unknown} & \good{sat 0.14} & \good{sat 0.05} & \textcolor{orange!80!black}{unknown} & \tmo & 4 & 0.05 s \\
+sc-2-th & unsat & \tmo & \tmo & \tmo & \tmo & \good{unsat 21.0} & \good{unsat 97.1} & \best{unsat 3.85} & 3 & 3.85 s \\
+sc-2-th-just-rf & unsat & \good{unsat 1.09} & \good{unsat 0.38} & \good{unsat 0.26} & \tmo & \good{unsat 0.26} & \good{unsat 0.21} & \best{unsat 0.21} & 6 & 0.21 s \\
+plsc-1-th & unsat & \tmo & \good{unsat 5.51} & \tmo & \tmo & \good{unsat 4.02} & \best{unsat 0.96} & \tmo & 3 & 0.96 s \\
+plsc-1-th-just-rf & unsat & \tmo & \tmo & \tmo & \tmo & \good{unsat 0.32} & \best{unsat 0.09} & \tmo & 2 & 0.09 s \\
+plsc-1-th-no-ltts & sat & \best{sat 0.09} & \good{sat 0.15} & \textcolor{orange!80!black}{unknown} & \good{sat 0.38} & \good{sat 0.09} & \textcolor{orange!80!black}{unknown} & \tmo & 4 & 0.09 s \\
+plsc-2-th & unsat & \tmo & \tmo & \tmo & \tmo & \tmo & \best{unsat 76.9} & \tmo & 1 & 76.9 s \\
+plsc-2-th-just-rf & unsat & \tmo & \tmo & \tmo & \tmo & \good{unsat 1.08} & \best{unsat 0.38} & \tmo & 2 & 0.38 s \\
+tso-1-th & unsat & \tmo & \tmo & \tmo & \tmo & \good{unsat 294.6} & \best{unsat 7.14} & \tmo & 2 & 7.14 s \\
+tso-1-th-just-rf & unsat & \tmo & \good{unsat 66.4} & \tmo & \tmo & \good{unsat 0.26} & \best{unsat 0.08} & \tmo & 3 & 0.08 s \\
+tso-1-th-no-ltts & sat & \good{sat 4.35} & \tmo & \textcolor{orange!80!black}{unknown} & \tmo & \best{sat 1.27} & \tmo & \tmo & 2 & 1.27 s \\
+\midrule
+solved & & 5 & 7 & 2 & 3 & 12 & 10 & 3 & \multicolumn{2}{l}{\textbf{13 of 13}} \\
+\bottomrule
+\end{tabular}

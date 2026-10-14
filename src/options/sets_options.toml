@@ -94,6 +94,30 @@ name   = "Sets Theory"
   help       = "split a closure membership (a,b) in TC(R) into fresh elements (TCLOSURE_DOWN) only at last call, and only if the known members of R do not explain it"
 
 [[option]]
+  name       = "relsCycleDefUnion"
+  category   = "expert"
+  long       = "rels-cycle-def-union"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) for (rel.cyclic R) with R a union, also assert (s1, s1) in TC(R)"
+
+[[option]]
+  name       = "relsCycleUnrollGuard"
+  category   = "expert"
+  long       = "rels-cycle-unroll-guard"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) at full effort, do not unroll a cycle witness s1..s_c when c < l is false in the current assignment"
+
+[[option]]
+  name       = "relsCycleLenDecide"
+  category   = "expert"
+  long       = "rels-cycle-len-decide"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) decide the length l of every cycle witness from small to large (l <= 2, l <= 3, ...)"
+
+[[option]]
   name       = "relsAcyclicBackwardChords"
   category   = "expert"
   long       = "rels-acyclic-backward-chords"

@@ -19,6 +19,7 @@
 #include "options/sets_options.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/datatypes/tuple_utils.h"
+#include "theory/decision_manager.h"
 #include "theory/incomplete_id.h"
 #include "theory/sets/theory_sets.h"
 #include "theory/sets/theory_sets_private.h"
@@ -33,6 +34,27 @@ using namespace cvc5::internal::theory::datatypes;
 namespace cvc5::internal {
 namespace theory {
 namespace sets {
+
+namespace {
+/** PROTOTYPE: decides l <= 2, l <= 3, ... for the length l of a witness */
+class CycleLenDecisionStrategy : public DecisionStrategyFmf
+{
+ public:
+  CycleLenDecisionStrategy(Env& env, Valuation valuation, Node l)
+      : DecisionStrategyFmf(env, valuation), d_len(l)
+  {
+  }
+  Node mkLiteral(unsigned i) override
+  {
+    NodeManager* nm = nodeManager();
+    return nm->mkNode(Kind::LEQ, d_len, nm->mkConstInt(Rational(i + 2)));
+  }
+  std::string identify() const override { return "sets_cycle_len"; }
+
+ private:
+  Node d_len;
+};
+}  // namespace
 
 typedef std::map<Node, std::vector<Node> >::iterator MEM_IT;
 typedef context::CDHashMap<std::vector<Node>,
@@ -2513,6 +2535,15 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
   Node l = d_skCache.mkTypedSkolemCached(
       nm->integerType(), relUnion, SkolemCache::SK_CYCLE_LEN, "cyclen");
   makeSharedTerm(l);
+  if (options().sets.relsCycleLenDecide)
+  {
+    d_cycleLenStrategies.emplace_back(
+        new CycleLenDecisionStrategy(d_env, d_state.getValuation(), l));
+    d_im.getDecisionManager()->registerStrategy(
+        DecisionManager::STRAT_SETS_CYCLE_LEN,
+        d_cycleLenStrategies.back().get(),
+        DecisionManager::STRAT_SCOPE_CTX_INDEPENDENT);
+  }
 
   d_cycle_sequences.insert(rels, std::make_pair(std::vector<Node>{s1}, l));
 
@@ -2523,6 +2554,19 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
                        << std::endl;
 
   sendInfer(conc, InferenceId::SETS_RELS_INST_CYCLE, exp);
+
+  if (options().sets.relsCycleDefUnion)
+  {
+    // PROTOTYPE: the definition of rel.cyclic for the union itself, on the
+    // first element of the witness:
+    // conc = (set.member (tuple s1 s1) (rel.tclosure R)), R = exp[0]
+    Node rel = exp[0];
+    TypeNode tt = rel.getType().getSetElementType();
+    Node loop = TupleUtils::constructTupleFromElements(tt, {s1, s1}, 0, 1);
+    Node def = nm->mkNode(
+        Kind::SET_MEMBER, loop, nm->mkNode(Kind::RELATION_TCLOSURE, rel));
+    sendInfer(def, InferenceId::SETS_RELS_ACYCLIC_SELF_LOOP, exp);
+  }
 }
 
 /*
@@ -2881,6 +2925,27 @@ void TheorySetsRels::doCycleInference()
     std::vector<Node> rels = c_it->first;
     std::vector<Node> s = c_it->second.first;
     Node l = c_it->second.second;
+    if (options().sets.relsCycleUnrollGuard && s.size() >= 2)
+    {
+      // PROTOTYPE: ltc = (< cnt l), the atom of SplitCycleLen for s_cnt. If
+      // it is false in the current assignment, the witness is complete in
+      // this branch: do not unroll it (the last call completes it to the
+      // value of l if needed).
+      Node ltc = rewrite(nodeManager()->mkNode(
+          Kind::LT, nodeManager()->mkConstInt(Rational(s.size())), l));
+      bool pol = true;
+      if (ltc.getKind() == Kind::NOT)
+      {
+        ltc = ltc[0];
+        pol = false;
+      }
+      bool val;
+      if (d_state.hasSatValue(ltc, val) && val != pol)
+      {
+        ++c_it;
+        continue;
+      }
+    }
     Node acyc_exp = cyclicAtom(rels);
     // applyUnrollCycle returns the extended vector with the newly-created
     // element appended.

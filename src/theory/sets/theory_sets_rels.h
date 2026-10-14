@@ -18,6 +18,7 @@
 #include "context/cdhashset.h"
 #include "context/cdlist.h"
 #include "smt/env_obj.h"
+#include "theory/decision_strategy.h"
 #include "theory/sets/inference_manager.h"
 #include "theory/sets/rels_utils.h"
 #include "theory/sets/solver_state.h"
@@ -463,6 +464,8 @@ class TheorySetsRels : protected EnvObj
    * differently, is reduced to the first one (applyInstCycleRule).
    */
   std::map<std::vector<Node>, Node> d_cycleAtoms;
+  /** PROTOTYPE: the decision strategies on the witness lengths */
+  std::vector<std::unique_ptr<DecisionStrategy> > d_cycleLenStrategies;
   /**
    * Grounding conflict for a membership (a, b) in TC(R), stated by exp, that
    * the known members m1, ..., mn of R do not explain:

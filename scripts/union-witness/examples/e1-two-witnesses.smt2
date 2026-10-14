@@ -1,0 +1,8 @@
+(set-logic ALL)
+(declare-sort E 0)
+(declare-const A (Relation E E)) (declare-const B (Relation E E))
+(declare-const C (Relation E E)) (declare-const D (Relation E E))
+(assert (= (set.union A B) (set.union C D)))
+(assert (rel.cyclic (set.union A B)))
+(assert (rel.cyclic (set.union C D)))
+(check-sat)

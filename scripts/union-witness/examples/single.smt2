@@ -1,0 +1,5 @@
+(set-logic ALL)
+(declare-sort E 0)
+(declare-const A (Relation E E))
+(assert (rel.cyclic A))
+(check-sat)

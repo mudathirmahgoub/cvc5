@@ -2,8 +2,8 @@
  "mode": "virtual",
  "timeout": 300.0,
  "jobs": 6,
- "cvc5": "build-rel/bin/cvc5",
- "cvc5_version": "cvc5 1.4.3.dev+cycle-ext-cyclic@45502e064c [git 45502e064c on branch cycle-ext-cyclic]",
+ "cvc5": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5",
+ "cvc5_version": "cvc5 1.4.3.dev+cycle-ext-ground-premises@6094bb5747 [git 6094bb5747 on branch cycle-ext-ground-premises]",
  "benchmarks_rev": "e4a4f7e01b90c80e7a796e02c65eea024f999b58",
  "configs": {
   "default": {
@@ -75,6 +75,554 @@
    "desc": "PR #6: nofmf-unsat + the same rules, no closure split (unsat only)"
   }
  },
+ "runs": {
+  "plsc-1-th|default": {
+   "result": "timeout",
+   "time": 300.065,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/plsc-1-th.out"
+  },
+  "plsc-1-th|fmf-unsat": {
+   "result": "unsat",
+   "time": 5.51,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/plsc-1-th.out"
+  },
+  "plsc-1-th|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.053,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/plsc-1-th.out"
+  },
+  "plsc-1-th|stoponly": {
+   "result": "timeout",
+   "time": 300.065,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/plsc-1-th.out"
+  },
+  "plsc-1-th|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 4.019,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/plsc-1-th.out"
+  },
+  "plsc-1-th|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.957,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/plsc-1-th.out"
+  },
+  "plsc-1-th|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.046,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/plsc-1-th.out"
+  },
+  "plsc-1-th-just-rf|default": {
+   "result": "timeout",
+   "time": 300.027,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.068,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.053,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|stoponly": {
+   "result": "timeout",
+   "time": 300.078,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.318,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.091,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-just-rf|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.068,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/plsc-1-th-just-rf.out"
+  },
+  "plsc-1-th-no-ltts|default": {
+   "result": "sat",
+   "time": 0.087,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|fmf-unsat": {
+   "result": "sat",
+   "time": 0.148,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|nofmf-unsat": {
+   "result": "unknown",
+   "time": 0.263,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|stoponly": {
+   "result": "sat",
+   "time": 0.379,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|fmf-unsat-rules": {
+   "result": "sat",
+   "time": 0.091,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|nofmf-unsat-rules": {
+   "result": "unknown",
+   "time": 92.647,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/plsc-1-th-no-ltts.out"
+  },
+  "plsc-1-th-no-ltts|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.023,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/plsc-1-th-no-ltts.out"
+  },
+  "plsc-2-th|default": {
+   "result": "timeout",
+   "time": 300.05,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/plsc-2-th.out"
+  },
+  "plsc-2-th|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.036,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/plsc-2-th.out"
+  },
+  "plsc-2-th|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.075,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/plsc-2-th.out"
+  },
+  "plsc-2-th|stoponly": {
+   "result": "timeout",
+   "time": 300.053,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/plsc-2-th.out"
+  },
+  "plsc-2-th|fmf-unsat-rules": {
+   "result": "timeout",
+   "time": 300.072,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/plsc-2-th.out"
+  },
+  "plsc-2-th|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 76.9,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/plsc-2-th.out"
+  },
+  "plsc-2-th|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.053,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/plsc-2-th.out"
+  },
+  "plsc-2-th-just-rf|default": {
+   "result": "timeout",
+   "time": 300.044,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.057,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.044,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|stoponly": {
+   "result": "timeout",
+   "time": 300.038,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 1.084,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.383,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/plsc-2-th-just-rf.out"
+  },
+  "plsc-2-th-just-rf|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.062,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/plsc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/plsc-2-th-just-rf.out"
+  },
+  "sc-1-th|default": {
+   "result": "timeout",
+   "time": 300.036,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/sc-1-th.out"
+  },
+  "sc-1-th|fmf-unsat": {
+   "result": "unsat",
+   "time": 0.795,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/sc-1-th.out"
+  },
+  "sc-1-th|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.081,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/sc-1-th.out"
+  },
+  "sc-1-th|stoponly": {
+   "result": "timeout",
+   "time": 300.064,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/sc-1-th.out"
+  },
+  "sc-1-th|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.386,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/sc-1-th.out"
+  },
+  "sc-1-th|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.091,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/sc-1-th.out"
+  },
+  "sc-1-th|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.034,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/sc-1-th.out"
+  },
+  "sc-1-th-just-rf|default": {
+   "result": "unsat",
+   "time": 0.21,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|fmf-unsat": {
+   "result": "unsat",
+   "time": 0.145,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|nofmf-unsat": {
+   "result": "unsat",
+   "time": 0.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|stoponly": {
+   "result": "unsat",
+   "time": 5.601,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.078,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-just-rf|nofmf-unsat-hammer": {
+   "result": "unsat",
+   "time": 0.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/sc-1-th-just-rf.out"
+  },
+  "sc-1-th-no-ltts|default": {
+   "result": "sat",
+   "time": 0.048,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|fmf-unsat": {
+   "result": "sat",
+   "time": 0.091,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|nofmf-unsat": {
+   "result": "unknown",
+   "time": 0.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|stoponly": {
+   "result": "sat",
+   "time": 0.139,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|fmf-unsat-rules": {
+   "result": "sat",
+   "time": 0.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|nofmf-unsat-rules": {
+   "result": "unknown",
+   "time": 4.463,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/sc-1-th-no-ltts.out"
+  },
+  "sc-1-th-no-ltts|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.068,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/sc-1-th-no-ltts.out"
+  },
+  "sc-2-th|default": {
+   "result": "timeout",
+   "time": 300.054,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/sc-2-th.out"
+  },
+  "sc-2-th|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.078,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/sc-2-th.out"
+  },
+  "sc-2-th|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.064,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/sc-2-th.out"
+  },
+  "sc-2-th|stoponly": {
+   "result": "timeout",
+   "time": 300.056,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/sc-2-th.out"
+  },
+  "sc-2-th|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 20.958,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/sc-2-th.out"
+  },
+  "sc-2-th|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 97.067,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/sc-2-th.out"
+  },
+  "sc-2-th|nofmf-unsat-hammer": {
+   "result": "unsat",
+   "time": 3.852,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/sc-2-th.out"
+  },
+  "sc-2-th-just-rf|default": {
+   "result": "unsat",
+   "time": 1.091,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|fmf-unsat": {
+   "result": "unsat",
+   "time": 0.382,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|nofmf-unsat": {
+   "result": "unsat",
+   "time": 0.261,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|stoponly": {
+   "result": "timeout",
+   "time": 300.067,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.255,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.211,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/sc-2-th-just-rf.out"
+  },
+  "sc-2-th-just-rf|nofmf-unsat-hammer": {
+   "result": "unsat",
+   "time": 0.208,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/sc-2-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/sc-2-th-just-rf.out"
+  },
+  "tso-1-th|default": {
+   "result": "timeout",
+   "time": 300.071,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/tso-1-th.out"
+  },
+  "tso-1-th|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.078,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/tso-1-th.out"
+  },
+  "tso-1-th|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.072,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/tso-1-th.out"
+  },
+  "tso-1-th|stoponly": {
+   "result": "timeout",
+   "time": 300.052,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/tso-1-th.out"
+  },
+  "tso-1-th|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 294.581,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/tso-1-th.out"
+  },
+  "tso-1-th|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 7.143,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/tso-1-th.out"
+  },
+  "tso-1-th|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.042,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/tso-1-th.out"
+  },
+  "tso-1-th-just-rf|default": {
+   "result": "timeout",
+   "time": 300.073,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|fmf-unsat": {
+   "result": "unsat",
+   "time": 66.351,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|nofmf-unsat": {
+   "result": "timeout",
+   "time": 300.067,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|stoponly": {
+   "result": "timeout",
+   "time": 300.043,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|fmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.261,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|nofmf-unsat-rules": {
+   "result": "unsat",
+   "time": 0.083,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-just-rf|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.072,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-just-rf.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/tso-1-th-just-rf.out"
+  },
+  "tso-1-th-no-ltts|default": {
+   "result": "sat",
+   "time": 4.352,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/default/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|fmf-unsat": {
+   "result": "timeout",
+   "time": 300.071,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|nofmf-unsat": {
+   "result": "unknown",
+   "time": 0.151,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|stoponly": {
+   "result": "timeout",
+   "time": 300.049,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --decision=stoponly /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/stoponly/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|fmf-unsat-rules": {
+   "result": "sat",
+   "time": 1.267,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --e-matching --inst-when=full-delay --rels-acyclic-anchor=inclusion --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/fmf-unsat-rules/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|nofmf-unsat-rules": {
+   "result": "timeout",
+   "time": 300.038,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-tc-down-lazy /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-rules/tso-1-th-no-ltts.out"
+  },
+  "tso-1-th-no-ltts|nofmf-unsat-hammer": {
+   "result": "timeout",
+   "time": 300.03,
+   "cmd": "/Users/mahgoubyahia/cvc5/rachel-ground/build-rel/bin/cvc5 --tlimit=300000 --rels-acyclic-anchor=inclusion --inst-when=full-delay --rels-acyclic-backward-chords --prenex-quant=none --rels-tc-subset --rels-acyclic-hammer /Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/relational-solver-benchmarks/benchmarks-ltts-nofmf/tso-1-th-no-ltts.smt2",
+   "out": "/Users/mahgoubyahia/cvc5/rachel/build/bin/benchmarks-ltts-analysis/portfolio-work/results/pr11-6094bb5747-300s/virtual/nofmf-unsat-hammer/tso-1-th-no-ltts.out"
+  }
+ },
  "table": [
   {
    "benchmark": "plsc-1-th",
@@ -82,37 +630,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.038
+     300.065
     ],
     "fmf-unsat": [
      "unsat",
-     5.519
+     5.51
     ],
     "nofmf-unsat": [
      "timeout",
-     300.077
+     300.053
     ],
     "stoponly": [
      "timeout",
-     300.077
+     300.065
     ],
     "fmf-unsat-rules": [
      "unsat",
-     3.974
+     4.019
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.953
+     0.957
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.08
+     300.046
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 0.953,
+   "vbs_time": 0.957,
    "vbs_answer": "unsat",
-   "cascade_time": 305.56,
+   "cascade_time": 305.57,
    "cascade_config": "fmf-unsat",
    "flags": []
   },
@@ -122,37 +670,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.075
+     300.027
     ],
     "fmf-unsat": [
      "timeout",
-     300.026
+     300.068
     ],
     "nofmf-unsat": [
      "timeout",
-     300.039
+     300.053
     ],
     "stoponly": [
      "timeout",
-     300.032
+     300.078
     ],
     "fmf-unsat-rules": [
      "unsat",
-     0.331
+     0.318
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.086
+     0.091
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.076
+     300.068
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 0.086,
+   "vbs_time": 0.091,
    "vbs_answer": "unsat",
-   "cascade_time": 1200.5,
+   "cascade_time": 1200.54,
    "cascade_config": "fmf-unsat-rules",
    "flags": []
   },
@@ -162,11 +710,11 @@
    "per_config": {
     "default": [
      "sat",
-     0.088
+     0.087
     ],
     "fmf-unsat": [
      "sat",
-     0.141
+     0.148
     ],
     "nofmf-unsat": [
      "unknown",
@@ -174,23 +722,23 @@
     ],
     "stoponly": [
      "sat",
-     0.375
+     0.379
     ],
     "fmf-unsat-rules": [
      "sat",
-     0.082
+     0.091
     ],
     "nofmf-unsat-rules": [
      "unknown",
-     82.471
+     92.647
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.054
+     300.023
     ]
    },
-   "vbs_config": "fmf-unsat-rules",
-   "vbs_time": 0.082,
+   "vbs_config": "default",
+   "vbs_time": 0.087,
    "vbs_answer": "sat",
    "cascade_time": 0.09,
    "cascade_config": "default",
@@ -202,37 +750,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.067
+     300.05
     ],
     "fmf-unsat": [
      "timeout",
-     300.046
+     300.036
     ],
     "nofmf-unsat": [
      "timeout",
-     300.027
+     300.075
     ],
     "stoponly": [
      "timeout",
-     300.068
+     300.053
     ],
     "fmf-unsat-rules": [
      "timeout",
-     300.074
+     300.072
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     75.845
+     76.9
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.055
+     300.053
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 75.845,
+   "vbs_time": 76.9,
    "vbs_answer": "unsat",
-   "cascade_time": 1576.13,
+   "cascade_time": 1577.19,
    "cascade_config": "nofmf-unsat-rules",
    "flags": []
   },
@@ -242,37 +790,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.032
+     300.044
     ],
     "fmf-unsat": [
      "timeout",
-     300.071
+     300.057
     ],
     "nofmf-unsat": [
      "timeout",
-     300.021
+     300.044
     ],
     "stoponly": [
      "timeout",
-     300.069
+     300.038
     ],
     "fmf-unsat-rules": [
      "unsat",
-     1.083
+     1.084
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.384
+     0.383
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.068
+     300.062
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 0.384,
+   "vbs_time": 0.383,
    "vbs_answer": "unsat",
-   "cascade_time": 1201.28,
+   "cascade_time": 1201.27,
    "cascade_config": "fmf-unsat-rules",
    "flags": []
   },
@@ -282,37 +830,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.029
+     300.036
     ],
     "fmf-unsat": [
      "unsat",
-     0.794
+     0.795
     ],
     "nofmf-unsat": [
      "timeout",
-     300.022
+     300.081
     ],
     "stoponly": [
      "timeout",
-     300.049
+     300.064
     ],
     "fmf-unsat-rules": [
      "unsat",
-     0.381
+     0.386
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.088
+     0.091
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.038
+     300.034
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 0.088,
+   "vbs_time": 0.091,
    "vbs_answer": "unsat",
-   "cascade_time": 300.82,
+   "cascade_time": 300.83,
    "cascade_config": "fmf-unsat",
    "flags": []
   },
@@ -322,11 +870,11 @@
    "per_config": {
     "default": [
      "unsat",
-     0.204
+     0.21
     ],
     "fmf-unsat": [
      "unsat",
-     0.149
+     0.145
     ],
     "nofmf-unsat": [
      "unsat",
@@ -334,11 +882,11 @@
     ],
     "stoponly": [
      "unsat",
-     5.239
+     5.601
     ],
     "fmf-unsat-rules": [
      "unsat",
-     0.092
+     0.078
     ],
     "nofmf-unsat-rules": [
      "unsat",
@@ -352,7 +900,7 @@
    "vbs_config": "nofmf-unsat",
    "vbs_time": 0.049,
    "vbs_answer": "unsat",
-   "cascade_time": 0.2,
+   "cascade_time": 0.21,
    "cascade_config": "default",
    "flags": []
   },
@@ -362,19 +910,19 @@
    "per_config": {
     "default": [
      "sat",
-     0.046
+     0.048
     ],
     "fmf-unsat": [
      "sat",
-     0.089
+     0.091
     ],
     "nofmf-unsat": [
      "unknown",
-     0.084
+     0.049
     ],
     "stoponly": [
      "sat",
-     0.142
+     0.139
     ],
     "fmf-unsat-rules": [
      "sat",
@@ -382,15 +930,15 @@
     ],
     "nofmf-unsat-rules": [
      "unknown",
-     4.192
+     4.463
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.042
+     300.068
     ]
    },
    "vbs_config": "default",
-   "vbs_time": 0.046,
+   "vbs_time": 0.048,
    "vbs_answer": "sat",
    "cascade_time": 0.05,
    "cascade_config": "default",
@@ -402,37 +950,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.064
+     300.054
     ],
     "fmf-unsat": [
      "timeout",
-     300.038
+     300.078
     ],
     "nofmf-unsat": [
      "timeout",
-     300.05
+     300.064
     ],
     "stoponly": [
      "timeout",
-     300.028
+     300.056
     ],
     "fmf-unsat-rules": [
      "unsat",
-     20.433
+     20.958
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     94.636
+     97.067
     ],
     "nofmf-unsat-hammer": [
      "unsat",
-     3.763
+     3.852
     ]
    },
    "vbs_config": "nofmf-unsat-hammer",
-   "vbs_time": 3.763,
+   "vbs_time": 3.852,
    "vbs_answer": "unsat",
-   "cascade_time": 1220.61,
+   "cascade_time": 1221.21,
    "cascade_config": "fmf-unsat-rules",
    "flags": []
   },
@@ -442,19 +990,19 @@
    "per_config": {
     "default": [
      "unsat",
-     1.096
+     1.091
     ],
     "fmf-unsat": [
      "unsat",
-     0.375
+     0.382
     ],
     "nofmf-unsat": [
      "unsat",
-     0.248
+     0.261
     ],
     "stoponly": [
      "timeout",
-     300.058
+     300.067
     ],
     "fmf-unsat-rules": [
      "unsat",
@@ -462,17 +1010,17 @@
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.206
+     0.211
     ],
     "nofmf-unsat-hammer": [
      "unsat",
-     0.195
+     0.208
     ]
    },
    "vbs_config": "nofmf-unsat-hammer",
-   "vbs_time": 0.195,
+   "vbs_time": 0.208,
    "vbs_answer": "unsat",
-   "cascade_time": 1.1,
+   "cascade_time": 1.09,
    "cascade_config": "default",
    "flags": []
   },
@@ -482,37 +1030,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.053
+     300.071
     ],
     "fmf-unsat": [
      "timeout",
-     300.06
+     300.078
     ],
     "nofmf-unsat": [
      "timeout",
-     300.028
+     300.072
     ],
     "stoponly": [
      "timeout",
-     300.075
+     300.052
     ],
     "fmf-unsat-rules": [
      "unsat",
-     288.729
+     294.581
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     6.867
+     7.143
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.049
+     300.042
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 6.867,
+   "vbs_time": 7.143,
    "vbs_answer": "unsat",
-   "cascade_time": 1488.95,
+   "cascade_time": 1494.85,
    "cascade_config": "fmf-unsat-rules",
    "flags": []
   },
@@ -522,37 +1070,37 @@
    "per_config": {
     "default": [
      "timeout",
-     300.082
+     300.073
     ],
     "fmf-unsat": [
      "unsat",
-     5.64
+     66.351
     ],
     "nofmf-unsat": [
      "timeout",
-     300.042
+     300.067
     ],
     "stoponly": [
      "timeout",
-     300.077
+     300.043
     ],
     "fmf-unsat-rules": [
      "unsat",
-     0.266
+     0.261
     ],
     "nofmf-unsat-rules": [
      "unsat",
-     0.091
+     0.083
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.041
+     300.072
     ]
    },
    "vbs_config": "nofmf-unsat-rules",
-   "vbs_time": 0.091,
+   "vbs_time": 0.083,
    "vbs_answer": "unsat",
-   "cascade_time": 305.72,
+   "cascade_time": 366.42,
    "cascade_config": "fmf-unsat",
    "flags": []
   },
@@ -562,37 +1110,37 @@
    "per_config": {
     "default": [
      "sat",
-     4.441
+     4.352
     ],
     "fmf-unsat": [
      "timeout",
-     300.035
+     300.071
     ],
     "nofmf-unsat": [
      "unknown",
-     0.144
+     0.151
     ],
     "stoponly": [
      "timeout",
-     300.034
+     300.049
     ],
     "fmf-unsat-rules": [
      "sat",
-     1.22
+     1.267
     ],
     "nofmf-unsat-rules": [
      "timeout",
-     300.035
+     300.038
     ],
     "nofmf-unsat-hammer": [
      "timeout",
-     300.05
+     300.03
     ]
    },
    "vbs_config": "fmf-unsat-rules",
-   "vbs_time": 1.22,
+   "vbs_time": 1.267,
    "vbs_answer": "sat",
-   "cascade_time": 4.44,
+   "cascade_time": 4.35,
    "cascade_config": "default",
    "flags": []
   }

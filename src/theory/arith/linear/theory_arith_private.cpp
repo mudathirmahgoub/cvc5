@@ -1499,6 +1499,30 @@ void TheoryArithPrivate::setupAtom(TNode atom)
     }
     outputTrustedLemma(tlem, InferenceId::ARITH_EQUIV_ATOM);
   }
+  else if (d_presolved && options().arith.arithUnateLemmasSearch
+           && !options().base.incrementalSolving
+           && atom.getKind() == Kind::EQUAL
+           && (options().arith.arithUnateLemmaMode
+                   == options::ArithUnateLemmaMode::ALL
+               || options().arith.arithUnateLemmaMode
+                      == options::ArithUnateLemmaMode::EQUALITY))
+  {
+    // PROTOTYPE (--arith-unate-lemmas-search): presolve relates the input
+    // atoms by unate lemmas; an equality atom created during the search (e.g.
+    // (= l 4) for a length l introduced by a theory) gets the lemmas relating
+    // it to its nearest bounds, so that a bound that already excludes its value
+    // falsifies it by propagation instead of by a conflict on each decision.
+    // Only equalities: lemmas for every new bound (branch and bound, cuts,
+    // nonlinear refinement) change the integer and nonlinear search and made
+    // some regressions time out.
+    std::vector<TrustNode> lemmas;
+    d_constraintDatabase.outputUnateLemmasForNewConstraint(
+        lemmas, c, false, true);
+    for (const TrustNode& lem : lemmas)
+    {
+      outputTrustedLemma(lem, InferenceId::ARITH_UNATE);
+    }
+  }
 }
 
 void TheoryArithPrivate::preRegisterTerm(TNode n)
@@ -4876,6 +4900,7 @@ void TheoryArithPrivate::presolve()
     Trace("arith::presolve") << "TheoryArithPrivate::presolve" << endl;
   }
 
+  d_presolved = true;
   vector<TrustNode> lemmas;
   if (!options().base.incrementalSolving)
   {

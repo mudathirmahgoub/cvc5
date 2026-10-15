@@ -19,6 +19,7 @@
 #include <unordered_set>
 
 #include "base/output.h"
+#include "options/arith_options.h"
 #include "options/smt_options.h"
 #include "proof/eager_proof_generator.h"
 #include "proof/proof_node_manager.h"
@@ -2564,6 +2565,119 @@ void ConstraintDatabase::outputUnateInequalityLemmas(
   }
 }
 
+void ConstraintDatabase::outputUnateLemmasForNewConstraint(
+    std::vector<TrustNode>& out, ConstraintP c, bool ineqs, bool eqs) const
+{
+  // PROTOTYPE (--arith-unate-lemmas-search): the lemmas of
+  // outputUnateInequalityLemmas and outputUnateEqualityLemmas that involve c or
+  // its negation, for a constraint added after presolve. Only the nearest
+  // neighbours are related (as presolve does), and equalities are not made
+  // pairwise exclusive (quadratic; it follows from the bound lemmas).
+  const SortedConstraintMap& scm = c->constraintSet();
+  for (ConstraintP x : {c, c->getNegation()})
+  {
+    if (x == NullConstraint || !x->hasLiteral())
+    {
+      continue;
+    }
+    SortedConstraintMapConstIterator pos = x->d_variablePosition;
+    switch (x->getType())
+    {
+      case UpperBound:
+      {
+        if (ineqs)
+        {
+          // the chain of upper bounds: prev => x => next
+          SortedConstraintMapConstIterator it = pos;
+          while (it != scm.begin())
+          {
+            --it;
+            if (it->second.hasUpperBound()
+                && it->second.getUpperBound()->hasLiteral())
+            {
+              implies(out, it->second.getUpperBound(), x);
+              break;
+            }
+          }
+          ConstraintP next = x->getStrictlyWeakerUpperBound(true, false);
+          if (next != NullConstraint)
+          {
+            implies(out, x, next);
+          }
+        }
+        if (eqs)
+        {
+          // equalities whose nearest upper bound at or above them is now x
+          SortedConstraintMapConstIterator it = pos;
+          while (true)
+          {
+            const ValueCollection& vc = it->second;
+            if (it != pos && vc.hasUpperBound()
+                && vc.getUpperBound()->hasLiteral())
+            {
+              break;
+            }
+            if (vc.hasEquality() && vc.getEquality()->hasLiteral())
+            {
+              implies(out, vc.getEquality(), x);
+            }
+            if (it == scm.begin())
+            {
+              break;
+            }
+            --it;
+          }
+        }
+        break;
+      }
+      case LowerBound:
+      {
+        if (eqs)
+        {
+          // equalities whose nearest lower bound at or below them is now x
+          for (SortedConstraintMapConstIterator it = pos; it != scm.end(); ++it)
+          {
+            const ValueCollection& vc = it->second;
+            if (it != pos && vc.hasLowerBound()
+                && vc.getLowerBound()->hasLiteral())
+            {
+              break;
+            }
+            if (vc.hasEquality() && vc.getEquality()->hasLiteral())
+            {
+              implies(out, vc.getEquality(), x);
+            }
+          }
+        }
+        break;
+      }
+      case Equality:
+      {
+        if (eqs)
+        {
+          const ValueCollection& vc = x->getValueCollection();
+          bool hasLB = vc.hasLowerBound() && vc.getLowerBound()->hasLiteral();
+          bool hasUB = vc.hasUpperBound() && vc.getUpperBound()->hasLiteral();
+          ConstraintP lb = hasLB ? vc.getLowerBound()
+                                 : x->getStrictlyWeakerLowerBound(true, false);
+          ConstraintP ub = hasUB ? vc.getUpperBound()
+                                 : x->getStrictlyWeakerUpperBound(true, false);
+          if (lb != NullConstraint)
+          {
+            implies(out, x, lb);
+          }
+          if (ub != NullConstraint)
+          {
+            implies(out, x, ub);
+          }
+        }
+        break;
+      }
+      default: break;
+    }
+  }
+}
+
 bool ConstraintDatabase::handleUnateProp(ConstraintP ant, ConstraintP cons)
 {
   if (cons->negationHasProof())
@@ -2618,6 +2732,15 @@ void ConstraintDatabase::unatePropLowerBound(ConstraintP curr, ConstraintP prev)
     if (hasPrev && vc.hasConstraintOfType(prev->getType())
         && vc.getConstraintOfType(prev->getType()) == prev)
     {
+      // PROTOTYPE (--arith-unate-prop-prev-diseq): the previous lower bound
+      // (>= p c) does not imply (not (= p c)), but curr > c does. Without
+      // this, a lower bound that rises one value at a time never implies the
+      // disequalities at the values it passes.
+      if (options().arith.arithUnatePropPrevDiseq
+          && prev->getType() == LowerBound && vc.hasDisequality())
+      {
+        handleUnateProp(curr, vc.getDisequality());
+      }
       break;
     }
 
@@ -2665,6 +2788,12 @@ void ConstraintDatabase::unatePropUpperBound(ConstraintP curr, ConstraintP prev)
     if (hasPrev && vc.hasConstraintOfType(prev->getType())
         && vc.getConstraintOfType(prev->getType()) == prev)
     {
+      // PROTOTYPE (--arith-unate-prop-prev-diseq): as in unatePropLowerBound
+      if (options().arith.arithUnatePropPrevDiseq
+          && prev->getType() == UpperBound && vc.hasDisequality())
+      {
+        handleUnateProp(curr, vc.getDisequality());
+      }
       break;
     }
     // Don't worry about implying the negation of upperbound.
@@ -2713,7 +2842,16 @@ void ConstraintDatabase::unatePropEquality(ConstraintP curr,
   {
     scm_i = prevLB->d_variablePosition;
     if (scm_i != scm_curr)
-    {  // If this does not move this past scm_curr, move it one forward
+    {
+      // PROTOTYPE (--arith-unate-prop-prev-diseq): the disequality at the
+      // value of the previous lower bound, see unatePropLowerBound
+      if (options().arith.arithUnatePropPrevDiseq
+          && prevLB->getType() == LowerBound && scm_i->second.hasDisequality()
+          && handleUnateProp(curr, scm_i->second.getDisequality()))
+      {
+        return;
+      }
+      // If this does not move this past scm_curr, move it one forward
       ++scm_i;
     }
   }
@@ -2776,6 +2914,14 @@ void ConstraintDatabase::unatePropEquality(ConstraintP curr,
         return;
       }
     }
+  }
+  // PROTOTYPE (--arith-unate-prop-prev-diseq): the disequality at the value of
+  // the previous upper bound, see unatePropLowerBound
+  if (options().arith.arithUnatePropPrevDiseq && hasPrevUB
+      && scm_last != scm_curr && prevUB->getType() == UpperBound
+      && scm_last->second.hasDisequality())
+  {
+    handleUnateProp(curr, scm_last->second.getDisequality());
   }
 }
 

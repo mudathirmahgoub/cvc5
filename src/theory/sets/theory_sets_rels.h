@@ -160,6 +160,8 @@ class TheorySetsRels : protected EnvObj
    * constraints are present (cardinalityUsed).
    */
   void checkJoinLastCall(bool cardinalityUsed);
+  /** PROTOTYPE: compose the members of every product (--rels-product-lazy) */
+  void checkProductLastCall();
   /** Is kind k a kind that belongs to the relation theory? */
   static bool isRelationKind(Kind k);
 
@@ -227,6 +229,15 @@ class TheorySetsRels : protected EnvObj
                      std::pair<std::vector<Node>, Node>,
                      VectorNodeHashFunction>
       d_cycle_sequences;
+  /**
+   * PROTOTYPE (--rels-cycle-keep-prefix): the longest witness prefix unrolled
+   * so far for each operand list. User-context dependent, like the lemma
+   * cache: the lemmas of the prefix stay sent until the user context is
+   * popped.
+   */
+  context::
+      CDHashMap<std::vector<Node>, std::vector<Node>, VectorNodeHashFunction>
+          d_cyclePrefixes;
 
   /**
    * Maps the representative of a relation to the asserted atoms
@@ -466,6 +477,8 @@ class TheorySetsRels : protected EnvObj
   std::map<std::vector<Node>, Node> d_cycleAtoms;
   /** PROTOTYPE: the decision strategies on the witness lengths */
   std::vector<std::unique_ptr<DecisionStrategy> > d_cycleLenStrategies;
+  /** PROTOTYPE: the pairs (X;Y, X) whose subset atom was registered */
+  std::set<std::pair<Node, Node> > d_subsetSplitSent;
   /**
    * Grounding conflict for a membership (x, z) in TC(R), stated by
    * exp = (set.member t S) with S ~ TC(R), that the known members do not
@@ -542,6 +555,10 @@ class TheorySetsRels : protected EnvObj
    * asserted since).
    */
   void doCycleInference();
+  /** PROTOTYPE: continue a witness from its longest prefix (keep-prefix) */
+  void restoreCyclePrefix(const std::vector<Node>& rels,
+                          std::vector<Node>& s,
+                          Node l);
   /**
    * Anchor rules: a cycle of R whose edges all lie in TC(S) would be a cycle
    * of S, so for the witness s of an asserted (rel.cyclic R) (acyc_exp) and

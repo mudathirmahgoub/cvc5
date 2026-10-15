@@ -403,6 +403,8 @@ class TheorySetsPrivate : protected EnvObj
    * drive TheorySets::needsCheckLastEffort().
    */
   bool needsJoinGroundingLastCall() const;
+  /** PROTOTYPE: products are completed at last call (--rels-product-lazy) */
+  bool needsProductLastCall() const;
   /** Run the set.filter inference rules (checkFilterUp / checkFilterDown). */
   void checkFilters();
   /** Run the set.map inference rules (checkMapUp / checkMapDown). */

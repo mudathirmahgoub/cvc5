@@ -81,6 +81,8 @@ enum class IncompleteId
   // (it only does for constants, singletons and unions); the relations
   // solver has no rules for it
   SETS_RELS_RCLOSURE,
+  // PROTOTYPE: --rels-product-lazy and a product misses a pair of members
+  SETS_RELS_PRODUCT_LAZY,
   // we skipped processing a looping word equation
   STRINGS_LOOP_SKIP,
   // we could not simplify a regular expression membership

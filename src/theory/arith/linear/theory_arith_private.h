@@ -734,6 +734,8 @@ class TheoryArithPrivate : protected EnvObj
   bool isLeaf(TNode x) const;
   TheoryId theoryOf(TNode x) const;
   bool outputTrustedLemma(TrustNode lem, InferenceId id);
+  /** Whether presolve has run (atoms set up later are created in search). */
+  bool d_presolved = false;
   bool outputLemma(TNode lem, InferenceId id);
   void outputTrustedConflict(TrustNode conf, InferenceId id);
   void outputConflict(TNode lit, InferenceId id);

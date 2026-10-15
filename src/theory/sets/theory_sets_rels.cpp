@@ -13,6 +13,7 @@
 #include "theory/sets/theory_sets_rels.h"
 
 #include <algorithm>
+#include <functional>
 
 #include "expr/dtype.h"
 #include "expr/dtype_cons.h"
@@ -40,12 +41,25 @@ namespace {
 class CycleLenDecisionStrategy : public DecisionStrategyFmf
 {
  public:
-  CycleLenDecisionStrategy(Env& env, Valuation valuation, Node l)
-      : DecisionStrategyFmf(env, valuation), d_len(l)
+  /**
+   * maxLen, if set, returns the largest k for which l <= k may be decided
+   * (--rels-cycle-len-decide-bound); it may grow during the search.
+   */
+  CycleLenDecisionStrategy(Env& env,
+                           Valuation valuation,
+                           Node l,
+                           std::function<size_t()> maxLen)
+      : DecisionStrategyFmf(env, valuation), d_len(l), d_maxLen(maxLen)
   {
   }
   Node mkLiteral(unsigned i) override
   {
+    // literal i is l <= i + 2; a null literal is not cached, so it is asked
+    // for again once the bound has grown
+    if (d_maxLen && i + 2 > d_maxLen())
+    {
+      return Node::null();
+    }
     NodeManager* nm = nodeManager();
     return nm->mkNode(Kind::LEQ, d_len, nm->mkConstInt(Rational(i + 2)));
   }
@@ -53,6 +67,7 @@ class CycleLenDecisionStrategy : public DecisionStrategyFmf
 
  private:
   Node d_len;
+  std::function<size_t()> d_maxLen;
 };
 }  // namespace
 
@@ -79,7 +94,8 @@ TheorySetsRels::TheorySetsRels(Env& env,
       d_shared_terms(userContext()),
       // the cycle witnesses depend on the SAT context: they are rolled back
       // on backtracking (unlike d_shared_terms)
-      d_cycle_sequences(context())
+      d_cycle_sequences(context()),
+      d_cyclePrefixes(userContext())
 {
   d_trueNode = nodeManager()->mkConst(true);
   d_falseNode = nodeManager()->mkConst(false);
@@ -355,6 +371,72 @@ void TheorySetsRels::checkTransitiveClosureLastCall(bool cardinalityUsed)
   Trace("rels") << "\n[sets-rels] *********** Done with transitive closure "
                    "last call ***********\n"
                 << std::endl;
+}
+
+void TheorySetsRels::checkProductLastCall()
+{
+  // PROTOTYPE (--rels-product-lazy): products are not composed at full
+  // effort; before a model is accepted every product must contain the pairs
+  // of the members of its arguments.
+  clearCaches();
+  collectRelsInfo();
+  // Composing every product here would send a quadratic number of lemmas at
+  // every last call of an unsat search. Instead, check that every product
+  // contains the pairs of the members of its arguments; if not, the model
+  // is not sound (answer unknown, as for the hammer).
+  for (auto& term_it : d_terms_cache)
+  {
+    auto pit = term_it.second.find(Kind::RELATION_PRODUCT);
+    if (pit == term_it.second.end())
+    {
+      continue;
+    }
+    for (const Node& prod : pit->second)
+    {
+      Node aRep = getRepresentative(prod[0]);
+      Node bRep = getRepresentative(prod[1]);
+      auto ait = d_rReps_memberReps_cache.find(aRep);
+      auto bit = d_rReps_memberReps_cache.find(bRep);
+      if (ait == d_rReps_memberReps_cache.end()
+          || bit == d_rReps_memberReps_cache.end())
+      {
+        continue;
+      }
+      auto trie = d_membership_trie.find(getRepresentative(prod));
+      for (const Node& ma : ait->second)
+      {
+        for (const Node& mb : bit->second)
+        {
+          std::vector<Node> reps;
+          for (const Node& m : {ma, mb})
+          {
+            for (size_t i = 0, n = m.getType().getTupleLength(); i < n; i++)
+            {
+              reps.push_back(
+                  getRepresentative(TupleUtils::nthElementOfTuple(m, i)));
+            }
+          }
+          if (trie == d_membership_trie.end()
+              || trie->second.existsTerm(reps).isNull())
+          {
+            if (options().sets.relsProductLazyCompose)
+            {
+              // compose the members of this product (known ones are skipped
+              // under --rels-tc-up-skip-known)
+              composeMembersForRels(prod);
+              goto next_product;
+            }
+            d_im.setModelUnsound(IncompleteId::SETS_RELS_PRODUCT_LAZY);
+            clearCaches();
+            return;
+          }
+        }
+      }
+    next_product:;
+    }
+  }
+  // don't flush pending lemmas
+  clearCaches();
 }
 
 void TheorySetsRels::checkJoinLastCall(bool cardinalityUsed)
@@ -1245,6 +1327,37 @@ void TheorySetsRels::applyTCSubsetRules(Node tc_rel, Node exp)
   // baseReason = exp, and (= (rel.tclosure R) S) if S is not tc_rel
   Node r = tc_rel[0];
   Node tup = exp[0];
+  if (options().sets.relsTcSubsetSplit && r.getKind() == Kind::RELATION_JOIN)
+  {
+    // PROTOTYPE: r = (rel.join x y) with x transitive, e.g. x = co,
+    // y = sm (a restriction of the identity): if r subset x holds, closure
+    // induction gives TC(r) subset x. The atom is decided, true first; when
+    // it is false the sets solver looks for a member of r outside x.
+    // target = x if x is known to be transitive, TC(x) otherwise (always
+    // transitive): r subset target gives TC(r) subset target by closure
+    // induction, and the existing rules reduce TC(x) to x where they can
+    // (e.g. TC(fr) = fr for fr subset Read x Write, Read and Write disjoint)
+    Node x = r[0];
+    std::vector<Node> why;
+    bool trans = isTransitiveClass(getRepresentative(x), x, why);
+    Node target = trans ? x : nm->mkNode(Kind::RELATION_TCLOSURE, x);
+    if (d_subsetSplitSent.insert(std::make_pair(r, target)).second)
+    {
+      Node sub = rewrite(nm->mkNode(Kind::SET_SUBSET, r, target));
+      if (!sub.isConst())
+      {
+        // a decision strategy makes the SAT solver decide the atom (true
+        // first), even though no clause contains it
+        d_cycleLenStrategies.emplace_back(new DecisionStrategySingleton(
+            d_env, "sets_tc_subset_split", sub, d_state.getValuation()));
+        d_im.getDecisionManager()->registerStrategy(
+            DecisionManager::STRAT_SETS_CYCLE_LEN,
+            d_cycleLenStrategies.back().get(),
+            DecisionManager::STRAT_SCOPE_CTX_INDEPENDENT);
+        Trace("rels-cycles") << "TCSubsetSplit: " << sub << std::endl;
+      }
+    }
+  }
   std::vector<Node> baseReason{exp};
   if (tc_rel != exp[1])
   {
@@ -2134,7 +2247,26 @@ void TheorySetsRels::doTCInference(
     addSetEq(reasons[i][1]);
   }
   addSetEq(reasons.back()[1]);
-  if (all_reasons.size() > 1)
+  // PROTOTYPE (--rels-tc-up-skip-known): the pair is already a member of the
+  // closure in the current context: the lemma would only add another
+  // explanation of a known fact
+  bool known = false;
+  if (options().sets.relsTcUpSkipKnown)
+  {
+    Node tcRep = getRepresentative(tc_rel);
+    auto trie = d_membership_trie.find(tcRep);
+    if (trie != d_membership_trie.end())
+    {
+      std::vector<Node> pairReps{getRepresentative(reasons_front_0),
+                                 getRepresentative(reasons_back_1)};
+      known = !trie->second.existsTerm(pairReps).isNull();
+    }
+  }
+  if (known)
+  {
+    // nothing to send
+  }
+  else if (all_reasons.size() > 1)
   {
     // Use andReasons to ensure deterministic node ID assignments
     Node andReasons = nm->mkNode(Kind::AND, all_reasons);
@@ -2509,7 +2641,50 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
   // rels = the operands of the nested unions of R, e.g. [rf, po, co] for
   //        (set.union rf (set.union po co)), or [R] if R is not a union
   std::vector<Node> rels;
-  collectUnionOperands(atom[0], rels);
+  if (options().sets.relsCycleFlattenTop
+      && atom[0].getKind() == Kind::SET_UNION)
+  {
+    // PROTOTYPE: only the top-level union, e.g. [ppo, com] for
+    // (set.union ppo com) even if ppo is itself a union
+    rels.push_back(atom[0][0]);
+    rels.push_back(atom[0][1]);
+  }
+  else if (options().sets.relsCycleFlattenKeepTc
+           && atom[0].getKind() == Kind::SET_UNION)
+  {
+    // PROTOTYPE: flatten, but keep a nested union X whose closure TC(X) is a
+    // term (e.g. ppo, used as ppo+ by other constraints) as one operand, so
+    // that the witness edges are in that very closure
+    std::vector<Node> todo{atom[0][1], atom[0][0]};
+    while (!todo.empty())
+    {
+      Node r = todo.back();
+      todo.pop_back();
+      Node tc = nodeManager()->mkNode(Kind::RELATION_TCLOSURE, r);
+      if (r.getKind() == Kind::SET_UNION && !d_state.hasTerm(tc))
+      {
+        todo.push_back(r[1]);
+        todo.push_back(r[0]);
+      }
+      else if (r.getKind() == Kind::RELATION_JOIN
+               && r[0].getKind() == Kind::SET_UNION && !d_state.hasTerm(tc))
+      {
+        // (A U B);C = A;C U B;C: the closure of each part is simpler, e.g.
+        // (rfe U fr U co);sm gives rfe;sm, fr;sm and co;sm
+        NodeManager* nm = nodeManager();
+        todo.push_back(nm->mkNode(Kind::RELATION_JOIN, r[0][1], r[1]));
+        todo.push_back(nm->mkNode(Kind::RELATION_JOIN, r[0][0], r[1]));
+      }
+      else
+      {
+        rels.push_back(r);
+      }
+    }
+  }
+  else
+  {
+    collectUnionOperands(atom[0], rels);
+  }
   auto ins = d_cycleAtoms.emplace(rels, atom);
   if (ins.first->second != atom)
   {
@@ -2585,15 +2760,50 @@ void TheorySetsRels::applyInstCycleRule(Node atom)
   makeSharedTerm(l);
   if (options().sets.relsCycleLenDecide)
   {
+    // PROTOTYPE (--rels-cycle-len-decide-bound): decide l <= k only up to one
+    // more than the number of unrolled elements. Otherwise, when every
+    // decision l <= k is refuted during propagation, the strategy decides
+    // l <= k + 1, l <= k + 2, ... forever and the full-effort check, which
+    // unrolls the witness, is never reached.
+    std::function<size_t()> maxLen;
+    if (options().sets.relsCycleLenDecideBound)
+    {
+      maxLen = [this, rels]() {
+        size_t n = 1;
+        auto it = d_cycle_sequences.find(rels);
+        if (it != d_cycle_sequences.end())
+        {
+          n = std::max(n, (*it).second.first.size());
+        }
+        auto pit = d_cyclePrefixes.find(rels);
+        if (pit != d_cyclePrefixes.end())
+        {
+          n = std::max(n, (*pit).second.size());
+        }
+        return n + 1;
+      };
+    }
     d_cycleLenStrategies.emplace_back(
-        new CycleLenDecisionStrategy(d_env, d_state.getValuation(), l));
+        new CycleLenDecisionStrategy(d_env, d_state.getValuation(), l, maxLen));
     d_im.getDecisionManager()->registerStrategy(
         DecisionManager::STRAT_SETS_CYCLE_LEN,
         d_cycleLenStrategies.back().get(),
         DecisionManager::STRAT_SCOPE_CTX_INDEPENDENT);
   }
 
-  d_cycle_sequences.insert(rels, std::make_pair(std::vector<Node>{s1}, l));
+  // PROTOTYPE (--rels-cycle-keep-prefix): restart from the longest prefix
+  // unrolled so far; its elements are the same cached skolems and its lemmas
+  // are permanent.
+  std::vector<Node> start{s1};
+  if (options().sets.relsCycleKeepPrefix)
+  {
+    auto pit = d_cyclePrefixes.find(rels);
+    if (pit != d_cyclePrefixes.end())
+    {
+      start = pit->second;
+    }
+  }
+  d_cycle_sequences.insert(rels, std::make_pair(start, l));
 
   // conc = (< 1 l), reason = atom
   Node conc = nm->mkNode(Kind::LT, nm->mkConstInt(Rational(1)), l);
@@ -2694,7 +2904,10 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
     // Ri_tclos = (rel.tclosure Ri)
     Node tup =
         TupleUtils::constructTupleFromElements(tt, {sPrev, newElem}, 0, 1);
-    Node Ri_tclos = nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
+    // PROTOTYPE (--rels-cycle-plain-edges): edges in Ri itself
+    Node Ri_tclos = options().sets.relsCyclePlainEdges
+                        ? Ri
+                        : nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
     disjs.push_back(nm->mkNode(Kind::SET_MEMBER, tup, Ri_tclos));
   }
 
@@ -2721,7 +2934,8 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
   // ContrMinimal implies these constraints only indirectly (via a chord that
   // the transitive-closure rules first have to infer); stating them here
   // prunes the choice of the relation of every unrolled edge immediately.
-  if (cnt >= 2)
+  // with plain edges, consecutive edges may lie in the same operand
+  if (cnt >= 2 && !options().sets.relsCyclePlainEdges)
   {
     Node acyc = cyclicAtom(rels);
     // reasonA = (and (rel.cyclic R) (< cnt l))
@@ -2764,6 +2978,14 @@ std::vector<Node> TheorySetsRels::applyUnrollCycle(
   std::vector<Node> sNew = s;
   sNew.push_back(newElem);
   d_cycle_sequences.insert(rels, std::make_pair(sNew, l));
+  if (options().sets.relsCycleKeepPrefix)
+  {
+    auto pit = d_cyclePrefixes.find(rels);
+    if (pit == d_cyclePrefixes.end() || pit->second.size() < sNew.size())
+    {
+      d_cyclePrefixes[rels] = sNew;
+    }
+  }
   return sNew;
 }
 
@@ -2802,7 +3024,11 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
   {
     TypeNode tt = Ri.getType().getSetElementType();
     // Ri_tc = (rel.tclosure Ri); exp = (rel.cyclic R)
-    Node Ri_tc = nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
+    // with plain edges the witness is a shortest cycle of the union, so a
+    // chord is an edge of Ri itself
+    Node Ri_tc = options().sets.relsCyclePlainEdges
+                     ? Ri
+                     : nm->mkNode(Kind::RELATION_TCLOSURE, Ri);
     for (size_t r = 2; r <= cnt; ++r)
     {
       Node sr = s[r - 1];  // Adjust for 0-based indexing
@@ -2815,6 +3041,17 @@ void TheorySetsRels::applyContrMinimalRule(const std::vector<Node>& rels,
       Node r_neq_l =
           nm->mkNode(Kind::EQUAL, nm->mkConstInt(Rational(r)), l).notNode();
       Node reason_not_closing = nm->mkNode(Kind::AND, reason, r_neq_l);
+      if (options().sets.relsCycleLtPremise)
+      {
+        // PROTOTYPE (--rels-cycle-lt-premise): the same premise as
+        // (and (rel.cyclic R) (< r l)). Its atom (>= l r+1) is a bound, which
+        // arithmetic propagates from a lower bound on l at once; the equality
+        // atom (= r l) is falsified only once l equals a constant.
+        reason_not_closing =
+            nm->mkNode(Kind::AND,
+                       exp,
+                       nm->mkNode(Kind::LT, nm->mkConstInt(Rational(r)), l));
+      }
       for (size_t q = 1; q < r; ++q)
       {
         Node sq = s[q - 1];  // Adjust for 0-based indexing
@@ -2955,6 +3192,26 @@ void TheorySetsRels::applyAcyclicDownRule(Node mem_rep,
             reason);
 }
 
+void TheorySetsRels::restoreCyclePrefix(const std::vector<Node>& rels,
+                                        std::vector<Node>& s,
+                                        Node l)
+{
+  // PROTOTYPE (--rels-cycle-keep-prefix): after backtracking, the witness of
+  // the current context may be shorter than the longest prefix unrolled so
+  // far. The elements of that prefix are the same cached skolems and their
+  // lemmas are permanent, so continue from it.
+  if (!options().sets.relsCycleKeepPrefix)
+  {
+    return;
+  }
+  auto pit = d_cyclePrefixes.find(rels);
+  if (pit != d_cyclePrefixes.end() && pit->second.size() > s.size())
+  {
+    s = pit->second;
+    d_cycle_sequences.insert(rels, std::make_pair(s, l));
+  }
+}
+
 void TheorySetsRels::doCycleInference()
 {
   // Self-loop witnesses: only the anchor rules apply, and they are re-applied
@@ -2973,6 +3230,7 @@ void TheorySetsRels::doCycleInference()
     std::vector<Node> rels = c_it->first;
     std::vector<Node> s = c_it->second.first;
     Node l = c_it->second.second;
+    restoreCyclePrefix(rels, s, l);
     if (options().sets.relsCycleUnrollGuard && s.size() >= 2)
     {
       // PROTOTYPE: ltc = (< cnt l), the atom of SplitCycleLen for s_cnt. If
@@ -3238,6 +3496,7 @@ void TheorySetsRels::checkAcyclicityLastCall(Valuation& val)
     std::vector<Node> rels = c_it->first;
     std::vector<Node> s = c_it->second.first;
     Node l = c_it->second.second;
+    restoreCyclePrefix(rels, s, l);
 
     // The model's current candidate value for l.
     // lVal = the value of l in the candidate model, e.g. 4
@@ -3362,6 +3621,12 @@ void TheorySetsRels::computeMembersForBinOpRel(Node rel)
     case Kind::RELATION_JOIN:
     case Kind::RELATION_PRODUCT:
     {
+      // PROTOTYPE (--rels-product-lazy, unsat only): no eager composition of
+      // product members
+      if (k == Kind::RELATION_PRODUCT && options().sets.relsProductLazy)
+      {
+        break;
+      }
       composeMembersForRels(rel);
       break;
     }
@@ -3519,6 +3784,24 @@ void TheorySetsRels::composeMembersForRels(Node rel)
 
         Node composed_tuple =
             nm->mkNode(Kind::APPLY_CONSTRUCTOR, tuple_elements);
+        if (options().sets.relsTcUpSkipKnown)
+        {
+          // PROTOTYPE: the tuple is already a member of rel in this context
+          auto trie = d_membership_trie.find(getRepresentative(rel));
+          if (trie != d_membership_trie.end())
+          {
+            std::vector<Node> elemReps;
+            for (size_t e = 1, ne = tuple_elements.size(); e < ne; e++)
+            {
+              elemReps.push_back(getRepresentative(tuple_elements[e]));
+            }
+            if (!trie->second.existsTerm(elemReps).isNull())
+            {
+              reasons.clear();
+              continue;
+            }
+          }
+        }
         Node fact = nm->mkNode(Kind::SET_MEMBER, composed_tuple, rel);
         reasons.push_back(r1_rep_exps[i]);
         reasons.push_back(r2_rep_exps[j]);

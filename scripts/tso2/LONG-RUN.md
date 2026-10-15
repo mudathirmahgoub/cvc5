@@ -156,8 +156,31 @@ in the order of 10^9 equality tests per round.
 **End.** Stopped at 23 h 52 min (2026-10-14 12:13) without an answer: no step after 11 h 47 min,
 memory 2.9 GB throughout.
 
-**What would help (not tried).** A membership test by representative (a hash set of the member
+**What would help.** A membership test by representative (a hash set of the member
 representatives of each class, rebuilt at the start of each round, since representatives change
 with the context) makes each test O(1). Independently, materialising closures over all pairs of
 55 elements is what makes the classes large; the bounded queries of `DECOMPOSITION.md` avoid it.
+The next run tries the membership test by representative.
 
+## The single query with a membership index (snapshot `v12`): unsat in 5 h 33 min
+
+The options of `v11` plus `--sets-member-index` (branch `sets-member-index`, commit 13ca723ade):
+`SolverState::isMember` looks the member up in a per-class hash set of member representatives,
+built on first use and dropped when the context changes, instead of scanning the member list.
+Started 2026-10-14 13:57 CDT (`tso2/single-v12` of the analysis directory), tracing build.
+
+| step | first run | `v11` | `v12` |
+|---|---|---|---|
+| ghb cycles up to 8 / 9 edges ruled out | 22 min / 2 h 43 min | 29 min / 4 h 52 min | 14 min / 1 h 10 min |
+| per-location cycles up to 4 / 5 ruled out | 4 h 18 min / 7 h 20 min | 7 h 18 min / 11 h 47 min | 1 h 54 min / 2 h 35 min |
+| end | runaway, 161 GB at 9 h | no step after 11 h 47 min, stopped at 23 h 52 min | **unsat at 5 h 33 min** (19,996 s) |
+| memory | 161 GB | 2.9 GB | at most 3.56 GB |
+
+Against `v11` the steps are 2.1× (ghb 8), 4.2× (ghb 9), 3.8× (per-location 4) and 4.6×
+(per-location 5) faster: the later steps, with larger membership classes, gain more. After the
+per-location cycles of 5 at 2 h 35 min, the search ran for another 3 h without unrolling a witness
+further and ended with **unsat**, the expected answer (`PROOF.md`, and the decomposition of
+`DECOMPOSITION.md`).
+
+This is the first time `tso-2-th` is solved as one query. The decomposition remains much faster
+(about 23 min of cvc5 time in all, the 9-edge cycle query alone 879 s).

@@ -204,3 +204,11 @@ name   = "Sets Theory"
   type       = "bool"
   default    = "false"
   help       = "in the cycle witness of (rel.cyclic R), also exclude backward edges that close a shorter cycle, e.g. (s3,s2) in the witness s1 -> s2 -> s3 -> s1; helps unsat proofs that use a totality axiom, slows down finite model finding"
+
+[[option]]
+  name       = "setsMemberIndex"
+  category   = "expert"
+  long       = "sets-member-index"
+  type       = "bool"
+  default    = "false"
+  help       = "(prototype) membership tests look up the representative of the element in a per-class set of member representatives instead of scanning the members of the class"

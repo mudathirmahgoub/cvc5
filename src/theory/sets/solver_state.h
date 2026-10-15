@@ -16,9 +16,11 @@
 #define CVC5__THEORY__SETS__THEORY_SOLVER_STATE_H
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 #include "context/cdhashset.h"
+#include "context/cdo.h"
 #include "theory/sets/skolem_cache.h"
 #include "theory/theory_state.h"
 #include "theory/uf/equality_engine.h"
@@ -270,6 +272,22 @@ class SolverState : public TheoryState
   std::map<Node, std::vector<Node>> d_members_data;
   /** A (SAT-context-dependent) number of members in the above map */
   NodeIntMap d_members;
+  /**
+   * PROTOTYPE (--sets-member-index): for each class s, the representatives of
+   * the members of s, so that isMember is a hash lookup instead of a scan
+   * with areEqual. Within a SAT context, memberships only grow and classes
+   * only merge, so a cached representative stays a member; a lookup may miss
+   * because a later merge changed a representative or added a member, and
+   * then falls back to the scan. d_memberRepStamp is the stamp of the last
+   * change to the cache, in the SAT context: when backtracking restores an
+   * older stamp, the cache is discarded.
+   */
+  mutable std::map<Node, std::unordered_set<Node>> d_memberRepCache;
+  mutable context::CDO<uint64_t> d_memberRepStamp;
+  mutable uint64_t d_memberRepCurrent = 0;
+  mutable uint64_t d_memberRepCounter = 0;
+  /** Note a change to the cache in the current SAT context */
+  void touchMemberRepCache() const;
   //--------------------------------- end
   /** is set disequality entailed internal
    *

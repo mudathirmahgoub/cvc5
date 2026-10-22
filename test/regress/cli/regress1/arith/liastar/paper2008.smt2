@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; DISABLE-TESTER: proof
 (set-logic HO_ALL)
 (set-info :source "Decision Procedures for Multisets with Cardinality Constraints

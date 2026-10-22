@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; DISABLE-TESTER: proof
 ; (int.star-contains (lambda ((x Int) (y Int)) (= (+ x y) 2)) 5 0)
 ; Hilbert basis: {}, maximal subspace: {(1, -1)}

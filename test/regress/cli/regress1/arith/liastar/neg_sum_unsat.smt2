@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; DISABLE-TESTER: proof
 ; Summands are fixed at -2, so the star closure is {0, -2, -4, ...}:
 ; a positive (and odd) value is unreachable.

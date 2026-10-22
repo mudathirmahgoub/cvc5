@@ -9,13 +9,10 @@
  * Extension to the theory of arithmetic handling lia star operator.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include "liastar_extension.h"
 
 #include "expr/skolem_manager.h"
 #include "liastar_utils.h"
-#include "libnormaliz/input.h"
 #include "options/arith_options.h"
 #include "options/smt_options.h"
 #include "theory/arith/arith_rewriter.h"
@@ -38,10 +35,6 @@ namespace cvc5::internal {
 namespace theory {
 namespace arith {
 namespace liastar {
-
-using namespace libnormaliz;
-
-using libnormaliz::operator<<;
 
 template <typename T>
 std::string toString(const std::vector<T>& l)
@@ -202,7 +195,7 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       continue;
     }
     // more work need to be done
-    std::vector<std::pair<std::vector<std::string>, Node>> pairs =
+    std::vector<std::pair<LinearConstraints, Node>> pairs =
         convertQFLIAToMatrices(lambda);
 
     auto [cones, starConstraints] = getCones(literal, pairs);
@@ -269,160 +262,62 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
   d_stats.d_checkFullEffortTime.stop();
 }
 
-/**
- * Normaliz's `getHilbertBasis()` covers only the *pointed* part of a cone: for
- * a cone containing a line it is relative to the cone's maximal subspace (its
- * lineality space), so non-negative combinations of it miss lattice points. The
- * maximal subspace is appended to complete it, once per generator, with a
- * sign-unrestricted multiplier -- a lineality direction is available in both
- * directions. Appending `m` and `-m` instead would also be correct, but gives
- * every point infinitely many representations, which the arithmetic search then
- * has to enumerate.
- *
- * `numPointed` returns how many leading entries came from `getHilbertBasis()`
- * and so must keep a non-negative multiplier. For a pointed cone the maximal
- * subspace is empty and the result is exactly `getHilbertBasis()`.
- */
-static std::vector<std::vector<Integer>> getHilbertBasisWithLineality(
-    libnormaliz::Cone<Integer>& cone, size_t& numPointed)
-{
-  std::vector<std::vector<Integer>> basis = cone.getHilbertBasis();
-  numPointed = basis.size();
-  for (const std::vector<Integer>& generator : cone.getMaximalSubspace())
-  {
-    basis.push_back(generator);
-  }
-  return basis;
-}
-
-std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
-          std::vector<Node>>
+std::pair<std::vector<std::pair<Node, IntegerPolyhedron>>, std::vector<Node>>
 LiaStarExtension::getCones(
-    Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
+    Node n, const std::vector<std::pair<LinearConstraints, Node>>& pairs)
 {
   d_stats.d_getConesTime.start();
-  std::vector<std::pair<Node, Cone<Integer>>> cones;
+  std::vector<std::pair<Node, IntegerPolyhedron>> cones;
   std::vector<Node> vec(n.begin() + 1, n.end());
   size_t dimension = vec.size();
   d_stats.d_dimensionMax.maxAssign(dimension);
-  std::vector<Integer> zeroVector(dimension, Integer(0));
+  IntegerVector zeroVector = IntegerVectorUtils::zero(dimension);
   std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
   std::vector<Node> starConstraints;
   const bool assumeNonnegative = options().arith.arithLiaStarAssumeNonnegative;
 
   for (size_t i = 0; i < pairs.size(); i++)
   {
-    const std::pair<std::vector<std::string>, Node>& pair = pairs[i];
+    LinearConstraints constraints = pairs[i].first;
+    Node disjunct = pairs[i].second;
+    if (assumeNonnegative)
+    {
+      constraints.addNonnegativity();
+    }
     Trace("liastar-ext") << "---------------------------" << std::endl;
     Trace("liastar-ext") << "Cone for node " << i << std::endl
-                         << pair.second << std::endl;
+                         << disjunct << std::endl;
+    Trace("liastar-ext") << "constraints: " << constraints.toString()
+                         << std::endl;
+    ++d_stats.d_hilbertBasisCalls;
+    d_stats.d_hilbertBasisTime.start();
+    IntegerPolyhedron polyhedron(constraints);
+    d_stats.d_hilbertBasisTime.stop();
+    d_stats.d_hilbertBasisSums += polyhedron.getNumSums();
+    Trace("liastar-ext") << polyhedron.toString() << std::endl;
 
-    libnormaliz::OptionsHandler options;
-
-    std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
-        poly_param_input;
-    std::map<libnormaliz::NumParam::Param, long> num_param_input;
-    std::map<libnormaliz::BoolParam::Param, bool> bool_param_input;
-
-    libnormaliz::renf_class_ptr number_field_ref;
-
-    std::stringstream ss;
-    ss << "amb_space " << dimension << std::endl;
-    ss << "constraints " << pair.first.size() << " symbolic" << std::endl;
-    for (auto constraint : pair.first)
+    if (polyhedron.isEmpty())
     {
-      ss << constraint << std::endl;
-    }
-    if (assumeNonnegative)
-    {
-      ss << "nonnegative" << std::endl;
-    }
-    else
-    {
-      // nonnegativity is not assumed so declare every coordinate
-      // sign-unrestricted
-      // signs is a vector with entries in {−1, 0, 1}.
-      // The entry 1 at the i-th component means x_i >= 0,
-      // and entry -1 at the i-th component means x_i <= 0
-      // The entry 0 does not impose an inequality.
-      ss << "signs" << std::endl;
-      for (size_t sj = 0; sj < dimension; sj++)
-      {
-        ss << (sj == 0 ? "" : " ") << "0";
-      }
-      ss << std::endl;
-    }
-    ss << "HilbertBasis" << std::endl;
-    ss << "ModuleGenerators" << std::endl;
-    Trace("liastar-ext") << "normaliz input:" << std::endl;
-    Trace("liastar-ext") << ss.str() << std::endl;
-
-    // here we use mpq_class instead of Integer (or mpz_class)
-    // because libnormaliz.so only has implementation for
-    // readNormalizInput<mpq_class>
-    std::map<Type::InputType, libnormaliz::Matrix<mpq_class>> input;
-    d_stats.d_normalizInputTime.start();
-    input = libnormaliz::readNormalizInput<mpq_class>(ss,
-                                                      options,
-                                                      num_param_input,
-                                                      bool_param_input,
-                                                      poly_param_input,
-                                                      number_field_ref);
-    d_stats.d_normalizInputTime.stop();
-    ++d_stats.d_normalizCalls;
-    d_stats.d_normalizComputeTime.start();
-    Cone<Integer> cone(input);
-    if (assumeNonnegative)
-    {
-      cone.setNonnegative(true);
-    }
-    else
-    {
-      cone.setNonnegative(false);
-    }
-    // always use infinite precision for integers
-    cone.deactivateChangeOfPrecision();
-    cone.compute(ConeProperty::HilbertBasis);
-    cone.compute(ConeProperty::ModuleGenerators);
-    // completes the Hilbert basis for a non-pointed cone
-    cone.compute(ConeProperty::MaximalSubspace);
-    d_stats.d_normalizComputeTime.stop();
-
-    if (cone.isInhomogeneous())
-    {
-      // AffineDim is only computed for inhomogeneous cones
-      if (cone.getAffineDim() == -1)
-      {
-        // the cone is empty skip.
-        Trace("liastar-ext") << "empty cone" << std::endl;
-        ++d_stats.d_conesEmpty;
-        continue;
-      }
+      // the disjunct has no integer solutions, skip it
+      Trace("liastar-ext") << "empty cone" << std::endl;
+      ++d_stats.d_conesEmpty;
+      continue;
     }
     ++d_stats.d_conesNonempty;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
+    // the Hilbert basis comes first and takes nonnegative multipliers, the
+    // maximal subspace follows and takes sign-unrestricted ones
+    size_t numPointed = polyhedron.getHilbertBasis().size();
+    const std::vector<IntegerVector> hilbertBasis =
+        polyhedron.getRecessionMonoidGenerators();
+    const std::vector<IntegerVector>& generators =
+        polyhedron.getModuleGenerators();
     d_stats.d_hilbertBasisTotal += hilbertBasis.size();
     d_stats.d_hilbertBasisMax.maxAssign(hilbertBasis.size());
-    d_stats.d_moduleGeneratorsTotal += cone.getModuleGenerators().size();
-    d_stats.d_moduleGeneratorsMax.maxAssign(cone.getModuleGenerators().size());
+    d_stats.d_moduleGeneratorsTotal += generators.size();
+    d_stats.d_moduleGeneratorsMax.maxAssign(generators.size());
 
-    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
+    for (const IntegerVector& generator : generators)
     {
-      Trace("liastar-ext") << toString(basis) << std::endl;
-    }
-
-    Trace("liastar-ext") << "Module generators:" << std::endl;
-    std::vector<std::vector<Integer>> generators = {zeroVector};
-    if (cone.getModuleGenerators().size() > 0)
-    {
-      generators = cone.getModuleGenerators();
-    }
-    for (const auto& generator : generators)
-    {
-      Trace("liastar-ext") << toString(generator) << std::endl;
       Node mu = d_one;
       if (generator != zeroVector)
       {
@@ -431,16 +326,16 @@ LiaStarExtension::getCones(
 
       starConstraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
       Vector point;
-      for (const auto& element : generator)
+      for (const Integer& element : generator)
       {
-        Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+        Node constant = d_nm->mkConstInt(Rational(element));
         Node monomial = d_nm->mkNode(Kind::MULT, constant, mu);
         point.push_back(monomial);
       }
       std::vector<Vector> rays;
       for (size_t j = 0; j < hilbertBasis.size(); j++)
       {
-        const std::vector<Integer>& basis = hilbertBasis[j];
+        const IntegerVector& basis = hilbertBasis[j];
         Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
         if (j < numPointed)
         {
@@ -453,9 +348,9 @@ LiaStarExtension::getCones(
                 .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
 
         Vector ray;
-        for (const auto& element : basis)
+        for (const Integer& element : basis)
         {
-          Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+          Node constant = d_nm->mkConstInt(Rational(element));
           Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
           ray.push_back(monomial);
         }
@@ -463,7 +358,7 @@ LiaStarExtension::getCones(
       }
       lambdas.push_back({point, rays});
     }
-    cones.push_back({pair.second, cone});
+    cones.push_back({disjunct, polyhedron});
   }
 
   // sum constraints
@@ -490,49 +385,33 @@ LiaStarExtension::getCones(
 }
 
 std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
-    Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones)
+    Node n, const std::vector<std::pair<Node, IntegerPolyhedron>>& cones)
 {
   d_stats.d_getLiaTime.start();
   Node vec = n[0];
   size_t dimension = vec.getNumChildren();
   std::vector<std::pair<Node, Node>> disjunctions;
-  std::vector<Integer> zeroVector(dimension, Integer(0));
 
-  for (auto& pair : cones)
+  for (const auto& [node, polyhedron] : cones)
   {
-    Node node = pair.first;
-    libnormaliz::Cone<Integer> cone = pair.second;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
-    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
-    {
-      Trace("liastar-ext") << toString(basis) << std::endl;
-    }
-
-    Trace("liastar-ext") << "Module generators:" << std::endl;
-    std::vector<std::vector<Integer>> generators = {zeroVector};
-    if (cone.getModuleGenerators().size() > 0)
-    {
-      generators = cone.getModuleGenerators();
-    }
-    for (const auto& generator : generators)
+    size_t numPointed = polyhedron.getHilbertBasis().size();
+    const std::vector<IntegerVector> hilbertBasis =
+        polyhedron.getRecessionMonoidGenerators();
+    for (const IntegerVector& generator : polyhedron.getModuleGenerators())
     {
       std::vector<Node> conjunctions;
       Vector point;
-      for (const auto& element : generator)
+      for (const Integer& element : generator)
       {
-        Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+        Node constant = d_nm->mkConstInt(Rational(element));
         point.push_back(constant);
       }
 
       std::vector<Vector> rays;
       std::vector<Node> boundVariables;
-      const std::vector<std::vector<Integer>>& bases = hilbertBasis;
-      for (size_t index = 0; index < bases.size(); index++)
+      for (size_t index = 0; index < hilbertBasis.size(); index++)
       {
-        const std::vector<Integer>& basis = bases[index];
+        const IntegerVector& basis = hilbertBasis[index];
         std::string name = "l" + std::to_string(index + 1);
         Node lambda = d_nm->mkBoundVar(name, d_nm->integerType());
         boundVariables.push_back(lambda);
@@ -543,9 +422,9 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
         }
 
         Vector ray;
-        for (const auto& element : basis)
+        for (const Integer& element : basis)
         {
-          Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+          Node constant = d_nm->mkConstInt(Rational(element));
           Node monomial = rewrite(d_nm->mkNode(Kind::MULT, constant, lambda));
           ray.push_back(monomial);
         }
@@ -601,7 +480,7 @@ Node LiaStarExtension::isNotZeroVector(Node v)
   return notZero;
 }
 
-const std::vector<std::pair<std::vector<std::string>, Node>>
+const std::vector<std::pair<LinearConstraints, Node>>
 LiaStarExtension::convertQFLIAToMatrices(Node n)
 {
   Assert(n.getKind() == Kind::LAMBDA);
@@ -636,7 +515,7 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
   Trace("liastar-ext") << "lia constraint: " << std::endl;
 
   d_stats.d_getMatricesTime.start();
-  std::vector<std::pair<std::vector<std::string>, Node>> pairs =
+  std::vector<std::pair<LinearConstraints, Node>> pairs =
       LiaStarUtils::getMatrices(variables, dnf);
   d_stats.d_getMatricesTime.stop();
   ++d_stats.d_dnfCalls;
@@ -649,5 +528,3 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
 }  // namespace arith
 }  // namespace theory
 }  // namespace cvc5::internal
-
-#endif /* CVC5_USE_NORMALIZ */

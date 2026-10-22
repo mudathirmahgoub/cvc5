@@ -13,7 +13,7 @@ GPL="$1"
 COMMON_CMD="./configure.sh unrestricted --auto-download --python-bindings --python-only-src --no-pyvenv --prefix=./install"
 
 if [ "$GPL" = "true" ]; then
-  GPL_FLAGS="--gpl --cln --glpk --cocoa --normaliz"
+  GPL_FLAGS="--gpl --cln --glpk --cocoa"
 else
   GPL_FLAGS=""
 fi

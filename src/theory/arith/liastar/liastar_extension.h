@@ -10,8 +10,6 @@
  * Extension to the theory of arithmetic handling lia star operator.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #ifndef CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H
 #define CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H
 
@@ -19,9 +17,10 @@
 #include <vector>
 
 #include "expr/node.h"
-#include "libnormaliz/libnormaliz.h"
 #include "smt/env_obj.h"
+#include "theory/arith/liastar/integer_polyhedron.h"
 #include "theory/arith/liastar/liastar_stats.h"
+#include "theory/arith/liastar/linear_constraints.h"
 #include "theory/ext_theory.h"
 #include "theory/theory.h"
 #include "util/result.h"
@@ -35,10 +34,6 @@ class TheoryArith;
 
 namespace liastar {
 
-// Arbitrary‑precision integers.
-typedef mpz_class Integer;
-// type the constraint matrix
-typedef std::vector<std::vector<Integer>> Matrix;
 typedef std::vector<Node> Vector;
 /** Liastar extension class
  *
@@ -105,22 +100,53 @@ class LiaStarExtension : EnvObj
   Node isNotZeroVector(Node v);
 
   /**
-   * Argument n must be a node of the form (int.star-contains ((x1 Int) ... (xn
-   * Int)) p v) This functions convert the predicate p (which in QFLIA) to a
-   * list of matrices representing a disjunction of set of inequalities in
-   * Normaliz matrix form A x b >= 0 where A is a matrix and x = (x1 ... xn 1).
-   * This form is used
+   * Argument n must be a lambda (lambda ((x1 Int) ... (xn Int)) p). This
+   * function converts the predicate p (which is in QFLIA) to DNF and returns
+   * one integer constraint matrix per disjunct, over the coordinates
+   * (x1 ... xn), see LinearConstraints.
    */
-  const std::vector<std::pair<std::vector<std::string>, Node>>
-  convertQFLIAToMatrices(Node n);
+  const std::vector<std::pair<LinearConstraints, Node>> convertQFLIAToMatrices(
+      Node n);
 
-  std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
-            std::vector<Node>>
+  /**
+   * Compute the integer solutions of every disjunct and the constraints
+   * expressing that the vector of the star-contains literal n is in the star
+   * of the solutions of the predicate.
+   *
+   * The solutions of the i-th disjunct are a union over its module
+   * generators g of the linear sets g + Z>=0 {h_1, ..., h_k} + Z {u_1, ...}
+   * (see IntegerPolyhedron). A sum of such vectors is
+   *   sum over i and g of  mu_{i,g} g + sum_j l_{i,g,j} r_j
+   * where r_j ranges over the Hilbert basis and the maximal subspace of the
+   * disjunct, mu_{i,g} >= 0 counts the summands from the linear set of g, a
+   * Hilbert basis multiplier l_{i,g,j} is nonnegative, and mu_{i,g} = 0
+   * implies l_{i,g,j} = 0. For the module generator g = 0, mu_{i,g} is 1.
+   *
+   * @param n a star-contains literal (int.star-contains f v1 ... vn)
+   * @param pairs the constraint matrices of the disjuncts of the predicate of
+   * f, as returned by convertQFLIAToMatrices
+   * @return the pairs of a disjunct and its integer solutions, for the
+   * disjuncts that have solutions, and the constraints over v1, ..., vn and
+   * fresh variables mu and l, whose conjunction is equivalent to n
+   */
+  std::pair<std::vector<std::pair<Node, IntegerPolyhedron>>, std::vector<Node>>
   getCones(Node n,
-           const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
+           const std::vector<std::pair<LinearConstraints, Node>>& pairs);
 
+  /**
+   * For tracing: express the integer solutions of each disjunct as a LIA
+   * formula over the variables of the lambda n, i.e. for every disjunct and
+   * module generator g the formula
+   *   (exists ((l1 Int) ...) (and (>= l1 0) ... (= x (+ g (* l1 r1) ...))))
+   * whose disjunction is equivalent to the predicate of n.
+   *
+   * @param n the lambda (lambda ((x1 Int) ... (xn Int)) p)
+   * @param cones the disjuncts of p and their integer solutions, as returned
+   * by getCones
+   * @return pairs of a disjunct and one of its formulas
+   */
   std::vector<std::pair<Node, Node>> getLia(
-      Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
+      Node n, const std::vector<std::pair<Node, IntegerPolyhedron>>& cones);
 
   /** node manager */
   NodeManager* d_nm;
@@ -157,5 +183,3 @@ class LiaStarExtension : EnvObj
 }  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H */
-
-#endif /* CVC5_USE_NORMALIZ */

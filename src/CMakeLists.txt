@@ -410,12 +410,22 @@ libcvc5_add_sources(
   theory/arith/equality_solver.h
   theory/arith/inference_manager.cpp
   theory/arith/inference_manager.h
+  theory/arith/liastar/dual_hilbert_basis.cpp
+  theory/arith/liastar/dual_hilbert_basis.h
+  theory/arith/liastar/integer_polyhedron.cpp
+  theory/arith/liastar/integer_polyhedron.h
+  theory/arith/liastar/integer_vector.cpp
+  theory/arith/liastar/integer_vector.h
+  theory/arith/liastar/lattice_basis.cpp
+  theory/arith/liastar/lattice_basis.h
   theory/arith/liastar/liastar_extension.cpp
   theory/arith/liastar/liastar_extension.h
   theory/arith/liastar/liastar_stats.cpp
   theory/arith/liastar/liastar_stats.h
   theory/arith/liastar/liastar_utils.cpp
   theory/arith/liastar/liastar_utils.h
+  theory/arith/liastar/linear_constraints.cpp
+  theory/arith/liastar/linear_constraints.h
   theory/arith/linear/approx_simplex.cpp
   theory/arith/linear/approx_simplex.h
   theory/arith/linear/arith_static_learner.cpp
@@ -1611,16 +1621,6 @@ if(USE_COCOA)
   add_dependencies(cvc5-prerequisites CoCoA)
   target_include_directories(cvc5-obj SYSTEM PRIVATE ${CoCoA_INCLUDE_DIR})
   target_link_libraries(cvc5 PRIVATE $<BUILD_INTERFACE:CoCoA> $<INSTALL_INTERFACE:cocoa>)
-endif()
-
-if(USE_NORMALIZ)
-  add_dependencies(cvc5-prerequisites Normaliz)
-  target_include_directories(cvc5-obj PRIVATE ${Normaliz_INCLUDE_DIR})
-  if(BUILD_SHARED_LIBS)
-    target_link_libraries(cvc5 PRIVATE $<BUILD_INTERFACE:Normaliz> $<INSTALL_INTERFACE:Normaliz>)
-  else()
-    target_link_libraries(cvc5 PUBLIC $<BUILD_INTERFACE:Normaliz> $<INSTALL_INTERFACE:Normaliz>)
-  endif()
 endif()
 
 add_dependencies(cvc5-prerequisites SymFPU)

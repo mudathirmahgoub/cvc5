@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 (set-logic HO_ALL)
 (set-option :produce-models true)
 (set-option :quiet true)

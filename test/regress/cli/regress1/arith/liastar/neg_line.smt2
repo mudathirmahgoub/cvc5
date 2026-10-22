@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; DISABLE-TESTER: proof
 ; The solution set x + y = 0 is a full line through the origin (negative
 ; coordinates included) and is closed under addition, so its star closure

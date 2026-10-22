@@ -10,14 +10,13 @@
  * Unit tests for lia star utilities.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include <vector>
 
 #include "expr/node.h"
 #include "expr/node_manager.h"
 #include "smt/env.h"
 #include "test_smt.h"
+#include "theory/arith/liastar/integer_vector.h"
 #include "theory/arith/liastar/liastar_utils.h"
 #include "util/rational.h"
 
@@ -65,6 +64,23 @@ class TestLiaStarUtils : public TestSmt
   {
     return nm->mkBoundVar(name, nm->booleanType());
   }
+
+  /** @return the integer vectors with the given entries */
+  static std::vector<IntegerVector> vecs(
+      const std::vector<std::vector<int>>& entries)
+  {
+    std::vector<IntegerVector> vs;
+    for (const std::vector<int>& entry : entries)
+    {
+      IntegerVector v;
+      for (int e : entry)
+      {
+        v.push_back(Integer(e));
+      }
+      vs.push_back(v);
+    }
+    return vs;
+  }
 };
 
 TEST_F(TestLiaStarUtils, getVectorPredicateInstantiatesLambda)
@@ -105,9 +121,11 @@ TEST_F(TestLiaStarUtils, getMatricesConjunctionIsOneMatrix)
 
   auto matrices = LiaStarUtils::getMatrices(boundVarList({x, y}), conjunction);
 
+  // rows (a_x, a_y, b) of x - 1 >= 0 and y = 0
   ASSERT_EQ(1, matrices.size());
-  ASSERT_EQ(std::vector<std::string>({"x[1] >= 1;", "x[2] = 0;"}),
-            matrices[0].first);
+  ASSERT_EQ(vecs({{1, 0, -1}}), matrices[0].first.getInequalities());
+  ASSERT_EQ(vecs({{0, 1, 0}}), matrices[0].first.getEquations());
+  ASSERT_EQ(conjunction, matrices[0].second);
 }
 
 TEST_F(TestLiaStarUtils, getMatricesDisjunctionIsOneMatrixPerDisjunct)
@@ -119,8 +137,8 @@ TEST_F(TestLiaStarUtils, getMatricesDisjunctionIsOneMatrixPerDisjunct)
   auto matrices = LiaStarUtils::getMatrices(boundVarList({x, y}), disjunction);
 
   ASSERT_EQ(2, matrices.size());
-  ASSERT_EQ(std::vector<std::string>({"x[1] >= 1;"}), matrices[0].first);
-  ASSERT_EQ(std::vector<std::string>({"x[2] >= 2;"}), matrices[1].first);
+  ASSERT_EQ("x - 1 >= 0", matrices[0].first.toString());
+  ASSERT_EQ("y - 2 >= 0", matrices[1].first.toString());
 }
 
 TEST_F(TestLiaStarUtils, getMatricesPrintsCoefficients)
@@ -132,8 +150,8 @@ TEST_F(TestLiaStarUtils, getMatricesPrintsCoefficients)
   auto matrices = LiaStarUtils::getMatrices(boundVarList({x, y}), constraint);
 
   ASSERT_EQ(1, matrices.size());
-  ASSERT_EQ(std::vector<std::string>({"2x[1] + x[2] >= 1;"}),
-            matrices[0].first);
+  ASSERT_EQ(vecs({{2, 1, -1}}), matrices[0].first.getInequalities());
+  ASSERT_EQ("2*x + y - 1 >= 0", matrices[0].first.toString());
 }
 
 TEST_F(TestLiaStarUtils, cvc5CheckSatUnsat)
@@ -180,42 +198,60 @@ TEST_F(TestLiaStarUtils, areAssertionsUnsatIsNoneWhenSubsolverIsDisabled)
   ASSERT_EQ(Result::Status::NONE, result.getStatus());
 }
 
-TEST_F(TestLiaStarUtils, normalizCheckSatEmptyConeIsUnsat)
+TEST_F(TestLiaStarUtils, hilbertBasisCheckSatEmptyConeIsUnsat)
 {
   // x >= 1 and x <= 0 describe an empty cone
   Node assertion = nm->mkNode(
       Kind::AND, nm->mkNode(Kind::GEQ, x, one), nm->mkNode(Kind::LEQ, x, zero));
 
   Result result =
-      LiaStarUtils::normalizCheckSat(boundVarList({x}), assertion, false);
+      LiaStarUtils::hilbertBasisCheckSat(boundVarList({x}), assertion, false);
 
   ASSERT_EQ(Result::Status::UNSAT, result.getStatus());
 }
 
-TEST_F(TestLiaStarUtils, normalizCheckSatNonemptyConeIsNone)
+TEST_F(TestLiaStarUtils, hilbertBasisCheckSatNonemptyConeIsSat)
 {
-  // x >= 1 describes a nonempty cone, which is reported as none rather
-  // than sat
+  // x >= 1 describes a nonempty cone
   Node assertion = nm->mkNode(Kind::GEQ, x, one);
 
   Result result =
-      LiaStarUtils::normalizCheckSat(boundVarList({x}), assertion, false);
+      LiaStarUtils::hilbertBasisCheckSat(boundVarList({x}), assertion, false);
 
-  ASSERT_EQ(Result::Status::NONE, result.getStatus());
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
 }
 
-TEST_F(TestLiaStarUtils, normalizCheckSatAssumeNonnegative)
+TEST_F(TestLiaStarUtils, hilbertBasisCheckSatNoIntegerPoint)
+{
+  // x = 2y and x = 2z + 1 have rational solutions but no integer one
+  Node z = nm->mkBoundVar("z", intType);
+  Node twoY = nm->mkNode(Kind::MULT, two, y);
+  Node twoZ = nm->mkNode(Kind::MULT, two, z);
+  Node twoZPlusOne = nm->mkNode(Kind::ADD, twoZ, one);
+  Node even = nm->mkNode(Kind::EQUAL, x, twoY);
+  Node odd = nm->mkNode(Kind::EQUAL, x, twoZPlusOne);
+  Node assertion = nm->mkNode(Kind::AND, even, odd);
+
+  Result result = LiaStarUtils::hilbertBasisCheckSat(
+      boundVarList({x, y, z}), assertion, false);
+
+  ASSERT_EQ(Result::Status::UNSAT, result.getStatus());
+}
+
+TEST_F(TestLiaStarUtils, hilbertBasisCheckSatAssumeNonnegative)
 {
   // x <= -1 is satisfiable over the integers, but not over the
   // nonnegative orthant
   Node assertion = nm->mkNode(Kind::LEQ, x, nm->mkConstInt(Rational(-1)));
 
-  ASSERT_EQ(Result::Status::NONE,
-            LiaStarUtils::normalizCheckSat(boundVarList({x}), assertion, false)
-                .getStatus());
-  ASSERT_EQ(Result::Status::UNSAT,
-            LiaStarUtils::normalizCheckSat(boundVarList({x}), assertion, true)
-                .getStatus());
+  ASSERT_EQ(
+      Result::Status::SAT,
+      LiaStarUtils::hilbertBasisCheckSat(boundVarList({x}), assertion, false)
+          .getStatus());
+  ASSERT_EQ(
+      Result::Status::UNSAT,
+      LiaStarUtils::hilbertBasisCheckSat(boundVarList({x}), assertion, true)
+          .getStatus());
 }
 
 TEST_F(TestLiaStarUtils, distribute1)
@@ -331,5 +367,3 @@ TEST_F(TestLiaStarUtils, toDNF6)
 
 }  // namespace test
 }  // namespace cvc5::internal
-
-#endif /* CVC5_USE_NORMALIZ */

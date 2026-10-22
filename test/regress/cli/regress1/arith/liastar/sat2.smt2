@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 (set-logic HO_ALL)
 (set-info :status sat)
 

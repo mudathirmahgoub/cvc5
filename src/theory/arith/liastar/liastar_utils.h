@@ -10,15 +10,13 @@
  * Utility functions for liastar extension.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #ifndef CVC5__THEORY__LIASTAR__UTILS_H
 #define CVC5__THEORY__LIASTAR__UTILS_H
 
 #include "expr/node.h"
 #include "smt/env.h"
 #include "theory/arith/liastar/liastar_stats.h"
-#include "theory/arith/linear/normal_form.h"
+#include "theory/arith/liastar/linear_constraints.h"
 #include "util/result.h"
 namespace cvc5::internal {
 namespace theory {
@@ -26,16 +24,10 @@ namespace arith {
 namespace liastar {
 
 /**
- * The integer type used by Normaliz. Note this shadows
- * cvc5::internal::Integer within namespace liastar.
- */
-typedef mpz_class Integer;
-
-/**
  * Utilities shared by the liastar extension: destructuring star-contains
  * atoms, converting their predicates to DNF, deciding satisfiability of
- * candidate disjuncts with a subsolver, and translating disjuncts into the
- * symbolic constraints Normaliz consumes.
+ * candidate disjuncts with a subsolver, and translating disjuncts into
+ * integer constraint matrices (LinearConstraints).
  *
  * All methods are static and stateless. Methods taking a LiaStarStatistics
  * pointer accumulate timers and counters into it when it is non-null.
@@ -103,9 +95,9 @@ class LiaStarUtils
 
   /**
    * Check whether a conjunction of assertions is unsatisfiable, using either
-   * cvc5 or Normaliz as the subsolver depending on the
-   * arith-liastar-subsolver-normaliz-as-subsolver option. Free variables of
-   * the assertions are existentially quantified.
+   * a cvc5 subsolver or a Hilbert basis computation depending on the
+   * arith-liastar-subsolver-hilbert-basis option. Free variables of the
+   * assertions are existentially quantified.
    *
    * @param assertions the assertions to check, interpreted conjunctively
    * @param e the environment, used for its node manager and options
@@ -138,35 +130,38 @@ class LiaStarUtils
                              Env* e,
                              LiaStarStatistics* stats = nullptr);
   /**
-   * Check satisfiability of a conjunction of LIA constraints by computing its
-   * cone with Normaliz: the constraints are unsatisfiable over the integers
-   * exactly when the resulting inhomogeneous cone is empty.
+   * Check satisfiability of a conjunction of LIA constraints over the
+   * integers by computing its module generators (IntegerPolyhedron): the
+   * constraints have an integer solution exactly when there is a module
+   * generator.
    *
    * @param variables a node of Kind BOUND_VAR_LIST giving the coordinates of
    * the ambient space, in order
    * @param assertion a conjunction of LIA constraints over `variables`
-   * @param assumeNonnegative whether to restrict the cone to the nonnegative
-   * orthant; when false every coordinate is sign-unrestricted
+   * @param assumeNonnegative whether to restrict the solutions to the
+   * nonnegative orthant; when false every coordinate is sign-unrestricted
    * @param stats optional statistics collector, may be nullptr
-   * @return unsat if the cone is empty, and none otherwise (a nonempty cone
-   * is not reported as sat, since satisfiability is not needed by callers)
+   * @return unsat if there is no integer solution, and sat otherwise
    */
-  static Result normalizCheckSat(Node variables,
-                                 Node assertion,
-                                 bool assumeNonnegative,
-                                 LiaStarStatistics* stats = nullptr);
+  static Result hilbertBasisCheckSat(Node variables,
+                                     Node assertion,
+                                     bool assumeNonnegative,
+                                     LiaStarStatistics* stats = nullptr);
 
   /**
-   * This function returns a list of matrices representing cones (disjunctions)
-   * where the rows of each matrix are constraints of the form a1 x_1 + ... +
-   * an_xn + b >= 0
+   * Convert a LIA predicate in DNF to one integer constraint matrix per
+   * disjunct (see LinearConstraints).
+   *
+   * For example, over the variables (x y) the predicate
+   * (or (and (>= x 1) (= y 0)) (< x y)) gives the matrices
+   * {x - 1 >= 0, y = 0} and {-x + y - 1 >= 0}.
+   *
    * @param variables is a node of Kind BOUND_VAR_LIST
    * @param n is a LIA predicate in DNF format
-   * @return one pair per disjunct of n, holding the disjunct's constraints as
-   * Normaliz symbolic constraint strings (over the coordinates x[1]..x[k] of
-   * `variables`) together with the disjunct itself
+   * @return one pair per disjunct of n, holding the disjunct's constraints
+   * over the coordinates `variables` together with the disjunct itself
    */
-  static std::vector<std::pair<std::vector<std::string>, Node>> getMatrices(
+  static std::vector<std::pair<LinearConstraints, Node>> getMatrices(
       Node variables, Node n);
 
  private:
@@ -209,16 +204,6 @@ class LiaStarUtils
    * @return the flattened node, or n itself if it has no children
    */
   static Node recursiveFlatten(NodeManager* nm, Node n);
-  /**
-   * Print a linear polynomial as a Normaliz symbolic term, mapping the i-th
-   * variable of `variables` to the Normaliz coordinate x[i + 1].
-   *
-   * @param variables a node of Kind BOUND_VAR_LIST giving the coordinate
-   * order; every variable of p must occur in it
-   * @param p an integral linear polynomial
-   * @return the polynomial as a string, e.g. "2x[1] - x[3] + 5"
-   */
-  static std::string getString(Node variables, linear::Polynomial& p);
 };
 }  // namespace liastar
 }  // namespace arith
@@ -226,5 +211,3 @@ class LiaStarUtils
 }  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__LIASTAR__UTILS_H */
-
-#endif /* CVC5_USE_NORMALIZ */

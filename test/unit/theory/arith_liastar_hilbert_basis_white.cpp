@@ -258,6 +258,24 @@ TEST_F(TestLiaStarHilbertBasis, dualMagicSquares)
   ASSERT_EQ(0, dual.getUnits().getRank());
 }
 
+TEST_F(TestLiaStarHilbertBasis, dualArbitraryPrecision)
+{
+  // The lattice x = 2^70 y cut with x >= 0 has the Hilbert basis
+  // {(2^70, 1)}, where x does not fit into 64 bits, so the computation is
+  // repeated with arbitrary precision.
+  Integer big("1180591620717411303424");
+  IntegerVector equation = {Integer(1), -big};
+  DualHilbertBasis dual(2, {equation}, vecs({{1, 0}}));
+  dual.compute();
+  ASSERT_TRUE(dual.usedArbitraryPrecision());
+  ASSERT_EQ(std::vector<IntegerVector>({{big, Integer(1)}}),
+            dual.getHilbertBasis());
+  // small values do not need it
+  DualHilbertBasis small(2, {}, vecs({{-1, 2}, {3, -1}}));
+  small.compute();
+  ASSERT_FALSE(small.usedArbitraryPrecision());
+}
+
 TEST_F(TestLiaStarHilbertBasis, dualTruncation)
 {
   // x >= 1 homogenized to x - t >= 0 with level t: the irreducible points of

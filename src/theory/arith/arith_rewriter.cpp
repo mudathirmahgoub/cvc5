@@ -37,6 +37,7 @@
 #include "theory/rewriter.h"
 #include "theory/strings/arith_entail.h"
 #include "theory/theory.h"
+#include "theory/uf/function_const.h"
 #include "util/bitvector.h"
 #include "util/divisible.h"
 #include "util/iand.h"
@@ -1137,8 +1138,10 @@ RewriteResponse ArithRewriter::rewriteStarContains(TNode t)
                               [](const Node& e) { return e.isConst(); });
 
   // if the vector is constant, we can evaluate the predicate
-  // and see if it holds.
-  if (allConst)
+  // and see if it holds. The rewriter may see the atom before
+  // TheoryArith::ppStaticRewrite rejects a first argument that is not a
+  // lambda, see LiaStarUtils::getVectorPredicate.
+  if (allConst && !uf::FunctionConst::getDefinition(t[0]).isNull())
   {
     auto [vectorPredicate, nonnegative] =
         liastar::LiaStarUtils::getVectorPredicate(t, nm);

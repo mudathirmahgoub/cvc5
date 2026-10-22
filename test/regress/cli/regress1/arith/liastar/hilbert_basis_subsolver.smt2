@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; COMMAND-LINE: --arith-liastar-subsolver-hilbert-basis
 ; DISABLE-TESTER: proof
 ; The DNF disjuncts are pruned with the Hilbert basis computation instead of

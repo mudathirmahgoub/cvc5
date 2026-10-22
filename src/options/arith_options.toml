@@ -630,7 +630,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarSubSolver"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-subsolver"
   type       = "bool"
   default    = "true"
@@ -638,7 +638,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarHilbertBasisAsSubSolver"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-subsolver-hilbert-basis"
   type       = "bool"
   default    = "false"
@@ -646,7 +646,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarAssumeNonnegative"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-assume-nonnegative"
   type       = "bool"
   default    = "false"

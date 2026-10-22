@@ -14,6 +14,7 @@
 
 #include "expr/node.h"
 #include "expr/node_manager.h"
+#include "expr/skolem_manager.h"
 #include "smt/env.h"
 #include "test_smt.h"
 #include "theory/arith/liastar/integer_vector.h"
@@ -112,6 +113,21 @@ TEST_F(TestLiaStarUtils, getVectorPredicateAcceptsConstantLambda)
   ASSERT_EQ("(and true (>= x 0))", nonnegative.toString());
 }
 
+TEST_F(TestLiaStarUtils, getVectorPredicateAcceptsLiftedLambda)
+{
+  Node u = nm->mkBoundVar("u", intType);
+  // (int.star-contains k x), where lambda lifting replaced the lambda
+  // (lambda ((u Int)) (>= u 1)) by its purification skolem k
+  Node lifted =
+      SkolemManager::mkPurifySkolem(lambda({u}, nm->mkNode(Kind::GEQ, u, one)));
+  Node star = nm->mkNode(Kind::STAR_CONTAINS, lifted, x);
+
+  auto [predicate, nonnegative] = LiaStarUtils::getVectorPredicate(star, nm);
+
+  ASSERT_EQ(nm->mkNode(Kind::GEQ, x, one), predicate);
+  ASSERT_EQ("(and true (>= x 0))", nonnegative.toString());
+}
+
 TEST_F(TestLiaStarUtils, getMatricesConjunctionIsOneMatrix)
 {
   // (and (>= x 1) (= y 0)) over the coordinates (x y)
@@ -152,6 +168,60 @@ TEST_F(TestLiaStarUtils, getMatricesPrintsCoefficients)
   ASSERT_EQ(1, matrices.size());
   ASSERT_EQ(vecs({{2, 1, -1}}), matrices[0].first.getInequalities());
   ASSERT_EQ("2*x + y - 1 >= 0", matrices[0].first.toString());
+}
+
+TEST_F(TestLiaStarUtils, getMatricesPrintsNegativeCoefficients)
+{
+  // (>= (+ (* 2 x) (* (- 1) y)) 5)
+  Node minusOne = nm->mkConstInt(Rational(-1));
+  Node five = nm->mkConstInt(Rational(5));
+  Node twoX = nm->mkNode(Kind::MULT, two, x);
+  Node minusY = nm->mkNode(Kind::MULT, minusOne, y);
+  Node sum = nm->mkNode(Kind::ADD, twoX, minusY);
+  Node constraint = nm->mkNode(Kind::GEQ, sum, five);
+
+  auto matrices = LiaStarUtils::getMatrices(boundVarList({x, y}), constraint);
+
+  ASSERT_EQ(1, matrices.size());
+  ASSERT_EQ(vecs({{2, -1, -5}}), matrices[0].first.getInequalities());
+  ASSERT_EQ("2*x - y - 5 >= 0", matrices[0].first.toString());
+}
+
+TEST_F(TestLiaStarUtils, getMatricesConvertsRelationsAndKeepsDisjuncts)
+{
+  // (or (< x y) (> x y) (<= x y)), one matrix per relation; a strict
+  // inequality loses 1 since x and y are integers
+  Node less = nm->mkNode(Kind::LT, x, y);
+  Node greater = nm->mkNode(Kind::GT, x, y);
+  Node atMost = nm->mkNode(Kind::LEQ, x, y);
+  Node disjunction = nm->mkNode(Kind::OR, less, greater, atMost);
+
+  auto matrices = LiaStarUtils::getMatrices(boundVarList({x, y}), disjunction);
+
+  ASSERT_EQ(3, matrices.size());
+  ASSERT_EQ("-x + y - 1 >= 0", matrices[0].first.toString());
+  ASSERT_EQ("x - y - 1 >= 0", matrices[1].first.toString());
+  ASSERT_EQ("-x + y >= 0", matrices[2].first.toString());
+  // each pair carries its own disjunct
+  for (size_t i = 0; i < 3; i++)
+  {
+    ASSERT_EQ(disjunction[i], matrices[i].second);
+  }
+}
+
+TEST_F(TestLiaStarUtils, getMatricesConstants)
+{
+  // true has no constraints, and false is the equation 1 = 0
+  Node vars = boundVarList({x});
+  auto trueMatrices = LiaStarUtils::getMatrices(vars, nm->mkConst<bool>(true));
+  auto falseMatrices =
+      LiaStarUtils::getMatrices(vars, nm->mkConst<bool>(false));
+
+  ASSERT_EQ(1, trueMatrices.size());
+  ASSERT_EQ("true", trueMatrices[0].first.toString());
+  ASSERT_EQ(1, falseMatrices.size());
+  ASSERT_EQ(vecs({{0, 1}}), falseMatrices[0].first.getEquations());
+  ASSERT_EQ("1 = 0", falseMatrices[0].first.toString());
 }
 
 TEST_F(TestLiaStarUtils, cvc5CheckSatUnsat)

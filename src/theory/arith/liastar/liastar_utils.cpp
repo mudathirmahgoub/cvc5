@@ -14,7 +14,6 @@
 
 #include "expr/algorithm/flatten.h"
 #include "expr/node_algorithm.h"
-#include "expr/skolem_manager.h"
 #include "options/arith_options.h"
 #include "theory/arith/liastar/integer_polyhedron.h"
 #include "theory/booleans/theory_bool_rewriter.h"
@@ -37,18 +36,21 @@ std::pair<Node, Node> LiaStarUtils::getVectorPredicate(Node n, NodeManager* nm)
   // The first child may have been purified into a skolem by lambda
   // lifting, and the rewriter may normalize a constant lambda to a
   // function array constant; recover the lambda from either form.
-  Node lambda =
-      uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(n[0]));
-  Assert(!lambda.isNull() && lambda.getKind() == Kind::LAMBDA)
-      << "Expected a lambda as the first child of " << n << std::endl;
+  Node lambda = uf::FunctionConst::getDefinition(n[0]);
+  Assert(!lambda.isNull()) << "Expected a lambda as the first child of " << n
+                           << std::endl;
+  // n = (int.star-contains (lambda ((u Int) (v Int)) (>= u v)) x y)
+  // vars = (u v), vecElements = (x y)
   std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
   std::vector<Node> vecElements(n.begin() + 1, n.end());
 
+  // substitute = (>= x y)
   Node substitute = lambda[1].substitute(
       vars.begin(), vars.end(), vecElements.begin(), vecElements.end());
 
   Trace("liastar-ext-debug") << "n: " << n << std::endl;
   Trace("liastar-ext-debug") << "predicate : " << lambda[1] << std::endl;
+  // nonnegativeConstraints = (and (and true (>= x 0)) (>= y 0))
   Node nonnegativeConstraints = nm->mkConst<bool>(true);
   for (const auto& v : vecElements)
   {
@@ -557,6 +559,7 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
                                         Env* e,
                                         LiaStarStatistics* stats)
 {
+  // pruning is disabled: report "not known to be unsat"
   if (!e->getOptions().arith.arithLiaStarSubSolver)
   {
     return Result();
@@ -567,6 +570,7 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
     stats->d_subSolverTime.start();
   }
   NodeManager* nm = e->getNodeManager();
+  // {(>= x 1), (<= x 0)} --> (and (>= x 1) (<= x 0))
   Node assertion;
   if (assertions.size() == 1)
   {
@@ -576,13 +580,16 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
   {
     assertion = nm->mkNode(Kind::AND, assertions);
   }
+  // the unknowns of the check, here {x}
   std::unordered_set<Node> fvs;
   expr::getFreeVariables(assertion, fvs);
   std::vector<Node> freeVariables(fvs.begin(), fvs.end());
   Result result;
+  // ground assertions go to cvc5
   if (fvs.size() > 0
       && e->getOptions().arith.arithLiaStarHilbertBasisAsSubSolver)
   {
+    // the coordinates of the integer solutions: x is the first one
     Node variables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
     result = hilbertBasisCheckSat(
         variables,
@@ -613,6 +620,7 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
                                   LiaStarStatistics* stats)
 {
   if (stats) stats->d_cvc5SubSolverTime.start();
+  // default options rather than e's; the logic is still e's
   Options subOptions;
   SubsolverSetupInfo ssi(*e, subOptions);
 
@@ -625,7 +633,8 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
   {
     NodeManager* nm = e->getNodeManager();
     // by default nonnegativity is not assumed: the star-contains lambda
-    // body (part of `assertion`) carries the user's constraints
+    // body (part of `assertion`) carries the user's constraints.
+    // With the option: (and (and A (>= x 0)) (>= y 0)).
     if (e->getOptions().arith.arithLiaStarAssumeNonnegative)
     {
       Node zero = nm->mkConstInt(Rational(0));
@@ -634,6 +643,8 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
         assertion = assertion.andNode(nm->mkNode(Kind::GEQ, var, zero));
       }
     }
+    // the unknowns are bound variables, which cannot occur free in an
+    // assertion: check (exists ((x Int)) (and (>= x 1) (<= x 0)))
     Node boundVariables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
     Node exists = nm->mkNode(Kind::EXISTS, boundVariables, assertion);
     result = checkWithSubsolver(exists, ssi);

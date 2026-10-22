@@ -40,7 +40,13 @@ class LiaStarUtils
    * satisfy, by instantiating the lambda with the vector elements.
    *
    * The first child may be a purified skolem or a function array constant
-   * rather than a syntactic lambda; both are resolved.
+   * rather than a syntactic lambda; both are resolved, see
+   * uf::FunctionConst::getDefinition.
+   *
+   * The type rule of int.star-contains does not require its first argument
+   * to be a lambda; this is enforced by TheoryArith::ppStaticRewrite. Callers
+   * that may see atoms that were not preprocessed, e.g. the rewriter, must
+   * check that getDefinition(n[0]) is non-null before calling this method.
    *
    * @param n a node of the form
    * (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) y_1 ... y_n)

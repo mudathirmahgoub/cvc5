@@ -3880,6 +3880,7 @@ set(regress_1_tests
   regress1/sets/remove_check_free_31_6.smt2
   regress1/sets/sets-disequal.smt2
   regress1/sets/sets-to-bags-card.smt2
+  regress1/sets/sets-to-bags-liastar.smt2
   regress1/sets/sets-tuple-poly.cvc.smt2
   regress1/sets/sets-uc-wrong.smt2
   regress1/sets/set-comp-sat.smt2

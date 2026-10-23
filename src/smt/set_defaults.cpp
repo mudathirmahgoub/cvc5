@@ -491,6 +491,13 @@ void SetDefaults::finalizeLogic(LogicInfo& logic, Options& opts) const
     {
       log.enableIntegers();
     }
+    if (opts.bags.bagsToLiastar)
+    {
+      // The bags are translated to int.star-contains, whose first argument is
+      // a lambda, and which is solved by an extension of non-linear arithmetic.
+      log.enableHigherOrder();
+      log.arithNonLinear();
+    }
     logic = log;
     logic.lock();
   }

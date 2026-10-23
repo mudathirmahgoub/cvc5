@@ -1,0 +1,6 @@
+(set-logic ALL)
+(declare-fun A () (Set Int))
+(declare-fun B () (Set Int))
+(assert (set.subset A B))
+(assert (> (set.card A) (set.card B)))
+(check-sat)

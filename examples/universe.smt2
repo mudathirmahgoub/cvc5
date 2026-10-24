@@ -1,7 +1,0 @@
-(set-logic ALL)
-(set-option :sets-exp true)
-(declare-fun A () (Set Int))
-(declare-fun x () Int)
-(assert (set.member x A))
-(assert (not (set.member x (as set.universe (Set Int)))))
-(check-sat)

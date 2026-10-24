@@ -14,6 +14,10 @@ set.subset, set.inter, ...) in a temporary directory. Their status annotations
 are dropped there, since they are the statuses of the verification conditions
 these formulas come from, and some of the formulas themselves are
 satisfiable.
+
+Before the timed runs of each configuration, every job runs the same command
+once on a small problem, untimed. Otherwise the first runs of a configuration
+are slower, since they start while the caches of the machine are cold.
 """
 import argparse
 import csv
@@ -42,6 +46,15 @@ CONFIGURATIONS = [
     ("sls-mapa-unfold5", "sls", ["--mapa", "--unfold=5"]),
     ("sls-mapa-nointerp", "sls", ["--mapa", "--no-interp"]),
 ]
+
+# the small problem of the warm-up, in the syntax of the BAPA benchmarks
+WARMUP = """(set-logic ALL_SUPPORTED)
+(declare-fun A () (Set Int))
+(declare-fun n () Int)
+(assert (= (card A) n))
+(assert (> n 1))
+(check-sat)
+"""
 
 SYNTAX = [
     (r"\bALL_SUPPORTED\b", "ALL"),
@@ -95,20 +108,30 @@ def main():
     for d, f in BENCHMARKS:
         to_cvc5_syntax(os.path.join(ROOT, "benchmarks/bapa", d, f),
                        os.path.join(tmp, "%s_%s" % (d, f)))
+    warmup = os.path.join(tmp, "warmup.smt2")
+    with open(warmup, "w") as fh:
+        fh.write(WARMUP)
+    to_cvc5_syntax(warmup, os.path.join(tmp, "warmup_cvc5.smt2"))
 
     results = {}
     for name, tool, options in CONFIGURATIONS:
-        def command(df):
-            d, f = df
+        def command(path):
             if tool == "cvc5":
                 # cvc5 enforces the limit itself; the process timeout is a guard
-                return [args.cvc5, "--tlimit=%d" % (args.timeout * 1000)] + options \
-                    + [os.path.join(tmp, "%s_%s" % (d, f))]
-            return [sys.executable, os.path.join(ROOT, "lia_star_solver.py"),
-                    os.path.join(ROOT, "benchmarks/bapa", d, f)] + options
+                return [args.cvc5, "--tlimit=%d" % (args.timeout * 1000)] + options + [path]
+            return [sys.executable, os.path.join(ROOT, "lia_star_solver.py"), path] + options
+
+        def path(df):
+            d, f = df
+            if tool == "cvc5":
+                return os.path.join(tmp, "%s_%s" % (d, f))
+            return os.path.join(ROOT, "benchmarks/bapa", d, f)
+
         guard = args.timeout * 2 if tool == "cvc5" else args.timeout
+        warmup_path = os.path.join(tmp, "warmup_cvc5.smt2" if tool == "cvc5" else "warmup.smt2")
         with ThreadPoolExecutor(args.jobs) as ex:
-            rows = list(ex.map(lambda df: run(command(df), guard), BENCHMARKS))
+            list(ex.map(lambda _: run(command(warmup_path), guard), range(args.jobs)))
+            rows = list(ex.map(lambda df: run(command(path(df)), guard), BENCHMARKS))
         for (d, f), (answer, t) in zip(BENCHMARKS, rows):
             results.setdefault("%s/%s" % (d, f), {})[name] = (answer, t)
         print("%-18s done" % name, flush=True)

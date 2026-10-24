@@ -1,5 +1,0 @@
-(set-logic ALL)
-(set-option :sets-exp true)
-(declare-fun A () (Set Bool))
-(assert (= (as set.universe (Set Bool)) (set.singleton true)))
-(check-sat)

@@ -1,5 +1,0 @@
-(set-logic ALL)
-(declare-fun A () (Set Int))
-(declare-fun x () Int)
-(assert (set.member x (set.minus A (set.singleton x))))
-(check-sat)

@@ -1,6 +1,6 @@
 """Make the tables and the cactus plot from results.csv.
 
-usage: python3 report.py
+usage: python3 report.py [--timeout SECONDS]
 
 Writes summary.csv and summary.md (one row per configuration) and cactus.png
 and cactus.pdf next to this script. Requires matplotlib.
@@ -10,6 +10,7 @@ number of benchmarks solved is on the y axis: the solved runtimes of each
 configuration are sorted and plotted as (t_i, i). The timeout is a vertical
 line and each curve's final count is a direct label at its right end.
 """
+import argparse
 import csv
 import os
 import statistics
@@ -23,6 +24,7 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import FixedFormatter, FixedLocator, NullLocator
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# the time limit of the runs, set by --timeout
 TIMEOUT = 5.0
 
 # (configuration, description in the tables, label in the plot)
@@ -165,9 +167,10 @@ def panel(ax, data, answers, title, ymax, keys):
     ax.text(TIMEOUT / 1.06, ymax * 0.02, "%g s limit" % TIMEOUT, color=MUTED,
             fontsize=8, ha="right", va="bottom")
     ax.set_xscale("log")
-    ax.set_xlim(0.008, 10)
-    ax.xaxis.set_major_locator(FixedLocator([0.01, 0.1, 1]))
-    ax.xaxis.set_major_formatter(FixedFormatter(["0.01", "0.1", "1"]))
+    ax.set_xlim(0.008, TIMEOUT * 2)
+    ticks = [t for t in (0.01, 0.1, 1, 10, 100) if t < TIMEOUT]
+    ax.xaxis.set_major_locator(FixedLocator(ticks))
+    ax.xaxis.set_major_formatter(FixedFormatter(["%g" % t for t in ticks]))
     ax.xaxis.set_minor_locator(NullLocator())
     ax.set_ylim(0, ymax)
     ax.set_title(title, color=INK, fontsize=10.5, loc="left", pad=8)
@@ -212,6 +215,11 @@ def plot(data):
 
 
 def main():
+    global TIMEOUT
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--timeout", type=float, default=5.0,
+                        help="the time limit of the runs in seconds")
+    TIMEOUT = parser.parse_args().timeout
     data = load()
     summarize(data)
     plot(data)

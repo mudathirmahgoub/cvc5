@@ -1,12 +1,15 @@
-"""Make the tables and the cactus plot from results.csv.
+"""Make the tables and the cactus plots from results.csv.
 
 usage: python3 report.py [--timeout SECONDS]
 
-Writes summary.csv and summary.md (one row per configuration) and cactus.png
-and cactus.pdf next to this script. Requires matplotlib.
+The set reading and the bag reading of the benchmarks are reported separately,
+since answers for one reading are not answers for the other. For each reading
+this writes a table, summary-sets.csv / summary-bags.csv (and .md), and cactus
+plots, cactus-sets.png / cactus-bags.png (and .pdf), next to this script.
+Requires matplotlib.
 
-In the cactus plot, time is on the x axis (log scale) and the cumulative
-number of benchmarks solved is on the y axis: the solved runtimes of each
+In a cactus plot, time is on the x axis (log scale) and the cumulative number
+of benchmarks solved is on the y axis: the solved runtimes of each
 configuration are sorted and plotted as (t_i, i). The timeout is a vertical
 line and each curve's final count is a direct label at its right end.
 """
@@ -27,23 +30,37 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # the time limit of the runs, set by --timeout
 TIMEOUT = 5.0
 
-# (configuration, description in the tables, label in the plot)
-CONFIGURATIONS = [
-    ("sets", "cvc5, sets solver", "plain sets"),
-    ("sets-fmf", "cvc5, sets solver, `--fmf-bound`", None),
-    ("setof-stock", "cvc5, `--sets-to-bags=setof`, stock bags solver", "setof + stock bags"),
-    ("relaxed-stock", "cvc5, `--sets-to-bags=relaxed`, stock bags solver", "relaxed + stock bags"),
-    ("setof-liastar", "cvc5, `--sets-to-bags=setof --bags-to-liastar`", "setof + LIA*"),
-    ("relaxed-liastar", "cvc5, `--sets-to-bags=relaxed --bags-to-liastar`", "relaxed + LIA*"),
-    ("sls-bapa", "sls-reachability, BAPA", "sls-reachability BAPA"),
-    ("sls-mapa", "sls-reachability, MAPA (`--mapa`)", "sls-reachability MAPA"),
-    ("sls-mapa-unfold5", "sls-reachability, MAPA, `--unfold=5`", None),
-    ("sls-mapa-nointerp", "sls-reachability, MAPA, `--no-interp`", None),
-]
-# Configurations whose sat answers are answers for the multiset reading of the
-# benchmarks rather than for the sets.
-MULTISET = {"relaxed-stock", "relaxed-liastar", "sls-mapa", "sls-mapa-unfold5",
-            "sls-mapa-nointerp"}
+# (configuration, description in the tables, label in the plots)
+READINGS = {
+    "sets": [
+        ("sets", "cvc5, sets solver", "sets solver"),
+        ("sets-fmf", "cvc5, sets solver, `--fmf-bound`", None),
+        ("setof-stock", "cvc5, `--sets-to-bags=setof --fmf-bound` (stock bags solver)",
+         "setof + stock bags"),
+        ("setof-liastar", "cvc5, `--sets-to-bags=setof --bags-to-liastar`", "setof + LIA*"),
+        ("sls-bapa", "sls-reachability, BAPA", "sls-reachability BAPA"),
+    ],
+    "bags": [
+        ("bags-stock", "cvc5 on the bag version, stock bags solver (`--fmf-bound`)",
+         "bag version + stock bags"),
+        ("bags-liastar", "cvc5 on the bag version, `--bags-to-liastar`",
+         "bag version + LIA*"),
+        ("relaxed-stock", "cvc5, `--sets-to-bags=relaxed --fmf-bound` (stock bags solver)",
+         "relaxed + stock bags"),
+        ("relaxed-liastar", "cvc5, `--sets-to-bags=relaxed --bags-to-liastar`",
+         "relaxed + LIA*"),
+        ("sls-mapa", "sls-reachability, MAPA (`--mapa`)", "sls-reachability MAPA"),
+        ("sls-mapa-unfold5", "sls-reachability, MAPA, `--unfold=5`", None),
+        ("sls-mapa-nointerp", "sls-reachability, MAPA, `--no-interp`", None),
+    ],
+}
+# Configurations that report unknown instead of sat: --sets-to-bags=relaxed
+# marks the model unsound, since it is not a model of the sets it started from.
+NO_SAT = {"relaxed-stock", "relaxed-liastar"}
+TITLES = {
+    "sets": "Sets: 240 BAPA benchmarks of the LIA* paper artifact, %g s limit",
+    "bags": "Bags: the same benchmarks read as multisets (MAPA), %g s limit",
+}
 
 # chart chrome and ink
 SURFACE = "#fcfcfb"
@@ -52,25 +69,21 @@ INK2 = "#52514e"
 MUTED = "#898781"
 GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
-
-# plotted series, in the fixed order of the categorical palette
-SERIES = [
-    ("setof-liastar", "#2a78d6"),
-    ("relaxed-liastar", "#eb6834"),
-    ("sets", "#1baf7a"),
-    ("setof-stock", "#eda100"),
-    ("relaxed-stock", "#e87ba4"),
-    ("sls-bapa", "#008300"),
-    ("sls-mapa", "#6250d6"),
-]
-LABELS = {name: label for name, _, label in CONFIGURATIONS}
+# the categorical palette, assigned in this fixed order to the plotted
+# configurations of each reading
+PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
+SERIES = {
+    "sets": ["setof-liastar", "sets", "setof-stock", "sls-bapa"],
+    "bags": ["bags-liastar", "relaxed-liastar", "bags-stock", "relaxed-stock", "sls-mapa"],
+}
 
 
 def load():
-    data = {name: [] for name, _, _ in CONFIGURATIONS}
+    names = [name for configs in READINGS.values() for name, _, _ in configs]
+    data = {name: [] for name in names}
     with open(os.path.join(HERE, "results.csv")) as fh:
         for row in csv.DictReader(fh):
-            for name in data:
+            for name in names:
                 answer = row[name + " answer"]
                 if answer not in ("sat", "unsat", "unknown", "timeout"):
                     answer = "error"
@@ -78,28 +91,28 @@ def load():
     return data
 
 
-def summarize(data):
+def summarize(data, reading):
     header = ["configuration", "unsat", "sat", "unknown", "timeout", "error",
               "solved", "median time of solved (s)"]
     rows = []
-    for name, description, _ in CONFIGURATIONS:
+    for name, description, _ in READINGS[reading]:
         answers = [a for _, a, _ in data[name]]
         solved = [t for _, a, t in data[name] if a in ("sat", "unsat")]
         rows.append([description] + [answers.count(a) for a in
                                      ("unsat", "sat", "unknown", "timeout", "error")]
                     + [len(solved), "%.3f" % statistics.median(solved)])
-    with open(os.path.join(HERE, "summary.csv"), "w", newline="") as fh:
+    with open(os.path.join(HERE, "summary-%s.csv" % reading), "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(header)
         w.writerows(rows)
-    with open(os.path.join(HERE, "summary.md"), "w") as fh:
+    with open(os.path.join(HERE, "summary-%s.md" % reading), "w") as fh:
         fh.write("| Configuration | unsat | sat | unknown | timeout | error | solved"
                  " | median time |\n")
         fh.write("|---|---|---|---|---|---|---|---|\n")
-        for (name, _, _), r in zip(CONFIGURATIONS, rows):
-            sat = "%d*" % r[2] if name in MULTISET and r[2] else str(r[2])
-            fh.write("| %s | %d | %s | %d | %d | %d | %d | %s s |\n"
-                     % (r[0], r[1], sat, r[3], r[4], r[5], r[6], r[7]))
+        for (name, _, _), r in zip(READINGS[reading], rows):
+            unknown = "%d*" % r[3] if name in NO_SAT else str(r[3])
+            fh.write("| %s | %d | %d | %s | %d | %d | %d | %s s |\n"
+                     % (r[0], r[1], r[2], unknown, r[4], r[5], r[6], r[7]))
 
 
 def curve(rows, answers):
@@ -151,12 +164,10 @@ def place_labels(ax, ends, gap_pt=12):
                     path_effects=[pe.withStroke(linewidth=3, foreground=SURFACE)])
 
 
-def panel(ax, data, answers, title, ymax, keys):
+def panel(ax, data, answers, title, ymax, series):
     ax.set_facecolor(SURFACE)
     ends = []
-    for key, color in SERIES:
-        if key not in keys:
-            continue
+    for key, color in series:
         xs, ys = curve(data[key], answers)
         if not xs:
             continue
@@ -187,31 +198,33 @@ def panel(ax, data, answers, title, ymax, keys):
     return ends
 
 
-def plot(data):
+def plot(data, reading):
     plt.rcParams["font.family"] = ["Helvetica Neue", "Helvetica", "Arial",
                                    "DejaVu Sans"]
+    labels = {name: label for name, _, label in READINGS[reading]}
+    series = list(zip(SERIES[reading], PALETTE))
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200)
     fig.patch.set_facecolor(SURFACE)
-    # only unsat answers carry over from the multiset reading to the sets
-    ends_left = panel(left, data, {"sat", "unsat"},
-                      "Solved with set semantics (sat or unsat)", 250,
-                      {key for key, _ in SERIES if key not in MULTISET})
-    ends_right = panel(right, data, {"unsat"}, "Proved unsat", 100,
-                       {key for key, _ in SERIES})
-    handles = [Line2D([0], [0], color=c, linewidth=2) for _, c in SERIES]
-    leg = fig.legend(handles, [LABELS[k] for k, _ in SERIES], loc="lower center",
-                     ncol=4, frameon=False, fontsize=9, handlelength=1.8,
+    # configurations that report unknown instead of sat only have unsat answers
+    ends_left = panel(left, data, {"sat", "unsat"}, "Solved (sat or unsat)", 250,
+                      [(k, c) for k, c in series if k not in NO_SAT])
+    ends_right = panel(right, data, {"unsat"}, "Proved unsat", 100, series)
+    handles = [Line2D([0], [0], color=c, linewidth=2) for _, c in series]
+    leg = fig.legend(handles, [labels[k] for k, _ in series], loc="lower center",
+                     ncol=len(series), frameon=False, fontsize=9, handlelength=1.8,
                      bbox_to_anchor=(0.5, 0.0))
     for text in leg.get_texts():
         text.set_color(INK2)
-    fig.suptitle("240 BAPA benchmarks of the LIA* paper artifact, %g s limit" % TIMEOUT,
-                 color=INK, fontsize=12, x=0.055, ha="left", y=0.975)
-    fig.subplots_adjust(left=0.06, right=0.985, bottom=0.24, top=0.83, wspace=0.16)
+    fig.suptitle(TITLES[reading] % TIMEOUT, color=INK, fontsize=12, x=0.055,
+                 ha="left", y=0.975)
+    fig.subplots_adjust(left=0.06, right=0.985, bottom=0.2, top=0.83, wspace=0.16)
     # the labels are placed in display coordinates, hence after the layout
     place_labels(left, ends_left)
     place_labels(right, ends_right)
     for ext in ("png", "pdf"):
-        fig.savefig(os.path.join(HERE, "cactus." + ext), facecolor=SURFACE)
+        fig.savefig(os.path.join(HERE, "cactus-%s.%s" % (reading, ext)),
+                    facecolor=SURFACE)
+    plt.close(fig)
 
 
 def main():
@@ -221,8 +234,9 @@ def main():
                         help="the time limit of the runs in seconds")
     TIMEOUT = parser.parse_args().timeout
     data = load()
-    summarize(data)
-    plot(data)
+    for reading in READINGS:
+        summarize(data, reading)
+        plot(data, reading)
 
 
 if __name__ == "__main__":

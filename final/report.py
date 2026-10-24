@@ -32,24 +32,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # the time limit of the runs, set by --timeout
 TIMEOUT = 5.0
 
-# (configuration, description in the tables, label in the plots)
+# (configuration, name in the tables and plots, options). cvc5 (sets) is the
+# sets solver of cvc5, cvc5 (bags) and cvc5 (LIA*) encode the sets as bags and
+# solve them with the bags solver of cvc5 and with its translation to LIA*, and
+# SLS is sls-reachability.
 READINGS = {
     "sets": [
-        ("sets", "cvc5, sets solver", "sets solver"),
-        ("sets-fmf", "cvc5, sets solver, `--fmf-bound`", None),
-        ("setof-stock", "cvc5, `--sets-to-bags=setof --fmf-bound` (stock bags solver)",
-         "setof + stock bags"),
-        ("setof-liastar", "cvc5, `--sets-to-bags=setof --bags-to-liastar`", "setof + LIA*"),
-        ("sls-bapa", "sls-reachability, BAPA", "sls-reachability BAPA"),
+        ("sets", "cvc5 (sets)", "`--sets-to-bags=none`"),
+        ("sets-fmf", "cvc5 (sets), fmf-bound", "`--sets-to-bags=none --fmf-bound`"),
+        ("setof-stock", "cvc5 (bags)", "`--sets-to-bags=setof --fmf-bound`"),
+        ("setof-liastar", "cvc5 (LIA*)", "`--sets-to-bags=setof --bags-to-liastar`"),
+        ("sls-bapa", "SLS", "`lia_star_solver.py`"),
     ],
     "bags": [
-        ("relaxed-stock", "cvc5, `--sets-to-bags=relaxed --fmf-bound` (stock bags solver)",
-         "relaxed + stock bags"),
-        ("relaxed-liastar", "cvc5, `--sets-to-bags=relaxed --bags-to-liastar`",
-         "relaxed + LIA*"),
-        ("sls-mapa", "sls-reachability, MAPA (`--mapa`)", "sls-reachability MAPA"),
-        ("sls-mapa-unfold5", "sls-reachability, MAPA, `--unfold=5`", None),
-        ("sls-mapa-nointerp", "sls-reachability, MAPA, `--no-interp`", None),
+        ("relaxed-stock", "cvc5 (bags)", "`--sets-to-bags=relaxed --fmf-bound`"),
+        ("relaxed-liastar", "cvc5 (LIA*)", "`--sets-to-bags=relaxed --bags-to-liastar`"),
+        ("sls-mapa", "SLS", "`lia_star_solver.py --mapa`"),
+        ("sls-mapa-unfold5", "SLS, unfolding", "`lia_star_solver.py --mapa --unfold=5`"),
+        ("sls-mapa-nointerp", "SLS, no interpolation",
+         "`lia_star_solver.py --mapa --no-interp`"),
     ],
 }
 TITLES = {
@@ -64,9 +65,11 @@ INK2 = "#52514e"
 MUTED = "#898781"
 GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
-# the categorical palette, assigned in this fixed order to the plotted
-# configurations of each reading
-PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
+# the color of each name, the same in both readings, from the first slots of
+# the categorical palette in their fixed order
+COLORS = {"cvc5 (LIA*)": "#2a78d6", "cvc5 (sets)": "#eb6834",
+          "cvc5 (bags)": "#1baf7a", "SLS": "#eda100"}
+# the plotted configurations of each reading
 SERIES = {
     "sets": ["setof-liastar", "sets", "setof-stock", "sls-bapa"],
     "bags": ["relaxed-liastar", "relaxed-stock", "sls-mapa"],
@@ -87,13 +90,13 @@ def load():
 
 
 def summarize(data, reading):
-    header = ["configuration", "unsat", "sat", "unknown", "timeout", "error",
-              "solved", "median time of solved (s)"]
+    header = ["configuration", "options", "unsat", "sat", "unknown", "timeout",
+              "error", "solved", "median time of solved (s)"]
     rows = []
-    for name, description, _ in READINGS[reading]:
-        answers = [a for _, a, _ in data[name]]
-        solved = [t for _, a, t in data[name] if a in ("sat", "unsat")]
-        rows.append([description] + [answers.count(a) for a in
+    for key, name, options in READINGS[reading]:
+        answers = [a for _, a, _ in data[key]]
+        solved = [t for _, a, t in data[key] if a in ("sat", "unsat")]
+        rows.append([name, options.strip("`")] + [answers.count(a) for a in
                                      ("unsat", "sat", "unknown", "timeout", "error")]
                     + [len(solved), "%.3f" % statistics.median(solved)])
     with open(os.path.join(HERE, "summary-%s.csv" % reading), "w", newline="") as fh:
@@ -101,11 +104,11 @@ def summarize(data, reading):
         w.writerow(header)
         w.writerows(rows)
     with open(os.path.join(HERE, "summary-%s.md" % reading), "w") as fh:
-        fh.write("| Configuration | unsat | sat | unknown | timeout | error | solved"
-                 " | median time |\n")
-        fh.write("|---|---|---|---|---|---|---|---|\n")
+        fh.write("| Configuration | Options | unsat | sat | unknown | timeout | error"
+                 " | solved | median time |\n")
+        fh.write("|---|---|---|---|---|---|---|---|---|\n")
         for r in rows:
-            fh.write("| %s | %d | %d | %d | %d | %d | %d | %s s |\n" % tuple(r))
+            fh.write("| %s | `%s` | %d | %d | %d | %d | %d | %d | %s s |\n" % tuple(r))
 
 
 def curve(rows, answers):
@@ -194,8 +197,8 @@ def panel(ax, data, answers, title, ymax, series):
 def plot(data, reading):
     plt.rcParams["font.family"] = ["Helvetica Neue", "Helvetica", "Arial",
                                    "DejaVu Sans"]
-    labels = {name: label for name, _, label in READINGS[reading]}
-    series = list(zip(SERIES[reading], PALETTE))
+    labels = {key: name for key, name, _ in READINGS[reading]}
+    series = [(key, COLORS[labels[key]]) for key in SERIES[reading]]
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.6), dpi=200)
     fig.patch.set_facecolor(SURFACE)
     # (answers counted, title, upper limit of the y axis)

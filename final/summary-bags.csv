@@ -1,6 +1,6 @@
-configuration,unsat,sat,unknown,timeout,error,solved,median time of solved (s)
-"cvc5, `--sets-to-bags=relaxed --fmf-bound` (stock bags solver)",24,109,0,107,0,133,0.021
-"cvc5, `--sets-to-bags=relaxed --bags-to-liastar`",92,148,0,0,0,240,0.020
-"sls-reachability, MAPA (`--mapa`)",69,111,0,60,0,180,0.186
-"sls-reachability, MAPA, `--unfold=5`",76,117,0,47,0,193,0.270
-"sls-reachability, MAPA, `--no-interp`",60,113,0,67,0,173,0.137
+configuration,options,unsat,sat,unknown,timeout,error,solved,median time of solved (s)
+cvc5 (bags),--sets-to-bags=relaxed --fmf-bound,24,109,0,107,0,133,0.021
+cvc5 (LIA*),--sets-to-bags=relaxed --bags-to-liastar,92,148,0,0,0,240,0.020
+SLS,lia_star_solver.py --mapa,69,111,0,60,0,180,0.186
+"SLS, unfolding",lia_star_solver.py --mapa --unfold=5,76,117,0,47,0,193,0.270
+"SLS, no interpolation",lia_star_solver.py --mapa --no-interp,60,113,0,67,0,173,0.137

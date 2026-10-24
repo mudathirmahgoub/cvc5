@@ -8,10 +8,12 @@ this writes a table, summary-sets.csv / summary-bags.csv (and .md), and cactus
 plots, cactus-sets.png / cactus-bags.png (and .pdf), next to this script.
 Requires matplotlib.
 
-In a cactus plot, time is on the x axis (log scale) and the cumulative number
-of benchmarks solved is on the y axis: the solved runtimes of each
-configuration are sorted and plotted as (t_i, i). The timeout is a vertical
-line and each curve's final count is a direct label at its right end.
+Each figure has three cactus plots: the benchmarks solved, sat or unsat, and
+those solved sat and unsat separately. In a cactus plot, time is on the x axis
+(log scale) and the cumulative number of benchmarks solved is on the y axis:
+the solved runtimes of each configuration are sorted and plotted as (t_i, i).
+The timeout is a vertical line and each curve's final count is a direct label
+at its right end.
 """
 import argparse
 import csv
@@ -194,23 +196,26 @@ def plot(data, reading):
                                    "DejaVu Sans"]
     labels = {name: label for name, _, label in READINGS[reading]}
     series = list(zip(SERIES[reading], PALETTE))
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6), dpi=200)
     fig.patch.set_facecolor(SURFACE)
-    ends_left = panel(left, data, {"sat", "unsat"}, "Solved (sat or unsat)", 250,
-                      series)
-    ends_right = panel(right, data, {"unsat"}, "Proved unsat", 100, series)
+    # (answers counted, title, upper limit of the y axis)
+    panels = [({"sat", "unsat"}, "Solved (sat or unsat)", 250),
+              ({"sat"}, "Sat", 160),
+              ({"unsat"}, "Unsat", 100)]
+    ends = [panel(ax, data, answers, title, ymax, series)
+            for ax, (answers, title, ymax) in zip(axes, panels)]
     handles = [Line2D([0], [0], color=c, linewidth=2) for _, c in series]
     leg = fig.legend(handles, [labels[k] for k, _ in series], loc="lower center",
                      ncol=len(series), frameon=False, fontsize=9, handlelength=1.8,
                      bbox_to_anchor=(0.5, 0.0))
     for text in leg.get_texts():
         text.set_color(INK2)
-    fig.suptitle(TITLES[reading] % TIMEOUT, color=INK, fontsize=12, x=0.055,
+    fig.suptitle(TITLES[reading] % TIMEOUT, color=INK, fontsize=12, x=0.04,
                  ha="left", y=0.975)
-    fig.subplots_adjust(left=0.06, right=0.985, bottom=0.2, top=0.83, wspace=0.16)
+    fig.subplots_adjust(left=0.045, right=0.99, bottom=0.2, top=0.83, wspace=0.18)
     # the labels are placed in display coordinates, hence after the layout
-    place_labels(left, ends_left)
-    place_labels(right, ends_right)
+    for ax, e in zip(axes, ends):
+        place_labels(ax, e)
     for ext in ("png", "pdf"):
         fig.savefig(os.path.join(HERE, "cactus-%s.%s" % (reading, ext)),
                     facecolor=SURFACE)

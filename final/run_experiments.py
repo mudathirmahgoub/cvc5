@@ -17,8 +17,8 @@ cvc5 cannot parse the set syntax of z3 that the benchmarks use, so each
 benchmark is translated in memory and given to cvc5 on its standard input:
 the logic ALL_SUPPORTED becomes ALL, and card, subset, intersection and
 setminus become set.card, set.subset, set.inter and set.minus. The status
-annotation is dropped, since it is the status of the verification condition
-the formula comes from, and some of the formulas themselves are satisfiable.
+annotation is dropped: every benchmark is annotated unsat, but many are
+satisfiable, which cvc5 would report as an error.
 
 Before the timed runs of each configuration, every job runs the same command
 once on the first benchmark, untimed. Otherwise the first runs of a

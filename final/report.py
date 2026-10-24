@@ -33,20 +33,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TIMEOUT = 5.0
 
 # (configuration, name in the tables and plots, options). cvc5 (sets) is the
-# sets solver of cvc5, cvc5 (bags) and cvc5 (LIA*) encode the sets as bags and
-# solve them with the bags solver of cvc5 and with its translation to LIA*, and
-# SLS is sls-reachability.
+# sets solver of cvc5, cvc5 (bags) and cvc5 (bags + LIA*) encode the sets as
+# bags and solve them with the bags solver of cvc5 and with its translation to
+# LIA*, and SLS is sls-reachability.
 READINGS = {
     "sets": [
         ("sets", "cvc5 (sets)", "`--sets-to-bags=none`"),
         ("sets-fmf", "cvc5 (sets), fmf-bound", "`--sets-to-bags=none --fmf-bound`"),
         ("setof-stock", "cvc5 (bags)", "`--sets-to-bags=setof --fmf-bound`"),
-        ("setof-liastar", "cvc5 (LIA*)", "`--sets-to-bags=setof --bags-to-liastar`"),
+        ("setof-liastar", "cvc5 (bags + LIA*)", "`--sets-to-bags=setof --bags-to-liastar`"),
         ("sls-bapa", "SLS", "`lia_star_solver.py`"),
     ],
     "bags": [
         ("relaxed-stock", "cvc5 (bags)", "`--sets-to-bags=relaxed --fmf-bound`"),
-        ("relaxed-liastar", "cvc5 (LIA*)", "`--sets-to-bags=relaxed --bags-to-liastar`"),
+        ("relaxed-liastar", "cvc5 (bags + LIA*)", "`--sets-to-bags=relaxed --bags-to-liastar`"),
         ("sls-mapa", "SLS", "`lia_star_solver.py --mapa`"),
         ("sls-mapa-unfold5", "SLS, unfolding", "`lia_star_solver.py --mapa --unfold=5`"),
         ("sls-mapa-nointerp", "SLS, no interpolation",
@@ -67,7 +67,7 @@ GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
 # the color of each name, the same in both readings, from the first slots of
 # the categorical palette in their fixed order
-COLORS = {"cvc5 (LIA*)": "#2a78d6", "cvc5 (sets)": "#eb6834",
+COLORS = {"cvc5 (bags + LIA*)": "#2a78d6", "cvc5 (sets)": "#eb6834",
           "cvc5 (bags)": "#1baf7a", "SLS": "#eda100"}
 # the plotted configurations of each reading
 SERIES = {

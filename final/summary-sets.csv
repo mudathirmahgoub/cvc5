@@ -2,5 +2,5 @@ configuration,options,unsat,sat,unknown,timeout,error,solved,median time of solv
 cvc5 (sets),--sets-to-bags=none,90,142,0,8,0,232,0.017
 "cvc5 (sets), fmf-bound",--sets-to-bags=none --fmf-bound,90,0,142,8,0,90,0.017
 cvc5 (bags),--sets-to-bags=setof --fmf-bound,24,52,0,164,0,76,0.023
-cvc5 (LIA*),--sets-to-bags=setof --bags-to-liastar,92,148,0,0,0,240,0.037
+cvc5 (bags + LIA*),--sets-to-bags=setof --bags-to-liastar,92,148,0,0,0,240,0.037
 SLS,lia_star_solver.py,78,118,0,44,0,196,0.214

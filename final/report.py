@@ -41,10 +41,6 @@ READINGS = {
         ("sls-bapa", "sls-reachability, BAPA", "sls-reachability BAPA"),
     ],
     "bags": [
-        ("bags-stock", "cvc5 on the bag version, stock bags solver (`--fmf-bound`)",
-         "bag version + stock bags"),
-        ("bags-liastar", "cvc5 on the bag version, `--bags-to-liastar`",
-         "bag version + LIA*"),
         ("relaxed-stock", "cvc5, `--sets-to-bags=relaxed --fmf-bound` (stock bags solver)",
          "relaxed + stock bags"),
         ("relaxed-liastar", "cvc5, `--sets-to-bags=relaxed --bags-to-liastar`",
@@ -54,9 +50,6 @@ READINGS = {
         ("sls-mapa-nointerp", "sls-reachability, MAPA, `--no-interp`", None),
     ],
 }
-# Configurations that report unknown instead of sat: --sets-to-bags=relaxed
-# marks the model unsound, since it is not a model of the sets it started from.
-NO_SAT = {"relaxed-stock", "relaxed-liastar"}
 TITLES = {
     "sets": "Sets: 240 BAPA benchmarks of the LIA* paper artifact, %g s limit",
     "bags": "Bags: the same benchmarks read as multisets (MAPA), %g s limit",
@@ -74,7 +67,7 @@ AXIS = "#c3c2b7"
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
 SERIES = {
     "sets": ["setof-liastar", "sets", "setof-stock", "sls-bapa"],
-    "bags": ["bags-liastar", "relaxed-liastar", "bags-stock", "relaxed-stock", "sls-mapa"],
+    "bags": ["relaxed-liastar", "relaxed-stock", "sls-mapa"],
 }
 
 
@@ -109,10 +102,8 @@ def summarize(data, reading):
         fh.write("| Configuration | unsat | sat | unknown | timeout | error | solved"
                  " | median time |\n")
         fh.write("|---|---|---|---|---|---|---|---|\n")
-        for (name, _, _), r in zip(READINGS[reading], rows):
-            unknown = "%d*" % r[3] if name in NO_SAT else str(r[3])
-            fh.write("| %s | %d | %d | %s | %d | %d | %d | %s s |\n"
-                     % (r[0], r[1], r[2], unknown, r[4], r[5], r[6], r[7]))
+        for r in rows:
+            fh.write("| %s | %d | %d | %d | %d | %d | %d | %s s |\n" % tuple(r))
 
 
 def curve(rows, answers):
@@ -205,9 +196,8 @@ def plot(data, reading):
     series = list(zip(SERIES[reading], PALETTE))
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200)
     fig.patch.set_facecolor(SURFACE)
-    # configurations that report unknown instead of sat only have unsat answers
     ends_left = panel(left, data, {"sat", "unsat"}, "Solved (sat or unsat)", 250,
-                      [(k, c) for k, c in series if k not in NO_SAT])
+                      series)
     ends_right = panel(right, data, {"unsat"}, "Proved unsat", 100, series)
     handles = [Line2D([0], [0], color=c, linewidth=2) for _, c in series]
     leg = fig.legend(handles, [labels[k] for k, _ in series], loc="lower center",

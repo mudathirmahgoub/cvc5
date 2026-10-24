@@ -1,6 +1,6 @@
 configuration,unsat,sat,unknown,timeout,error,solved,median time of solved (s)
-"cvc5, sets solver",90,142,0,8,0,232,0.019
-"cvc5, sets solver, `--fmf-bound`",90,0,142,8,0,90,0.016
-"cvc5, `--sets-to-bags=setof --fmf-bound` (stock bags solver)",24,52,0,164,0,76,0.024
-"cvc5, `--sets-to-bags=setof --bags-to-liastar`",92,148,0,0,0,240,0.036
-"sls-reachability, BAPA",78,118,0,44,0,196,0.202
+"cvc5, sets solver",90,142,0,8,0,232,0.017
+"cvc5, sets solver, `--fmf-bound`",90,0,142,8,0,90,0.017
+"cvc5, `--sets-to-bags=setof --fmf-bound` (stock bags solver)",24,52,0,164,0,76,0.023
+"cvc5, `--sets-to-bags=setof --bags-to-liastar`",92,148,0,0,0,240,0.037
+"sls-reachability, BAPA",78,118,0,44,0,196,0.214

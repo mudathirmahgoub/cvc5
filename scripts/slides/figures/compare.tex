@@ -1,0 +1,19 @@
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+benchmark & winner & VBS & real & CPU \\
+\midrule
+sc-1-th & noFMF+R & 0.09 s & 0.06 s & 0.4 s \\
+sc-1-th-just-rf & noFMF & 0.05 s & 0.06 s & 0.3 s \\
+sc-1-th-no-ltts & default & 0.05 s & 0.04 s & 0.2 s \\
+sc-2-th & noFMF+H & 3.85 s & 3.86 s & 27.0 s \\
+sc-2-th-just-rf & noFMF+H / noFMF+R & 0.21 s & 0.19 s & 1.2 s \\
+plsc-1-th & noFMF+R & 0.96 s & 0.95 s & 6.7 s \\
+plsc-1-th-just-rf & noFMF+R & 0.09 s & 0.09 s & 0.6 s \\
+plsc-1-th-no-ltts & default & 0.09 s & 0.09 s & 0.6 s \\
+plsc-2-th & noFMF+R & 76.9 s & 79.5 s & 556.4 s \\
+plsc-2-th-just-rf & noFMF+R & 0.38 s & 0.35 s & 2.5 s \\
+tso-1-th & noFMF+R & 7.14 s & 6.86 s & 48.0 s \\
+tso-1-th-just-rf & noFMF+R & 0.08 s & 0.09 s & 0.5 s \\
+tso-1-th-no-ltts & FMF+R & 1.27 s & 1.19 s & 7.1 s \\
+\bottomrule
+\end{tabular}

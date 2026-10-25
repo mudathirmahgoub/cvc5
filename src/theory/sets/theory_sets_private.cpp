@@ -57,6 +57,8 @@ TheorySetsPrivate::TheorySetsPrivate(Env& env,
       d_cardSolver(new CardinalityExtension(d_env, state, im, d_treg)),
       d_hasEnabledRels(false),
       d_rels_enabled(false),
+      d_tc_enabled(false),
+      d_join_enabled(false),
       d_hasEnabledCard(false),
       d_card_enabled(false),
       d_higher_order_kinds_enabled(false),
@@ -113,12 +115,26 @@ void TheorySetsPrivate::eqNotifyMerge(TNode t1, TNode t2)
         {
           if (s1.getKind() == s2.getKind())
           {
-            Trace("sets-prop") << "Propagate eq inference : " << s1
-                               << " == " << s2 << std::endl;
-            // infer equality between elements of singleton
-            Node exp = s1.eqNode(s2);
-            Node eq = s1[0].eqNode(s2[0]);
-            d_im.assertSetsFact(eq, true, InferenceId::SETS_SINGLETON_EQ, exp);
+            // Only assert if the elements aren't already known equal --
+            // eqNotifyMerge fires on every merge of two set equivalence
+            // classes that both have a known singleton, which can happen
+            // many times for the same underlying element pair (e.g. once per
+            // additional singleton-wrapper term that later joins either
+            // class). Without this check, each of those re-derives an
+            // already-known fact, and since the underlying elements here are
+            // shared (uninterpreted-sort) terms, each redundant assertion
+            // still propagates across theories, touching the output channel
+            // every time and blocking the round from ever going quiescent.
+            if (!d_state.areEqual(s1[0], s2[0]))
+            {
+              Trace("sets-prop") << "Propagate eq inference : " << s1
+                                 << " == " << s2 << std::endl;
+              // infer equality between elements of singleton
+              Node exp = s1.eqNode(s2);
+              Node eq = s1[0].eqNode(s2[0]);
+              d_im.assertSetsFact(
+                  eq, true, InferenceId::SETS_SINGLETON_EQ, exp);
+            }
           }
           else
           {
@@ -247,6 +263,8 @@ void TheorySetsPrivate::fullEffortReset()
   d_higher_order_kinds_enabled = false;
   d_card_enabled = false;
   d_rels_enabled = false;
+  d_tc_enabled = false;
+  d_join_enabled = false;
   // reset the state object
   d_state.reset();
   // reset the inference manager
@@ -266,6 +284,8 @@ void TheorySetsPrivate::checkBasic()
     Trace("sets-eqc") << d_equalityEngine->debugPrintEqc() << std::endl;
   }
   std::map<TypeNode, unsigned> eqcTypeCount;
+  // whether a (rel.is-functional R) term occurs
+  bool hasFunctional = false;
   eq::EqClassesIterator eqcs_i = eq::EqClassesIterator(d_equalityEngine);
   while (!eqcs_i.isFinished())
   {
@@ -324,6 +344,27 @@ void TheorySetsPrivate::checkBasic()
       else if (d_rels->isRelationKind(nk))
       {
         ensureRelationsEnabled();
+        if (nk == Kind::RELATION_TCLOSURE)
+        {
+          d_tc_enabled = true;
+        }
+        if (nk == Kind::RELATION_JOIN)
+        {
+          d_join_enabled = true;
+        }
+        if (nk == Kind::RELATION_IS_FUNCTIONAL)
+        {
+          hasFunctional = true;
+        }
+        else if (nk == Kind::RELATION_RCLOSURE)
+        {
+          // no rules for the reflexive closure of a relation that rewriting
+          // did not eliminate, e.g. (rel.rclosure R) for a variable R
+          d_fullCheckIncomplete = true;
+          d_fullCheckIncompleteId = IncompleteId::SETS_RELS_RCLOSURE;
+          Trace("sets-incomplete")
+              << "Sets : incomplete because of " << n << "." << std::endl;
+        }
       }
       else if (isHigherOrderKind(nk))
       {
@@ -331,6 +372,18 @@ void TheorySetsPrivate::checkBasic()
       }
     }
     ++eqcs_i;
+  }
+
+  if (hasFunctional && d_card_enabled)
+  {
+    // The cardinality solver may complete the model of a relation with fresh
+    // elements that are not constrained by (rel.is-functional R), so we cannot
+    // answer sat in this case.
+    d_fullCheckIncomplete = true;
+    d_fullCheckIncompleteId = IncompleteId::SETS_RELS_CARD;
+    Trace("sets-incomplete")
+        << "Sets : incomplete because of rel.is-functional with cardinality."
+        << std::endl;
   }
 
   if (TraceIsOn("sets-state"))
@@ -424,6 +477,17 @@ void TheorySetsPrivate::checkRelations()
   }
 }
 
+void TheorySetsPrivate::checkAcyclicity()
+{
+  // The acyclicity check unrolls the cycle witnesses of the constraints
+  // (rel.cyclic R) by one edge and splits on their length (applyUnrollCycle,
+  // applySplitCycleLenRule).
+  if (d_rels_enabled)
+  {
+    d_rels->checkAcyclicity();
+  }
+}
+
 void TheorySetsPrivate::checkTransitiveClosureDown()
 {
   // The transitive-closure down rule introduces fresh skolem elements. It does
@@ -443,6 +507,46 @@ void TheorySetsPrivate::checkTransitiveClosureUp()
   if (d_rels_enabled)
   {
     d_rels->checkTransitiveClosureUp();
+  }
+}
+
+void TheorySetsPrivate::checkAcyclicityLastCall()
+{
+  if (d_rels_enabled)
+  {
+    d_rels->checkAcyclicityLastCall(getValuation());
+  }
+}
+
+bool TheorySetsPrivate::hasOpenCycleObligation() const
+{
+  return d_rels_enabled && d_rels->hasOpenCycleObligation();
+}
+
+bool TheorySetsPrivate::needsTCGroundingLastCall() const
+{
+  return d_tc_enabled
+         && (options().sets.relsAcyclicHammer || options().sets.relsTcDownLazy);
+}
+
+bool TheorySetsPrivate::needsJoinGroundingLastCall() const
+{
+  return d_join_enabled && options().sets.relsAcyclicHammer;
+}
+
+void TheorySetsPrivate::checkTransitiveClosureLastCall()
+{
+  if (needsTCGroundingLastCall())
+  {
+    d_rels->checkTransitiveClosureLastCall(d_hasEnabledCard);
+  }
+}
+
+void TheorySetsPrivate::checkJoinLastCall()
+{
+  if (needsJoinGroundingLastCall())
+  {
+    d_rels->checkJoinLastCall(d_hasEnabledCard);
   }
 }
 
@@ -1456,7 +1560,13 @@ void TheorySetsPrivate::notifyFact(TNode atom,
         Node pexp = nodeManager()->mkNode(Kind::AND, atom, atom[1].eqNode(s));
         if (s.getKind() == Kind::SET_SINGLETON)
         {
-          if (s[0] != atom[0])
+          // Check semantic equality (areEqual), not just syntactic
+          // inequality (!=): notifyFact fires on every new SET_MEMBER fact
+          // for this set, which can recur many times for elements that are
+          // already known equal to s[0] via different syntactic terms.
+          // Without this check, each such recurrence redundantly re-derives
+          // an already-known fact.
+          if (!d_state.areEqual(s[0], atom[0]))
           {
             Trace("sets-prop") << "Propagate mem-eq : " << pexp << std::endl;
             Node eq = s[0].eqNode(atom[0]);
@@ -1748,8 +1858,9 @@ void TheorySetsPrivate::preRegisterTerm(TNode node)
   {
     case Kind::EQUAL:
     case Kind::SET_MEMBER:
+    case Kind::RELATION_IS_FUNCTIONAL:
     {
-      // add trigger predicate for equality and membership
+      // add trigger predicate for equality, membership and functionality
       d_state.addEqualityEngineTriggerPredicate(node);
     }
     break;

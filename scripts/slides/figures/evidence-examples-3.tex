@@ -1,0 +1,13 @@
+\begin{tabular}{@{}p{2.2cm}p{2.0cm}p{9.6cm}@{}}
+\toprule
+rule & benchmark, configuration & a lemma it sent \\
+\midrule
+TC-Sub: R$\subseteq$S & sc1n, FMF+R & {\ttfamily\raggedright (cyc5,cyc9) $\in$ po+ $\wedge$ Event$\times$Event = (po $\cup$ Event$\times$Event) $\Rightarrow$ (cyc5,cyc9) $\in$ Event$\times$Event} \\
+Fun-UF & plsc2r, noFMF+R & {\ttfamily\raggedright fun(address) $\wedge$ (cyc9,srj23) $\in$ address $\Rightarrow$ srj23 = (rfun\_34 cyc9)} \\
+TC-Down (lazy) & plsc1n, FMF+R & {\ttfamily\raggedright (cycedge59.0,cycedge59.1) $\in$ po+ $\Rightarrow$ (cycedge59.0,cycedge59.1) $\in$ po $\vee$ ((cycedge59.0,stc181) $\in$ po $\wedge$ (stc282,cycedge59.1) $\in$ po $\wedge$ (stc181 = stc282 $\vee$ (stc181,stc282) $\in$ po+))} \\
+TC-Up & plsc1r, noFMF+R & {\ttfamily\raggedright (cyc6,cyc10) $\in$ (loc $\cap$ po+) $\wedge$ (loc $\cap$ po+) = (loc $\cap$ po+) $\Rightarrow$ (cyc6,cyc10) $\in$ ((loc $\cap$ po+))+} \\
+TC-Down & sc1n, def & {\ttfamily\raggedright (cyc5,cyc9) $\in$ po+ $\Rightarrow$ (cyc5,cyc9) $\in$ po $\vee$ ((cyc5,stc123) $\in$ po $\wedge$ (stc224,cyc9) $\in$ po $\wedge$ (stc123 = stc224 $\vee$ (stc123,stc224) $\in$ po+))} \\
+Join-Compose & sc1r, noFMF+H & {\ttfamily\raggedright (cyc9) $\in$ Write $\wedge$ (cyc9,cyc5) $\in$ rf+ $\wedge$ rf = rf+ $\Rightarrow$ (cyc5) $\in$ Write;rf} \\
+Join-Split & sc1, noFMF+R & {\ttfamily\raggedright (cyc5,cyc9) $\in$ (address;(address)$^{-1}$ $\cup$ (co $\cup$ (rf $\cup$ fr))) $\wedge$ address;(address)$^{-1}$ = (address;(address)$^{-1}$ $\cup$ (co $\cup$ (rf $\cup$ fr))) $\Rightarrow$ (cyc5,srj22) $\in$ address} \\
+\bottomrule
+\end{tabular}

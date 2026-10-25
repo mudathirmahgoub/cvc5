@@ -1,0 +1,11 @@
+\begin{tabular}{@{}lp{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}@{}}
+\toprule
+rule & def & FMF & noFMF & stop & FMF+R & noFMF+R & noFMF+H \\
+\midrule
+TC-Down (lazy) &  &  &  &  & \bad{plsc1n}, \bad{tso1n} &  &  \\
+TC-Up & \textbf{sc2r} & \bad{plsc1} & $\cdot$ & $\cdot$ & \bad{plsc1}, \bad{plsc1r}, \bad{plsc2r}, \bad{tso1} & \textbf{plsc1}, \textbf{plsc1r}, \textbf{plsc2r}, \textbf{tso1} & $\cdot$ \\
+TC-Down & \bad{plsc1n}, \bad{sc1n}, \bad{tso1n} & \bad{plsc1n} & $\cdot$ & \bad{plsc1n}, \bad{sc1n} &  &  &  \\
+Join-Compose & \bad{sc1r}, \bad{sc2r} & \textbf{tso1r}, \bad{plsc1}, \bad{sc1}, \bad{sc1r}, \bad{sc2r} & \textbf{sc1r}, \textbf{sc2r} & \bad{sc1r} & \bad{plsc1}, \bad{plsc1r}, \bad{plsc2r}, \bad{sc1}, \bad{sc1r}, \bad{sc2}, \bad{sc2r}, \bad{tso1} & \textbf{plsc1}, \textbf{plsc1r}, \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc1}, \textbf{sc1r}, \textbf{sc2}, \textbf{sc2r}, \textbf{tso1} & \textbf{sc1r}, \textbf{sc2}, \textbf{sc2r} \\
+Join-Split & \bad{tso1n} & \textbf{tso1r}, \bad{plsc1}, \bad{sc1} & $\cdot$ & \textbf{sc1r}, \bad{plsc1n} & \textbf{tso1}, \bad{plsc1}, \bad{plsc1r}, \bad{plsc2r}, \bad{sc1}, \bad{tso1r}, \bad{tso1n} & \textbf{plsc1}, \textbf{plsc1r}, \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc1}, \textbf{sc2}, \textbf{tso1}, \textbf{tso1r} &  \\
+\bottomrule
+\end{tabular}

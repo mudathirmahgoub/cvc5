@@ -298,6 +298,27 @@ typerule = "::cvc5::internal::theory::sets::RelTransClosureTypeRule"
 
 [[kinds]]
 type     = "operator"
+name     = "RELATION_RCLOSURE"
+children = 1
+comment  = "relation reflexive closure"
+typerule = "::cvc5::internal::theory::sets::RelReflClosureTypeRule"
+
+[[kinds]]
+type     = "operator"
+name     = "RELATION_RTCLOSURE"
+children = 1
+comment  = "relation reflexive transitive closure"
+typerule = "::cvc5::internal::theory::sets::RelReflTransClosureTypeRule"
+
+[[kinds]]
+type     = "operator"
+name     = "RELATION_CYCLIC"
+children = 1
+comment  = "relation cyclic: (rel.cyclic R) iff (x, x) in (rel.tclosure R) for some x"
+typerule = "::cvc5::internal::theory::sets::RelCyclicTypeRule"
+
+[[kinds]]
+type     = "operator"
 name     = "RELATION_JOIN_IMAGE"
 children = 2
 comment  = "relation join image"
@@ -309,6 +330,13 @@ name     = "RELATION_IDEN"
 children = 1
 comment  ="relation identity"
 typerule = "::cvc5::internal::theory::sets::RelIdenTypeRule"
+
+[[kinds]]
+type     = "operator"
+name     = "RELATION_IS_FUNCTIONAL"
+children = 1
+comment  = "predicate: the binary relation is functional (right-unique)"
+typerule = "::cvc5::internal::theory::sets::RelIsFunctionalTypeRule"
 
 # rel.table_join operator
 [[kinds]]

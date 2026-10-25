@@ -3933,6 +3933,81 @@ enum ENUM(Kind)
    */
   EVALUE(RELATION_TCLOSURE),
   /**
+   * Relation reflexive closure.
+   *
+   * \rst
+   * ``(rel.rclosure R)`` is :math:`R` together with the pairs
+   * :math:`(x, x)` for every :math:`x` in the domain or range of the binary
+   * relation :math:`R`, e.g., :math:`\{(1, 2)\}` gives
+   * :math:`\{(1, 1), (1, 2), (2, 2)\}`. The solver only supports it if its
+   * argument is built from the empty set, singletons and unions, which
+   * rewriting eliminates; otherwise it may answer unknown.
+   * \endrst
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` Term of relation Sort
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - TermManager::mkTerm(Kind, const std::vector<Term>&)
+   *   - TermManager::mkTerm(const Op&, const std::vector<Term>&)
+   *
+   * - Create Op of this kind with:
+   *
+   *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
+   */
+  EVALUE(RELATION_RCLOSURE),
+  /**
+   * Relation reflexive transitive closure.
+   *
+   * \rst
+   * ``(rel.rtclosure R)`` is the union of ``(rel.rclosure R)`` and
+   * ``(rel.tclosure R)``, e.g., :math:`\{(1, 2), (2, 3)\}` gives
+   * :math:`\{(1, 1), (1, 2), (1, 3), (2, 2), (2, 3), (3, 3)\}`.
+   * \endrst
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` Term of relation Sort
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - TermManager::mkTerm(Kind, const std::vector<Term>&)
+   *   - TermManager::mkTerm(const Op&, const std::vector<Term>&)
+   *
+   * - Create Op of this kind with:
+   *
+   *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
+   */
+  EVALUE(RELATION_RTCLOSURE),
+  /**
+   * Relation cyclicity predicate.
+   *
+   * \rst
+   * ``(rel.cyclic R)`` holds iff :math:`(x, x) \in R^+` for some :math:`x`,
+   * where :math:`R^+` is the transitive closure of the binary relation
+   * :math:`R`, i.e., iff :math:`R` has a cycle. Acyclicity of :math:`R` is
+   * ``(not (rel.cyclic R))``. For example, ``(rel.cyclic (set.union R S))``
+   * holds for :math:`R = \{(a, b)\}` and :math:`S = \{(b, a)\}`, while
+   * ``(rel.cyclic R)`` and ``(rel.cyclic S)`` do not.
+   * \endrst
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` Term of binary relation Sort whose two columns have the same Sort
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - TermManager::mkTerm(Kind, const std::vector<Term>&)
+   *   - TermManager::mkTerm(const Op&, const std::vector<Term>&)
+   *
+   * - Create Op of this kind with:
+   *
+   *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
+   */
+  EVALUE(RELATION_CYCLIC),
+  /**
    * Relation join image.
    *
    * - Arity: ``2``
@@ -3980,6 +4055,37 @@ enum ENUM(Kind)
    * \endrst
    */
   EVALUE(RELATION_IDEN),
+  /**
+   * Relation functionality predicate.
+   *
+   * \rst
+   * ``(rel.is-functional R)`` holds if the binary relation
+   * :math:`R` is functional (right-unique), that is, if
+   * :math:`(x, y) \in R` and :math:`(x, z) \in R` imply :math:`y = z`.
+   * :math:`R` need not be total.
+   * \endrst
+   *
+   * - Arity: ``1``
+   *
+   *   - ``1:`` Term of binary relation Sort
+   *
+   * - Create Term of this Kind with:
+   *
+   *   - TermManager::mkTerm(Kind, const std::vector<Term>&)
+   *   - TermManager::mkTerm(const Op&, const std::vector<Term>&)
+   *
+   * - Create Op of this kind with:
+   *
+   *   - TermManager::mkOp(Kind, const std::vector<uint32_t>&)
+   *
+   * \rst
+   * .. warning::
+   *
+   *     This kind is experimental and may be changed or removed in future
+   *     versions.
+   * \endrst
+   */
+  EVALUE(RELATION_IS_FUNCTIONAL),
   /**
    * Relation group
    *

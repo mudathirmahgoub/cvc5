@@ -68,6 +68,19 @@ enum class IncompleteId
   SETS_RELS_CARD,
   // finite model finding used in combination with set cardinality constraints
   SETS_FMF_BOUND_CARD,
+  // the length of the cycle witness of a (rel.cyclic R) has no practical
+  // value in the candidate model, so the witness could not be completed
+  SETS_RELS_ACYCLIC_LEN_UNKNOWN,
+  // at last call, a membership (a, b) in TC(R) is not explained by the known
+  // members of R, but with cardinality constraints the cardinality solver
+  // may still add members to R, so the grounding conflict cannot be sent
+  SETS_RELS_TCLOSURE_GROUNDING_UNKNOWN,
+  // the same for a membership in (rel.join A B)
+  SETS_RELS_JOIN_GROUNDING_UNKNOWN,
+  // a reflexive closure (rel.rclosure R) that rewriting did not eliminate
+  // (it only does for constants, singletons and unions); the relations
+  // solver has no rules for it
+  SETS_RELS_RCLOSURE,
   // we skipped processing a looping word equation
   STRINGS_LOOP_SKIP,
   // we could not simplify a regular expression membership

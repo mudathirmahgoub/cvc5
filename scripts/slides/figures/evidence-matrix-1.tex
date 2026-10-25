@@ -1,0 +1,18 @@
+\begin{tabular}{@{}lp{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}p{1.62cm}@{}}
+\toprule
+rule & def & FMF & noFMF & stop & FMF+R & noFMF+R & noFMF+H \\
+\midrule
+Cycle-Def & $\cdot$ & $\cdot$ &  & $\cdot$ & \textbf{tso1} & $\cdot$ &  \\
+Inst-Cycle & \bad{plsc1n}, \bad{sc1r}, \bad{sc1n}, \bad{sc2r}, \bad{tso1n} & \bad{sc2r} & \textbf{sc2r} & \bad{plsc1n}, \bad{sc1r}, \bad{sc1n} & \bad{plsc2r}, \bad{sc2}, \bad{sc2r} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Unroll & \bad{plsc1n}, \bad{sc1r}, \bad{sc1n}, \bad{sc2r}, \bad{tso1n} & \bad{plsc1n}, \bad{sc2r} & \textbf{sc2r} & \bad{plsc1n}, \bad{sc1r}, \bad{sc1n} & \bad{plsc1n}, \bad{plsc2r}, \bad{sc2}, \bad{sc2r} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Split-Len & \bad{sc2r} & \bad{sc2r} & \textbf{sc2r} & $\cdot$ & \textbf{tso1}, \bad{plsc2r}, \bad{sc2}, \bad{sc2r} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Alternate & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & \textbf{tso1} & $\cdot$ & $\cdot$ \\
+Alt-Close & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ \\
+Chord & $\cdot$ & \textbf{sc2r} & \textbf{sc2r} & $\cdot$ & \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r}, \textbf{tso1} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Distinct & \textbf{sc1r} & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ \\
+Backward &  & $\cdot$ & $\cdot$ &  & \textbf{sc2} & $\cdot$ & $\cdot$ \\
+LC completion & \textbf{sc2r} & \bad{sc2r} & \textbf{sc2r} & $\cdot$ & \bad{plsc2r}, \bad{sc2}, \bad{sc2r} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+Branch & $\cdot$ &  &  & \textbf{sc1r} &  &  &  \\
+all minimality & \textbf{plsc1n}, \textbf{sc1n}, \textbf{tso1n} & \textbf{plsc1}, \textbf{plsc1n}, \textbf{sc1n}, \textbf{sc2r} & \textbf{sc2r} & $\cdot$ & \textbf{plsc1n}, \textbf{plsc2r}, \textbf{sc1n}, \textbf{sc2}, \textbf{sc2r}, \textbf{tso1}, \textbf{tso1n} & \textbf{plsc2}, \textbf{plsc2r}, \textbf{sc2}, \textbf{sc2r} & \textbf{sc2}, \textbf{sc2r} \\
+\bottomrule
+\end{tabular}

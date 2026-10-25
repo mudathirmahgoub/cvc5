@@ -59,10 +59,21 @@
   (-> (Set T) (Set U) (Set ($tuple_type_join T U))))
 (declare-parameterized-const rel.group ((T Type :implicit))
   (-> @List (Set T) (Set (Set T))))
+; (rel.cyclic R) holds iff some (x, x) is in the transitive closure of R.
+(declare-parameterized-const rel.cyclic ((T Type :implicit))
+  (-> (Set (Tuple T T)) Bool))
 
 ; Experimental relation operators.
 (declare-parameterized-const rel.iden ((T Type :implicit))
   (-> (Set (Tuple T)) (Set (Tuple T T))))
+(declare-parameterized-const rel.is-functional ((T Type :implicit) (U Type :implicit))
+  (-> (Set (Tuple T U)) Bool))
+; (rel.rclosure R) is R with (x, x) for every x in its domain or range;
+; (rel.rtclosure R) is its union with (rel.tclosure R).
+(declare-parameterized-const rel.rclosure ((T Type :implicit))
+  (-> (Set (Tuple T T)) (Set (Tuple T T))))
+(declare-parameterized-const rel.rtclosure ((T Type :implicit))
+  (-> (Set (Tuple T T)) (Set (Tuple T T))))
 (declare-parameterized-const rel.join_image ((T Type :implicit))
   (-> (Set (Tuple T T)) Int (Set (Tuple T))))
 

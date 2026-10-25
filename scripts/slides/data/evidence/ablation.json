@@ -1,0 +1,3817 @@
+{
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.29,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.25,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.25,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.17,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.25,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "unsat",
+  "time": 0.28,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.43,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.5,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.39,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.14,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unknown",
+  "time": 0.92,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-just-rf|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_INST_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|default||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.11,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.12,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "sat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TCLOSURE_DOWN_LAZY": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "sat",
+  "time": 0.34,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_INST_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.23,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.26,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "sat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.4,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.24,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.33,
+  "limit": 60
+ },
+ "plsc-1-th-no-ltts|stoponly||GROUP_MINIMALITY": {
+  "answer": "sat",
+  "time": 0.36,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "unsat",
+  "time": 5.02,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.44,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 20.24,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 4.8,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 4.79,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 4.23,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 10.87,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 10.33,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.42,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 6.52,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 5.58,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 5.71,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.54,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 15.53,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "unsat",
+  "time": 3.44,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.4,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.49,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 2.95,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 5.45,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 3.61,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 16.3,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 5.09,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 10.31,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 1.76,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.63,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 3.63,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "unsat",
+  "time": 1.39,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "unsat",
+  "time": 3.37,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "unsat",
+  "time": 1.68,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 4.09,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 1.96,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 1.46,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 2.02,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 1.8,
+  "limit": 60
+ },
+ "plsc-1-th|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 9.0,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.34,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.35,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.71,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.77,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.86,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.86,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.86,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.98,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 1.44,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.64,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.84,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "unsat",
+  "time": 0.7,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "unsat",
+  "time": 0.7,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "unsat",
+  "time": 0.78,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.78,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 1.67,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "plsc-1-th|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 1.0,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.92,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.9,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.94,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 1.09,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "sat",
+  "time": 0.17,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.88,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.6,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.99,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 51.99,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.71,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 6.68,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unknown",
+  "time": 0.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unknown",
+  "time": 0.04,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unknown",
+  "time": 0.06,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.35,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.33,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.33,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "unknown",
+  "time": 0.14,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unknown",
+  "time": 3.66,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.08,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unknown",
+  "time": 1.41,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th-just-rf|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unknown",
+  "time": 90.69,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unknown",
+  "time": 8.02,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unknown",
+  "time": 57.56,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 59.16,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 66.9,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 77.48,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 68.82,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 68.0,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 10.49,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 77.19,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "timeout",
+  "time": 300.02,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 67.97,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 179.54,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 300.02,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 300.02,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "plsc-2-th|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 300.02,
+  "limit": 300
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.01,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_DISTINCT": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.23,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|default||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.12,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.13,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-hammer||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.22,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.01,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.01,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 2.22,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 5.64,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "unsat",
+  "time": 22.18,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 20.83,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 6.59,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 6.03,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.72,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-just-rf|stoponly||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_INST_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|default||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "sat",
+  "time": 0.14,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_INST_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.11,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.11,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th-no-ltts|stoponly||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.65,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.66,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.57,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.47,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.34,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 3.59,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.88,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.13,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 1.79,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.09,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.32,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.21,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.48,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "unsat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.45,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.11,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.17,
+  "limit": 60
+ },
+ "sc-1-th|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 1.21,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-1-th|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.12,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.01,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 1.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "unsat",
+  "time": 1.06,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.92,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.91,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 1.07,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_TCLOSURE_UP": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.34,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|default||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 1.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.64,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.37,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.34,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 1.64,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "sat",
+  "time": 0.23,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.33,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.4,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.3,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.38,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.26,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.29,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.13,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.26,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.25,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unknown",
+  "time": 0.05,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unknown",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unknown",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.52,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.24,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.94,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "unknown",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.23,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.11,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.27,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.24,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_INST_CYCLE": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.17,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.14,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.12,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.14,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-hammer||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unknown",
+  "time": 0.03,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unknown",
+  "time": 0.04,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unknown",
+  "time": 0.08,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.26,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "unknown",
+  "time": 0.28,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unknown",
+  "time": 0.55,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unknown",
+  "time": 0.07,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "sc-2-th-just-rf|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 0.08,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 31.11,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 22.21,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 86.02,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 32.87,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "timeout",
+  "time": 86.02,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "sat",
+  "time": 0.86,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.16,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 45.01,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 4.13,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "timeout",
+  "time": 86.03,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "timeout",
+  "time": 86.02,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 35.13,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "timeout",
+  "time": 86.03,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 13.93,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.07,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unsat",
+  "time": 66.37,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 86.03,
+  "limit": 86
+ },
+ "sc-2-th|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 86.02,
+  "limit": 86
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_INST_CYCLE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 2.84,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 3.32,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 3.36,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 5.39,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 3.24,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 0.71,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 3.45,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 3.59,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 3.41,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-hammer||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unknown",
+  "time": 0.22,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unknown",
+  "time": 0.66,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 159.41,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 85.31,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 92.51,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 34.24,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_LAST_CALL_COMPLETION": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 123.87,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "unsat",
+  "time": 86.59,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "timeout",
+  "time": 300.02,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 184.15,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 205.13,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "sc-2-th|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "unsat",
+  "time": 36.57,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.41,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 50.19,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 52.64,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 61.48,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 110.83,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 6.35,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 13.8,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 84.24,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 255.02,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 12.17,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.2,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 255.03,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 255.03,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 16.02,
+  "limit": 255
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "unsat",
+  "time": 0.75,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.15,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.18,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.19,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.17,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.07,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.22,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.21,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "sat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.16,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "unsat",
+  "time": 0.1,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "unsat",
+  "time": 0.03,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "unsat",
+  "time": 0.05,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "unknown",
+  "time": 0.33,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "tso-1-th-just-rf|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 0.04,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "sat",
+  "time": 3.83,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_INST_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.02,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 7.96,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 3.82,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 3.86,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 4.31,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 10.95,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_ANCHOR_BRANCH": {
+  "answer": "sat",
+  "time": 3.75,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 3.36,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.53,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 3.73,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 1.13,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_TCLOSURE_DOWN": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.03,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.31,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|default||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "sat",
+  "time": 0.29,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "sat",
+  "time": 0.2,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "sat",
+  "time": 1.04,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "sat",
+  "time": 1.03,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "sat",
+  "time": 1.02,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "sat",
+  "time": 1.05,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "sat",
+  "time": 0.66,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "sat",
+  "time": 0.51,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "sat",
+  "time": 0.75,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "sat",
+  "time": 0.72,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "sat",
+  "time": 1.65,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "sat",
+  "time": 0.82,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "sat",
+  "time": 0.6,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "sat",
+  "time": 0.55,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "sat",
+  "time": 1.45,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "sat",
+  "time": 0.98,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TCLOSURE_DOWN_LAZY": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 1.03,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 0.84,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.33,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "Fatal failure within void cvc5::internal::smt::CheckModels::checkModel(TheoryModel *, const context::CDList<Node> &, bool) at /Users/mahgoubyahia/cvc5/rachel-evidence/src/smt/check_models.cpp:251",
+  "time": 0.06,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th-no-ltts|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_SELF_LOOP": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 76.13,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 78.46,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 201.93,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 169.41,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 122.41,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 34.72,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 155.93,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_INTER_MINUS": {
+  "answer": "unsat",
+  "time": 283.55,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 235.21,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "sat",
+  "time": 111.89,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "sat",
+  "time": 0.4,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 53.14,
+  "limit": 300
+ },
+ "tso-1-th|fmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "timeout",
+  "time": 300.03,
+  "limit": 300
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_INST_CYCLE": {
+  "answer": "unsat",
+  "time": 2.26,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_UNROLL_CYCLE": {
+  "answer": "unsat",
+  "time": 2.34,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_SPLIT_CYCLE_LEN": {
+  "answer": "unsat",
+  "time": 5.57,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_ALTERNATE": {
+  "answer": "unsat",
+  "time": 6.35,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_ALT_CLOSE": {
+  "answer": "unsat",
+  "time": 6.45,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_CHORD": {
+  "answer": "unsat",
+  "time": 6.38,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_DISTINCT": {
+  "answer": "unsat",
+  "time": 6.38,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_BACKWARD": {
+  "answer": "unsat",
+  "time": 9.07,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_ACYCLIC_DOWN": {
+  "answer": "unsat",
+  "time": 7.09,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_REGISTER": {
+  "answer": "unsat",
+  "time": 6.23,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_ANCHOR_INCLUSION": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SYNTACTIC": {
+  "answer": "unsat",
+  "time": 3.39,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SELF": {
+  "answer": "unsat",
+  "time": 6.13,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_PRODUCT": {
+  "answer": "unsat",
+  "time": 6.22,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_TC_SUBSET_SUPERSET": {
+  "answer": "unsat",
+  "time": 3.56,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_FUNCTIONAL": {
+  "answer": "unsat",
+  "time": 21.51,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_TCLOSURE_UP": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_COMPOSE": {
+  "answer": "timeout",
+  "time": 60.03,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||SETS_RELS_JOIN_SPLIT_1": {
+  "answer": "timeout",
+  "time": 60.02,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||GROUP_CLOSURE_INDUCTION": {
+  "answer": "unsat",
+  "time": 2.31,
+  "limit": 60
+ },
+ "tso-1-th|nofmf-unsat-rules||GROUP_MINIMALITY": {
+  "answer": "unsat",
+  "time": 8.41,
+  "limit": 60
+ }
+}

@@ -1991,6 +1991,22 @@ set(regress_0_tests
   regress0/rels/card_transpose.cvc.smt2
   regress0/rels/iden_0.cvc.smt2
   regress0/rels/iden_1.cvc.smt2
+  regress0/rels/is_functional_arith.smt2
+  regress0/rels/is_functional_basic.smt2
+  regress0/rels/is_functional_compose.smt2
+  regress0/rels/is_functional_congruence.smt2
+  regress0/rels/is_functional_injective.smt2
+  regress0/rels/is_functional_neg_congr.smt2
+  regress0/rels/is_functional_neg_model.smt2
+  regress0/rels/is_functional_neg_sat.smt2
+  regress0/rels/is_functional_rw_const_false.smt2
+  regress0/rels/is_functional_rw_const_true.smt2
+  regress0/rels/is_functional_rw_empty.smt2
+  regress0/rels/is_functional_rw_iden.smt2
+  regress0/rels/is_functional_sat.smt2
+  regress0/rels/is_functional_subset.smt2
+  regress0/rels/is_functional_tclosure.smt2
+  regress0/rels/is_functional_union_sat.smt2
   regress0/rels/issue11903-join-unit-tuple.smt2
   regress0/rels/join-eq-u-sat.cvc.smt2
   regress0/rels/join-eq-u.cvc.smt2
@@ -1999,6 +2015,8 @@ set(regress_0_tests
   regress0/rels/qgu-fuzz-relations-1.smt2
   regress0/rels/qgu-fuzz-relations-1-dd.smt2
   regress0/rels/rel_1tup_0.cvc.smt2
+  regress0/rels/rel_acyclic_flatten_union.smt2
+  regress0/rels/rel_acyclic_self_loop.smt2
   regress0/rels/rel_complex_0.cvc.smt2
   regress0/rels/rel_complex_1.cvc.smt2
   regress0/rels/rel_conflict_0.cvc.smt2
@@ -2028,6 +2046,18 @@ set(regress_0_tests
   regress0/rels/rel_tc_3.cvc.smt2
   regress0/rels/rel_tc_7.cvc.smt2
   regress0/rels/rel_tc_8.cvc.smt2
+  regress0/rels/rel_tc_grounding_cut.smt2
+  regress0/rels/rel_tc_grounding_cut_sat.smt2
+  regress0/rels/rel_tc_down_lazy_sat.smt2
+  regress0/rels/rel_tc_down_lazy_unsat.smt2
+  regress0/rels/rel_join_grounding_alias.smt2
+  regress0/rels/rel_join_grounding_distinct.smt2
+  regress0/rels/rel_join_grounding_key.smt2
+  regress0/rels/rel_join_grounding_merge.smt2
+  regress0/rels/rel_rclosure_union.smt2
+  regress0/rels/rel_tc_subset_disjoint.smt2
+  regress0/rels/rel_tc_subset_functional.smt2
+  regress0/rels/rel_tc_subset_transitive.smt2
   regress0/rels/rel_tp_3_1.cvc.smt2
   regress0/rels/rel_tp_join_0.cvc.smt2
   regress0/rels/rel_tp_join_1.cvc.smt2
@@ -3647,6 +3677,31 @@ set(regress_1_tests
   regress1/quantifiers/var-eq-trigger-simple.smt2
   regress1/quantifiers/z3.620661-no-fv-trigger.smt2
   regress1/quantifiers/z3.855483_dio_nl.smt2
+  regress1/rels/cycles/acyclic-by-inclusion.smt2
+  regress1/rels/cycles/acyclic-down-exp-tuple.smt2
+  regress1/rels/cycles/acyclic-ltts-plsc-1-th-isf.smt2
+  regress1/rels/cycles/acyclic-ltts-plsc-1-th-nofmf.smt2
+  regress1/rels/cycles/acyclic-ltts-plsc-2-th-just-rf-isf.smt2
+  regress1/rels/cycles/acyclic-ltts-sc-1-th.smt2
+  regress1/rels/cycles/acyclic1.smt2
+  regress1/rels/cycles/acyclic2.smt2
+  regress1/rels/cycles/acyclic3.smt2
+  regress1/rels/cycles/acyclic4.smt2
+  regress1/rels/cycles/acyclic5.smt2
+  regress1/rels/cycles/acyclic6.smt2
+  regress1/rels/cycles/acyclic7.smt2
+  regress1/rels/cycles/acyclic10.smt2
+  regress1/rels/cycles/cyclic-same-operands.smt2
+  regress1/rels/cycles/cyclic-same-operands-sat.smt2
+  regress1/rels/cycles/acyclic_multi_rel.smt2
+  regress1/rels/cycles/acyclic_union_single.smt2
+  regress1/rels/cycles/acyclic_union_single_tc.smt2
+  regress1/rels/cycles/acyclic_union_multi.smt2
+  regress1/rels/cycles/acyclic_union_multi_core.smt2
+  regress1/rels/cycles/acyclic-cycle-pinned.smt2
+  regress1/rels/cycles/not-acyclic-cycle-pinned.smt2
+  regress1/rels/cycles/multi-rel-no-hammer-bug.smt2
+  regress1/rels/cycles/tcgrounding-identity-sat.smt2
   regress1/rels/addr_book_1.cvc.smt2
   regress1/rels/addr_book_1_1.cvc.smt2
   regress1/rels/bv1-unit.cvc.smt2
@@ -4394,6 +4449,7 @@ set(regress_2_tests
   regress2/quantifiers/nunchaku2309663.nun.min.smt2
   regress2/quantifiers/small-bug1-fixpoint-3.smt2
   regress2/quantifiers/syn874-1.smt2
+  regress2/rels/acyclic-ltts-sc-2-th-nofmf.smt2
   regress2/seq/err-model-soundness.smt2
   regress2/simplify.javafe.ast.ArrayInit.35_without_quantification2.smt2
   regress2/strings/bidir_star.smt2

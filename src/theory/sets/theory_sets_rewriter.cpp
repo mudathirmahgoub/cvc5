@@ -405,12 +405,16 @@ RewriteResponse TheorySetsRewriter::postRewrite(TNode node)
     case Kind::SET_ALL: return postRewriteAll(node);
     case Kind::SET_SOME: return postRewriteSome(node);
     case Kind::SET_FOLD: return postRewriteFold(node);
+    case Kind::RELATION_CYCLIC: return postRewriteCyclic(node);
+    case Kind::RELATION_RCLOSURE: return postRewriteRClosure(node);
+    case Kind::RELATION_RTCLOSURE: return postRewriteRTClosure(node);
     case Kind::RELATION_TABLE_JOIN:
     case Kind::RELATION_TRANSPOSE:
     case Kind::RELATION_PRODUCT:
     case Kind::RELATION_JOIN:
     case Kind::RELATION_TCLOSURE:
     case Kind::RELATION_IDEN:
+    case Kind::RELATION_IS_FUNCTIONAL:
     case Kind::RELATION_JOIN_IMAGE:
     case Kind::RELATION_GROUP:
     case Kind::RELATION_AGGREGATE:
@@ -747,6 +751,32 @@ RewriteResponse TheorySetsRewriter::postRewriteRelations(TNode node)
       break;
     }
 
+    case Kind::RELATION_IS_FUNCTIONAL:
+    {
+      // the empty relation, a singleton and an identity relation are
+      // functional
+      Kind k0 = node[0].getKind();
+      if (k0 == Kind::SET_EMPTY || k0 == Kind::SET_SINGLETON
+          || k0 == Kind::RELATION_IDEN)
+      {
+        return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+      }
+      if (node[0].isConst())
+      {
+        // a constant relation is functional iff its tuples have pairwise
+        // distinct first components (the tuples themselves are distinct)
+        std::set<Node> firsts;
+        for (const Node& t : NormalForm::getElementsFromNormalConstant(node[0]))
+        {
+          if (!firsts.insert(TupleUtils::nthElementOfTuple(t, 0)).second)
+          {
+            return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
+          }
+        }
+        return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+      }
+      return RewriteResponse(REWRITE_DONE, node);
+    }
     case Kind::RELATION_GROUP: return postRewriteGroup(node);
     case Kind::RELATION_AGGREGATE: return postRewriteAggregate(node);
     case Kind::RELATION_PROJECT: return postRewriteProject(node);
@@ -864,6 +894,107 @@ RewriteResponse TheorySetsRewriter::postRewriteTableJoin(TNode n)
     return RewriteResponse(REWRITE_AGAIN_FULL, ret);
   }
   return RewriteResponse(REWRITE_DONE, n);
+}
+
+RewriteResponse TheorySetsRewriter::postRewriteCyclic(TNode n)
+{
+  Assert(n.getKind() == Kind::RELATION_CYCLIC);
+  NodeManager* nm = nodeManager();
+  Node r = n[0];
+  // the empty relation has no cycle
+  if (r.getKind() == Kind::SET_EMPTY)
+  {
+    return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
+  }
+  // a single pair (x, y) is a cycle iff it is a self-loop
+  if (r.getKind() == Kind::SET_SINGLETON)
+  {
+    Node x = TupleUtils::nthElementOfTuple(r[0], 0);
+    Node y = TupleUtils::nthElementOfTuple(r[0], 1);
+    return RewriteResponse(REWRITE_AGAIN_FULL, x.eqNode(y));
+  }
+  // a constant relation is cyclic iff its transitive closure has a self-loop
+  if (r.isConst())
+  {
+    std::set<Node> mems = NormalForm::getElementsFromNormalConstant(r);
+    std::set<Node> tc = RelsUtils::computeTC(mems, r);
+    for (const Node& tuple : tc)
+    {
+      if (TupleUtils::nthElementOfTuple(tuple, 0)
+          == TupleUtils::nthElementOfTuple(tuple, 1))
+      {
+        return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
+      }
+    }
+    return RewriteResponse(REWRITE_DONE, nm->mkConst(false));
+  }
+  return RewriteResponse(REWRITE_DONE, n);
+}
+
+RewriteResponse TheorySetsRewriter::postRewriteRClosure(TNode n)
+{
+  Assert(n.getKind() == Kind::RELATION_RCLOSURE);
+  NodeManager* nm = nodeManager();
+  Kind k = n[0].getKind();
+  switch (k)
+  {
+    case Kind::SET_EMPTY:
+    {
+      // (rel.rclosure empty) = empty
+      Node ret = n[0];
+      return RewriteResponse(REWRITE_DONE, ret);
+    }
+    case Kind::SET_SINGLETON:
+    {
+      // (rel.rclosure {(x, y)}) = {(y, y)} U ({(x, x)} U {(x, y)}),
+      // e.g. (rel.rclosure {(1, 2)}) = {(1, 1), (1, 2), (2, 2)}
+      Node tuple = n[0][0];
+      Node x = TupleUtils::nthElementOfTuple(tuple, 0);
+      Node y = TupleUtils::nthElementOfTuple(tuple, 1);
+
+      Node ret = n[0];
+      Node tuplex =
+          TupleUtils::constructTupleFromElements(tuple.getType(), {x, x}, 0, 1);
+      Node singletonx = nm->mkNode(Kind::SET_SINGLETON, tuplex);
+      ret = nm->mkNode(Kind::SET_UNION, singletonx, ret);
+      Node tupley =
+          TupleUtils::constructTupleFromElements(tuple.getType(), {y, y}, 0, 1);
+      Node singletony = nm->mkNode(Kind::SET_SINGLETON, tupley);
+      ret = nm->mkNode(Kind::SET_UNION, singletony, ret);
+
+      return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+    }
+    case Kind::SET_UNION:
+    {
+      // (rel.rclosure (A U B)) = (rel.rclosure A) U (rel.rclosure B), since
+      // the elements related by A U B are those related by A or by B
+      Node A = n[0][0];
+      Node B = n[0][1];
+
+      Node rcloseA = nm->mkNode(Kind::RELATION_RCLOSURE, A);
+      Node rcloseB = nm->mkNode(Kind::RELATION_RCLOSURE, B);
+
+      Node ret = nm->mkNode(Kind::SET_UNION, rcloseA, rcloseB);
+
+      return RewriteResponse(REWRITE_AGAIN_FULL, ret);
+    }
+
+    default: break;
+  }
+  return RewriteResponse(REWRITE_DONE, n);
+}
+
+RewriteResponse TheorySetsRewriter::postRewriteRTClosure(TNode n)
+{
+  Assert(n.getKind() == Kind::RELATION_RTCLOSURE);
+  NodeManager* nm = nodeManager();
+  // (rel.rtclosure A) = (set.union (rel.tclosure A) (rel.rclosure A))
+  Node A = n[0];
+  Node rcloseA = nm->mkNode(Kind::RELATION_RCLOSURE, A);
+  Node tcloseA = nm->mkNode(Kind::RELATION_TCLOSURE, A);
+  Node ret = nm->mkNode(Kind::SET_UNION, rcloseA, tcloseA);
+
+  return RewriteResponse(REWRITE_AGAIN_FULL, ret);
 }
 
 RewriteResponse TheorySetsRewriter::postRewriteMap(TNode n)

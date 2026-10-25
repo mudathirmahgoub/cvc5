@@ -27,6 +27,9 @@
 
 namespace cvc5::internal {
 namespace theory {
+
+class Valuation;
+
 namespace sets {
 
 class TheorySetsPrivate;
@@ -51,6 +54,21 @@ class TupleTrie
   void debugPrint(const char* c, Node n, unsigned depth = 0);
   void clear() { d_data.clear(); }
 }; /* class TupleTrie */
+
+/**
+ * Hash function for vector of nodes, used for the context-dependent map
+ * d_cycle_sequences, which maps a relation list to its sequence representation
+ * and count.
+ */
+struct VectorNodeHashFunction
+{
+  size_t operator()(const std::vector<Node>& v) const
+  {
+    size_t h = 0;
+    for (const Node& n : v) h = h * 31 + std::hash<Node>()(n);
+    return h;
+  }
+};
 
 /** The relations extension of the theory of sets
  *
@@ -80,12 +98,20 @@ class TheorySetsRels : protected EnvObj
 
   ~TheorySetsRels();
   /**
-   * Invoke the check method with effort level e. At a high level, this class
-   * will make calls to TheorySetsPrivate::processInference to assert facts,
-   * lemmas, and conflicts. If this class makes no such call, then the current
-   * set of assertions is satisfiable with respect to relations.
+   * Invoke the check method for the basic relational-operator rules. At a
+   * high level, this class will make calls to
+   * TheorySetsPrivate::processInference to assert facts, lemmas, and
+   * conflicts. If this class makes no such call, then the current set of
+   * assertions is satisfiable with respect to relations.
    */
   void check(Theory::Effort e);
+  /**
+   * Unroll the cycle witness of every asserted (rel.cyclic R) by one element
+   * and split on its length (doCycleInference). The witnesses are created by
+   * applyInstCycleRule, from collectRelsInfo, which check(Theory::Effort) ran
+   * earlier in the same check.
+   */
+  void checkAcyclicity();
   /**
    * Seed the closure graph of every TC term with the members of its base
    * relation, then apply the transitive-closure DOWN rule for each asserted TC
@@ -104,6 +130,35 @@ class TheorySetsRels : protected EnvObj
    * the same check.
    */
   void checkTransitiveClosureUp();
+  /**
+   * Last call: complete every cycle witness to its length in the candidate
+   * model, and send the branching anchor lemma for it. Example: for a witness
+   * s1, s2 whose length l is 4 in the model, add s3 and s4 (with s4 = s1)
+   * and the rules for them. If l has no practical value in the model (not a
+   * constant, or more than 10000), the model is marked unsound.
+   */
+  void checkAcyclicityLastCall(Valuation& val);
+  /** Whether a cycle witness exists, which requires the last-call check. */
+  bool hasOpenCycleObligation() const;
+  /**
+   * Last call, with --rels-acyclic-hammer or --rels-tc-down-lazy (neither
+   * splits closure memberships at full effort). For every (a, b) in TC(R) that
+   * the known members of R do not explain, e.g. (a, c) in TC(R) with
+   * R = {(a, b)}, send the TCLOSURE_DOWN split in the lazy mode and the
+   * grounding conflict (applyTCGroundingConflict) otherwise. If cardinality
+   * constraints are present (cardinalityUsed), the cardinality solver may
+   * still add members to R, so the model is marked unsound instead.
+   */
+  void checkTransitiveClosureLastCall(bool cardinalityUsed);
+  /**
+   * Last call, with --rels-acyclic-hammer (which does not split join
+   * memberships at full effort). For every (x, z) in (rel.join A B) that the
+   * known members of A and B do not explain, e.g. (a, c) in A;B with
+   * A = {(a, b)} and B = {(d, c)}, send the grounding conflict
+   * (applyJoinGroundingConflict), or mark the model unsound if cardinality
+   * constraints are present (cardinalityUsed).
+   */
+  void checkJoinLastCall(bool cardinalityUsed);
   /** Is kind k a kind that belongs to the relation theory? */
   static bool isRelationKind(Kind k);
 
@@ -142,6 +197,46 @@ class TheorySetsRels : protected EnvObj
   std::map<Node, std::map<Kind, std::vector<Node> > > d_terms_cache;
 
   /**
+   * Maps the representative of a relation to the asserted literals
+   * (not (rel.cyclic S)) with S in its class, e.g. po -> [(not (rel.cyclic
+   * po))]. Used by the acyclic-down rule and as the S of the anchor rules.
+   */
+  std::map<Node, std::vector<Node> > d_acyclic_cache;
+  /**
+   * (R, S) for which the inclusion anchor lemma was sent, R the union of the
+   * operands of a witness and S an acyclic relation.
+   */
+  std::set<std::pair<Node, Node> > d_anchorInclusionSent;
+  /**
+   * ((R, S), length) for which the branching anchor lemma was sent; the
+   * length is part of the key since the length of the witness in the
+   * candidate model may change between last-call checks.
+   */
+  std::set<std::pair<std::pair<Node, Node>, size_t> > d_anchorBranchSent;
+
+  /**
+   * Maps the operands [R1, ..., Rk] of an asserted (rel.cyclic (R1 U ... U
+   * Rk)), k >= 2, to its cycle witness: the elements unrolled so far
+   * [s1, ..., s_cnt] and the length l, with s_l = s1. Example:
+   * [rf, po] -> ([s1, s2, s3], l) for the cycle s1 -rf+-> s2 -po+-> s3 ...
+   * Context-dependent, so that elements unrolled in a branch are forgotten on
+   * backtracking.
+   */
+  context::CDHashMap<std::vector<Node>,
+                     std::pair<std::vector<Node>, Node>,
+                     VectorNodeHashFunction>
+      d_cycle_sequences;
+
+  /**
+   * Maps the representative of a relation to the asserted atoms
+   * (rel.is-functional R) with R in its class, e.g. po -> [(rel.is-functional
+   * po)].
+   */
+  std::map<Node, std::vector<Node> > d_functional_cache;
+  /** (rel.is-functional R) atoms asserted false for which we sent a witness */
+  std::unordered_set<Node> d_notFunctionalSent;
+
+  /**
    * Transitive closure (TC) graphs.
    *
    * For a term (rel.tclosure r), we maintain a "TC graph": an adjacency-list
@@ -151,7 +246,8 @@ class TheorySetsRels : protected EnvObj
    * graphs are built during a full-effort check (see buildTCGraphForRel) and
    * cleared at the start of the next one; they are caches for a single
    * full-effort check, not context-dependent data structures. Edges are only
-   * ever added to a graph, never removed or replaced.
+   * ever added to a graph, never removed; see addTCEdge for the one case in
+   * which an edge's explanation is replaced.
    */
   /**
    * Mapping between the representative of a base relation r (the argument of a
@@ -165,10 +261,9 @@ class TheorySetsRels : protected EnvObj
    * Mapping between a transitive closure term TC(r) = (rel.tclosure r) and its
    * TC graph. Seeded by buildTCGraphForRel with the asserted members of r, and
    * extended by applyTCRule with pairs that are asserted to be members of TC(r)
-   * directly (and are not already reachable in the base graph). Both go through
-   * addTCEdge, so the two sets of edges accumulate. Once per full-effort check,
-   * doTCInference() closes each of these graphs transitively and infers the
-   * implied memberships.
+   * directly. Both go through addTCEdge, so the two sets of edges accumulate.
+   * Once per full-effort check, doTCInference() closes each of these graphs
+   * transitively and infers the implied memberships.
    */
   std::map<Node, std::map<Node, std::unordered_set<Node> > > d_tcr_tcGraph;
   /**
@@ -215,6 +310,56 @@ class TheorySetsRels : protected EnvObj
   void collectRelsInfo();
   void applyTransposeRule(std::vector<Node> tp_terms);
   void applyTransposeRule(Node rel, Node rel_rep, Node exp);
+  /**
+   * Minimality of the witness s = [s1, ..., s_cnt] of length l: its elements
+   * are distinct except s1 = s_l, and it has no chord. Example: for the
+   * witness s1 -> s2 -> s3 -> s4 = s1 of R1 U R2, (s1, s3) is in neither
+   * TC(R1) nor TC(R2). With --rels-acyclic-backward-chords, backward edges
+   * that close a shorter cycle are excluded too, e.g. (s3, s2) when l >= 4.
+   * exp is the (rel.cyclic R) atom.
+   */
+  void applyContrMinimalRule(const std::vector<Node>& rels,
+                             const std::vector<Node>& s,
+                             Node l,
+                             Node exp);
+  /**
+   * Acyclic-down rule: (a, b) in TC(R) /\ (not (rel.cyclic R)) => a != b.
+   * mem is the representative of the tuple, rel the closure term TC(R) and
+   * exp the membership literal.
+   */
+  void applyAcyclicDownRule(Node mem, Node rel, Node exp);
+  /**
+   * Create the cycle witness of an asserted (rel.cyclic R):
+   * - R not a union: (s, s) in TC(R) for a fresh s, e.g. (rel.cyclic po)
+   *   gives (s, s) in TC(po);
+   * - R = R1 U ... U Rk: a fresh s1 and length l with 1 < l, unrolled by
+   *   doCycleInference, e.g. (rel.cyclic (rf U po)) gives the cycle
+   *   s1 -> s2 -> ... -> s_l = s1 whose edges are in TC(rf) or TC(po).
+   * If an atom with the same operands, nested differently, already has the
+   * witness (A U (B U C) and (A U B) U C), this atom implies that atom.
+   */
+  void applyInstCycleRule(Node atom);
+  /** The atom (rel.cyclic R) whose witness has the operands rels. */
+  Node cyclicAtom(const std::vector<Node>& rels) const;
+  /** Build the (rewritten) union of the given relations. */
+  Node mkRelUnion(const std::vector<Node>& rels);
+  /**
+   * Split on whether the witness closes at its last element s_cnt:
+   *   (rel.cyclic R) /\ cnt <= l => cnt < l \/ (l = cnt /\ s_cnt = s1)
+   */
+  void applySplitCycleLenRule(const std::vector<Node>& rels,
+                              const std::vector<Node>& s,
+                              Node l);
+  /**
+   * Add the element s_{cnt+1} to the witness of (rel.cyclic (R1 U ... U Rk)):
+   *   (rel.cyclic R) /\ cnt < l =>
+   *     (s_cnt, s_{cnt+1}) in TC(R1) \/ ... \/ (s_cnt, s_{cnt+1}) in TC(Rk)
+   * and two consecutive edges are not in the same TC(Ri) (they would compose
+   * into one, giving a shorter cycle). Returns the extended witness.
+   */
+  std::vector<Node> applyUnrollCycle(const std::vector<Node>& rels,
+                                     const std::vector<Node>& s,
+                                     Node l);
   void applyProductRule(Node rel, Node rel_rep, Node exp);
   void applyJoinRule(Node rel, Node rel_rep, Node exp);
   /**
@@ -233,6 +378,21 @@ class TheorySetsRels : protected EnvObj
   void applyTableJoinRule(Node n, Node nRep, Node exp);
   void applyJoinImageRule(Node mem_rep, Node rel_rep, Node exp);
   void applyIdenRule(Node mem_rep, Node rel_rep, Node exp);
+  /**
+   * Rules for the asserted (rel.is-functional R), applied to the asserted
+   * members of the relations in the class of R (--rels-functional-mode):
+   *   uf (default):  (x, y) in R => y = f_R(x)   for a fresh function f_R
+   *   pairs:         (x1, y1) in R /\ (x2, y2) in R => (x1 = x2 => y1 = y2)
+   * Example: with (a, b) and (a, c) in R, uf gives b = f_R(a) and
+   * c = f_R(a), hence b = c. uf is linear in the number of members, pairs
+   * quadratic; pairs is used when the logic has no uninterpreted functions.
+   */
+  void applyFunctionalRules();
+  /**
+   * (not (rel.is-functional R)) => (k1, k2) in R /\ (k1, k3) in R /\ k2 != k3
+   * for fresh k1, k2, k3, sent once per atom.
+   */
+  void applyNotFunctionalRule(Node atom);
   /**
    * Process a membership in a transitive closure term.
    *
@@ -257,12 +417,106 @@ class TheorySetsRels : protected EnvObj
    */
   void applyTCRule(Node mem, Node rel, Node rel_rep, Node exp);
   /**
-   * Add the edge (fst_rep, snd_rep), justified by exp, to the TC graph of
-   * tc_rel. Edges are only added: if the edge is already present it keeps the
-   * explanation it was first added with. This is the only way d_tcr_tcGraph and
-   * d_tcr_tcGraph_exps are written.
+   * The TCLOSURE_DOWN split of applyTCRule for the membership exp of (a, b) in
+   * tc_rel = TC(R), also sent at last call with --rels-tc-down-lazy.
    */
-  void addTCEdge(Node tc_rel, Node fst_rep, Node snd_rep, Node exp);
+  void sendTCDownSplit(Node tc_rel, Node exp);
+  /**
+   * Closure induction (--rels-tc-subset): TC(R) is the least transitive
+   * relation containing R, so (a, b) in TC(R), R subset S and S transitive
+   * give (a, b) in S. For the membership exp of (a, b) in tc_rel = TC(R),
+   * the lemma (a, b) in S is sent for every such S in the current context:
+   *  1. S = TC(X) with R syntactically included in TC(X),
+   *     e.g. R = TC(po) ∩ loc and S = TC(po);
+   *  2. S with R subset S asserted (as (set.union R S) = S) and S transitive
+   *     (isTransitiveClass), e.g. R subset (rel.product A B): (a, b) in A x B;
+   *  3. S = R if R is transitive, e.g. (rel.join R R) subset R asserted;
+   *  4. S = R if R = A x B or R subset A x B with A ∩ B = empty: no two edges
+   *     of R compose, so TC(R) = R, e.g. fr from reads to writes;
+   *  5. S = X for R = X ∩ Y or R = X \ Y with X transitive.
+   * No fresh element is introduced, so where it applies this replaces an
+   * unbounded sequence of TCLOSURE_DOWN splits.
+   */
+  void applyTCSubsetRules(Node tc_rel, Node exp);
+  /**
+   * Whether the class of p (representative pRep) is known to be transitive:
+   * it contains a product A x B, a closure or an identity; or a join J;J^T
+   * with (rel.is-functional J) asserted (J;J^T;J;J^T is a subset of J;J^T,
+   * since J^T;J relates only equal elements); or (rel.join p p) subset p is
+   * asserted. The literals that justify this are appended to reason.
+   */
+  bool isTransitiveClass(Node pRep, Node p, std::vector<Node>& reason);
+  /** Whether applyTCRule is called from the last-call check (lazy split). */
+  bool d_tcLastCall = false;
+  /**
+   * Self-loop witnesses: for an asserted (rel.cyclic R), R not a union, maps
+   * [R] to the fresh s with (s, s) in TC(R).
+   */
+  std::map<std::vector<Node>, Node> d_selfLoops;
+  /**
+   * Maps the operands of the relation of an asserted (rel.cyclic R) to the
+   * atom, e.g.
+   *   [rf, po, co] -> (rel.cyclic (set.union rf (set.union po co)))
+   *   [po]         -> (rel.cyclic po)
+   * The atom is the reason of every lemma about the witness of these
+   * operands. An atom whose relation has the same operands, nested
+   * differently, is reduced to the first one (applyInstCycleRule).
+   */
+  std::map<std::vector<Node>, Node> d_cycleAtoms;
+  /**
+   * Grounding conflict for a membership (x, z) in TC(R), stated by
+   * exp = (set.member t S) with S ~ TC(R), that the known members do not
+   * explain:
+   *   (x, z) in S   S = TC(R)   R = {(p1, q1), ..., (pn, qn)}   x in U
+   *   pi notin U \/ (qi in U /\ qi != z)   for all i
+   *   ------------------------------------------------------------------
+   *   false
+   * where U = {x} U {q | (p, q) in R, M |= p = x \/ (x, p) in TC(R)}: x and
+   * the target q of every member (p, q) of R whose source p is x or reachable
+   * from x in the current model M; p notin U is p != u for all u in U. Every
+   * edge from U stays in U and misses z. The lemma keeps, per member, the
+   * disjunct that holds. E.g. for
+   * (a, c) in TC(R) with R = {(a, b), (d, c)}: U = {a, b}, and the lemma has
+   * b != c, d != a, d != b. S = TC(R) is omitted when S is TC(R). Introduces no
+   * fresh element.
+   */
+  void applyTCGroundingConflict(Node mem_rep, Node tc_rel, Node exp);
+  /**
+   * Grounding conflict for a membership (x, z) in (rel.join A B), stated by
+   * exp = (set.member t S) with S ~ A;B, that the known members do not
+   * explain:
+   *   (x, z) in S   S = A;B   A = {(x1, y1), ..}   B = {(u1, z1), ..}
+   *   xi != x \/ yi != uj \/ zj != z   for all i, j
+   *   ------------------------------------------------------------------
+   *   false
+   * no pair of members composes to (x, z). The lemma keeps, per pair, one
+   * disjunct that holds (a component disequality for a member whose prefix or
+   * suffix differs covers all its pairs). E.g. for (a, c) in A;B with
+   * A = {(a, b)} and B = {(d, c)}: only b != d. S = A;B is omitted when S is
+   * the join. Introduces no fresh element.
+   */
+  void applyJoinGroundingConflict(Node mem_rep, Node join_rel, Node exp);
+  /**
+   * Adds the known members of rel (tuples of representatives) to members and
+   * returns the set of them, (set.union (set.singleton m1) ...), or the empty
+   * set.
+   */
+  Node mkKnownMembers(Node rel, std::vector<Node>& members);
+  /**
+   * Add the edge (fst_rep, snd_rep), justified by exp, to the TC graph of
+   * tc_rel. Edges are only added, never removed. If the edge is already
+   * present, it keeps the explanation it was first added with, unless
+   * overwriteExp is true, in which case its explanation is replaced by exp.
+   * applyTCRule passes overwriteExp = true so that doTCInference chains the
+   * asserted TC membership rather than the (withdrawable) base-relation
+   * membership that seeded the same edge. This is the only way d_tcr_tcGraph
+   * and d_tcr_tcGraph_exps are written.
+   */
+  void addTCEdge(Node tc_rel,
+                 Node fst_rep,
+                 Node snd_rep,
+                 Node exp,
+                 bool overwriteExp = false);
   /**
    * Seed the TC graph of tc_rel = (rel.tclosure r) with the currently asserted
    * members of r, with all nodes and edges expressed in terms of
@@ -270,9 +524,55 @@ class TheorySetsRels : protected EnvObj
    * (keyed by tc_rel) via addTCEdge and to d_rRep_tcGraph (keyed by r's
    * representative); nothing is overwritten, so this can be called at any point
    * of a check without discarding the edges applyTCRule contributed. It is
-   * called once per TC term per check, by checkTransitiveClosureDown.
+   * called once per TC term per check, via ensureTCGraphBuilt.
    */
   void buildTCGraphForRel(Node tc_rel);
+  /**
+   * Ensure buildTCGraphForRel has been called for tc_rel in the current check
+   * (tracked via d_rel_nodes, which clearCaches resets).
+   */
+  void ensureTCGraphBuilt(Node tc_rel);
+  /**
+   * Unroll every witness in d_cycle_sequences by one element and apply the
+   * length split, minimality and anchor rules to it; re-apply the anchor
+   * rules to the self-loop witnesses (acyclicity constraints may have been
+   * asserted since).
+   */
+  void doCycleInference();
+  /**
+   * Anchor rules: a cycle of R whose edges all lie in TC(S) would be a cycle
+   * of S, so for the witness s of an asserted (rel.cyclic R) (acyc_exp) and
+   * every asserted (not (rel.cyclic S)), some edge of R is outside TC(S):
+   *   inclusion:  t in R /\ t not in TC(S)  for a fresh pair t;
+   *   branch:     l = N => (s1, s2) not in TC(S) \/ ... \/ (s_{N-1}, s_N)
+   *               not in TC(S)
+   * The fresh edge is restricted to the operands of R that are not
+   * syntactically in TC(S): for (rel.cyclic (rf U po)) and
+   * (not (rel.cyclic po)), inclusion gives t in rf /\ t not in TC(po). If
+   * every operand is in TC(S), e.g. (rel.cyclic (set.inter po loc)) and
+   * (not (rel.cyclic po)), the constraints conflict directly.
+   * --rels-acyclic-anchor selects the rules.
+   *
+   * The branch lemma needs every edge of the witness, so it is only sent when
+   * concreteLen >= 2 is given: the length N of the witness in the candidate
+   * model (s may be longer; its first N elements are used), with lenEq the
+   * literal l = N. Full-effort callers pass concreteLen = -1.
+   */
+  void applyAcyclicAnchorRules(const std::vector<Node>& rels,
+                               const std::vector<Node>& s,
+                               Node acyc_exp,
+                               int64_t concreteLen = -1,
+                               Node lenEq = Node::null());
+  /**
+   * Append the operands of the nested unions of r to parts, e.g.
+   * A U (B U C) gives [A, B, C]; r itself if it is not a union.
+   */
+  void collectUnionOperands(Node r, std::vector<Node>& parts);
+  /**
+   * Whether x is a subset of TC(s) in every interpretation, by its shape:
+   * e.g. s, TC(s), s ∩ Y, s \ Y, s;s and s;(rel.iden A) are.
+   */
+  bool isSyntacticallyInTC(Node x, Node s);
   /**
    * Called at the end of a full-effort check. For each transitive closure
    * term TC(r) with a graph in d_tcr_tcGraph, computes the transitive
@@ -348,6 +648,11 @@ class TheorySetsRels : protected EnvObj
                      std::unordered_set<Node>& hasSeen,
                      std::map<Node, std::unordered_set<Node> >& tc_graph,
                      bool& isReachable);
+  /**
+   * True if mem_rep is justified by currently-known members of join_rel[0] and
+   * join_rel[1].
+   */
+  bool isJoinReachable(Node mem_rep, Node join_rel);
 
   /** Helper functions */
   bool hasTerm(Node a);

@@ -1,0 +1,15 @@
+\begin{tabular}{@{}p{2.2cm}p{2.0cm}p{9.6cm}@{}}
+\toprule
+rule & benchmark, configuration & a lemma it sent \\
+\midrule
+Cycle-Def & tso1, FMF+R & {\ttfamily\raggedright cyc(co) $\Rightarrow$ (cyc117,cyc117) $\in$ co+} \\
+Inst-Cycle & sc1n, def & {\ttfamily\raggedright cyc((rf $\cup$ (po $\cup$ (co $\cup$ fr)))) $\Rightarrow$ cyclen6 $\ge$ 2} \\
+Unroll & sc1n, def & {\ttfamily\raggedright cyclen6 $\ge$ 2 $\Rightarrow$ (cyc5,cyc9) $\in$ rf+ $\vee$ (cyc5,cyc9) $\in$ po+ $\vee$ (cyc5,cyc9) $\in$ co+ $\vee$ (cyc5,cyc9) $\in$ fr+} \\
+Split-Len & sc2r, noFMF+H & {\ttfamily\raggedright cyc((po $\cup$ rf)) $\wedge$ cyclen10 $\ge$ 2 $\Rightarrow$ cyclen10 $\ge$ 3 $\vee$ (cyclen10 = 2 $\wedge$ cyc9 = cyc14)} \\
+Alternate & tso1, FMF+R & {\ttfamily\raggedright cyc((co $\cup$ (fr $\cup$ (rf $\cup$ (loc $\cap$ po+))))) $\wedge$ cyclen8 $\ge$ 3 $\Rightarrow$ $\neg$((cyc7,cyc10) $\in$ co+ $\wedge$ (cyc10,cyc95) $\in$ co+)} \\
+Alt-Close & sc1r, noFMF+H & {\ttfamily\raggedright cyc((po $\cup$ rf)) $\wedge$ cyclen6 = 3 $\Rightarrow$ $\neg$((cyc9,cyc28) $\in$ po+ $\wedge$ (cyc5,cyc9) $\in$ po+)} \\
+Chord & sc2r, noFMF+H & {\ttfamily\raggedright cyc((po $\cup$ rf)) $\wedge$ cyclen10 $\ge$ 3 $\Rightarrow$ (cyc9,cyc32) $\notin$ po+} \\
+Distinct & sc1r, def & {\ttfamily\raggedright cyclen6 $\ne$ 2 $\wedge$ cyc((po $\cup$ rf)) $\wedge$ cyclen6 $\ge$ 2 $\Rightarrow$ cyc5 $\ne$ cyc9} \\
+Backward & sc2, FMF+R & {\ttfamily\raggedright cyc((rf $\cup$ (po $\cup$ (co $\cup$ fr)))) $\wedge$ cyclen10 = 3 $\Rightarrow$ (cyc68,cyc9) $\notin$ rf+} \\
+\bottomrule
+\end{tabular}

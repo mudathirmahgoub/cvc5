@@ -114,13 +114,74 @@ class LiaStarExtension : EnvObj
   const std::vector<std::pair<std::vector<std::string>, Node>>
   convertQFLIAToMatrices(Node n);
 
-  std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
-            std::vector<Node>>
-  getCones(Node n,
-           const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
+  /**
+   * One disjunct of the DNF of a star body with what Normaliz computed for
+   * its cone: the Hilbert basis completed by the maximal subspace (see
+   * getHilbertBasisWithLineality), how many of its leading vectors keep a
+   * nonnegative multiplier, and the module generators, or the zero vector
+   * when there are none.
+   */
+  struct ConeData
+  {
+    Node d_disjunct;
+    std::vector<std::vector<Integer>> d_hilbertBasis;
+    size_t d_numPointed;
+    std::vector<std::vector<Integer>> d_generators;
+  };
 
-  std::vector<std::pair<Node, Node>> getLia(
-      Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones);
+  /**
+   * Runs Normaliz on the disjuncts of a star body of the given dimension (see
+   * convertQFLIAToMatrices) and returns the data of the nonempty cones.
+   */
+  std::vector<ConeData> computeConeData(
+      size_t dimension,
+      const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
+
+  /**
+   * The formula of Piskac and Kuncak for vec in the star of the cones: vec is
+   * the sum, over every cone and module generator p, of mu * p plus
+   * lambda_j * r_j over the Hilbert basis, with mu and the lambda_j of the
+   * pointed vectors nonnegative and lambda_j = 0 when mu = 0. The multipliers
+   * are fresh variables, appended to vars: bound variables when asBoundVars,
+   * which is what a nested star needs (see flattenNestedStars), and skolems
+   * otherwise.
+   */
+  Node starFormula(const std::vector<Node>& vec,
+                   const std::vector<ConeData>& cones,
+                   std::vector<Node>& vars,
+                   bool asBoundVars);
+
+  std::pair<std::vector<ConeData>, std::vector<Node>> getCones(
+      Node n,
+      const std::vector<std::pair<std::vector<std::string>, Node>>& pairs);
+
+  std::vector<std::pair<Node, Node>> getLia(Node n,
+                                            const std::vector<ConeData>& cones);
+
+  /** Whether a star-contains atom occurs in n. */
+  static bool hasNestedStar(TNode n);
+
+  /**
+   * Collects the star-contains atoms of n that occur positively, i.e. under
+   * conjunctions and disjunctions only. Returns false when one occurs anywhere
+   * else, where replacing it by an existential formula would be unsound.
+   */
+  static bool collectNestedStars(TNode n,
+                                 bool positive,
+                                 std::vector<Node>& stars);
+
+  /**
+   * Eliminates the star-contains atoms from the body of lambda. Such an atom
+   * (int.star-contains (lambda (y ...) B) t ...) says that the inner vector t,
+   * a function of the row of the outer star, is a sum of rows satisfying B.
+   * Its semilinear-set formula replaces it, with the multipliers as further
+   * bound variables of lambda. This is sound because a sum of rows is a sum of
+   * their witnesses: {x | exists w. phi(x, w)}* is the projection of
+   * {(x, w) | phi}*. The new bound variables are appended to extraVars, and
+   * the outer star gets a free coordinate for each of them. Returns the null
+   * node when an atom occurs under a negation.
+   */
+  Node flattenNestedStars(Node lambda, std::vector<Node>& extraVars);
 
   /** node manager */
   NodeManager* d_nm;

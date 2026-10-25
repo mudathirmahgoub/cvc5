@@ -2973,6 +2973,13 @@ set(regress_1_tests
   regress1/bags/liastar/guarded_star.smt2
   regress1/bags/liastar/map_card_sat.smt2
   regress1/bags/liastar/map_card_unsat.smt2
+  regress1/bags/liastar/map_group_distinct_unsat.smt2
+  regress1/bags/liastar/map_group_injective_unsat.smt2
+  regress1/bags/liastar/map_group_chain_unsat.smt2
+  regress1/bags/liastar/map_group_inter_unsat.smt2
+  regress1/bags/liastar/map_group_sat.smt2
+  regress1/bags/liastar/map_group_unknown.smt2
+  regress1/bags/liastar/map_group_subbag_unsat.smt2
   regress1/bags/liastar/member_card_sat.smt2
   regress1/bags/liastar/member_card_unsat.smt2
   regress1/bags/liastar/setof_fold_sat.smt2

@@ -149,6 +149,8 @@ class LiaStarStatistics
    * d_subSolverUnsat.
    */
   IntStat d_conesEmpty;
+  /** nested star-contains atoms eliminated from star bodies */
+  IntStat d_nestedStarsFlattened;
   /**
    * Number of disjuncts with a nonempty Normaliz cone (sat disjuncts) in
    * the main star reduction (getCones). Cones computed by the

@@ -31,3 +31,11 @@ name   = "Bags Theory"
 [[option.mode.ELEMENTS]]
   name = "elements"
   help = "During the search, at last call effort, a fresh element is introduced by a lemma whenever the known elements do not add up to the cardinalities of the candidate model."
+
+[[option]]
+  name       = "bagsLiastarGroupSlots"
+  category   = "expert"
+  long       = "bags-liastar-group-slots=N"
+  type       = "uint64_t"
+  default    = "8"
+  help       = "with --bags-to-liastar, the maximum number of slots of the source type that the group columns of a map term sum over; a map whose grouping would need more gets no row equation"

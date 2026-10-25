@@ -13,6 +13,7 @@
 
 #include "liastar_extension.h"
 
+#include "expr/node_algorithm.h"
 #include "expr/skolem_manager.h"
 #include "liastar_utils.h"
 #include "libnormaliz/input.h"
@@ -138,6 +139,11 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(literal[0]));
     Assert(!lambda.isNull() && lambda.getKind() == Kind::LAMBDA)
         << "Expected a lambda as the first child of " << literal << std::endl;
+    // a body with star-contains atoms of its own: those are eliminated by
+    // flattenNestedStars below, and the splitting lemma and the model value
+    // check are skipped, since the vector predicate would carry the inner
+    // atoms over the sums
+    const bool nested = hasNestedStar(lambda[1]);
     auto [vectorPredicate, nonnegative] =
         LiaStarUtils::getVectorPredicate(literal, nm);
 
@@ -152,47 +158,50 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       d_im.addPendingLemma(
           lemma, InferenceId::ARITH_LIA_STAR_NONNEGATIVE, nullptr);
     }
-    // add a spliting lemma for vector predicate
-    Node split = vectorPredicate.orNode(vectorPredicate.notNode());
-    d_im.addPendingLemma(split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
-    d_im.doPendingLemmas();
-    if (d_im.hasSentLemma())
+    if (!nested)
     {
-      Trace("liastar-ext") << "Sending lemma: " << split << std::endl;
-      continue;
-    }
-    if (options().arith.arithLiaStarModelValue)
-    {
-      d_stats.d_modelValueTime.start();
-      ++d_stats.d_modelValueChecks;
-      std::vector<Node> keys;
-      std::vector<Node> values;
-
-      for (const auto& [key, value] : arithModel)
+      // add a spliting lemma for vector predicate
+      Node split = vectorPredicate.orNode(vectorPredicate.notNode());
+      d_im.addPendingLemma(split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+      d_im.doPendingLemmas();
+      if (d_im.hasSentLemma())
       {
-        keys.push_back(key);
-        values.push_back(value);
-      }
-
-      Node value = vectorPredicate.substitute(
-          keys.begin(), keys.end(), values.begin(), values.end());
-      value = rewrite(value);
-
-      Trace("liastar-ext-debug") << "value: " << value << std::endl;
-
-      if (value == d_true)
-      {
-        ++d_stats.d_modelValueSolved;
-        Trace("liastar-ext-debug")
-            << "----------------------------------------" << std::endl;
-        Trace("liastar-ext-debug")
-            << literal << " is satisfied in the current model" << std::endl;
-        Trace("liastar-ext-debug")
-            << "----------------------------------------" << std::endl;
-        d_stats.d_modelValueTime.stop();
+        Trace("liastar-ext") << "Sending lemma: " << split << std::endl;
         continue;
       }
-      d_stats.d_modelValueTime.stop();
+      if (options().arith.arithLiaStarModelValue)
+      {
+        d_stats.d_modelValueTime.start();
+        ++d_stats.d_modelValueChecks;
+        std::vector<Node> keys;
+        std::vector<Node> values;
+
+        for (const auto& [key, value] : arithModel)
+        {
+          keys.push_back(key);
+          values.push_back(value);
+        }
+
+        Node value = vectorPredicate.substitute(
+            keys.begin(), keys.end(), values.begin(), values.end());
+        value = rewrite(value);
+
+        Trace("liastar-ext-debug") << "value: " << value << std::endl;
+
+        if (value == d_true)
+        {
+          ++d_stats.d_modelValueSolved;
+          Trace("liastar-ext-debug")
+              << "----------------------------------------" << std::endl;
+          Trace("liastar-ext-debug")
+              << literal << " is satisfied in the current model" << std::endl;
+          Trace("liastar-ext-debug")
+              << "----------------------------------------" << std::endl;
+          d_stats.d_modelValueTime.stop();
+          continue;
+        }
+        d_stats.d_modelValueTime.stop();
+      }
     }
 
     if (std::find(
@@ -202,11 +211,39 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       continue;
     }
     // more work need to be done
+    Node flat = lambda;
+    std::vector<Node> extraVars;
+    if (nested)
+    {
+      flat = flattenNestedStars(lambda, extraVars);
+      if (flat.isNull())
+      {
+        Trace("liastar-ext")
+            << "nested star under a negation in " << literal << std::endl;
+        d_im.setModelUnsound(IncompleteId::UNKNOWN);
+        d_processedStarTerms.push_back(literal);
+        continue;
+      }
+    }
     std::vector<std::pair<std::vector<std::string>, Node>> pairs =
-        convertQFLIAToMatrices(lambda);
+        convertQFLIAToMatrices(flat);
+    Node flatLiteral = literal;
+    if (!extraVars.empty())
+    {
+      // the outer star gets a coordinate for each witness of the inner stars;
+      // its sum over the rows is free
+      std::vector<Node> children(literal.begin(), literal.end());
+      children[0] = flat;
+      for (size_t i = 0, ne = extraVars.size(); i < ne; i++)
+      {
+        children.push_back(
+            d_nm->mkDummySkolem("liastar_nested_sum", d_nm->integerType()));
+      }
+      flatLiteral = d_nm->mkNode(Kind::STAR_CONTAINS, children);
+    }
 
-    auto [cones, starConstraints] = getCones(literal, pairs);
-    std::vector<std::pair<Node, Node>> lia = getLia(lambda, cones);
+    auto [cones, starConstraints] = getCones(flatLiteral, pairs);
+    std::vector<std::pair<Node, Node>> lia = getLia(flat, cones);
 
     Trace("liastar-ext") << "lia constraint: " << std::endl;
     if (TraceIsOn("liastar-ext-smt"))
@@ -295,19 +332,14 @@ static std::vector<std::vector<Integer>> getHilbertBasisWithLineality(
   return basis;
 }
 
-std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
-          std::vector<Node>>
-LiaStarExtension::getCones(
-    Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
+std::vector<LiaStarExtension::ConeData> LiaStarExtension::computeConeData(
+    size_t dimension,
+    const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
 {
   d_stats.d_getConesTime.start();
-  std::vector<std::pair<Node, Cone<Integer>>> cones;
-  std::vector<Node> vec(n.begin() + 1, n.end());
-  size_t dimension = vec.size();
   d_stats.d_dimensionMax.maxAssign(dimension);
   std::vector<Integer> zeroVector(dimension, Integer(0));
-  std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
-  std::vector<Node> starConstraints;
+  std::vector<ConeData> cones;
   const bool assumeNonnegative = options().arith.arithLiaStarAssumeNonnegative;
 
   for (size_t i = 0; i < pairs.size(); i++)
@@ -400,124 +432,144 @@ LiaStarExtension::getCones(
       }
     }
     ++d_stats.d_conesNonempty;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
-    d_stats.d_hilbertBasisTotal += hilbertBasis.size();
-    d_stats.d_hilbertBasisMax.maxAssign(hilbertBasis.size());
+    ConeData data;
+    data.d_disjunct = pair.second;
+    data.d_numPointed = 0;
+    data.d_hilbertBasis = getHilbertBasisWithLineality(cone, data.d_numPointed);
+    d_stats.d_hilbertBasisTotal += data.d_hilbertBasis.size();
+    d_stats.d_hilbertBasisMax.maxAssign(data.d_hilbertBasis.size());
     d_stats.d_moduleGeneratorsTotal += cone.getModuleGenerators().size();
     d_stats.d_moduleGeneratorsMax.maxAssign(cone.getModuleGenerators().size());
 
     Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
+    for (const auto& basis : data.d_hilbertBasis)
     {
       Trace("liastar-ext") << toString(basis) << std::endl;
     }
-
     Trace("liastar-ext") << "Module generators:" << std::endl;
-    std::vector<std::vector<Integer>> generators = {zeroVector};
+    data.d_generators = {zeroVector};
     if (cone.getModuleGenerators().size() > 0)
     {
-      generators = cone.getModuleGenerators();
+      data.d_generators = cone.getModuleGenerators();
     }
-    for (const auto& generator : generators)
+    for (const auto& generator : data.d_generators)
     {
       Trace("liastar-ext") << toString(generator) << std::endl;
-      Node mu = d_one;
-      if (generator != zeroVector)
-      {
-        mu = d_nm->mkDummySkolem("mu", d_nm->integerType());
-      }
+    }
+    cones.push_back(data);
+  }
+  d_stats.d_getConesTime.stop();
+  return cones;
+}
 
-      starConstraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
-      Vector point;
-      for (const auto& element : generator)
+Node LiaStarExtension::starFormula(const std::vector<Node>& vec,
+                                   const std::vector<ConeData>& cones,
+                                   std::vector<Node>& vars,
+                                   bool asBoundVars)
+{
+  size_t dimension = vec.size();
+  TypeNode intType = d_nm->integerType();
+  auto fresh = [&](const std::string& name) {
+    Node v = asBoundVars ? d_nm->mkBoundVar(name, intType)
+                         : d_nm->mkDummySkolem(name, intType);
+    vars.push_back(v);
+    return v;
+  };
+  std::vector<Node> constraints;
+  Vector sums(dimension, d_zero);
+  for (const ConeData& data : cones)
+  {
+    for (const std::vector<Integer>& generator : data.d_generators)
+    {
+      bool isZero = true;
+      for (const Integer& element : generator)
       {
-        Node constant = d_nm->mkConstInt(Rational(element.get_str()));
-        Node monomial = d_nm->mkNode(Kind::MULT, constant, mu);
-        point.push_back(monomial);
+        isZero = isZero && element == 0;
       }
-      std::vector<Vector> rays;
-      for (size_t j = 0; j < hilbertBasis.size(); j++)
+      Node mu = d_one;
+      if (!isZero)
       {
-        const std::vector<Integer>& basis = hilbertBasis[j];
-        Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
-        if (j < numPointed)
+        mu = fresh("mu");
+        constraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
+      }
+      for (size_t i = 0; i < dimension; i++)
+      {
+        Node constant = d_nm->mkConstInt(Rational(generator[i].get_str()));
+        sums[i] = d_nm->mkNode(
+            Kind::ADD, sums[i], d_nm->mkNode(Kind::MULT, constant, mu));
+      }
+      for (size_t j = 0, nb = data.d_hilbertBasis.size(); j < nb; j++)
+      {
+        const std::vector<Integer>& basis = data.d_hilbertBasis[j];
+        Node lambda = fresh("l");
+        if (j < data.d_numPointed)
         {
           // Coefficients for Hilbert bases are nonnegative
-          starConstraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
+          constraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
         }
-        // (=> (= mu 0) (= l 0))
-        starConstraints.push_back(
-            d_nm->mkNode(Kind::EQUAL, mu, d_zero)
-                .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
-
-        Vector ray;
-        for (const auto& element : basis)
+        if (!isZero)
         {
-          Node constant = d_nm->mkConstInt(Rational(element.get_str()));
-          Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
-          ray.push_back(monomial);
+          // (=> (= mu 0) (= l 0)). Inside a star body it is written without
+          // the implication, which the DNF conversion does not accept: mu is
+          // nonnegative, so (or (>= mu 1) (= l 0)) says the same.
+          constraints.push_back(
+              asBoundVars ? d_nm->mkNode(Kind::OR,
+                                         d_nm->mkNode(Kind::GEQ, mu, d_one),
+                                         lambda.eqNode(d_zero))
+                          : mu.eqNode(d_zero).impNode(lambda.eqNode(d_zero)));
         }
-        rays.push_back(ray);
-      }
-      lambdas.push_back({point, rays});
-    }
-    cones.push_back({pair.second, cone});
-  }
-
-  // sum constraints
-  Vector sums(dimension, d_zero);
-  for (const std::pair<Vector, std::vector<Vector>>& pair : lambdas)
-  {
-    for (size_t i = 0; i < dimension; i++)
-    {
-      sums[i] = d_nm->mkNode(Kind::ADD, sums[i], pair.first[i]);
-      for (const auto& ray : pair.second)
-      {
-        sums[i] = d_nm->mkNode(Kind::ADD, sums[i], ray[i]);
+        for (size_t i = 0; i < dimension; i++)
+        {
+          Node constant = d_nm->mkConstInt(Rational(basis[i].get_str()));
+          sums[i] = d_nm->mkNode(
+              Kind::ADD, sums[i], d_nm->mkNode(Kind::MULT, constant, lambda));
+        }
       }
     }
   }
-
   for (size_t i = 0; i < dimension; i++)
   {
-    starConstraints.push_back(vec[i].eqNode(sums[i]));
+    constraints.push_back(vec[i].eqNode(sums[i]));
   }
+  Node formula = constraints.size() == 1 ? constraints[0]
+                                         : d_nm->mkNode(Kind::AND, constraints);
+  // inside a star body the atoms must be in the normal form the DNF
+  // conversion reads, as the atoms of a bag translation are
+  return asBoundVars ? rewrite(formula) : formula;
+}
 
-  d_stats.d_getConesTime.stop();
+std::pair<std::vector<LiaStarExtension::ConeData>, std::vector<Node>>
+LiaStarExtension::getCones(
+    Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
+{
+  std::vector<Node> vec(n.begin() + 1, n.end());
+  std::vector<ConeData> cones = computeConeData(vec.size(), pairs);
+  std::vector<Node> skolems;
+  Node formula = starFormula(vec, cones, skolems, false);
+  std::vector<Node> starConstraints;
+  if (formula.getKind() == Kind::AND)
+  {
+    starConstraints.insert(
+        starConstraints.end(), formula.begin(), formula.end());
+  }
+  else
+  {
+    starConstraints.push_back(formula);
+  }
   return std::make_pair(cones, starConstraints);
 }
 
 std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
-    Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones)
+    Node n, const std::vector<ConeData>& cones)
 {
   d_stats.d_getLiaTime.start();
   Node vec = n[0];
   size_t dimension = vec.getNumChildren();
   std::vector<std::pair<Node, Node>> disjunctions;
-  std::vector<Integer> zeroVector(dimension, Integer(0));
 
-  for (auto& pair : cones)
+  for (const ConeData& data : cones)
   {
-    Node node = pair.first;
-    libnormaliz::Cone<Integer> cone = pair.second;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
-    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
-    {
-      Trace("liastar-ext") << toString(basis) << std::endl;
-    }
-
-    Trace("liastar-ext") << "Module generators:" << std::endl;
-    std::vector<std::vector<Integer>> generators = {zeroVector};
-    if (cone.getModuleGenerators().size() > 0)
-    {
-      generators = cone.getModuleGenerators();
-    }
-    for (const auto& generator : generators)
+    for (const auto& generator : data.d_generators)
     {
       std::vector<Node> conjunctions;
       Vector point;
@@ -529,14 +581,14 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
 
       std::vector<Vector> rays;
       std::vector<Node> boundVariables;
-      const std::vector<std::vector<Integer>>& bases = hilbertBasis;
+      const std::vector<std::vector<Integer>>& bases = data.d_hilbertBasis;
       for (size_t index = 0; index < bases.size(); index++)
       {
         const std::vector<Integer>& basis = bases[index];
         std::string name = "l" + std::to_string(index + 1);
         Node lambda = d_nm->mkBoundVar(name, d_nm->integerType());
         boundVariables.push_back(lambda);
-        if (index < numPointed)
+        if (index < data.d_numPointed)
         {
           // (>= l 0); a lineality direction is unrestricted in sign
           conjunctions.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
@@ -581,12 +633,116 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
         Node variables = d_nm->mkNode(Kind::BOUND_VAR_LIST, boundVariables);
         conjunction = d_nm->mkNode(Kind::EXISTS, variables, conjunction);
       }
-      disjunctions.push_back({node, conjunction});
+      disjunctions.push_back({data.d_disjunct, conjunction});
     }
   }
 
   d_stats.d_getLiaTime.stop();
   return disjunctions;
+}
+
+bool LiaStarExtension::hasNestedStar(TNode n)
+{
+  return expr::hasSubtermKind(Kind::STAR_CONTAINS, n);
+}
+
+bool LiaStarExtension::collectNestedStars(TNode n,
+                                          bool positive,
+                                          std::vector<Node>& stars)
+{
+  Kind k = n.getKind();
+  if (k == Kind::STAR_CONTAINS)
+  {
+    if (!positive)
+    {
+      return false;
+    }
+    if (std::find(stars.begin(), stars.end(), n) == stars.end())
+    {
+      stars.push_back(n);
+    }
+    return true;
+  }
+  if (k == Kind::NOT)
+  {
+    return collectNestedStars(n[0], !positive, stars);
+  }
+  if (k == Kind::IMPLIES)
+  {
+    return collectNestedStars(n[0], !positive, stars)
+           && collectNestedStars(n[1], positive, stars);
+  }
+  if (k == Kind::AND || k == Kind::OR)
+  {
+    for (const Node& c : n)
+    {
+      if (!collectNestedStars(c, positive, stars))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+  // under any other operator the atom has both polarities (an ite condition,
+  // an equivalence) or is the argument of a term
+  return !hasNestedStar(n);
+}
+
+Node LiaStarExtension::flattenNestedStars(Node lambda,
+                                          std::vector<Node>& extraVars)
+{
+  Assert(lambda.getKind() == Kind::LAMBDA);
+  std::vector<Node> stars;
+  if (!collectNestedStars(lambda[1], true, stars))
+  {
+    return Node::null();
+  }
+  if (stars.empty())
+  {
+    return lambda;
+  }
+  TypeNode intType = d_nm->integerType();
+  std::vector<Node> vars(lambda[0].begin(), lambda[0].end());
+  Node body = lambda[1];
+  for (const Node& star : stars)
+  {
+    Node innerLambda =
+        uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(star[0]));
+    Assert(!innerLambda.isNull() && innerLambda.getKind() == Kind::LAMBDA)
+        << "Expected a lambda as the first child of " << star << std::endl;
+    std::vector<Node> innerExtra;
+    Node flat = flattenNestedStars(innerLambda, innerExtra);
+    if (flat.isNull())
+    {
+      return Node::null();
+    }
+    std::vector<Node> vec(star.begin() + 1, star.end());
+    for (size_t i = 0, ne = innerExtra.size(); i < ne; i++)
+    {
+      // the witnesses of the inner star's own inner stars are summed over its
+      // rows, and that sum is a further coordinate of the outer row
+      Node w = d_nm->mkBoundVar("liastar_nested", intType);
+      vec.push_back(w);
+      vars.push_back(w);
+      extraVars.push_back(w);
+    }
+    std::vector<std::pair<std::vector<std::string>, Node>> pairs =
+        convertQFLIAToMatrices(flat);
+    std::vector<ConeData> cones = computeConeData(vec.size(), pairs);
+    std::vector<Node> witnesses;
+    Node formula = starFormula(vec, cones, witnesses, true);
+    vars.insert(vars.end(), witnesses.begin(), witnesses.end());
+    extraVars.insert(extraVars.end(), witnesses.begin(), witnesses.end());
+    Trace("liastar-ext") << "nested star " << star << " with " << cones.size()
+                         << " cones and " << witnesses.size() << " witnesses"
+                         << std::endl;
+    TNode from = star;
+    TNode to = formula;
+    body = body.substitute(from, to);
+    ++d_stats.d_nestedStarsFlattened;
+  }
+  return d_nm->mkNode(
+      Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, vars), body);
 }
 
 Node LiaStarExtension::isNotZeroVector(Node v)

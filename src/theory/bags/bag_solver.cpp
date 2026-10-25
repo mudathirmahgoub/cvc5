@@ -12,8 +12,12 @@
 
 #include "theory/bags/bag_solver.h"
 
+#include <limits>
+#include <unordered_set>
+
 #include "expr/bound_var_manager.h"
 #include "expr/emptybag.h"
+#include "expr/node_algorithm.h"
 #include "expr/skolem_manager.h"
 #include "options/bags_options.h"
 #include "options/smt_options.h"
@@ -118,6 +122,7 @@ void BagSolver::checkLiastarConstraints()
   d_lastBody = Node::null();
   d_lastPremises.clear();
   d_lastSums.clear();
+  d_groupColumns.clear();
 
   eq::EqualityEngine* ee = d_state.getEqualityEngine();
 
@@ -150,9 +155,17 @@ void BagSolver::checkLiastarConstraints()
   const std::map<Node, Node>& cardTerms = d_state.getCardinalityTerms();
   Trace("bags-liastar") << "equalities: " << equalities << std::endl;
   Trace("bags-liastar") << "disequalities: " << disequalities << std::endl;
-  if (equalities.empty() && disequalities.empty() && cardTerms.empty())
+  if (cardTerms.empty())
   {
-    // there is nothing to translate
+    // Nothing to translate. Without a cardinality term the star could only
+    // restate, at every element, the pointwise facts that the element-wise
+    // rules of the theory derive anyway, and its cost grows with the number
+    // of bag terms: a SQL equivalence query with 87 bag terms and no
+    // cardinality spends the whole time limit in the liastar check, where the
+    // element-wise rules refute it in 0.1s. The cardinality terms that the
+    // translation itself introduces (mapCard, mapDown) are only introduced
+    // once one is present, so this is a check on the input and the fold
+    // reduction, see checkMap and InferenceGenerator::mapDown.
     return;
   }
 
@@ -269,6 +282,15 @@ void BagSolver::collectLiastarModelValues(TheoryModel* m,
   {
     // checkLiastarCandidateModel made the known elements add up to the
     // cardinalities during the search, or marked the model unsound
+    return;
+  }
+  if (!d_groupColumns.empty())
+  {
+    // a fresh row of a group is a fresh element of the source of a map whose
+    // image is the group; this construction does not invent such elements
+    Trace("bags-liastar-model")
+        << "give up: the star has group columns" << std::endl;
+    d_im.setModelUnsound(IncompleteId::BAGS_LIASTAR_MODEL);
     return;
   }
   NodeManager* nm = nodeManager();
@@ -727,9 +749,13 @@ Node BagSolver::buildStar(const std::vector<Node>& equalities,
   {
     bags.push_back(pair.first);
   }
-  // the outer vector, the inner vector, and the body of the star
+  // the outer vector, the inner vector, and the body of the star. The
+  // constraints on the slots are kept by the element type of the slots they
+  // constrain, since the rows of one type are what a map groups, see
+  // addGroupConstraints.
   std::vector<Node> cardinalities;
   std::vector<Node> boundVars;
+  std::map<TypeNode, std::vector<Node>> typedConstraints;
   std::vector<Node> constraints;
   for (const Node& bag : bags)
   {
@@ -741,17 +767,19 @@ Node BagSolver::buildStar(const std::vector<Node>& equalities,
     // bags, so print the slots of bag here
     Trace("bags-liastar") << "slot " << bag << ": cardinality = " << x
                           << ", bound var = " << c << std::endl;
+    std::vector<Node>& typed =
+        typedConstraints[bag.getType().getBagElementType()];
     // a count is non negative. Never omit the sign constraints: negative
     // summands would let the star cancel, and a cardinality of zero would no
     // longer mean that the bag is empty.
-    constraints.push_back(nm->mkNode(Kind::GEQ, c, d_zero));
+    typed.push_back(nm->mkNode(Kind::GEQ, c, d_zero));
     if (hasPointwiseTranslation(bag.getKind()))
     {
-      constraints.push_back(getPointwiseConstraint(bag));
+      typed.push_back(getPointwiseConstraint(bag));
     }
     else if (bag.getKind() == Kind::BAG_MAKE)
     {
-      addBagMakeConstraints(bag, constraints);
+      addBagMakeConstraints(bag, typed);
     }
     else if (bag.getKind() == Kind::BAG_FILTER)
     {
@@ -759,31 +787,42 @@ Node BagSolver::buildStar(const std::vector<Node>& equalities,
       // has no slot for. What is left is the inclusion (<= c c_A), which is
       // still worth having: without it a filter could have elements its bag
       // does not.
-      constraints.push_back(nm->mkNode(Kind::LEQ, c, d_bagBoundVars[bag[1]]));
+      typed.push_back(nm->mkNode(Kind::LEQ, c, d_bagBoundVars[bag[1]]));
     }
   }
   // the positive atoms hold at every element
   for (const Node& equality : equalities)
   {
+    std::vector<Node>& typed =
+        typedConstraints[equality[0].getType().getBagElementType()];
     Node a;
     Node b;
     if (isInclusionAtom(equality, a, b))
     {
       // (<= c_A c_B), the inclusion rule of the table
-      constraints.push_back(
+      typed.push_back(
           nm->mkNode(Kind::LEQ, d_bagBoundVars[a], d_bagBoundVars[b]));
     }
     else
     {
-      constraints.push_back(
+      typed.push_back(
           d_bagBoundVars[equality[0]].eqNode(d_bagBoundVars[equality[1]]));
     }
     premises.push_back(equality);
   }
   addBagMakeOverlaps(constraints, premises);
+  for (const std::pair<const TypeNode, std::vector<Node>>& pair :
+       typedConstraints)
+  {
+    constraints.insert(
+        constraints.end(), pair.second.begin(), pair.second.end());
+  }
   // no bag term was discovered while building the body, so the two vectors
   // cover all the bound variables that occur in it
   Assert(d_bagBoundVars.size() == bags.size());
+  // the group columns of the map terms extend the two vectors
+  addGroupConstraints(
+      bags, typedConstraints, boundVars, cardinalities, constraints);
 
   Node boundVarList = nm->mkNode(Kind::BOUND_VAR_LIST, boundVars);
   Node body = nm->mkAnd(constraints);
@@ -800,7 +839,7 @@ Node BagSolver::buildStar(const std::vector<Node>& equalities,
   Node lambda = nm->mkNode(Kind::LAMBDA, boundVarList, body);
   std::vector<Node> children;
   children.push_back(lambda);
-  for (size_t i = 0, n = bags.size(); i < n; i++)
+  for (size_t i = 0, n = boundVars.size(); i < n; i++)
   {
     children.push_back(sums[i].isNull()
                            ? cardinalities[i]
@@ -815,6 +854,223 @@ Node BagSolver::buildStar(const std::vector<Node>& equalities,
   return nm->mkAnd(rows);
 }
 
+void BagSolver::addGroupConstraints(
+    const std::vector<Node>& bags,
+    const std::map<TypeNode, std::vector<Node>>& typedConstraints,
+    std::vector<Node>& boundVars,
+    std::vector<Node>& coordinates,
+    std::vector<Node>& constraints)
+{
+  NodeManager* nm = nodeManager();
+  BoundVarManager* bvm = nm->getBoundVarManager();
+  SkolemManager* sm = nm->getSkolemManager();
+  TypeNode intType = nm->integerType();
+  // Every variable of a group is cached by the terms it stands for, so that
+  // the same context builds the same star atom at every check and the
+  // liastar extension expands it once.
+  // the groupings, one per function and source type. The rows of the source
+  // type that f sends to the same element form one group whatever bag they
+  // are counted in, so every map with the same f over that type reads its
+  // count off the same group sums.
+  std::map<std::pair<Node, TypeNode>, size_t> groups;
+  for (const Node& bag : bags)
+  {
+    if (bag.getKind() != Kind::BAG_MAP)
+    {
+      continue;
+    }
+    Node f = bag[0];
+    TypeNode sourceType = bag[1].getType().getBagElementType();
+    TypeNode targetType = bag.getType().getBagElementType();
+    std::pair<Node, TypeNode> key(f, sourceType);
+    std::map<std::pair<Node, TypeNode>, size_t>::iterator it = groups.find(key);
+    if (it == groups.end())
+    {
+      // (the grouping of f is built on its first map)
+      // The slots of the grouping: the sources of the maps of f, the slots
+      // they are built from, and the setof of any of those, which is what a
+      // count of distinct values reads. Every other slot of the source type
+      // is left out: its group sums carry nothing the row equations use, and
+      // each one adds a dimension to the star and a factor to the DNF of its
+      // body, which a fold reduction, with its dozens of slots, makes
+      // prohibitive. The groupings with more slots than
+      // --bags-liastar-group-slots are dropped altogether.
+      std::vector<Node> sources;
+      for (const Node& b : bags)
+      {
+        if (b.getKind() == Kind::BAG_MAP && b[0] == f
+            && b[1].getType().getBagElementType() == sourceType
+            && std::find(sources.begin(), sources.end(), b[1]) == sources.end())
+        {
+          sources.push_back(b[1]);
+        }
+      }
+      bool changed = true;
+      while (changed)
+      {
+        changed = false;
+        for (size_t i = 0; i < sources.size(); i++)
+        {
+          for (const Node& child : sources[i])
+          {
+            if (child.getType().isBag()
+                && child.getType().getBagElementType() == sourceType
+                && d_bagBoundVars.find(child) != d_bagBoundVars.end()
+                && std::find(sources.begin(), sources.end(), child)
+                       == sources.end())
+            {
+              sources.push_back(child);
+              changed = true;
+            }
+          }
+        }
+        for (const Node& b : bags)
+        {
+          if (b.getKind() == Kind::BAG_SETOF
+              && std::find(sources.begin(), sources.end(), b[0])
+                     != sources.end()
+              && std::find(sources.begin(), sources.end(), b) == sources.end())
+          {
+            sources.push_back(b);
+            changed = true;
+          }
+        }
+      }
+      if (sources.size() > options().bags.bagsLiastarGroupSlots)
+      {
+        Trace("bags-liastar") << "no group of " << f << ": " << sources.size()
+                              << " slots" << std::endl;
+        groups[key] = std::numeric_limits<size_t>::max();
+        continue;
+      }
+      it = groups.insert({key, d_groupColumns.size()}).first;
+      // the slots in the order of the slots, so that the same context builds
+      // the same inner star
+      std::vector<Node> ordered;
+      for (const Node& b : bags)
+      {
+        if (std::find(sources.begin(), sources.end(), b) != sources.end())
+        {
+          ordered.push_back(b);
+        }
+      }
+      sources = ordered;
+      // the fresh variables of the rows of the inner star: the outer lambda
+      // binds the slot variables, so the inner body is the typed constraints
+      // of the slots of the grouping over variables of its own
+      std::vector<Node> sourceVars;
+      std::vector<Node> innerVars;
+      for (const Node& b : sources)
+      {
+        sourceVars.push_back(d_bagBoundVars[b]);
+        innerVars.push_back(bvm->mkBoundVar(BoundVarId::BAGS_LIASTAR_ROW_COUNT,
+                                            nm->mkNode(Kind::BAG_MAP, f, b),
+                                            "row",
+                                            intType));
+      }
+      std::unordered_set<Node> sourceVarSet(sourceVars.begin(),
+                                            sourceVars.end());
+      std::vector<Node> innerBody;
+      std::map<TypeNode, std::vector<Node>>::const_iterator typedIt =
+          typedConstraints.find(sourceType);
+      if (typedIt != typedConstraints.end())
+      {
+        for (const Node& c : typedIt->second)
+        {
+          // only the constraints over the slots of the grouping
+          std::unordered_set<Node> fvs;
+          expr::getFreeVariables(c, fvs);
+          bool inGroup = true;
+          for (const Node& v : fvs)
+          {
+            inGroup = inGroup && sourceVarSet.find(v) != sourceVarSet.end();
+          }
+          if (!inGroup)
+          {
+            continue;
+          }
+          innerBody.push_back(c.substitute(sourceVars.begin(),
+                                           sourceVars.end(),
+                                           innerVars.begin(),
+                                           innerVars.end()));
+        }
+      }
+      // the group sum columns: the column of a source slot B sums B over the
+      // rows of a group, so its column sum over all groups is the cardinality
+      // of B
+      std::vector<Node> vec;
+      for (size_t i = 0, n = sources.size(); i < n; i++)
+      {
+        Node g = bvm->mkBoundVar(BoundVarId::BAGS_LIASTAR_GROUP_SUM,
+                                 nm->mkNode(Kind::BAG_MAP, f, sources[i]),
+                                 "group",
+                                 intType);
+        GroupColumn column;
+        column.d_function = f;
+        column.d_targetType = targetType;
+        column.d_source = sources[i];
+        column.d_boundVar = g;
+        column.d_coordinate = getCardinalityVar(sources[i]);
+        d_groupColumns.push_back(column);
+        boundVars.push_back(g);
+        coordinates.push_back(column.d_coordinate);
+        constraints.push_back(nm->mkNode(Kind::GEQ, g, d_zero));
+        vec.push_back(g);
+      }
+      bool injective = d_state.isInjective(f);
+      if (injective)
+      {
+        // an injective f sends at most one row to a group: an indicator
+        // column counts the rows of a group, and its column sum is free
+        Node one = bvm->mkBoundVar(
+            BoundVarId::BAGS_LIASTAR_ROW_ONE, f, "row_one", intType);
+        innerVars.push_back(one);
+        innerBody.push_back(one.eqNode(d_one));
+        Node size = bvm->mkBoundVar(
+            BoundVarId::BAGS_LIASTAR_GROUP_SIZE, f, "group_size", intType);
+        GroupColumn column;
+        column.d_function = f;
+        column.d_targetType = targetType;
+        column.d_boundVar = size;
+        column.d_coordinate =
+            sm->mkSkolemFunction(SkolemId::BAGS_LIASTAR_BAG_INTEGER, {f});
+        d_groupColumns.push_back(column);
+        boundVars.push_back(size);
+        coordinates.push_back(column.d_coordinate);
+        constraints.push_back(nm->mkNode(Kind::GEQ, size, d_zero));
+        constraints.push_back(nm->mkNode(Kind::LEQ, size, d_one));
+        vec.push_back(size);
+      }
+      Node innerLambda = nm->mkNode(Kind::LAMBDA,
+                                    nm->mkNode(Kind::BOUND_VAR_LIST, innerVars),
+                                    nm->mkAnd(innerBody));
+      std::vector<Node> children;
+      children.push_back(innerLambda);
+      children.insert(children.end(), vec.begin(), vec.end());
+      constraints.push_back(nm->mkNode(Kind::STAR_CONTAINS, children));
+      Trace("bags-liastar") << "group of " << f << " over " << sourceType
+                            << ": " << sources.size() << " source slots"
+                            << (injective ? ", injective" : "") << std::endl;
+    }
+    if (it->second == std::numeric_limits<size_t>::max())
+    {
+      // the grouping of f was dropped
+      continue;
+    }
+    // the row equation: the count of a group in the map is the group sum of
+    // the source of the map
+    for (size_t i = it->second, n = d_groupColumns.size(); i < n; i++)
+    {
+      const GroupColumn& column = d_groupColumns[i];
+      if (column.d_function == f && column.d_source == bag[1])
+      {
+        constraints.push_back(d_bagBoundVars[bag].eqNode(column.d_boundVar));
+        break;
+      }
+    }
+  }
+}
+
 void BagSolver::addElementRows(const std::vector<Node>& bags,
                                const std::vector<Node>& boundVars,
                                const Node& body,
@@ -823,7 +1079,11 @@ void BagSolver::addElementRows(const std::vector<Node>& bags,
                                std::vector<Node>& sums)
 {
   NodeManager* nm = nodeManager();
+  SkolemManager* sm = nm->getSkolemManager();
   size_t n = bags.size();
+  // the columns: the slots, then the group columns
+  size_t m = boundVars.size();
+  Assert(m == n + d_groupColumns.size());
   // the known elements, by their representatives, in one fixed order
   std::vector<Node> elements;
   for (const Node& bag : bags)
@@ -838,17 +1098,49 @@ void BagSolver::addElementRows(const std::vector<Node>& bags,
       }
     }
   }
-  sums.assign(n, Node::null());
-  std::vector<std::vector<Node>> summands(n);
-  for (size_t j = 0, m = elements.size(); j < m; j++)
+  sums.assign(m, Node::null());
+  std::vector<std::vector<Node>> summands(m);
+  for (size_t j = 0, numElements = elements.size(); j < numElements; j++)
   {
     const Node& e = elements[j];
     TypeNode type = e.getType();
     // the row of e: its count terms in the slots of its type
-    std::vector<Node> row(n);
+    std::vector<Node> row(m);
     for (size_t i = 0; i < n; i++)
     {
       row[i] = getRowCount(e, bags[i]);
+    }
+    for (size_t i = n; i < m; i++)
+    {
+      // a known element of the target type of a grouping is a group, whose
+      // sums the inner star of the row constrains; an element of another type
+      // is in no group of it. The group sum of a source slot B at e is the
+      // count of e in (bag.map f B): the count term when that map is a slot,
+      // otherwise its purification skolem, as in getRowCount. The size of the
+      // group is a skolem of f and e.
+      const GroupColumn& column = d_groupColumns[i - n];
+      if (type != column.d_targetType)
+      {
+        row[i] = d_zero;
+      }
+      else if (column.d_source.isNull())
+      {
+        row[i] = sm->mkSkolemFunction(SkolemId::BAGS_LIASTAR_BAG_INTEGER,
+                                      {column.d_function, e});
+      }
+      else
+      {
+        Node map =
+            nm->mkNode(Kind::BAG_MAP, column.d_function, column.d_source);
+        if (d_bagBoundVars.find(map) != d_bagBoundVars.end())
+        {
+          row[i] = getRowCount(e, map);
+        }
+        else
+        {
+          row[i] = sm->mkPurifySkolem(nm->mkNode(Kind::BAG_COUNT, e, map));
+        }
+      }
     }
     rows.push_back(body.substitute(
         boundVars.begin(), boundVars.end(), row.begin(), row.end()));
@@ -876,7 +1168,7 @@ void BagSolver::addElementRows(const std::vector<Node>& bags,
     Trace("bags-liastar") << "row of " << e << ": " << row
                           << (isNew.isNull() ? "" : " if ") << isNew
                           << std::endl;
-    for (size_t i = 0; i < n; i++)
+    for (size_t i = 0; i < m; i++)
     {
       if (row[i] == d_zero)
       {
@@ -887,7 +1179,7 @@ void BagSolver::addElementRows(const std::vector<Node>& bags,
                                 : nm->mkNode(Kind::ITE, isNew, row[i], d_zero));
     }
   }
-  for (size_t i = 0; i < n; i++)
+  for (size_t i = 0; i < m; i++)
   {
     if (summands[i].empty())
     {
@@ -988,6 +1280,12 @@ Node BagSolver::getBagBoundVar(const Node& bag)
   else if (bag.getKind() == Kind::BAG_FILTER)
   {
     // the inclusion of a filter in its bag needs the slot of the bag
+    getBagBoundVar(bag[1]);
+  }
+  else if (bag.getKind() == Kind::BAG_MAP)
+  {
+    // the group sums of a map are sums over the slots of its source, see
+    // addGroupConstraints, so the source needs a slot
     getBagBoundVar(bag[1]);
   }
   return c;
@@ -1379,12 +1677,15 @@ void BagSolver::checkDisequalBagTerms()
 void BagSolver::checkMap(Node n)
 {
   Assert(n.getKind() == Kind::BAG_MAP);
-  if (options().bags.bagsToLiastar)
+  if (options().bags.bagsToLiastar && !d_state.getCardinalityTerms().empty())
   {
     // the cardinality of a map is the cardinality of its argument. This is
     // only sent with the translation to liastar, where the cardinality terms
     // are not reduced, since otherwise it introduces two cardinality terms
-    // that are each reduced to a bounded quantifier.
+    // that are each reduced to a bounded quantifier; and only once the
+    // context has a cardinality term, since otherwise this would be the term
+    // that brings the star into a problem that asks nothing about
+    // cardinalities, see checkLiastarConstraints.
     InferInfo card = d_ig.mapCard(n);
     d_im.lemmaTheoryInference(&card);
   }

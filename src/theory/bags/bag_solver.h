@@ -296,6 +296,35 @@ class BagSolver : protected EnvObj
    */
   Node buildStar(const std::vector<Node>& equalities,
                  std::vector<Node>& premises);
+
+  /**
+   * The row equation of the map terms. (bag.map f A)(y) is the sum of A(x)
+   * over the preimage of y, so the rows of the target type of f are groups of
+   * rows of its source type: every map with the same f over that type gets
+   * one group sum column per slot of the source type, a bound variable
+   * g_B(y) = sum of B(x) over the group of y, and the row equation
+   * (= c_(bag.map f B) g_B). The vector of the group sums is a star over the
+   * rows of the source type, whose body is the typed constraints of the
+   * source slots over fresh variables; this inner star-contains atom is part
+   * of the body and is eliminated by the liastar extension
+   * (LiaStarExtension::flattenNestedStars). The column sum of g_B over all
+   * groups is the cardinality of B, so the coordinate of the outer vector is
+   * the cardinality variable of B. For an injective f the rows carry an
+   * indicator so that the size of a group, a further column with a free
+   * coordinate, is at most one. The grouping is never named, as the rows of
+   * the star never are: any partition of the rows is a witness, which is why
+   * the lemma is implied by the semantics; two functions over the same source
+   * are two independent groupings, a sound relaxation. A grouping sums only
+   * the slots its row equations need: the sources of the maps of f, their
+   * operands, and the setof of those; it is dropped when they exceed
+   * --bags-liastar-group-slots.
+   */
+  void addGroupConstraints(
+      const std::vector<Node>& bags,
+      const std::map<TypeNode, std::vector<Node>>& typedConstraints,
+      std::vector<Node>& boundVars,
+      std::vector<Node>& coordinates,
+      std::vector<Node>& constraints);
   /**
    * The rows of the known elements, see checkLiastarConstraints. An element is
    * known when it has a count term in some bag of the star, and its row is
@@ -538,7 +567,7 @@ class BagSolver : protected EnvObj
    */
   using BagElementsMap = context::CDHashMap<
       Node,
-      std::shared_ptr<context::CDHashMap<Node, std::pair<Node, Node> > > >;
+      std::shared_ptr<context::CDHashMap<Node, std::pair<Node, Node>>>>;
   BagElementsMap d_mapCache;
 
   /**
@@ -570,6 +599,28 @@ class BagSolver : protected EnvObj
    */
   std::vector<Node> d_lastPremises;
   std::vector<Node> d_lastSums;
+  /** A group sum column of the star, see addGroupConstraints. */
+  struct GroupColumn
+  {
+    /** the function of the grouping */
+    Node d_function;
+    /** the element type of the groups, i.e. of the map terms */
+    TypeNode d_targetType;
+    /** the source slot the column sums, or null for the group size column */
+    Node d_source;
+    /** the bound variable of the column */
+    Node d_boundVar;
+    /**
+     * the coordinate of the outer vector: the cardinality variable of the
+     * source, or a free skolem for the group size column
+     */
+    Node d_coordinate;
+  };
+  /**
+   * The group columns of the last star, after the slots in the order of the
+   * bound variables; recomputed by each call to checkLiastarConstraints.
+   */
+  std::vector<GroupColumn> d_groupColumns;
   /**
    * The number of fresh elements checkLiastarCandidateModel has introduced,
    * which it bounds. It lives in the user context so that the elements of a

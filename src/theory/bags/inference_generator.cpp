@@ -466,7 +466,7 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
   Node sizeGTE_zero = d_nm->mkNode(Kind::GEQ, size, d_zero);
   std::vector<Node> conjuncts = {
       baseCase, totalSumEqualCountE, forAll_i, sizeGTE_zero};
-  if (d_useCardinality)
+  if (d_useCardinality && !d_state->getCardinalityTerms().empty())
   {
     // uf enumerates the distinct elements of A without repetition, so size is
     // the cardinality of (bag.setof A). Naming that value lets whatever

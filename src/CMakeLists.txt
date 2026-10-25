@@ -111,6 +111,8 @@ libcvc5_add_sources(
   preprocessing/passes/rewrite.h
   preprocessing/passes/sep_skolem_emp.cpp
   preprocessing/passes/sep_skolem_emp.h
+  preprocessing/passes/sets_to_bags.cpp
+  preprocessing/passes/sets_to_bags.h
   preprocessing/passes/sort_infer.cpp
   preprocessing/passes/sort_infer.h
   preprocessing/passes/static_learning.cpp
@@ -410,6 +412,8 @@ libcvc5_add_sources(
   theory/arith/equality_solver.h
   theory/arith/inference_manager.cpp
   theory/arith/inference_manager.h
+  theory/arith/liastar/liastar_extension.cpp
+  theory/arith/liastar/liastar_extension.h
   theory/arith/liastar/liastar_stats.cpp
   theory/arith/liastar/liastar_stats.h
   theory/arith/liastar/liastar_utils.cpp

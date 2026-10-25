@@ -106,6 +106,7 @@ set(regress_0_tests
   regress0/arith/proj-issue715-real-as-int-cot.smt2
   regress0/arith/projissue469-int-equality.smt2
   regress0/arith/proj-issue780-arith-mult-pf.smt2
+  regress0/arith/unate-prop-prev-diseq.smt2
   regress0/arith-bv-conv-ineq-rewrites.smt2
   regress0/arr1.smt2
   regress0/arr1.smtv1.smt2

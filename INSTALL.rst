@@ -241,7 +241,7 @@ Licensing of GPL dependencies
 
 cvc5 itself is distributed under the modified BSD license, and by default it is
 built without any GPL-licensed dependency. Several of the optional dependencies
-below (CoCoA, CLN, glpk-cut-log and Normaliz) are covered by the `GNU General
+below (CoCoA, CLN and glpk-cut-log) are covered by the `GNU General
 Public License, version 3 <https://www.gnu.org/licenses/gpl-3.0.en.html>`_. If
 you link cvc5 against any of them, the resulting combined work is covered by
 the GPLv3 as well.
@@ -334,17 +334,6 @@ a package named `libedit-dev`, `libedit-devel`, or similar.  Configure cvc5 with
 ``configure.sh --editline`` to build with this dependency.  Additionally,
 to run tests related to interactive mode with this dependency, you will need
 the Python module `pexpect <https://pexpect.readthedocs.io/en/stable/>`_.
-
-Normaliz (Optional rational cones library)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-`Normaliz <https://www.normaliz.uni-osnabrueck.de/>`_ is required for 
-liastar solver extension. We recommend downloading it using the ``--auto-download`` 
-configuration flag. It is included in the build through the
-``--normaliz --gpl`` configuration flag.
-
-Normaliz is covered by the GPLv3 license; see `Licensing of GPL dependencies
-<#licensing-of-gpl-dependencies>`__ for the ramifications of this.
 
 
 Google Test Unit Testing Framework (Unit Tests)

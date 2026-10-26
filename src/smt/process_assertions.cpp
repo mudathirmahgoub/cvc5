@@ -160,6 +160,13 @@ bool ProcessAssertions::apply(AssertionPipeline& ap)
     applyPass("sets-to-bags", ap);
   }
 
+  // Record the keys and NOT NULL columns of tables that the assertions state,
+  // before anything rewrites them, see theory::bags::BagsRewriter::recordFacts.
+  if (logicInfo().isTheoryEnabled(theory::THEORY_BAGS))
+  {
+    applyPass("bags-facts", ap);
+  }
+
   // Apply substitutions first. If we are non-incremental, this has only the
   // effect of replacing defined functions with their definitions.
   // We do not call theory-specific expand definitions here, since we want

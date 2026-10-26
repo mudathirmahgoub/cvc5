@@ -10,6 +10,8 @@
  * Inference generator utility.
  */
 
+#include <map>
+
 #include "cvc5_private.h"
 
 #ifndef CVC5__THEORY__BAGS__INFERENCE_GENERATOR_H
@@ -106,6 +108,48 @@ class InferenceGenerator : protected EnvObj
    *   where witness is a skolem of type E.
    */
   InferInfo bagDisequality(Node equality, Node witness);
+  /**
+   * @param equality (= A B) where A, B are bag terms of the same kind
+   * @return an inference that expresses:
+   *   (not (= A B)) => (or (not (= A1 B1)) .. (not (= An Bn)))
+   * for the children of A and B, or one with a null conclusion when A and B
+   * are not of one kind
+   */
+  InferInfo bagDisequalityDecompose(Node equality);
+  /**
+   * @param equality (= A B) between unions of filtered and mapped bags
+   * @return an inference that some row of a base bag is counted differently by
+   * the parts of A and of B over it with one function, or one with a null
+   * conclusion when there is nothing to compare: for
+   *   (= (bag.union_disjoint (bag.filter p X) (bag.filter q X))
+   *      (bag.filter r X))
+   * the inference
+   *   (=> (not (= A B))
+   *       (and (>= (bag.count e X) 1)
+   *            (not (= (+ (ite (p e) 1 0) (ite (q e) 1 0))
+   *                    (ite (r e) 1 0)))))
+   * for a fresh element e
+   */
+  InferInfo bagDisequalityPointwise(Node equality);
+  /**
+   * an element y of (bag.map f A) has a preimage in A, see mapDown:
+   *   (=> (>= (bag.count y (bag.map f A)) 1)
+   *       (and (>= (bag.count w A) 1) (= (f w) y)))
+   * for a fresh w; the conclusion is true when an element of A is already
+   * known to map to y
+   */
+  InferInfo mapDownWitness(Node n, Node y);
+  /**
+   * @param a, b two bag.fold terms of one type
+   * @return an inference whose conclusion is
+   *   (or (= a b) (not (= i1 i2)) (not (= X1 X2))
+   *       (and (>= (bag.count x X1) 1) (not (= (f1 x acc) (f2 x acc)))))
+   * for a = (bag.fold f1 i1 X1), b = (bag.fold f2 i2 X2), x and acc fresh:
+   * the folds are equal when the functions agree on the elements of the bag
+   * for every accumulator and the other arguments are equal, so the folds
+   * never need unrolling to be compared
+   */
+  InferInfo foldDecompose(Node a, Node b);
   /**
    * @param n is (as bag.empty (Bag E))
    * @param e is a node of Type E
@@ -588,6 +632,8 @@ class InferenceGenerator : protected EnvObj
    * FunctionConst::getDefinition.
    */
   Node mkApplyFunction(const Node& f, const Node& x);
+  /** (f a1 .. an), beta-reduced when f is a lambda, as the one above */
+  Node mkApplyFunction(const Node& f, const std::vector<Node>& args);
 
   NodeManager* d_nm;
   SkolemManager* d_sm;
@@ -603,6 +649,12 @@ class InferenceGenerator : protected EnvObj
   Node d_true;
   Node d_zero;
   Node d_one;
+  /**
+   * the fresh elements of the inferences above, one per key: (SEXPR f g X)
+   * for bagDisequalityDecompose and foldDecompose, (SEXPR equality f X) for
+   * bagDisequalityPointwise, (SEXPR n y 1) for mapDownWitness
+   */
+  std::map<Node, Node> d_elementWitnesses;
 };
 
 }  // namespace bags

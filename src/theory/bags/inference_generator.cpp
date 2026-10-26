@@ -157,6 +157,295 @@ InferInfo InferenceGenerator::bagDisequality(Node equality, Node witness)
   return inferInfo;
 }
 
+namespace {
+/**
+ * a part of a union: (bag.map f (bag.filter p X)), f or p null when absent;
+ * for (bag.filter p X) f is null, for (bag.map f X) p is null, and for a
+ * table X both are
+ */
+struct UnionPart
+{
+  Node f;
+  Node p;
+  Node X;
+};
+/**
+ * the parts of n, a tree of bag.union_disjoint, as UnionPart: for
+ * (bag.union_disjoint (bag.map f X) (bag.union_disjoint (bag.filter p X)
+ * Y)), the parts (f, null, X), (null, p, X) and (null, null, Y); an empty bag
+ * is no part
+ */
+void unionParts(const Node& n, std::vector<UnionPart>& parts)
+{
+  if (n.getKind() == Kind::BAG_UNION_DISJOINT)
+  {
+    unionParts(n[0], parts);
+    unionParts(n[1], parts);
+    return;
+  }
+  if (n.getKind() == Kind::BAG_EMPTY)
+  {
+    return;
+  }
+  UnionPart part;
+  Node rest = n;
+  if (rest.getKind() == Kind::BAG_MAP)
+  {
+    part.f = rest[0];
+    rest = rest[1];
+  }
+  if (rest.getKind() == Kind::BAG_FILTER)
+  {
+    part.p = rest[0];
+    rest = rest[1];
+  }
+  part.X = rest;
+  parts.push_back(part);
+}
+}  // namespace
+
+InferInfo InferenceGenerator::bagDisequalityPointwise(Node equality)
+{
+  // equality is (= A B), A and B unions of parts (bag.map f (bag.filter p
+  // X)). Grouped by f and X, the parts of a group give a row e of X the
+  // multiplicity (+ (ite (p1 e) 1 0) .. (ite (pn e) 1 0)) times its own; if
+  // every group gives every row the same sum on both sides, the two sides are
+  // equal. So when they are not, some row of some group differs:
+  //   (=> (not (= A B))
+  //       (or (and (>= (bag.count e1 X1) 1)
+  //                (not (= (+ (ite (p1 e1) 1 0) (ite (p2 e1) 1 0))
+  //                        (ite (q1 e1) 1 0))))
+  //           ..))
+  // with one fresh element e1 per group (f1, X1), the parts with p1 and p2 on
+  // the left, q1 on the right. E.g. for
+  //   (= (bag.union_disjoint (bag.filter p X) (bag.filter q X))
+  //      (bag.filter r X))
+  // the conclusion is
+  //   (and (>= (bag.count e X) 1)
+  //        (not (= (+ (ite (p e) 1 0) (ite (q e) 1 0)) (ite (r e) 1 0))))
+  InferInfo inferInfo(d_im, InferenceId::BAGS_DISEQUALITY_POINTWISE);
+  std::vector<UnionPart> pa, pb;
+  unionParts(equality[0], pa);
+  unionParts(equality[1], pb);
+  if (pa.size() + pb.size() <= 2)
+  {
+    return inferInfo;
+  }
+  // groups (f, X), in order of first appearance, with the predicates of their
+  // parts on each side; a part without a filter has the predicate true
+  std::vector<std::pair<Node, Node>> keys;
+  std::map<std::pair<Node, Node>,
+           std::pair<std::vector<Node>, std::vector<Node>>>
+      groups;
+  auto add = [&](const UnionPart& part, bool left) {
+    std::pair<Node, Node> key(part.f, part.X);
+    if (groups.find(key) == groups.end())
+    {
+      keys.push_back(key);
+    }
+    std::vector<Node>& side = left ? groups[key].first : groups[key].second;
+    side.push_back(part.p.isNull() ? d_nm->mkConst(true) : part.p);
+  };
+  for (const UnionPart& part : pa)
+  {
+    add(part, true);
+  }
+  for (const UnionPart& part : pb)
+  {
+    add(part, false);
+  }
+  std::vector<Node> disjuncts;
+  for (const std::pair<Node, Node>& key : keys)
+  {
+    const std::vector<Node>& ps = groups[key].first;
+    const std::vector<Node>& qs = groups[key].second;
+    if (ps == qs)
+    {
+      continue;
+    }
+    Node X = key.second;
+    Node cacheKey = d_nm->mkNode(
+        Kind::SEXPR, equality, key.first.isNull() ? X : key.first, X);
+    std::map<Node, Node>::iterator it = d_elementWitnesses.find(cacheKey);
+    if (it == d_elementWitnesses.end())
+    {
+      Node e = NodeManager::mkDummySkolem("e", X.getType().getBagElementType());
+      it = d_elementWitnesses.emplace(cacheKey, e).first;
+    }
+    Node e = it->second;
+    // (+ (ite (p1 e) 1 0) (ite (p2 e) 1 0)), or 0 for no part
+    auto sum = [&](const std::vector<Node>& preds) {
+      std::vector<Node> terms;
+      for (const Node& p : preds)
+      {
+        Node holds = p.isConst() ? p : mkApplyFunction(p, e);
+        terms.push_back(d_nm->mkNode(Kind::ITE, holds, d_one, d_zero));
+      }
+      if (terms.empty())
+      {
+        return d_zero;
+      }
+      return terms.size() == 1 ? terms[0] : d_nm->mkNode(Kind::ADD, terms);
+    };
+    Node inX =
+        d_nm->mkNode(Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, e, X), d_one);
+    disjuncts.push_back(inX.andNode(sum(ps).eqNode(sum(qs)).notNode()));
+  }
+  if (disjuncts.empty())
+  {
+    return inferInfo;
+  }
+  inferInfo.d_premises.push_back(equality.notNode());
+  inferInfo.d_conclusion =
+      disjuncts.size() == 1 ? disjuncts[0] : d_nm->mkNode(Kind::OR, disjuncts);
+  return inferInfo;
+}
+
+InferInfo InferenceGenerator::bagDisequalityDecompose(Node equality)
+{
+  // equality is (= A B) with A = (op A1 .. An) and B = (op B1 .. Bn) of one
+  // operator: when they differ, some pair of arguments does, the converse of
+  // congruence,
+  //   (=> (not (= (table.product X1 Y1) (table.product X2 Y2)))
+  //       (or (not (= X1 X2)) (not (= Y1 Y2))))
+  // A pair of functions differs at a witness: for a map or a filter at an
+  // element e of the bag it is applied to,
+  //   (=> (not (= (bag.map f X) (bag.map g X)))
+  //       (and (>= (bag.count e X) 1) (not (= (f e) (g e)))))
+  // and at fresh arguments w1, w2 for the step of a fold or an aggregate,
+  // (not (= (f w1 w2) (g w1 w2))). It lets the solver find the place where
+  // two queries of the same shape differ, instead of relating the
+  // multiplicities of their results, which for a non-injective map needs the
+  // sums of two preimages.
+  Assert(equality.getKind() == Kind::EQUAL && equality[0].getType().isBag());
+  InferInfo inferInfo(d_im, InferenceId::BAGS_DISEQUALITY_DECOMPOSE);
+  Node A = equality[0];
+  Node B = equality[1];
+  Kind k = A.getKind();
+  if (k != B.getKind() || A.getNumChildren() == 0
+      || A.getNumChildren() != B.getNumChildren())
+  {
+    return inferInfo;
+  }
+  bool paramA = A.getMetaKind() == kind::metakind::PARAMETERIZED;
+  bool paramB = B.getMetaKind() == kind::metakind::PARAMETERIZED;
+  if (paramA != paramB || (paramA && A.getOperator() != B.getOperator()))
+  {
+    return inferInfo;
+  }
+  switch (k)
+  {
+    case Kind::BAG_MAP:
+    case Kind::BAG_FILTER:
+    case Kind::BAG_SETOF:
+    case Kind::BAG_UNION_DISJOINT:
+    case Kind::BAG_UNION_MAX:
+    case Kind::BAG_INTER_MIN:
+    case Kind::BAG_DIFFERENCE_SUBTRACT:
+    case Kind::BAG_DIFFERENCE_REMOVE:
+    case Kind::TABLE_PRODUCT:
+    case Kind::TABLE_JOIN:
+    case Kind::TABLE_AGGREGATE:
+    case Kind::TABLE_GROUP:
+    case Kind::TABLE_PROJECT: break;
+    default: return inferInfo;
+  }
+  std::vector<Node> disjuncts;
+  for (size_t i = 0, n = A.getNumChildren(); i < n; i++)
+  {
+    if (A[i].getType() != B[i].getType())
+    {
+      // two maps of one result type over rows of different types: the
+      // arguments differ trivially and the lemma would say nothing
+      return InferInfo(d_im, InferenceId::BAGS_DISEQUALITY_DECOMPOSE);
+    }
+    if (A[i] == B[i])
+    {
+      continue;
+    }
+    if (A[i].getType().isFunction())
+    {
+      // two functions differ where they differ on some argument, applied to
+      // both so that no equality between functions is asserted and the
+      // lambdas reduce. For a map or a filter the argument is an element of
+      // the bag they are applied to: the functions only have to agree there,
+      // like the two sides of "select a .. where a = b" and "select b ..",
+      // and the filter below tells the solver what holds of such an element
+      if (A[i].getType().getArgTypes().size() != 1)
+      {
+        // a fold's or an aggregate's step: compared at a witness per argument
+        std::vector<Node> args;
+        for (size_t a = 0, na = A[i].getType().getArgTypes().size(); a < na;
+             a++)
+        {
+          args.push_back(d_sm->mkSkolemFunction(
+              SkolemId::HO_DEQ_DIFF,
+              {A[i], B[i], d_nm->mkConstInt(Rational(a))}));
+        }
+        Node fa = mkApplyFunction(A[i], args);
+        Node fb = mkApplyFunction(B[i], args);
+        disjuncts.push_back(fa.eqNode(fb).notNode());
+        continue;
+      }
+      Node fa, fb, inBag;
+      if ((k == Kind::BAG_MAP || k == Kind::BAG_FILTER) && i == 0)
+      {
+        Node X = A[1];
+        Node key = d_nm->mkNode(Kind::SEXPR, A[i], B[i], X);
+        std::map<Node, Node>::iterator it = d_elementWitnesses.find(key);
+        if (it == d_elementWitnesses.end())
+        {
+          Node e =
+              NodeManager::mkDummySkolem("e", X.getType().getBagElementType());
+          it = d_elementWitnesses.emplace(key, e).first;
+        }
+        Node e = it->second;
+        inBag =
+            d_nm->mkNode(Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, e, X), d_one);
+        fa = mkApplyFunction(A[i], e);
+        fb = mkApplyFunction(B[i], e);
+      }
+      else
+      {
+        Node w = d_sm->mkSkolemFunction(
+            SkolemId::HO_DEQ_DIFF, {A[i], B[i], d_nm->mkConstInt(Rational(0))});
+        fa = mkApplyFunction(A[i], w);
+        fb = mkApplyFunction(B[i], w);
+      }
+      Node differ = fa.eqNode(fb).notNode();
+      disjuncts.push_back(inBag.isNull() ? differ : inBag.andNode(differ));
+      continue;
+    }
+    disjuncts.push_back(A[i].eqNode(B[i]).notNode());
+  }
+  if (disjuncts.empty())
+  {
+    return inferInfo;
+  }
+  if ((k == Kind::BAG_UNION_DISJOINT || k == Kind::BAG_UNION_MAX
+       || k == Kind::BAG_INTER_MIN)
+      && A[0] != B[1] && A[1] != B[0])
+  {
+    // a commutative operator: the arguments may meet in the other order, and
+    //   (not (= (bag.union_disjoint A1 A2) (bag.union_disjoint B1 B2)))
+    // also gives (or (not (= A1 B2)) (not (= A2 B1))). One lemma says both:
+    // some pairing of the arguments differs in each,
+    //   (and (or (not (= A1 B1)) (not (= A2 B2)))
+    //        (or (not (= A1 B2)) (not (= A2 B1))))
+    Node straight = disjuncts.size() == 1 ? disjuncts[0]
+                                          : d_nm->mkNode(Kind::OR, disjuncts);
+    Node swapped = d_nm->mkNode(
+        Kind::OR, A[0].eqNode(B[1]).notNode(), A[1].eqNode(B[0]).notNode());
+    inferInfo.d_premises.push_back(equality.notNode());
+    inferInfo.d_conclusion = straight.andNode(swapped);
+    return inferInfo;
+  }
+  inferInfo.d_premises.push_back(equality.notNode());
+  inferInfo.d_conclusion =
+      disjuncts.size() == 1 ? disjuncts[0] : d_nm->mkNode(Kind::OR, disjuncts);
+  return inferInfo;
+}
+
 Node InferenceGenerator::registerAndAssertSkolemLemma(Node& n)
 {
   Node skolem = d_sm->mkPurifySkolem(n);
@@ -487,6 +776,62 @@ std::tuple<InferInfo, Node, Node> InferenceGenerator::mapDown(Node n, Node e)
   return std::tuple(inferInfo, uf, size);
 }
 
+Node InferenceGenerator::mkApplyFunction(const Node& f,
+                                         const std::vector<Node>& args)
+{
+  // (f a1 .. an), beta-reduced and rewritten when f is (the constant of) a
+  // lambda
+  Node lambda = uf::FunctionConst::getDefinition(f);
+  std::vector<Node> children{lambda.isNull() ? f : lambda};
+  children.insert(children.end(), args.begin(), args.end());
+  Node app = d_nm->mkNode(Kind::APPLY_UF, children);
+  return lambda.isNull() ? app : rewrite(app);
+}
+
+InferInfo InferenceGenerator::foldDecompose(Node a, Node b)
+{
+  // a = (bag.fold f1 i1 X1) and b = (bag.fold f2 i2 X2):
+  //   (or (= a b) (not (= i1 i2)) (not (= X1 X2))
+  //       (and (>= (bag.count x X1) 1) (not (= (f1 x acc) (f2 x acc)))))
+  // with fresh x and acc, one pair per (f1, f2, X1); the disjuncts for
+  // arguments that are one node are left out
+  Assert(a.getKind() == Kind::BAG_FOLD && b.getKind() == Kind::BAG_FOLD);
+  InferInfo inferInfo(d_im, InferenceId::BAGS_FOLD_DECOMPOSE);
+  std::vector<Node> disjuncts;
+  disjuncts.push_back(a.eqNode(b));
+  if (a[1] != b[1])
+  {
+    disjuncts.push_back(a[1].eqNode(b[1]).notNode());
+  }
+  if (a[2] != b[2])
+  {
+    disjuncts.push_back(a[2].eqNode(b[2]).notNode());
+  }
+  if (a[0] != b[0])
+  {
+    Node X = a[2];
+    Node key = d_nm->mkNode(Kind::SEXPR, a[0], b[0], X);
+    std::map<Node, Node>::iterator it = d_elementWitnesses.find(key);
+    if (it == d_elementWitnesses.end())
+    {
+      TypeNode accType = a.getType();
+      Node x = NodeManager::mkDummySkolem("x", X.getType().getBagElementType());
+      Node acc = NodeManager::mkDummySkolem("acc", accType);
+      it = d_elementWitnesses.emplace(key, d_nm->mkNode(Kind::SEXPR, x, acc))
+               .first;
+    }
+    Node x = it->second[0];
+    Node acc = it->second[1];
+    Node inBag =
+        d_nm->mkNode(Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, x, X), d_one);
+    Node fa = mkApplyFunction(a[0], {x, acc});
+    Node fb = mkApplyFunction(b[0], {x, acc});
+    disjuncts.push_back(inBag.andNode(fa.eqNode(fb).notNode()));
+  }
+  inferInfo.d_conclusion = d_nm->mkNode(Kind::OR, disjuncts);
+  return inferInfo;
+}
+
 Node InferenceGenerator::mkApplyFunction(const Node& f, const Node& x)
 {
   Node lambda = uf::FunctionConst::getDefinition(f);
@@ -495,6 +840,45 @@ Node InferenceGenerator::mkApplyFunction(const Node& f, const Node& x)
     return d_nm->mkNode(Kind::APPLY_UF, f, x);
   }
   return rewrite(d_nm->mkNode(Kind::APPLY_UF, lambda, x));
+}
+
+InferInfo InferenceGenerator::mapDownWitness(Node n, Node y)
+{
+  // (=> (>= (bag.count y (bag.map f A)) 1)
+  //     (and (>= (bag.count w A) 1) (= (f w) y)))
+  // for a fresh w: an element of a map's image has a preimage. Weaker than
+  // mapDown, which sums the multiplicities of the whole preimage, and ground:
+  // it is what refutes a y no element of A maps to.
+  Assert(n.getKind() == Kind::BAG_MAP);
+  InferInfo inferInfo(d_im, InferenceId::BAGS_MAP_DOWN_WITNESS);
+  Node f = n[0];
+  Node A = n[1];
+  const std::set<Node>& aElements = d_state->getElements(A);
+  for (const Node& x : aElements)
+  {
+    if (d_state->areEqual(mkApplyFunction(f, x), y))
+    {
+      // an element of A already maps to y: the map's up lemma for it says
+      // the rest, and a witness would only add another element
+      inferInfo.d_conclusion = d_true;
+      return inferInfo;
+    }
+  }
+  Node key = d_nm->mkNode(Kind::SEXPR, n, y, d_one);
+  std::map<Node, Node>::iterator it = d_elementWitnesses.find(key);
+  if (it == d_elementWitnesses.end())
+  {
+    Node w = NodeManager::mkDummySkolem("w", A.getType().getBagElementType());
+    it = d_elementWitnesses.emplace(key, w).first;
+  }
+  Node w = it->second;
+  Node inMap =
+      d_nm->mkNode(Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, y, n), d_one);
+  Node inA =
+      d_nm->mkNode(Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, w, A), d_one);
+  inferInfo.d_premises.push_back(inMap);
+  inferInfo.d_conclusion = inA.andNode(mkApplyFunction(f, w).eqNode(y));
+  return inferInfo;
 }
 
 InferInfo InferenceGenerator::mapDownInjective(Node n, Node y)

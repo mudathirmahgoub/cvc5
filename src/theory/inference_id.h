@@ -231,6 +231,21 @@ enum class InferenceId
   BAGS_BAG_MAKE_SPLIT,
   BAGS_SKOLEM,
   BAGS_DISEQUALITY,
+  // (=> (not (= (op A1 .. An) (op B1 .. Bn))) (or (not (= A1 B1)) ..)), the
+  // converse of congruence, see InferenceGenerator::bagDisequalityDecompose
+  BAGS_DISEQUALITY_DECOMPOSE,
+  // two unions of filters over one bag X differ at some element of X, see
+  // InferenceGenerator::bagDisequalityPointwise
+  BAGS_DISEQUALITY_POINTWISE,
+  // (=> (>= (bag.count y (bag.map f A)) 1)
+  //     (and (>= (bag.count w A) 1) (= (f w) y)))
+  BAGS_MAP_DOWN_WITNESS,
+  // two folds are equal when their arguments are, the functions on the
+  // elements of the bag, see InferenceGenerator::foldDecompose
+  BAGS_FOLD_DECOMPOSE,
+  // a fold that counts the elements of X is at least 0, and 0 when X is
+  // empty, see BagSolver::countLemma
+  BAGS_FOLD_COUNT,
   BAGS_CG_SPLIT,
   BAGS_EMPTY,
   BAGS_UNION_DISJOINT,

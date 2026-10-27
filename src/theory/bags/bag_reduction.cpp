@@ -14,6 +14,7 @@
 
 #include "expr/bound_var_manager.h"
 #include "expr/emptybag.h"
+#include "expr/node_algorithm.h"
 #include "expr/skolem_manager.h"
 #include "theory/datatypes/project_op.h"
 #include "theory/datatypes/tuple_utils.h"
@@ -181,8 +182,23 @@ Node BagReduction::reduceAggregateOperator(Node node)
   Node groupOp = nm->mkConst(Kind::TABLE_GROUP_OP, op);
   Node group = nm->mkNode(Kind::TABLE_GROUP, {groupOp, A});
 
-  Node bag = bvm->mkBoundVar(
-      BoundVarId::BAGS_FIRST_INDEX, group, "bag", nm->mkBagType(elementType));
+  // the aggregate as
+  //   (bag.map (lambda ((bag (Bag T))) (bag.fold f i bag))
+  //            ((_ table.group K) A))
+  // with one bound variable bag per bag type, so that the aggregates of two
+  // tables with the same function and initial value are the same lambda,
+  // which the solver then treats as one function; the fold's arguments are
+  // closed terms, so the variable is only renamed when one of them happens
+  // to contain it
+  TypeNode bagType = nm->mkBagType(elementType);
+  Node bag = bvm->mkBoundVar(BoundVarId::BAGS_FIRST_INDEX,
+                             nm->mkConst(EmptyBag(bagType)),
+                             "bag",
+                             bagType);
+  if (expr::hasSubterm(function, bag) || expr::hasSubterm(initialValue, bag))
+  {
+    bag = bvm->mkBoundVar(BoundVarId::BAGS_FIRST_INDEX, group, "bag", bagType);
+  }
   Node foldList = nm->mkNode(Kind::BOUND_VAR_LIST, bag);
   Node foldBody = nm->mkNode(Kind::BAG_FOLD, function, initialValue, bag);
 
@@ -199,7 +215,11 @@ Node BagReduction::reduceProjectOperator(Node n)
   TypeNode elementType = A.getType().getBagElementType();
   ProjectOp projectOp = n.getOperator().getConst<ProjectOp>();
   Node op = nm->mkConst(Kind::TUPLE_PROJECT_OP, projectOp);
-  Node t = NodeManager::mkBoundVar("t", elementType);
+  // (bag.map (lambda ((t T)) ((_ tuple.project 0 2) t)) A), over the one row
+  // variable of T, as the rewriter's PROJECT_TO_MAP builds it
+  BoundVarManager* bvm = nm->getBoundVarManager();
+  Node key = nm->mkConst(EmptyBag(nm->mkBagType(elementType)));
+  Node t = bvm->mkBoundVar(BoundVarId::BAGS_ROW, key, "t", elementType);
   Node projection = nm->mkNode(Kind::TUPLE_PROJECT, op, t);
   Node lambda =
       nm->mkNode(Kind::LAMBDA, nm->mkNode(Kind::BOUND_VAR_LIST, t), projection);

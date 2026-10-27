@@ -8,3 +8,27 @@ name   = "Bags Theory"
   type       = "bool"
   default    = "true"
   help       = "enables the bags solver in applicable logics"
+
+[[option]]
+  name       = "bagsMapWitness"
+  category   = "expert"
+  long       = "bags-map-witness"
+  type       = "bool"
+  default    = "false"
+  help       = "for an element of a non-injective bag.map, also infer a single preimage in the map's argument: a ground lemma that refutes elements nothing maps to, but adds elements the other map lemmas then read"
+
+[[option]]
+  name       = "bagsLazyFold"
+  category   = "expert"
+  long       = "bags-lazy-fold"
+  type       = "bool"
+  default    = "true"
+  help       = "keep bag.fold terms as terms, relating two folds by their functions, initial values and bags, and only unroll them over the elements of their bags when a model is about to be reported"
+
+[[option]]
+  name       = "bagsDeqDecompose"
+  category   = "expert"
+  long       = "bags-deq-decompose"
+  type       = "bool"
+  default    = "true"
+  help       = "when two bag terms of the same kind are disequal, infer that some pair of their arguments is: the converse of congruence, which localizes the difference between two relational-algebra terms of one shape"

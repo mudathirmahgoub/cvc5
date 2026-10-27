@@ -65,7 +65,14 @@ Node BoundVarManager::mkBoundVar(BoundVarId id, Node n, TypeNode tn)
   }
   Node v = NodeManager::mkBoundVar(tn);
   d_cache[key] = v;
+  d_ids[v] = id;
   return v;
+}
+
+bool BoundVarManager::isBoundVarOf(BoundVarId id, const Node& v) const
+{
+  std::map<Node, BoundVarId>::const_iterator it = d_ids.find(v);
+  return it != d_ids.end() && it->second == id;
 }
 
 Node BoundVarManager::mkBoundVar(BoundVarId id,

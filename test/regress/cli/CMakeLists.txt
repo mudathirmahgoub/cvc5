@@ -2244,6 +2244,16 @@ set(regress_0_tests
   regress0/sets/sets-testlemma-ints.smt2
   regress0/sets/sets-testlemma-reals.smt2
   regress0/sets/sets-testlemma.smt2
+  regress0/sets/sets-to-bags-datatype.smt2
+  regress0/sets/sets-to-bags-ho.smt2
+  regress0/sets/sets-to-bags-incremental.smt2
+  regress0/sets/sets-to-bags-mbqi.smt2
+  regress0/sets/sets-to-bags-minus-relaxed.smt2
+  regress0/sets/sets-to-bags-minus-setof.smt2
+  regress0/sets/sets-to-bags-operators.smt2
+  regress0/sets/sets-to-bags-union-relaxed.smt2
+  regress0/sets/sets-to-bags-universe.smt2
+  regress0/sets/sets-to-bags-unsupported.smt2
   regress0/sets/sets-union.smt2
   regress0/sets/sharing-simp.smt2
   regress0/sets/union-1a-flip.smt2
@@ -2951,6 +2961,18 @@ set(regress_1_tests
   regress1/bags/product2.smt2
   regress1/bags/product3.smt2
   regress1/bags/proj-issue497.smt2
+  regress1/bags/rewriter/aggr_filter_keeps_initial_row.smt2
+  regress1/bags/rewriter/aggr_filter_keeps_initial_row_ground.smt2
+  regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_keyed_empty_table.smt2
+  regress1/bags/rewriter/aggr_keyed_product_tested.smt2
+  regress1/bags/rewriter/aggr_keyed_product_untested.smt2
+  regress1/bags/rewriter/facts_incremental_pop.smt2
+  regress1/bags/rewriter/facts_incremental_top.smt2
+  regress1/bags/rewriter/facts_negated_key.smt2
+  regress1/bags/rewriter/facts_negated_not_null.smt2
+  regress1/bags/rewriter/facts_top_level_key.smt2
+  regress1/bags/rewriter/facts_top_level_not_null.smt2
   regress1/bags/proj-issue507.smt2
   regress1/bags/proj-issue547.smt2
   regress1/bags/proj-issue566.smt2
@@ -3821,6 +3843,7 @@ set(regress_1_tests
   regress1/sets/relation_project2.smt2
   regress1/sets/remove_check_free_31_6.smt2
   regress1/sets/sets-disequal.smt2
+  regress1/sets/sets-to-bags-card.smt2
   regress1/sets/sets-tuple-poly.cvc.smt2
   regress1/sets/sets-uc-wrong.smt2
   regress1/sets/set-comp-sat.smt2

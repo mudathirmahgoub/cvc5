@@ -148,6 +148,13 @@ const char* toString(InferenceId i)
     case InferenceId::BAGS_SKOLEM: return "BAGS_SKOLEM";
     case InferenceId::BAGS_CG_SPLIT: return "BAGS_CG_SPLIT";
     case InferenceId::BAGS_DISEQUALITY: return "BAGS_DISEQUALITY";
+    case InferenceId::BAGS_DISEQUALITY_DECOMPOSE:
+      return "BAGS_DISEQUALITY_DECOMPOSE";
+    case InferenceId::BAGS_DISEQUALITY_POINTWISE:
+      return "BAGS_DISEQUALITY_POINTWISE";
+    case InferenceId::BAGS_MAP_DOWN_WITNESS: return "BAGS_MAP_DOWN_WITNESS";
+    case InferenceId::BAGS_FOLD_DECOMPOSE: return "BAGS_FOLD_DECOMPOSE";
+    case InferenceId::BAGS_FOLD_COUNT: return "BAGS_FOLD_COUNT";
     case InferenceId::BAGS_EMPTY: return "BAGS_EMPTY";
     case InferenceId::BAGS_UNION_DISJOINT: return "BAGS_UNION_DISJOINT";
     case InferenceId::BAGS_UNION_MAX: return "BAGS_UNION_MAX";

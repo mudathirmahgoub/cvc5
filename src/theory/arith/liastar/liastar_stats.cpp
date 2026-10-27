@@ -70,8 +70,6 @@ LiaStarStatistics::LiaStarStatistics(StatisticsRegistry& sr)
           sr.registerInt("theory::arith::liastar::subSolverUnknown")),
       d_normalizCalls(sr.registerInt("theory::arith::liastar::normalizCalls")),
       d_conesEmpty(sr.registerInt("theory::arith::liastar::conesEmpty")),
-      d_nestedStarsFlattened(
-          sr.registerInt("theory::arith::liastar::nestedStarsFlattened")),
       d_conesNonempty(sr.registerInt("theory::arith::liastar::conesNonempty")),
       d_hilbertBasisTotal(
           sr.registerInt("theory::arith::liastar::hilbertBasisTotal")),

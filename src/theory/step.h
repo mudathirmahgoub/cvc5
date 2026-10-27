@@ -39,8 +39,6 @@ enum class Step : uint32_t
   BAGS_CHECK_BAG_MAKE,
   // check basic bag operations without quantifiers
   BAGS_CHECK_BASIC_OPERATIONS,
-  // check liastar constraints
-  BAGS_LIASTAR_CONSTRAINTS,
   // check bag operations with quantifiers
   BAGS_CHECK_QUANTIFIED_OPERATIONS,
   // reset the per-pass full-effort state

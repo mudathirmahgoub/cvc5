@@ -35,18 +35,7 @@ class SolverState;
 class InferenceGenerator : protected EnvObj
 {
  public:
-  /**
-   * @param env the environment
-   * @param state the solver state
-   * @param im the inference manager
-   * @param useCardinality whether the size of the distinct elements of a bag
-   * is named by the term (bag.card (bag.setof A)) instead of a skolem the
-   * solver has to guess. See mapDown.
-   */
-  InferenceGenerator(Env& env,
-                     SolverState* state,
-                     InferenceManager* im,
-                     bool useCardinality);
+  InferenceGenerator(Env& env, SolverState* state, InferenceManager* im);
 
   /**
    * @param n a node of the form (bag.count e A)
@@ -355,14 +344,6 @@ class InferenceGenerator : protected EnvObj
    *   (bag.count (f x) skolem)
    * where skolem is a fresh variable equals (bag.map f A))
    */
-  /**
-   * @param n a term of the form (bag.map f A)
-   * @return an inference that concludes
-   * (= (bag.card (bag.map f A)) (bag.card A))
-   * which holds since the map moves every occurrence of an element of A to an
-   * occurrence of its image, without adding or removing any.
-   */
-  InferInfo mapCard(Node n);
   InferInfo mapUp1(Node n, Node x);
   /**
    * @param n is (bag.map f A) where f is a function (-> E T), A a bag of type
@@ -640,11 +621,6 @@ class InferenceGenerator : protected EnvObj
   SolverState* d_state;
   /** Pointer to the inference manager */
   InferenceManager* d_im;
-  /**
-   * Whether the size of the distinct elements of a bag is named by the term
-   * (bag.card (bag.setof A)). See the constructor and mapDown.
-   */
-  bool d_useCardinality;
   /** Commonly used constants */
   Node d_true;
   Node d_zero;

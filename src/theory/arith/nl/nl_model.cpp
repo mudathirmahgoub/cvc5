@@ -96,11 +96,6 @@ Node NlModel::computeModelValue(TNode n, bool isConcrete)
       ret = getValueInternal(n);
     }
   }
-  else if (n.getKind() == Kind::STAR_CONTAINS)
-  {
-    // star contains is handled by liastar extension
-    return n;
-  }
   else
   {
     // otherwise, compute true value

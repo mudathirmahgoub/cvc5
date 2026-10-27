@@ -34,7 +34,7 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
     : Theory(THEORY_BAGS, env, out, valuation),
       d_state(env, valuation),
       d_im(env, *this, d_state),
-      d_ig(env, &d_state, &d_im, options().bags.bagsToLiastar),
+      d_ig(env, &d_state, &d_im),
       d_notify(*this, d_im),
       d_statistics(statisticsRegistry()),
       d_rewriter(nodeManager(),
@@ -110,13 +110,6 @@ TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
     case Kind::BAG_CHOOSE: return expandChooseOperator(atom, lems);
     case Kind::BAG_CARD:
     {
-      if (options().bags.bagsToLiastar)
-      {
-        // the cardinality terms are needed by the translation to liastar,
-        // which is the only thing that constrains them, so do not reduce them
-        // here. See BagSolver::checkLiastarConstraints.
-        return TrustNode::null();
-      }
       std::vector<Node> asserts;
       Node ret = BagReduction::reduceCardOperator(atom, asserts);
       Node andNode = nm->mkNode(Kind::AND, asserts);
@@ -136,8 +129,7 @@ TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
         return TrustNode::null();
       }
       std::vector<Node> asserts;
-      Node ret = BagReduction::reduceFoldOperator(
-          atom, asserts, options().bags.bagsToLiastar);
+      Node ret = BagReduction::reduceFoldOperator(atom, asserts);
       Node andNode = nm->mkNode(Kind::AND, asserts);
       d_im.lemma(andNode, InferenceId::BAGS_FOLD);
       Trace("bags::ppr") << "reduce(" << atom << ") = " << ret
@@ -261,12 +253,6 @@ void TheoryBags::postCheck(Effort effort)
     // the model has just been built, see TheoryEngine::check
     d_solver.reduceFoldsLastCall();
     d_solver.checkDisequalBagTermsLastCall();
-    if (options().bags.bagsToLiastar
-        && options().bags.bagsLiastarModel
-               == options::BagsLiastarModelMode::ELEMENTS)
-    {
-      d_solver.checkLiastarCandidateModel();
-    }
     d_im.doPendingLemmas();
     return;
   }
@@ -277,10 +263,7 @@ void TheoryBags::postCheck(Effort effort)
 
 bool TheoryBags::needsCheckLastEffort()
 {
-  return options().bags.bagsDeqDecompose || options().bags.bagsLazyFold
-         || options().bags.bagsToLiastar
-                && options().bags.bagsLiastarModel
-                       == options::BagsLiastarModelMode::ELEMENTS;
+  return options().bags.bagsDeqDecompose || options().bags.bagsLazyFold;
 }
 
 void TheoryBags::notifyFact(CVC5_UNUSED TNode atom,
@@ -299,12 +282,6 @@ bool TheoryBags::collectModelValues(TheoryModel* m,
 
   // a map from bag representatives to their constructed values
   std::map<Node, Node> processedBags;
-  if (options().bags.bagsToLiastar)
-  {
-    // the bags of the star are rebuilt from the cardinalities of the model
-    // first, the construction below only sees the elements of the solver
-    d_solver.collectLiastarModelValues(m, processedBags);
-  }
 
   Trace("bags-model") << "d_state equality engine:" << std::endl;
   Trace("bags-model") << d_state.getEqualityEngine()->debugPrintEqc()

@@ -32,9 +32,7 @@ BagReduction::BagReduction() {}
 
 BagReduction::~BagReduction() {}
 
-Node BagReduction::reduceFoldOperator(Node node,
-                                      std::vector<Node>& asserts,
-                                      bool useCardinality)
+Node BagReduction::reduceFoldOperator(Node node, std::vector<Node>& asserts)
 {
   Assert(node.getKind() == Kind::BAG_FOLD);
   NodeManager* nm = node.getNodeManager();
@@ -45,8 +43,6 @@ Node BagReduction::reduceFoldOperator(Node node,
   Node zero = nm->mkConstInt(Rational(0));
   Node one = nm->mkConstInt(Rational(1));
   // skolem functions
-  // the assertions below make A the disjoint union of n singletons, so n is
-  // the cardinality of A and the term (bag.card A) can be used for it
   Node n = sm->mkSkolemFunction(SkolemId::BAGS_FOLD_CARD, A);
   Node elements = sm->mkSkolemFunction(SkolemId::BAGS_FOLD_ELEMENTS, A);
   Node unionDisjoint =
@@ -93,14 +89,6 @@ Node BagReduction::reduceFoldOperator(Node node,
   asserts.push_back(unionDisjoint_0_equal);
   asserts.push_back(unionDisjoint_n_equal);
   asserts.push_back(nonNegative);
-  if (useCardinality)
-  {
-    // n is the cardinality of A, see the documentation of this function. Note
-    // n stays the bound of the quantifier above: replacing it by the term
-    // would leave the bounded integers module without a bound it can use, and
-    // the quantifier would then never be instantiated.
-    asserts.push_back(n.eqNode(nm->mkNode(Kind::BAG_CARD, A)));
-  }
   return combine_n;
 }
 

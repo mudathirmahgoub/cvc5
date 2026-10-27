@@ -491,13 +491,6 @@ void SetDefaults::finalizeLogic(LogicInfo& logic, Options& opts) const
     {
       log.enableIntegers();
     }
-    if (opts.bags.bagsToLiastar)
-    {
-      // The bags are translated to int.star-contains, whose first argument is
-      // a lambda, and which is solved by an extension of non-linear arithmetic.
-      log.enableHigherOrder();
-      log.arithNonLinear();
-    }
     logic = log;
     logic.lock();
   }
@@ -926,15 +919,6 @@ void SetDefaults::setDefaultsPost(const LogicInfo& logic, Options& opts) const
     SET_AND_NOTIFY_IF_NOT_USER(datatypes, dtSharedSelectors, true, "SyGuS");
   }
 
-  if (opts.bags.bagsToLiastar)
-  {
-    // The lemmas of the translation put sums of integer variables into the
-    // arguments of the star atoms, and the Diophantine equation solver then
-    // spends most of the search on the resulting equalities without finding
-    // conflicts: regress1/bags/fold2.smt2 takes 15s with it and 5s without,
-    // and the three fol benchmarks that time out with it are solved without.
-    SET_AND_NOTIFY_IF_NOT_USER(arith, arithDioSolver, false, "bags-to-liastar");
-  }
   if (opts.prop.minisatSimpMode == options::MinisatSimpMode::ALL)
   {
     // cannot use minisat variable elimination for logics where a theory solver

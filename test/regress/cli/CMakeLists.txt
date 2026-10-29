@@ -2956,6 +2956,15 @@ set(regress_1_tests
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
+  regress1/bags/rewriter/aggr_filter_keeps_initial_row_ground.smt2
+  regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/canonical_variable.smt2
+  regress1/bags/rewriter/filter_sort_conjuncts.smt2
+  regress1/bags/rewriter/intersection_sort.smt2
+  regress1/bags/rewriter/join_transitive_not_null.smt2
+  regress1/bags/rewriter/product_assoc.smt2
+  regress1/bags/rewriter/setof_absorb.smt2
+  regress1/bags/rewriter/sorted_keys.smt2
   regress1/bags/subbag1.smt2
   regress1/bags/subbag2.smt2
   regress1/bags/table_aggregate1.smt2

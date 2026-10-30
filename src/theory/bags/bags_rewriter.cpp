@@ -3722,7 +3722,13 @@ std::vector<int> BagsRewriter::reachedComponents(
           joined =
               equated(starts[i] + keyAt[i][Ki[m]], starts[j] + keyAt[j][Kj[m]]);
         }
-        if (joined && keySet(i) == keySet(j))
+        if (!joined)
+        {
+          continue;
+        }
+        Node keysI = keySet(i);
+        Node keysJ = keySet(j);
+        if (keysI == keysJ)
         {
           reached[j] = 2;
           changed = true;
@@ -10192,8 +10198,13 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
       const Node& A = comps[i];
       const Node& B = comps[j];
       if (A.getKind() != Kind::TABLE_AGGREGATE
-          || B.getKind() != Kind::TABLE_AGGREGATE || A[2] != B[2]
-          || A.getOperator() != B.getOperator())
+          || B.getKind() != Kind::TABLE_AGGREGATE || A[2] != B[2])
+      {
+        continue;
+      }
+      Node opA = A.getOperator();
+      Node opB = B.getOperator();
+      if (opA != opB)
       {
         continue;
       }
@@ -10527,6 +10538,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateCollapse(const TNode& n) const
   Node innerAggr = belowMap(first)[1];
   Node f = innerAggr[0];
   Node i0 = innerAggr[1];
+  Node innerOp = innerAggr.getOperator();
   std::vector<Node> inputs;
   for (const Node& p : parts)
   {
@@ -10534,8 +10546,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateCollapse(const TNode& n) const
     Node q = belowMap(p);
     if (pPi != pi || q.getKind() != Kind::BAG_FILTER || q[0] != Qi
         || q[1].getKind() != Kind::TABLE_AGGREGATE
-        || q[1].getOperator() != innerAggr.getOperator() || q[1][0] != f
-        || q[1][1] != i0)
+        || q[1].getOperator() != innerOp || q[1][0] != f || q[1][1] != i0)
     {
       return BagsRewriteResponse(n, Rewrite::NONE);
     }

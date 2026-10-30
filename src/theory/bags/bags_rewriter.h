@@ -68,6 +68,8 @@ class BagsRewriter : public TheoryRewriter
    * that build a lambda where the term has none do not apply, since the theory
    * of uninterpreted functions rejects lambdas there:
    * - FILTER_MAP, MAP_MAP and PROJECT_TO_MAP
+   * - FILTER_FILTER, PRODUCT_MAP_*, PRODUCT_FILTER_* and PRODUCT_SWAP
+   * - COUNT_MAP_CONST_PROBE over a table constant
    * The rewriter does not know the logic, so the default is false: the owner
    * of the rewriter passes true for a higher-order logic.
    */
@@ -152,6 +154,7 @@ class BagsRewriter : public TheoryRewriter
    * rewrites.h:
    *
    * - COUNT_EMPTY and COUNT_BAG_MAKE
+   * - COUNT_MAP_CONST_PROBE, for e with a constant column
    */
   BagsRewriteResponse rewriteBagCount(const TNode& n) const;
 
@@ -161,6 +164,7 @@ class BagsRewriter : public TheoryRewriter
    * (see BagsKeyTermAttribute in the .cpp):
    *
    * - SETOF_BAG_MAKE
+   * - SETOF_MAP_CONSTANT (rewriteSetofOfMap)
    * - SETOF_PROJECTION_SORT (rewriteSetofOfMap)
    */
   BagsRewriteResponse rewriteSetof(const TNode& n) const;
@@ -259,6 +263,7 @@ class BagsRewriter : public TheoryRewriter
    * The rules for an equality of bags (= A B), each a Rewrite id with an
    * example in rewrites.h:
    *
+   * - EQ_EMPTY_ARG, for a map or a bag.setof equal to the empty bag
    * - EQ_REFL, EQ_CONST_FALSE and EQ_SYM
    */
   BagsRewriteResponse postRewriteEqual(const TNode& n) const;
@@ -271,9 +276,12 @@ class BagsRewriter : public TheoryRewriter
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - MAP_CONST, MAP_BAG_MAKE and MAP_UNION_DISJOINT
    * - MAP_MAP, for X a map (rewriteMapOfMap)
+   * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - AGGREGATE_DEAD_COLUMNS, for X an aggregate (rewriteAggregateDeadColumns)
+   * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
    * - MAP_EQUAL_COLUMNS, for X a filter
    * - MAP_FIXED_COLUMNS, for X a filter (fixedColumns, readFixed)
+   * - SEMI_JOIN (rewriteSemiJoin)
    * - CANONICAL_VARIABLE (canonicalLambda)
    */
   BagsRewriteResponse postRewriteMap(const TNode& n) const;
@@ -285,13 +293,20 @@ class BagsRewriter : public TheoryRewriter
    *
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - FILTER_TRUE and FILTER_FALSE
+   * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - FILTER_NULLABLE_TRUTH (normalizeTruth)
    * - FILTER_CONFLICTING_CONSTANTS
+   * - FILTER_KNOWN_MEMBERSHIP (dropKnownMemberships)
+   * - FILTER_SORT_CONJUNCTS
    * - CANONICAL_VARIABLE (canonicalLambda)
+   * - FILTER_SPLIT_CLOSED
    * - FILTER_CONST, FILTER_BAG_MAKE and FILTER_UNION_DISJOINT
+   * - FILTER_FILTER, for X a filter (rewriteFilterOfFilter)
    * - FILTER_MAP, for X a map (rewriteFilterOfMap)
    * - AGGREGATE_KEYED, for X an aggregate or a product of them
    *   (keyedAggregateRows)
+   * - FILTER_SETOF, for X a bag.setof
+   * - FILTER_JOIN_TRANSITIVE (rewriteJoinTransitiveConditions)
    */
   BagsRewriteResponse postRewriteFilter(const TNode& n) const;
 
@@ -323,6 +338,7 @@ class BagsRewriter : public TheoryRewriter
    *
    * - FOLD_CONST and FOLD_BAG, for X a constant or (bag x c)
    * - NOT_NULL_COLUMNS (assumeNonNull)
+   * - FOLD_MAP
    * - FOLD_TUPLE (rewriteFoldOfTuple)
    * - FOLD_CONSTANT_STEP
    * - FOLD_UNION_DISJOINT
@@ -351,6 +367,11 @@ class BagsRewriter : public TheoryRewriter
    * rewrites.h:
    *
    * - PRODUCT_EMPTY
+   * - PRODUCT_MAP_LEFT and PRODUCT_MAP_RIGHT (rewriteProductOfMap)
+   * - PRODUCT_FILTER_LEFT and PRODUCT_FILTER_RIGHT (rewriteProductOfFilter)
+   * - PRODUCT_UNION_DISJOINT
+   * - PRODUCT_ASSOC
+   * - PRODUCT_SWAP (rewriteProductSwap)
    */
   BagsRewriteResponse postRewriteProduct(const TNode& n) const;
 
@@ -367,6 +388,11 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
+   * FILTER_FILTER, two filters as one, by the conjunction of their predicates.
+   * Both predicates must be lambdas (see composable).
+   */
+  BagsRewriteResponse rewriteFilterOfFilter(const TNode& n) const;
+  /**
    * FILTER_MAP, a filter of a map as a map of a filter. The map's function must
    * be a lambda (see composable).
    */
@@ -376,6 +402,25 @@ class BagsRewriter : public TheoryRewriter
    * be lambdas (see composable).
    */
   BagsRewriteResponse rewriteMapOfMap(const TNode& n) const;
+  /**
+   * PRODUCT_MAP_LEFT (left) and PRODUCT_MAP_RIGHT, a product with a map as a
+   * factor as a map of the product, which keeps the columns of the other
+   * factor. Only with the higher-order flag, see the constructor.
+   */
+  BagsRewriteResponse rewriteProductOfMap(const TNode& n, bool left) const;
+  /**
+   * PRODUCT_FILTER_LEFT (left) and PRODUCT_FILTER_RIGHT, a product with a
+   * filter as a factor as a filter of the product, over the columns of that
+   * factor. Only with the higher-order flag, see the constructor.
+   */
+  BagsRewriteResponse rewriteProductOfFilter(const TNode& n, bool left) const;
+  /**
+   * PRODUCT_SWAP, the factors of a product in the order of their node ids,
+   * under a map that puts the columns back, so that two joins that list their
+   * tables in different orders become one product. Only with the higher-order
+   * flag, see the constructor.
+   */
+  BagsRewriteResponse rewriteProductSwap(const TNode& n) const;
 
   // ---------------------------------------------------------------------------
   // Aggregates ((_ table.aggr K) f i X): X grouped by its columns K, each
@@ -407,6 +452,12 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteAggregateDeadColumns(const TNode& n) const;
   /**
+   * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two of
+   * which share a key value, under a filter that keeps the groups some row
+   * reached, as the union of the aggregates of the parts.
+   */
+  BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
+  /**
    * For A = ((_ table.aggr K) f i X) whose group columns K contain a key of X
    * (see rowKeys), the rows of the groups some row of X reached: every group is
    * one row t of X, folded once from i, so they are
@@ -436,11 +487,27 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
-   * SETOF_PROJECTION_SORT, the set of a projection onto columns in another
-   * order than theirs as the set of the projection onto the sorted columns,
-   * under a map that puts them in their order.
+   * SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map. Of a
+   * map with constant columns: the set of the map without them, under a map
+   * that puts them back. Of a projection onto columns in another order than
+   * theirs: the set of the projection onto the sorted columns, under a map
+   * that puts them in their order.
    */
   BagsRewriteResponse rewriteSetofOfMap(const TNode& n) const;
+  /**
+   * SEMI_JOIN, a join with a set B whose row the join equations fix, all its
+   * columns or a key, and whose columns the map does not read, as a filter of
+   * the other components by the existence of the matching row of B: SQL's
+   * EXISTS and IN. Called with side 0 only; every component of the product is
+   * tried.
+   */
+  BagsRewriteResponse rewriteSemiJoin(const TNode& n, size_t side) const;
+  /**
+   * Whether no element of X occurs twice, syntactically: a bag.setof, a table
+   * with a key, a filter over a set, a product of sets, or a map over one of
+   * these that keeps, of every component, all its columns or a key.
+   */
+  bool isSet(const Node& X) const;
   /**
    * The keys of B, read off its structure: the declared keys of a table
    * constant (see recordKey), kept by filters, intersections and differences
@@ -456,6 +523,42 @@ class BagsRewriter : public TheoryRewriter
    * keys {0, 2} and {1}.
    */
   std::vector<std::set<uint32_t>> keysOf(const Node& B) const;
+  /**
+   * The conditions that every element w of A satisfies, added to out: those
+   * read off the filters of A, through projections onto distinct columns, and
+   * through the copies of group columns of an aggregate whose counter a filter
+   * tests. For X : (Bag (Tuple Int Int)) and
+   *
+   *   A = (bag.map
+   *         (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
+   *         (bag.filter
+   *           (lambda ((s (Tuple Int Int))) (> ((_ tuple.select 1) s) 3))
+   *           X))
+   *
+   * out gets (> ((_ tuple.select 0) w) 3).
+   */
+  void elementConditions(const Node& A,
+                         const Node& w,
+                         std::set<Node>& out) const;
+  /**
+   * FILTER_KNOWN_MEMBERSHIP: body, the predicate of a filter over the rows t of
+   * A, without the membership conjuncts that every row of A satisfies, or that
+   * another conjunct implies. For X : (Bag (Tuple Int Int)), A the product of X
+   * with another bag, and
+   *
+   *   body = (and (>= (bag.count (tuple ((_ tuple.select 0) t))
+   *                              (bag.map
+   *                                (lambda ((s (Tuple Int Int)))
+   *                                  (tuple ((_ tuple.select 0) s)))
+   *                                X))
+   *                   1)
+   *               q)
+   *
+   * the result is q: column 0 of t is column 0 of a row of X.
+   */
+  Node dropKnownMemberships(const Node& body,
+                            const Node& t,
+                            const Node& A) const;
 
   // ---------------------------------------------------------------------------
   // Facts: keys and NOT NULL columns of table constants
@@ -538,6 +641,12 @@ class BagsRewriter : public TheoryRewriter
    */
   int counterColumn(const Node& P, const Node& f, const Node& i) const;
   /**
+   * Whether step counts rows from seed (nullable.some 0): COUNT(*),
+   * (nullable.some (+ (nullable.val acc) 1)), or COUNT(x), an ite that keeps
+   * acc on the rows where x is null and counts the others.
+   */
+  bool isCountStep(const Node& step, const Node& acc, const Node& seed) const;
+  /**
    * For a filter predicate P over the product of comps, whose columns start at
    * starts: for each component, in test, the conjunct of P that tests its count
    * of rows positive (-1 when none), and, as the result, whether its groups are
@@ -550,6 +659,13 @@ class BagsRewriter : public TheoryRewriter
                                      const std::vector<Node>& comps,
                                      const std::vector<size_t>& starts,
                                      std::vector<int>& test) const;
+  /**
+   * FILTER_JOIN_TRANSITIVE, a condition that the rows of one side of a join
+   * satisfy on a column that the join equates with others holds of the first
+   * column of their class too, and joins the filter, so that it is on both
+   * sides.
+   */
+  BagsRewriteResponse rewriteJoinTransitiveConditions(const TNode& n) const;
   /**
    * The columns that a filter predicate fixes to constants: {1 -> 5} for
    * (lambda ((t (Tuple Int Int))) (and (= ((_ tuple.select 1) t) 5) q)).
@@ -573,6 +689,29 @@ class BagsRewriter : public TheoryRewriter
   // Emptiness tests and SQL's three-valued truth in lambda bodies
   // ---------------------------------------------------------------------------
 
+  /**
+   * EQ_EMPTY_FILTER_DECORRELATE: the formula that the emptiness of the filter F
+   * stands for, decorrelated, or null. F, inside a lambda over a row r, filters
+   * the rows s of X by conjuncts c that read no s, conjuncts q that read only
+   * s, and equations of columns of s with terms that read no s: it is empty
+   * when c fails, or when the tuple of those terms is not among those columns
+   * of the rows of X that pass q, a bag that does not depend on r
+   * (see rewrites.h).
+   */
+  Node rewriteEmptyFilter(const Node& F) const;
+  /**
+   * An atom of a lambda body that asks about a bag, as the formula it stands
+   * for, or null: a membership in an intersection or a bag.setof, an
+   * emptiness of a filter (see rewriteEmptyFilter), of a counter filter over
+   * an aggregate, of an intersection whose filters fix its element, or of a
+   * (bag x c), and the count of a fold that counts rows being 0.
+   */
+  Node emptinessAtom(const Node& atom) const;
+  /**
+   * body with its atoms outside inner binders replaced by emptinessAtom:
+   * those under an inner binder belong to that lambda's own filter or map.
+   */
+  Node normalizeEmptiness(const Node& body) const;
   /**
    * The formula that a nullable Boolean X built of ites over (nullable.some b)
    * and null is (nullable.some true): (ite c b false) for

@@ -107,6 +107,12 @@ enum class Rewrite : uint32_t
    */
   FILTER_UNION_DISJOINT,
   /**
+   * FILTER_FILTER:
+   *   (bag.filter (lambda ((s T)) p) (bag.filter (lambda ((t T)) q) A))
+   *   ---> (bag.filter (lambda ((t T)) (and p[s := t] q)) A)
+   */
+  FILTER_FILTER,
+  /**
    * FILTER_MAP:
    *   (bag.filter (lambda ((s U)) p) (bag.map (lambda ((t T)) e) A))
    *   ---> (bag.map (lambda ((t T)) e)
@@ -114,11 +120,92 @@ enum class Rewrite : uint32_t
    */
   FILTER_MAP,
   /**
+   * FILTER_SETOF:
+   *   (bag.filter p (bag.setof A)) ---> (bag.setof (bag.filter p A))
+   */
+  FILTER_SETOF,
+  /**
    * MAP_MAP:
    *   (bag.map (lambda ((s U)) e) (bag.map (lambda ((t T)) g) A))
    *   ---> (bag.map (lambda ((t T)) e[s := g]) A)
    */
   MAP_MAP,
+  /**
+   * PRODUCT_MAP_LEFT, the map of the left factor as a map of the product
+   * (see rewriteProductOfMap); with A and B of two columns,
+   *   (table.product (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+   *                           A)
+   *                  B)
+   *   ---> (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+   *                                        ((_ tuple.select 2) t)
+   *                                        ((_ tuple.select 3) t)))
+   *                 (table.product A B))
+   */
+  PRODUCT_MAP_LEFT,
+  /**
+   * PRODUCT_MAP_RIGHT, the map of the right factor as a map of the product
+   * (see rewriteProductOfMap); with A and B of two columns,
+   *   (table.product A
+   *                  (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+   *                           B))
+   *   ---> (bag.map (lambda ((t V)) (tuple ((_ tuple.select 0) t)
+   *                                        ((_ tuple.select 1) t)
+   *                                        ((_ tuple.select 3) t)))
+   *                 (table.product A B))
+   */
+  PRODUCT_MAP_RIGHT,
+  /**
+   * PRODUCT_FILTER_LEFT, the filter of the left factor as a filter of the
+   * product (see rewriteProductOfFilter):
+   *   (table.product (bag.filter (lambda ((s T)) (> ((_ tuple.select 1) s) 3))
+   *                              A)
+   *                  B)
+   *   ---> (bag.filter (lambda ((t V)) (> ((_ tuple.select 1) t) 3))
+   *                    (table.product A B))
+   */
+  PRODUCT_FILTER_LEFT,
+  /**
+   * PRODUCT_FILTER_RIGHT, the filter of the right factor as a filter of the
+   * product (see rewriteProductOfFilter); with A of two columns,
+   *   (table.product A (bag.filter (lambda ((s U)) (> ((_ tuple.select 1) s)
+   *                                                  3))
+   *                                B))
+   *   ---> (bag.filter (lambda ((t V)) (> ((_ tuple.select 3) t) 3))
+   *                    (table.product A B))
+   */
+  PRODUCT_FILTER_RIGHT,
+  /**
+   * PRODUCT_UNION_DISJOINT:
+   *     (table.product (bag.union_disjoint A B) C)
+   *     ---> (bag.union_disjoint (table.product A C) (table.product B C))
+   *   and the same on the right
+   */
+  PRODUCT_UNION_DISJOINT,
+  /**
+   * PRODUCT_ASSOC:
+   *     (table.product (table.product A B) C)
+   *     ---> (table.product A (table.product B C))
+   */
+  PRODUCT_ASSOC,
+  /**
+   * PRODUCT_SWAP, the factors in the order of their ids, B < A, under the map
+   * that puts the columns back:
+   *   (table.product A (table.product B C))
+   *   ---> (bag.map perm (table.product B (table.product A C)))
+   * with, for one column each,
+   *   perm = (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+   *                                 ((_ tuple.select 0) t)
+   *                                 ((_ tuple.select 2) t)))
+   */
+  PRODUCT_SWAP,
+  /**
+   * EQ_EMPTY_ARG, a map or a bag.setof is empty when its argument is:
+   *   (= (bag.map f X) (as bag.empty (Bag U)))
+   *   ---> (= X (as bag.empty (Bag T)))
+   *   (= (bag.setof X) (as bag.empty (Bag T)))
+   *   ---> (= X (as bag.empty (Bag T)))
+   */
+  EQ_EMPTY_ARG,
   /**
    * AGGREGATE_MAP, grouping the rows of a map by the columns it copies:
    *   ((_ table.aggr 0) (lambda ((s U) (acc S)) b) i
@@ -144,6 +231,13 @@ enum class Rewrite : uint32_t
    *   ---> (as bag.empty (Bag T))
    */
   FILTER_FALSE,
+  /**
+   * FILTER_SORT_CONJUNCTS, the conjuncts in the order of their alpha
+   * keys, without duplicates:
+   *   (bag.filter (lambda ((t T)) (and q p q)) X)
+   *   ---> (bag.filter (lambda ((t T)) (and p q)) X)
+   */
+  FILTER_SORT_CONJUNCTS,
   /**
    * CANONICAL_VARIABLE: f with its variables renamed to t_N and acc_N, N the
    * id of f's alpha key, when that is safe:
@@ -179,6 +273,70 @@ enum class Rewrite : uint32_t
    *               (bag.fold (lambda ((t T) (a Int)) b1') i1 X))
    */
   FOLD_TUPLE,
+  /**
+   * SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
+   *   (bag.setof (bag.map (lambda ((t T)) c) Y))
+   *   ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
+   *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)
+   *                                              ((_ tuple.select 0) t)))
+   *                       Y))
+   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 1) r)
+   *                                        ((_ tuple.select 0) r)))
+   *                 (bag.setof (bag.map (lambda ((t T))
+   *                                       (tuple ((_ tuple.select 0) t)
+   *                                              ((_ tuple.select 2) t)))
+   *                                     Y)))
+   *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t) 5)) Y))
+   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r) 5))
+   *                 (bag.setof (bag.map (lambda ((t T))
+   *                                       (tuple ((_ tuple.select 1) t)))
+   *                                     Y)))
+   */
+  SETOF_MAP_CONSTANT,
+  /**
+   * FILTER_SPLIT_CLOSED, a disjunct c that does not read the row (EXISTS):
+   *   (bag.filter (lambda ((t T)) (or c q)) A)
+   *   ---> (bag.union_disjoint
+   *          (bag.filter (lambda ((t T)) c) A)
+   *          (bag.filter (lambda ((t T)) (and (not c) q)) A))
+   */
+  FILTER_SPLIT_CLOSED,
+  /**
+   * SEMI_JOIN, a join with a set B whose row the join equations fix (all its
+   * columns, or a key) and whose columns the map does not read, as a filter
+   * by the existence of the matching row. With the key {0} of Z,
+   *   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)))
+   *            (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+   *                                           ((_ tuple.select 2) t)))
+   *                        (table.product Y Z)))
+   *   ---> (bag.map (lambda ((a U)) (tuple ((_ tuple.select 1) a)))
+   *                 (bag.filter (lambda ((a U))
+   *                               (not (= (bag.filter (lambda ((b W))
+   *                                                     (= ((_ tuple.select 0)
+   *                                                          a)
+   *                                                        ((_ tuple.select 0)
+   *                                                          b)))
+   *                                                   Z)
+   *                                       (as bag.empty (Bag W)))))
+   *                             Y))
+   */
+  SEMI_JOIN,
+  /**
+   * EQ_EMPTY_FILTER_DECORRELATE, the emptiness of a filter that reads the
+   * row r of an enclosing lambda, as a membership that does not, in the
+   * bodies of filters and maps (see normalizeEmptiness, rewriteEmptyFilter):
+   *   (= (as bag.empty (Bag T))
+   *      (bag.filter (lambda ((s T)) (and q (= ((_ tuple.select 1) s)
+   *                                            ((_ tuple.select 0) r))))
+   *                  X))
+   *   ---> (not (>= (bag.count (tuple ((_ tuple.select 0) r))
+   *                            (bag.map (lambda ((s T))
+   *                                       (tuple ((_ tuple.select 1) s)))
+   *                                     (bag.filter (lambda ((s T)) q) X)))
+   *                 1))
+   * for q reading only s
+   */
+  EQ_EMPTY_FILTER_DECORRELATE,
   /**
    * AGGREGATE_DEAD_COLUMNS, a column of the aggregate nothing reads:
    *   (bag.map h ((_ table.aggr 0) (lambda ((t T) (acc S)) (tuple a0 a1 a2))
@@ -225,6 +383,34 @@ enum class Rewrite : uint32_t
    */
   SETOF_PROJECTION_SORT,
   /**
+   * FILTER_KNOWN_MEMBERSHIP: body without the membership conjuncts that
+   * every row t of A satisfies, or that another conjunct implies: with
+   * A = (table.product X Y),
+   *   (and (>= (bag.count (tuple ((_ tuple.select 0) t))
+   *                       (bag.map (lambda ((s T))
+   *                                  (tuple ((_ tuple.select 0) s)))
+   *                                X))
+   *            1)
+   *        q)
+   *   ---> q
+   */
+  FILTER_KNOWN_MEMBERSHIP,
+  /**
+   * COUNT_MAP_CONST_PROBE, a constant in the probe selects rows of X:
+   *     (bag.count (tuple 5 b)
+   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t)
+   *                                                ((_ tuple.select 0) t)))
+   *                         X))
+   *     ---> (bag.count (tuple b)
+   *                     (bag.map (lambda ((t T))
+   *                                (tuple ((_ tuple.select 0) t)))
+   *                              (bag.filter (lambda ((t T))
+   *                                            (= ((_ tuple.select 1) t) 5))
+   *                                          X)))
+   *   also for a table constant X, as its identity map
+   */
+  COUNT_MAP_CONST_PROBE,
+  /**
    * AGGREGATE_KEYED, see keyedAggregateRows: under a filter that drops the
    * row of initial values (see rejectsInitialRow),
    *   (bag.filter Q ((_ table.aggr 0) (lambda ((t T) (acc S)) b) i X))
@@ -264,6 +450,38 @@ enum class Rewrite : uint32_t
    *                             X))
    */
   MAP_EQUAL_COLUMNS,
+  /**
+   * FOLD_MAP:
+   *   (bag.fold (lambda ((t U) (acc S)) b) i
+   *             (bag.map (lambda ((s T)) e) Y))
+   *   ---> (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
+   */
+  FOLD_MAP,
+  /**
+   * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two
+   * of which share a key value:
+   *   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
+   *                               (bag.union_disjoint U1 U2))))
+   *   ---> (bag.map h (bag.filter Q (bag.union_disjoint
+   *                                   ((_ table.aggr 0) f i U1)
+   *                                   ((_ table.aggr 0) f i U2))))
+   */
+  AGGREGATE_UNION_DISJOINT_KEYS,
+  /**
+   * FILTER_JOIN_TRANSITIVE, a condition the rows of one side of a join
+   * satisfy on a column the join equates holds of the class's first column:
+   *   (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+   *                                  ((_ tuple.select 2) t)))
+   *               (table.product X (bag.filter (lambda ((s U))
+   *                                              (> ((_ tuple.select 0) s)
+   *                                                 3))
+   *                                            Y)))
+   *   ---> (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
+   *                                            ((_ tuple.select 2) t))
+   *                                         (> ((_ tuple.select 0) t) 3)))
+   *                    (table.product X (bag.filter .. Y)))
+   */
+  FILTER_JOIN_TRANSITIVE,
   /**
    * MAP_IDENTITY:
    *   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)

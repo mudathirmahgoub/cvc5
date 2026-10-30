@@ -317,6 +317,105 @@ BagsRewriteResponse BagsRewriter::rewriteMakeBag(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
 {
   Assert(n.getKind() == Kind::BAG_COUNT);
+  // a table constant whose rows have the sort of the probe
+  bool rowProbe = false;
+  if (n[1].getKind() == Kind::VARIABLE)
+  {
+    TypeNode rowType = n[1].getType().getBagElementType();
+    TypeNode probeType = n[0].getType();
+    rowProbe = rowType.isTuple() && rowType == probeType;
+  }
+  if ((n[1].getKind() == Kind::BAG_MAP || rowProbe)
+      && n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getNumChildren() > 1)
+  {
+    // COUNT_MAP_CONST_PROBE: column k of the probe is a constant c and the
+    // map copies column j of its row there, so only the rows of X whose
+    // column j is c can give the probe; column k leaves the probe and the map:
+    //   (bag.count (tuple 5 b)
+    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t)
+    //                                              ((_ tuple.select 0) t)))
+    //                       X))
+    //   --->
+    //   (bag.count (tuple b)
+    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
+    //                       (bag.filter (lambda ((t T))
+    //                                     (= ((_ tuple.select 1) t) 5))
+    //                                   X)))
+    // A table constant X that the input declares (Kind::VARIABLE) counts as
+    // its own identity map
+    //   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
+    //                                   ((_ tuple.select 1) t)))
+    //            X)
+    // but a skolem the solver introduced by purification does not: rewriting
+    // the counts of those makes the solver introduce more of them.
+    Node mapped = n[1];
+    if (mapped.getKind() != Kind::BAG_MAP && !d_higherOrder)
+    {
+      // the identity map is a lambda
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    if (mapped.getKind() != Kind::BAG_MAP)
+    {
+      // the identity map of X above, over the row variable of T
+      TypeNode et = mapped.getType().getBagElementType();
+      Node v = rowVariable(et);
+      std::vector<Node> cols;
+      for (size_t k = 0; k < et.getTupleLength(); k++)
+      {
+        cols.push_back(datatypes::TupleUtils::nthElementOfTuple(v, k));
+      }
+      mapped = d_nm->mkNode(
+          Kind::BAG_MAP,
+          d_nm->mkNode(Kind::LAMBDA,
+                       {d_nm->mkNode(Kind::BOUND_VAR_LIST, v),
+                        datatypes::TupleUtils::constructTupleFromElements(
+                            et, cols, 0, cols.size() - 1)}),
+          mapped);
+    }
+    Node n1 = mapped;
+    Node g = asLambda(n1[0]);
+    if (g.getKind() == Kind::LAMBDA && g[0].getNumChildren() == 1
+        && g[1].getKind() == Kind::APPLY_CONSTRUCTOR
+        && g[1].getNumChildren() == n[0].getNumChildren())
+    {
+      Node sv = g[0][0];
+      for (size_t k = 0; k < n[0].getNumChildren(); k++)
+      {
+        Node c = n[0][k];
+        Node col = g[1][k];
+        if (!c.isConst() || col.getKind() != Kind::APPLY_SELECTOR
+            || col[0] != sv)
+        {
+          continue;
+        }
+        std::vector<Node> cols, probe;
+        std::vector<TypeNode> types;
+        for (size_t i = 0; i < n[0].getNumChildren(); i++)
+        {
+          if (i != k)
+          {
+            cols.push_back(g[1][i]);
+            probe.push_back(n[0][i]);
+            types.push_back(g[1][i].getType());
+          }
+        }
+        TypeNode t = d_nm->mkTupleType(types);
+        // g2 is (lambda ((t T)) (tuple ((_ tuple.select 0) t))), e2 is
+        // (tuple b)
+        Node g2 = mkLambda(sv,
+                           datatypes::TupleUtils::constructTupleFromElements(
+                               t, cols, 0, cols.size() - 1));
+        Node e2 = datatypes::TupleUtils::constructTupleFromElements(
+            t, probe, 0, probe.size() - 1);
+        // (bag.filter (lambda ((t T)) (= ((_ tuple.select 1) t) 5)) X)
+        Node fixed =
+            d_nm->mkNode(Kind::BAG_FILTER, mkLambda(sv, col.eqNode(c)), n1[1]);
+        Node ret = d_nm->mkNode(
+            Kind::BAG_COUNT, e2, d_nm->mkNode(Kind::BAG_MAP, g2, fixed));
+        return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_CONST_PROBE);
+      }
+    }
+  }
   if (n[1].isConst() && n[1].getKind() == Kind::BAG_EMPTY)
   {
     // (bag.count x bag.empty) = 0
@@ -358,7 +457,7 @@ BagsRewriteResponse BagsRewriter::rewriteSetof(const TNode& n) const
   }
   if (n[0].getKind() == Kind::BAG_MAP)
   {
-    // SETOF_PROJECTION_SORT, see rewriteSetofOfMap
+    // SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, see rewriteSetofOfMap
     return rewriteSetofOfMap(n);
   }
   return BagsRewriteResponse(n, Rewrite::NONE);
@@ -1423,6 +1522,22 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
 BagsRewriteResponse BagsRewriter::postRewriteEqual(const TNode& n) const
 {
   Assert(n.getKind() == Kind::EQUAL);
+  for (size_t i = 0; i < 2; i++)
+  {
+    if (n[i].getKind() == Kind::BAG_EMPTY
+        && (n[1 - i].getKind() == Kind::BAG_MAP
+            || n[1 - i].getKind() == Kind::BAG_SETOF))
+    {
+      // EQ_EMPTY_ARG: a map or a bag.setof is empty when its argument is,
+      //   (= (bag.map f X) (as bag.empty (Bag U)))
+      //   ---> (= X (as bag.empty (Bag T)))
+      //   (= (bag.setof X) (as bag.empty (Bag T)))
+      //   ---> (= X (as bag.empty (Bag T)))
+      Node X = n[1 - i][n[1 - i].getNumChildren() - 1];
+      Node empty = d_nm->mkConst(EmptyBag(X.getType()));
+      return BagsRewriteResponse(X.eqNode(empty), Rewrite::EQ_EMPTY_ARG);
+    }
+  }
   if (n[0] == n[1])
   {
     Node ret = d_nm->mkConst(true);
@@ -1538,11 +1653,31 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
     }
     default: break;
   }
+  if (n[0].getKind() == Kind::LAMBDA && n[0][0].getNumChildren() == 1)
+  {
+    // EQ_EMPTY_FILTER_DECORRELATE: the emptiness tests of filters in the
+    // body, as formulas over the row, see normalizeEmptiness
+    Node normalized = normalizeEmptiness(n[0][1]);
+    if (normalized != n[0][1])
+    {
+      Node ret =
+          d_nm->mkNode(Kind::BAG_MAP, mkLambda(n[0][0][0], normalized), n[1]);
+      return BagsRewriteResponse(ret, Rewrite::EQ_EMPTY_FILTER_DECORRELATE);
+    }
+  }
   // the rules for maps of aggregates and of products of aggregates, each
   // documented at its function
   {
     // AGGREGATE_DEAD_COLUMNS, see rewriteAggregateDeadColumns
     BagsRewriteResponse r = rewriteAggregateDeadColumns(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
+  }
+  {
+    // AGGREGATE_UNION_DISJOINT_KEYS, see rewriteAggregateUnionDisjointKeys
+    BagsRewriteResponse r = rewriteAggregateUnionDisjointKeys(n);
     if (r.d_node != n)
     {
       return r;
@@ -1651,6 +1786,19 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       return BagsRewriteResponse(ret, Rewrite::MAP_FIXED_COLUMNS);
     }
   }
+  if (n[1].getKind() == Kind::BAG_FILTER
+      && n[1][1].getKind() == Kind::TABLE_PRODUCT)
+  {
+    // SEMI_JOIN, see rewriteSemiJoin
+    for (size_t side = 0; side < 2; side++)
+    {
+      BagsRewriteResponse r = rewriteSemiJoin(n, side);
+      if (r.d_node != n)
+      {
+        return r;
+      }
+    }
+  }
   if (n[0].getKind() == Kind::LAMBDA && n[0][0].getNumChildren() == 1)
   {
     // CANONICAL_VARIABLE: the lambda over the canonical variable of its
@@ -1717,6 +1865,15 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
   }
   if (P.getKind() == Kind::LAMBDA && P[0].getNumChildren() == 1)
   {
+    // EQ_EMPTY_FILTER_DECORRELATE: the emptiness tests of filters in the
+    // predicate, as formulas over the row, see normalizeEmptiness
+    Node normalized = normalizeEmptiness(P[1]);
+    if (normalized != P[1])
+    {
+      Node ret =
+          d_nm->mkNode(Kind::BAG_FILTER, mkLambda(P[0][0], normalized), A);
+      return BagsRewriteResponse(ret, Rewrite::EQ_EMPTY_FILTER_DECORRELATE);
+    }
     // FILTER_NULLABLE_TRUTH: the two ways to say that a three-valued
     // predicate holds become one, see normalizeTruth
     Node truth = normalizeTruth(P[1]);
@@ -1872,6 +2029,17 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
         return BagsRewriteResponse(ret, Rewrite::FILTER_CONFLICTING_CONSTANTS);
       }
     }
+    {
+      // FILTER_KNOWN_MEMBERSHIP: memberships every row of A satisfies, see
+      // dropKnownMemberships
+      Node simpler = dropKnownMemberships(body, P[0][0], A);
+      if (simpler != body)
+      {
+        Node ret =
+            d_nm->mkNode(Kind::BAG_FILTER, mkLambda(P[0][0], simpler), A);
+        return BagsRewriteResponse(ret, Rewrite::FILTER_KNOWN_MEMBERSHIP);
+      }
+    }
     if (body.getKind() == Kind::AND)
     {
       // FILTER_FALSE: a conjunct and its negation, no row passes,
@@ -1886,6 +2054,49 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
                                      Rewrite::FILTER_FALSE);
         }
       }
+      // FILTER_SORT_CONJUNCTS: the conjuncts in one order, without
+      // duplicates, so that two filters by the same conjunction, merged in
+      // different orders, are one lambda,
+      //   (bag.filter (lambda ((t T)) (and q p q)) X)
+      //   ---> (bag.filter (lambda ((t T)) (and p q)) X)
+      // when the alpha key of p is smaller than that of q. The order is by
+      // alphaKey, which does not depend on the name of the row variable: the
+      // name is chosen after the order (canonicalLambda), so an order by
+      // node id would change with it
+      std::vector<Node> cs(body.begin(), body.end());
+      std::vector<Node> sorted = cs;
+      sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+      Node var = P[0][0];
+      std::map<Node, Node> keys;
+      for (const Node& c : sorted)
+      {
+        keys[c] = alphaKey(mkLambda(var, c));
+      }
+      std::stable_sort(
+          sorted.begin(), sorted.end(), [&](const Node& a, const Node& b) {
+            return keys[a] < keys[b];
+          });
+      std::vector<Node> deduped;
+      for (const Node& c : sorted)
+      {
+        if (deduped.empty() || keys[deduped.back()] != keys[c]
+            || deduped.back() != c)
+        {
+          if (std::find(deduped.begin(), deduped.end(), c) == deduped.end())
+          {
+            deduped.push_back(c);
+          }
+        }
+      }
+      sorted = deduped;
+      if (sorted != cs)
+      {
+        Node newBody =
+            sorted.size() == 1 ? sorted[0] : d_nm->mkNode(Kind::AND, sorted);
+        Node ret =
+            d_nm->mkNode(Kind::BAG_FILTER, mkLambda(P[0][0], newBody), A);
+        return BagsRewriteResponse(ret, Rewrite::FILTER_SORT_CONJUNCTS);
+      }
     }
     // CANONICAL_VARIABLE, see canonicalLambda
     Node canonical = canonicalLambda(P);
@@ -1893,6 +2104,57 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
     {
       Node ret = d_nm->mkNode(Kind::BAG_FILTER, canonical, A);
       return BagsRewriteResponse(ret, Rewrite::CANONICAL_VARIABLE);
+    }
+    if (body.getKind() == Kind::OR)
+    {
+      // FILTER_SPLIT_CLOSED: a disjunct c that does not read the row, such as
+      // EXISTS (subquery), splits the filter in two:
+      //   (bag.filter (lambda ((t T)) (or c q)) A)
+      //   --->
+      //   (bag.union_disjoint (bag.filter (lambda ((t T)) c) A)
+      //                       (bag.filter (lambda ((t T)) (and (not c) q)) A))
+      // each row passes one of the two exactly when it passes the
+      // disjunction, and never both
+      Node var = P[0][0];
+      for (size_t k = 0, m = body.getNumChildren(); k < m; k++)
+      {
+        if (occursFree(body[k], var))
+        {
+          // or a question about a bag that reads the row and nothing else,
+          // such as IN (subquery), (>= (bag.count ((_ tuple.project 0) t) Y)
+          // 1): split on it as on EXISTS
+          std::unordered_set<Node> fvs;
+          expr::getFreeVariables(body[k], fvs);
+          fvs.erase(var);
+          if (!fvs.empty()
+              || !expr::hasSubtermKinds({Kind::BAG_FILTER,
+                                         Kind::BAG_MAP,
+                                         Kind::BAG_COUNT,
+                                         Kind::BAG_SETOF,
+                                         Kind::TABLE_PRODUCT,
+                                         Kind::TABLE_AGGREGATE,
+                                         Kind::TABLE_PROJECT},
+                                        body[k]))
+          {
+            continue;
+          }
+        }
+        Node c = body[k];
+        std::vector<Node> rest;
+        for (size_t j = 0; j < m; j++)
+        {
+          if (j != k)
+          {
+            rest.push_back(body[j]);
+          }
+        }
+        Node q = rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::OR, rest);
+        Node a = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(var, c), A);
+        Node b = d_nm->mkNode(
+            Kind::BAG_FILTER, mkLambda(var, c.notNode().andNode(q)), A);
+        Node ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b);
+        return BagsRewriteResponse(ret, Rewrite::FILTER_SPLIT_CLOSED);
+      }
     }
   }
   if (A.isConst())
@@ -1930,6 +2192,8 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
       return BagsRewriteResponse(ret, Rewrite::FILTER_UNION_DISJOINT);
     }
 
+    // FILTER_FILTER, see rewriteFilterOfFilter
+    case Kind::BAG_FILTER: return rewriteFilterOfFilter(n);
     // FILTER_MAP, see rewriteFilterOfMap
     case Kind::BAG_MAP: return rewriteFilterOfMap(n);
     case Kind::TABLE_AGGREGATE:
@@ -1948,6 +2212,14 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
         }
       }
       return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    case Kind::BAG_SETOF:
+    {
+      // FILTER_SETOF:
+      //   (bag.filter p (bag.setof A)) ---> (bag.setof (bag.filter p A))
+      Node inner = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][0]);
+      Node ret = d_nm->mkNode(Kind::BAG_SETOF, inner);
+      return BagsRewriteResponse(ret, Rewrite::FILTER_SETOF);
     }
     case Kind::TABLE_PRODUCT:
     {
@@ -2011,10 +2283,230 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
           }
         }
       }
+      {
+        // FILTER_JOIN_TRANSITIVE, see rewriteJoinTransitiveConditions
+        BagsRewriteResponse r = rewriteJoinTransitiveConditions(n);
+        if (r.d_node != n)
+        {
+          return r;
+        }
+      }
       return BagsRewriteResponse(n, Rewrite::NONE);
     }
     default: return BagsRewriteResponse(n, Rewrite::NONE);
   }
+}
+
+BagsRewriteResponse BagsRewriter::rewriteJoinTransitiveConditions(
+    const TNode& n) const
+{
+  // FILTER_JOIN_TRANSITIVE: (bag.filter P (table.product C0 C1 ..)) where P
+  // equates columns of different components: a condition on one column of
+  // an equated class that the rows of its component satisfy (read off the
+  // component and P's conjuncts on it alone, see elementConditions) holds of
+  // the class's first column too, and joins P when it is not there, so that
+  // a condition written on either side of a join is on both. With X and Y
+  // of two columns,
+  //   (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+  //                                  ((_ tuple.select 2) t)))
+  //               (table.product X
+  //                              (bag.filter (lambda ((s U))
+  //                                            (> ((_ tuple.select 0) s) 3))
+  //                                          Y)))
+  //   --->
+  //   (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
+  //                                       ((_ tuple.select 2) t))
+  //                                    (> ((_ tuple.select 0) t) 3)))
+  //               (table.product X
+  //                              (bag.filter (lambda ((s U))
+  //                                            (> ((_ tuple.select 0) s) 3))
+  //                                          Y)))
+  Node P = asLambda(n[0]);
+  if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
+      || d_rewriter == nullptr)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node r = P[0][0];
+  std::vector<Node> comps;
+  std::vector<size_t> starts;
+  {
+    Node rest = n[1];
+    size_t at = 0;
+    while (true)
+    {
+      Node c = rest.getKind() == Kind::TABLE_PRODUCT ? rest[0] : rest;
+      if (!c.getType().getBagElementType().isTuple())
+      {
+        return BagsRewriteResponse(n, Rewrite::NONE);
+      }
+      comps.push_back(c);
+      starts.push_back(at);
+      at += c.getType().getBagElementType().getTupleLength();
+      if (rest.getKind() != Kind::TABLE_PRODUCT)
+      {
+        break;
+      }
+      rest = rest[1];
+    }
+  }
+  size_t width = starts.back()
+                 + comps.back().getType().getBagElementType().getTupleLength();
+  auto compOf = [&](size_t pos) {
+    size_t c = 0;
+    while (c + 1 < comps.size() && starts[c + 1] <= pos)
+    {
+      c++;
+    }
+    return c;
+  };
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  // the classes of equated columns, a union-find whose representative is the
+  // smallest column, {0, 2} for (= ((_ tuple.select 0) t) ((_ tuple.select 2)
+  // t)); across is whether some class has columns of two components
+  std::vector<uint32_t> rep(width);
+  for (uint32_t k = 0; k < width; k++)
+  {
+    rep[k] = k;
+  }
+  std::function<uint32_t(uint32_t)> find = [&](uint32_t k) {
+    return rep[k] == k ? k : (rep[k] = find(rep[k]));
+  };
+  bool across = false;
+  for (const Node& c : conjuncts)
+  {
+    if (c.getKind() == Kind::EQUAL && c[0].getKind() == Kind::APPLY_SELECTOR
+        && c[1].getKind() == Kind::APPLY_SELECTOR && c[0][0] == r
+        && c[1][0] == r)
+    {
+      uint32_t a = find(datatypes::utils::indexOf(c[0].getOperator()));
+      uint32_t b = find(datatypes::utils::indexOf(c[1].getOperator()));
+      if (a != b)
+      {
+        across = across || compOf(a) != compOf(b);
+        rep[std::max(a, b)] = std::min(a, b);
+      }
+    }
+  }
+  if (!across)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::set<Node> present(conjuncts.begin(), conjuncts.end());
+  std::vector<Node> added;
+  for (size_t i = 0; i < comps.size(); i++)
+  {
+    size_t w = comps[i].getType().getBagElementType().getTupleLength();
+    // P's conjuncts on this component alone, over its rows: column
+    // starts[i] + k of t is column k of v
+    Node v = rowVariable(comps[i].getType().getBagElementType());
+    std::vector<Node> fromP, toP;
+    for (size_t k = 0; k < w; k++)
+    {
+      fromP.push_back(
+          datatypes::TupleUtils::nthElementOfTuple(r, starts[i] + k));
+      toP.push_back(datatypes::TupleUtils::nthElementOfTuple(v, k));
+    }
+    std::vector<Node> local;
+    for (const Node& c : conjuncts)
+    {
+      std::set<uint32_t> pos;
+      if (!readPositions(c, r, pos) || pos.empty())
+      {
+        continue;
+      }
+      bool inside = true;
+      for (uint32_t q : pos)
+      {
+        inside = inside && q >= starts[i] && q < starts[i] + w;
+      }
+      if (inside)
+      {
+        local.push_back(
+            c.substitute(fromP.begin(), fromP.end(), toP.begin(), toP.end()));
+      }
+    }
+    // the component under those conjuncts,
+    // (bag.filter (lambda ((v U)) (> ((_ tuple.select 0) v) 3)) Y), whose
+    // element conditions are read off
+    Node C = comps[i];
+    if (!local.empty())
+    {
+      Node body = local.size() == 1 ? local[0] : d_nm->mkNode(Kind::AND, local);
+      C = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(v, body), C);
+    }
+    Node u = rowVariable(comps[i].getType().getBagElementType());
+    std::set<Node> conds;
+    elementConditions(C, u, conds);
+    for (const Node& c : conds)
+    {
+      std::set<uint32_t> pos;
+      if (!readPositions(c, u, pos) || pos.size() != 1)
+      {
+        continue;
+      }
+      uint32_t k = *pos.begin();
+      uint32_t g = starts[i] + k;
+      uint32_t first = find(g);
+      if (first == g)
+      {
+        bool others = false;
+        for (uint32_t q = 0; q < width && !others; q++)
+        {
+          others = q != g && find(q) == g;
+        }
+        if (!others)
+        {
+          continue;
+        }
+      }
+      // the condition on the class's first column, unless P has it or the
+      // first column's own component does: (> ((_ tuple.select 0) u) 3)
+      // becomes (> ((_ tuple.select 0) t) 3) for u's column 0 at column 2
+      Node fromCol = datatypes::TupleUtils::nthElementOfTuple(u, k);
+      Node toCol = datatypes::TupleUtils::nthElementOfTuple(r, first);
+      Node c2 = d_rewriter->rewrite(c.substitute(TNode(fromCol), TNode(toCol)));
+      if (occursFree(c2, u) || present.count(c2) || c2.isConst())
+      {
+        continue;
+      }
+      size_t j = compOf(first);
+      if (j == i && first == g)
+      {
+        continue;
+      }
+      // nor one the rows of the product satisfy anyway, which would go again
+      if (dropKnownMemberships(c2, r, n[1]).isConst())
+      {
+        continue;
+      }
+      // nor a null test that NOT_NULL_COLUMNS decides on the rows of the
+      // product: (nullable.is_some ((_ tuple.select 0) t)) for a column 0
+      // that is never null would go again, see assumeNonNull
+      if (assumeNonNull(c2, r, nonNullColumns(n[1])) != c2)
+      {
+        continue;
+      }
+      present.insert(c2);
+      added.push_back(c2);
+    }
+  }
+  if (added.empty())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  conjuncts.insert(conjuncts.end(), added.begin(), added.end());
+  Node body = d_nm->mkNode(Kind::AND, conjuncts);
+  Node ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(r, body), n[1]);
+  return BagsRewriteResponse(ret, Rewrite::FILTER_JOIN_TRANSITIVE);
 }
 
 std::vector<int> BagsRewriter::reachedComponents(
@@ -2216,6 +2708,156 @@ std::vector<int> BagsRewriter::reachedComponents(
   return reached;
 }
 
+void BagsRewriter::elementConditions(const Node& A,
+                                     const Node& w,
+                                     std::set<Node>& out) const
+{
+  // conditions every element w of A satisfies, read off A's filters, through
+  // projections onto distinct columns, and through the key columns of the
+  // groups an aggregate's rows reached. For
+  //   A = (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+  //                (bag.filter (lambda ((s T))
+  //                              (and (> ((_ tuple.select 1) s) 3)
+  //                                   (< ((_ tuple.select 0) s) 7)))
+  //                            X))
+  // out gets (> ((_ tuple.select 0) w) 3): the map keeps column 1 of the
+  // rows, as column 0 of w, and drops column 0, of which nothing is said
+  switch (A.getKind())
+  {
+    case Kind::BAG_SETOF: elementConditions(A[0], w, out); return;
+    case Kind::BAG_INTER_MIN:
+      elementConditions(A[0], w, out);
+      elementConditions(A[1], w, out);
+      return;
+    case Kind::BAG_FILTER:
+    {
+      Node p = asLambda(A[0]);
+      if (p.getKind() == Kind::LAMBDA && p[0].getNumChildren() == 1
+          && !bindsVariable(p[1], p[0][0]))
+      {
+        Node body = p[1].substitute(TNode(p[0][0]), TNode(w));
+        if (body.getKind() == Kind::AND)
+        {
+          out.insert(body.begin(), body.end());
+        }
+        else
+        {
+          out.insert(body);
+        }
+      }
+      if (A[1].getKind() == Kind::TABLE_AGGREGATE
+          && counterColumn(A[0], asLambda(A[1][0]), A[1][1]) >= 0)
+      {
+        // a reached group's key columns hold values of its rows: with
+        // column q of f's result the group column ((_ tuple.select 0) t), a
+        // condition (> ((_ tuple.select 0) v) 3) of the rows of the input is
+        // (> ((_ tuple.select q) w) 3)
+        Node G = A[1];
+        Node f = asLambda(G[0]);
+        const std::vector<uint32_t>& K =
+            G.getOperator().getConst<ProjectOp>().getIndices();
+        if (f.getKind() == Kind::LAMBDA && f[0].getNumChildren() == 2
+            && f[1].getKind() == Kind::APPLY_CONSTRUCTOR)
+        {
+          Node v = rowVariable(G[2].getType().getBagElementType());
+          std::set<Node> inner;
+          elementConditions(G[2], v, inner);
+          std::map<uint32_t, size_t> at;
+          for (size_t q = 0; q < f[1].getNumChildren(); q++)
+          {
+            const Node& e = f[1][q];
+            if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == f[0][0])
+            {
+              uint32_t k = datatypes::utils::indexOf(e.getOperator());
+              if (std::find(K.begin(), K.end(), k) != K.end() && !at.count(k))
+              {
+                at[k] = q;
+              }
+            }
+          }
+          for (const Node& c : inner)
+          {
+            std::set<uint32_t> pos;
+            if (!readPositions(c, v, pos) || pos.empty())
+            {
+              continue;
+            }
+            std::vector<Node> from, to;
+            bool keysOnly = true;
+            for (uint32_t k : pos)
+            {
+              keysOnly = keysOnly && at.count(k) > 0;
+              if (keysOnly)
+              {
+                from.push_back(datatypes::TupleUtils::nthElementOfTuple(v, k));
+                to.push_back(
+                    datatypes::TupleUtils::nthElementOfTuple(w, at[k]));
+              }
+            }
+            if (keysOnly)
+            {
+              Node cw =
+                  c.substitute(from.begin(), from.end(), to.begin(), to.end());
+              if (!occursFree(cw, v))
+              {
+                out.insert(cw);
+              }
+            }
+          }
+        }
+        return;
+      }
+      elementConditions(A[1], w, out);
+      return;
+    }
+    case Kind::BAG_MAP:
+    {
+      Node g = asLambda(A[0]);
+      std::vector<uint32_t> J = projectionIndices(g);
+      std::set<uint32_t> distinct(J.begin(), J.end());
+      Node Y = A[1];
+      if (J.empty() || distinct.size() != J.size()
+          || !Y.getType().getBagElementType().isTuple())
+      {
+        return;
+      }
+      Node v = rowVariable(Y.getType().getBagElementType());
+      std::set<Node> inner;
+      elementConditions(Y, v, inner);
+      std::vector<Node> from, to;
+      for (size_t k = 0; k < J.size(); k++)
+      {
+        from.push_back(datatypes::TupleUtils::nthElementOfTuple(v, J[k]));
+        to.push_back(datatypes::TupleUtils::nthElementOfTuple(w, k));
+      }
+      for (const Node& c : inner)
+      {
+        std::set<uint32_t> pos;
+        if (!readPositions(c, v, pos) || pos.empty())
+        {
+          continue;
+        }
+        bool projected = true;
+        for (uint32_t q : pos)
+        {
+          projected = projected && distinct.count(q) > 0;
+        }
+        if (projected)
+        {
+          Node cw =
+              c.substitute(from.begin(), from.end(), to.begin(), to.end());
+          if (!occursFree(cw, v))
+          {
+            out.insert(cw);
+          }
+        }
+      }
+      return;
+    }
+    default: return;
+  }
+}
+
 BagsRewriteResponse BagsRewriter::postRewriteAll(TNode n)
 {
   Assert(n.getKind() == Kind::BAG_ALL);
@@ -2329,6 +2971,28 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
           return BagsRewriteResponse(ret, Rewrite::NOT_NULL_COLUMNS);
         }
       }
+      Node g = bag.getKind() == Kind::BAG_MAP ? asLambda(bag[0]) : Node::null();
+      if (!g.isNull() && g.getKind() == Kind::LAMBDA
+          && g[0].getNumChildren() == 1 && !bindsVariable(l[1], l[0][0]))
+      {
+        // FOLD_MAP: the fold visits (g y) once per occurrence of y in Y,
+        //   (bag.fold (lambda ((t U) (acc S)) b) i
+        //             (bag.map (lambda ((s T)) e) Y))
+        //   --->
+        //   (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
+        // when e does not read acc
+        Node y = g[0][0];
+        Node body = l[1].substitute(TNode(l[0][0]), TNode(g[1]));
+        if (!occursFree(g[1], l[0][1]))
+        {
+          Node lambda =
+              d_nm->mkNode(Kind::LAMBDA,
+                           d_nm->mkNode(Kind::BOUND_VAR_LIST, y, l[0][1]),
+                           body);
+          Node ret = d_nm->mkNode(Kind::BAG_FOLD, lambda, t, bag[1]);
+          return BagsRewriteResponse(ret, Rewrite::FOLD_MAP);
+        }
+      }
     }
   }
   {
@@ -2390,6 +3054,240 @@ BagsRewriteResponse BagsRewriter::postRewritePartition(const TNode& n) const
   }
 
   return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
+    const TNode& top) const
+{
+  // AGGREGATE_UNION_DISJOINT_KEYS: an aggregate over a union of parts no two
+  // of which share a key value, with Q keeping only groups some row reached
+  // (see counterColumn): every reached group is one part's, so the groups
+  // are the union of the parts' groups,
+  //   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
+  //                               (bag.union_disjoint U1 U2))))
+  //   --->
+  //   (bag.map h (bag.filter Q (bag.union_disjoint ((_ table.aggr 0) f i U1)
+  //                                                ((_ table.aggr 0) f i U2))))
+  // e.g. for
+  //   U1 = (bag.filter (lambda ((s T)) (= ((_ tuple.select 0) s) 1)) X)
+  //   U2 = (bag.filter (lambda ((s T)) (= ((_ tuple.select 0) s) 2)) Y)
+  // Two parts are disjoint when a key column one part's rows have equal to a
+  // constant makes a condition of the other's rows false (as 1 does to
+  // (= ((_ tuple.select 0) w) 2)), or when one part's key columns are
+  // constants or ites of constants and each of their combinations makes
+  // such a condition false, or is null in a column the other part never has
+  // null in
+  if (top[1].getKind() != Kind::BAG_FILTER
+      || top[1][1].getKind() != Kind::TABLE_AGGREGATE || d_rewriter == nullptr)
+  {
+    return BagsRewriteResponse(top, Rewrite::NONE);
+  }
+  Node A = top[1][1];
+  if (A[2].getKind() != Kind::BAG_UNION_DISJOINT
+      || counterColumn(top[1][0], asLambda(A[0]), A[1]) < 0)
+  {
+    return BagsRewriteResponse(top, Rewrite::NONE);
+  }
+  const std::vector<uint32_t>& K =
+      A.getOperator().getConst<ProjectOp>().getIndices();
+  if (K.empty())
+  {
+    return BagsRewriteResponse(top, Rewrite::NONE);
+  }
+  std::vector<Node> parts;
+  {
+    std::vector<Node> todo{A[2]};
+    while (!todo.empty())
+    {
+      Node c = todo.back();
+      todo.pop_back();
+      if (c.getKind() == Kind::BAG_UNION_DISJOINT)
+      {
+        todo.push_back(c[1]);
+        todo.push_back(c[0]);
+      }
+      else
+      {
+        parts.push_back(c);
+      }
+    }
+  }
+  TypeNode et = A[2].getType().getBagElementType();
+  Node w = rowVariable(et);
+  // the constant key values a part's rows can have: the leaves of its key
+  // columns' ite trees, or none when not constant; for the key column
+  // (ite c 1 (as nullable.null (Nullable Int))) of a map, the values 1 and
+  // null; at most 16 combinations
+  auto keyLeaves = [&](const Node& U, std::vector<std::vector<Node>>& out) {
+    std::vector<Node> cols;
+    if (U.getKind() == Kind::BAG_MAKE
+        && U[0].getKind() == Kind::APPLY_CONSTRUCTOR)
+    {
+      for (uint32_t k : K)
+      {
+        cols.push_back(U[0][k]);
+      }
+    }
+    else if (U.getKind() == Kind::BAG_MAP)
+    {
+      Node g = asLambda(U[0]);
+      if (g.getKind() != Kind::LAMBDA
+          || g[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+      {
+        return false;
+      }
+      for (uint32_t k : K)
+      {
+        cols.push_back(g[1][k]);
+      }
+    }
+    else
+    {
+      return false;
+    }
+    std::vector<std::vector<Node>> combos{{}};
+    for (const Node& c : cols)
+    {
+      std::vector<Node> leaves;
+      std::vector<Node> todo{c};
+      while (!todo.empty())
+      {
+        Node e = todo.back();
+        todo.pop_back();
+        if (e.getKind() == Kind::ITE)
+        {
+          todo.push_back(e[1]);
+          todo.push_back(e[2]);
+        }
+        else if (e.isConst())
+        {
+          leaves.push_back(e);
+        }
+        else
+        {
+          return false;
+        }
+      }
+      std::vector<std::vector<Node>> next;
+      for (const std::vector<Node>& p : combos)
+      {
+        for (const Node& l : leaves)
+        {
+          std::vector<Node> q = p;
+          q.push_back(l);
+          next.push_back(q);
+        }
+      }
+      combos = next;
+      if (combos.size() > 16)
+      {
+        return false;
+      }
+    }
+    out = combos;
+    return true;
+  };
+  // whether no row of U has the key values of a row of V
+  auto disjoint = [&](const Node& U, const Node& V) {
+    {
+      // a key column U's rows have equal to a constant that V's rows cannot
+      // have: (= ((_ tuple.select 0) w) 1) of U, and a condition of V false
+      // with 1 for ((_ tuple.select 0) w)
+      std::set<Node> cu, cv;
+      elementConditions(U, w, cu);
+      elementConditions(V, w, cv);
+      for (const Node& c : cu)
+      {
+        if (c.getKind() != Kind::EQUAL)
+        {
+          continue;
+        }
+        for (size_t sd = 0; sd < 2; sd++)
+        {
+          if (!c[sd].isConst() || c[1 - sd].getKind() != Kind::APPLY_SELECTOR
+              || c[1 - sd][0] != w
+              || std::find(K.begin(),
+                           K.end(),
+                           datatypes::utils::indexOf(c[1 - sd].getOperator()))
+                     == K.end())
+          {
+            continue;
+          }
+          for (const Node& d : cv)
+          {
+            Node e = d.substitute(TNode(c[1 - sd]), TNode(c[sd]));
+            if (e != d && !occursFree(e, w) && rewritesToFalse(e))
+            {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    std::vector<std::vector<Node>> leaves;
+    if (!keyLeaves(U, leaves))
+    {
+      return false;
+    }
+    std::set<Node> conds;
+    elementConditions(V, w, conds);
+    std::set<uint32_t> nn = nonNullColumns(V);
+    for (const std::vector<Node>& key : leaves)
+    {
+      bool nullWhereNone = false;
+      for (size_t k = 0; k < K.size(); k++)
+      {
+        nullWhereNone =
+            nullWhereNone || (isNullConstant(key[k]) && nn.count(K[k]));
+      }
+      if (nullWhereNone)
+      {
+        continue;
+      }
+      std::vector<Node> from, to;
+      for (size_t k = 0; k < K.size(); k++)
+      {
+        from.push_back(datatypes::TupleUtils::nthElementOfTuple(w, K[k]));
+        to.push_back(key[k]);
+      }
+      bool refuted = false;
+      for (const Node& c : conds)
+      {
+        Node v = c.substitute(from.begin(), from.end(), to.begin(), to.end());
+        if (!occursFree(v, w) && rewritesToFalse(v))
+        {
+          refuted = true;
+          break;
+        }
+      }
+      if (!refuted)
+      {
+        return false;
+      }
+    }
+    return true;
+  };
+  for (size_t a = 0; a < parts.size(); a++)
+  {
+    for (size_t b = a + 1; b < parts.size(); b++)
+    {
+      if (!disjoint(parts[a], parts[b]) && !disjoint(parts[b], parts[a]))
+      {
+        return BagsRewriteResponse(top, Rewrite::NONE);
+      }
+    }
+  }
+  // (bag.union_disjoint ((_ table.aggr 0) f i U1) ((_ table.aggr 0) f i U2))
+  Node u;
+  for (const Node& U : parts)
+  {
+    std::vector<Node> children{A.getOperator(), A[0], A[1], U};
+    Node g = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+    u = u.isNull() ? g : d_nm->mkNode(Kind::BAG_UNION_DISJOINT, u, g);
+  }
+  Node ret = d_nm->mkNode(
+      Kind::BAG_MAP, top[0], d_nm->mkNode(Kind::BAG_FILTER, top[1][0], u));
+  return BagsRewriteResponse(ret, Rewrite::AGGREGATE_UNION_DISJOINT_KEYS);
 }
 
 BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
@@ -2474,7 +3372,176 @@ BagsRewriteResponse BagsRewriter::postRewriteProduct(const TNode& n) const
     return BagsRewriteResponse(empty, Rewrite::PRODUCT_EMPTY);
   }
 
+  // the normal form keeps the maps and filters above the products, see
+  // rewriteProductOfMap and rewriteProductOfFilter, so that a query becomes
+  // (bag.map h (bag.filter P (table.product X1 (table.product X2 ..)))), the
+  // shape of SELECT h FROM X1, X2, .. WHERE P
+  // PRODUCT_MAP_LEFT, PRODUCT_MAP_RIGHT, PRODUCT_FILTER_LEFT and
+  // PRODUCT_FILTER_RIGHT
+  if (n[0].getKind() == Kind::BAG_MAP)
+  {
+    return rewriteProductOfMap(n, true);
+  }
+  if (n[1].getKind() == Kind::BAG_MAP)
+  {
+    return rewriteProductOfMap(n, false);
+  }
+  if (n[0].getKind() == Kind::BAG_FILTER)
+  {
+    return rewriteProductOfFilter(n, true);
+  }
+  if (n[1].getKind() == Kind::BAG_FILTER)
+  {
+    return rewriteProductOfFilter(n, false);
+  }
+  if (n[0].getKind() == Kind::BAG_UNION_DISJOINT)
+  {
+    // PRODUCT_UNION_DISJOINT, on either side:
+    //   (table.product (bag.union_disjoint A B) C)
+    //   ---> (bag.union_disjoint (table.product A C) (table.product B C))
+    Node a = d_nm->mkNode(Kind::TABLE_PRODUCT, n[0][0], n[1]);
+    Node b = d_nm->mkNode(Kind::TABLE_PRODUCT, n[0][1], n[1]);
+    return BagsRewriteResponse(d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b),
+                               Rewrite::PRODUCT_UNION_DISJOINT);
+  }
+  if (n[1].getKind() == Kind::BAG_UNION_DISJOINT)
+  {
+    Node a = d_nm->mkNode(Kind::TABLE_PRODUCT, n[0], n[1][0]);
+    Node b = d_nm->mkNode(Kind::TABLE_PRODUCT, n[0], n[1][1]);
+    return BagsRewriteResponse(d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b),
+                               Rewrite::PRODUCT_UNION_DISJOINT);
+  }
+  if (n[0].getKind() == Kind::TABLE_PRODUCT)
+  {
+    // PRODUCT_ASSOC: rows are flat tuples, so the nesting is a spelling,
+    //   (table.product (table.product A B) C)
+    //   ---> (table.product A (table.product B C))
+    Node bc = d_nm->mkNode(Kind::TABLE_PRODUCT, n[0][1], n[1]);
+    return BagsRewriteResponse(d_nm->mkNode(Kind::TABLE_PRODUCT, n[0][0], bc),
+                               Rewrite::PRODUCT_ASSOC);
+  }
+  // PRODUCT_SWAP: the factors of a right-nested product in one order,
+  // (table.product A (table.product B C)) with B < A becomes a column
+  // permutation of (table.product B (table.product A C)), see
+  // rewriteProductSwap
+  Node first = n[0];
+  Node second = n[1].getKind() == Kind::TABLE_PRODUCT ? n[1][0] : n[1];
+  if (second < first && first.getKind() != Kind::TABLE_PRODUCT)
+  {
+    return rewriteProductSwap(n);
+  }
   return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteProductOfFilter(const TNode& n,
+                                                         bool left) const
+{
+  // PRODUCT_FILTER_LEFT and PRODUCT_FILTER_RIGHT: a filter of a factor is a
+  // filter of the product, over the factor's columns of its rows. With A and
+  // B of two columns,
+  //   (table.product (bag.filter (lambda ((s T)) (> ((_ tuple.select 1) s) 3))
+  //                              A)
+  //                  B)
+  //   --->
+  //   (bag.filter (lambda ((t V)) (> ((_ tuple.select 1) t) 3))
+  //               (table.product A B))
+  //   (table.product A (bag.filter (lambda ((s U)) (> ((_ tuple.select 1) s)
+  //                                                  3))
+  //                                B))
+  //   --->
+  //   (bag.filter (lambda ((t V)) (> ((_ tuple.select 3) t) 3))
+  //               (table.product A B))
+  // p is applied to the factor's part of t, (tuple ((_ tuple.select 2) t)
+  // ((_ tuple.select 3) t)) for B, and beta-reduced (see applyFunction)
+  if (!d_higherOrder)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node filtered = left ? n[0] : n[1];
+  Node other = left ? n[1] : n[0];
+  Node p = filtered[0];
+  if (!composable(p))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node A = left ? filtered[1] : other;
+  Node B = left ? other : filtered[1];
+  TypeNode typeA = A.getType().getBagElementType();
+  TypeNode typeB = B.getType().getBagElementType();
+  TypeNode productType = n.getType().getBagElementType();
+  Node t = rowVariable(productType);
+  uint32_t nA = typeA.getTupleLength();
+  uint32_t nB = typeB.getTupleLength();
+  std::vector<Node> elems;
+  uint32_t offset = left ? 0 : nA;
+  uint32_t len = left ? nA : nB;
+  for (uint32_t i = 0; i < len; i++)
+  {
+    elems.push_back(datatypes::TupleUtils::nthElementOfTuple(t, offset + i));
+  }
+  Node side = datatypes::TupleUtils::constructTupleFromElements(
+      left ? typeA : typeB, elems, 0, len - 1);
+  Node body = applyFunction(p, side);
+  if (body.isNull())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node product = d_nm->mkNode(Kind::TABLE_PRODUCT, A, B);
+  Node ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, body), product);
+  return BagsRewriteResponse(
+      ret, left ? Rewrite::PRODUCT_FILTER_LEFT : Rewrite::PRODUCT_FILTER_RIGHT);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteProductSwap(const TNode& n) const
+{
+  // PRODUCT_SWAP: the factors of a product in the order of their node ids,
+  // with B < A,
+  //   (table.product A (table.product B C))
+  //   ---> (bag.map perm (table.product B (table.product A C)))
+  //   (table.product A B) ---> (bag.map perm (table.product B A))
+  // where perm puts the columns back in the order A, B, C; with A, B and C of
+  // one column,
+  //   perm = (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+  //                                 ((_ tuple.select 0) t)
+  //                                 ((_ tuple.select 2) t)))
+  // so that two joins that list their tables in different orders become one
+  // product
+  if (!d_higherOrder)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node A = n[0];
+  bool nested = n[1].getKind() == Kind::TABLE_PRODUCT;
+  Node B = nested ? n[1][0] : n[1];
+  Node C = nested ? Node(n[1][1]) : Node::null();
+  TypeNode typeA = A.getType().getBagElementType();
+  TypeNode typeB = B.getType().getBagElementType();
+  uint32_t nA = typeA.getTupleLength();
+  uint32_t nB = typeB.getTupleLength();
+  uint32_t nC = nested ? C.getType().getBagElementType().getTupleLength() : 0;
+  Node inner = nested ? d_nm->mkNode(Kind::TABLE_PRODUCT, A, C) : A;
+  Node swapped = d_nm->mkNode(Kind::TABLE_PRODUCT, B, inner);
+  TypeNode swappedType = swapped.getType().getBagElementType();
+  Node t = rowVariable(swappedType);
+  // swapped rows are (B, A, C); the result rows are (A, B, C)
+  std::vector<Node> result;
+  for (uint32_t i = 0; i < nA; i++)
+  {
+    result.push_back(datatypes::TupleUtils::nthElementOfTuple(t, nB + i));
+  }
+  for (uint32_t i = 0; i < nB; i++)
+  {
+    result.push_back(datatypes::TupleUtils::nthElementOfTuple(t, i));
+  }
+  for (uint32_t i = 0; i < nC; i++)
+  {
+    result.push_back(datatypes::TupleUtils::nthElementOfTuple(t, nB + nA + i));
+  }
+  TypeNode resultType = n.getType().getBagElementType();
+  Node resultTuple = datatypes::TupleUtils::constructTupleFromElements(
+      resultType, result, 0, result.size() - 1);
+  Node ret = d_nm->mkNode(Kind::BAG_MAP, mkLambda(t, resultTuple), swapped);
+  return BagsRewriteResponse(ret, Rewrite::PRODUCT_SWAP);
 }
 
 Node BagsRewriter::rowVariable(TypeNode tupleType) const
@@ -2652,6 +3719,34 @@ Node BagsRewriter::mkLambda(const Node& var, const Node& body) const
       Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, var), body);
 }
 
+BagsRewriteResponse BagsRewriter::rewriteFilterOfFilter(const TNode& n) const
+{
+  if (!d_higherOrder)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  // FILTER_FILTER: two filters are one, by the conjunction,
+  //   (bag.filter (lambda ((s T)) p) (bag.filter (lambda ((t T)) q) A))
+  //   ---> (bag.filter (lambda ((t T)) (and p[s := t] q)) A)
+  Node p = n[0];
+  Node q = n[1][0];
+  Node A = n[1][1];
+  if (!composable(p) || !composable(q))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::pair<Node, Node> lq = lambdaOf(q);
+  Node t = lq.first;
+  Node pt = applyFunction(p, t);
+  if (pt.isNull())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node body = d_nm->mkNode(Kind::AND, pt, lq.second);
+  Node ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, body), A);
+  return BagsRewriteResponse(ret, Rewrite::FILTER_FILTER);
+}
+
 BagsRewriteResponse BagsRewriter::rewriteFilterOfMap(const TNode& n) const
 {
   if (!d_higherOrder)
@@ -2707,6 +3802,95 @@ BagsRewriteResponse BagsRewriter::rewriteMapOfMap(const TNode& n) const
   }
   Node ret = d_nm->mkNode(Kind::BAG_MAP, mkLambda(t, body), A);
   return BagsRewriteResponse(ret, Rewrite::MAP_MAP);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteProductOfMap(const TNode& n,
+                                                      bool left) const
+{
+  if (!d_higherOrder)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  // PRODUCT_MAP_LEFT and PRODUCT_MAP_RIGHT: a map of a factor is a map of the
+  // product, which keeps the other factor's columns. With A and B of two
+  // columns,
+  //   (table.product (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+  //                           A)
+  //                  B)
+  //   --->
+  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+  //                                   ((_ tuple.select 2) t)
+  //                                   ((_ tuple.select 3) t)))
+  //            (table.product A B))
+  // and the same on the right, the image after A's columns; f is applied to
+  // the factor's part of t, (tuple ((_ tuple.select 0) t)
+  // ((_ tuple.select 1) t)) for A
+  Node mapped = left ? n[0] : n[1];
+  Node other = left ? n[1] : n[0];
+  Node f = mapped[0];
+  Node inner = mapped[1];
+  if (!composable(f))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node A = left ? inner : other;
+  Node B = left ? other : inner;
+  TypeNode typeA = A.getType().getBagElementType();
+  TypeNode typeB = B.getType().getBagElementType();
+  if (!typeA.isTuple() || !typeB.isTuple())
+  {
+    // the map builds rows from something that is not a table: no product of
+    // its argument exists
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  TypeNode productType = datatypes::TupleUtils::concatTupleTypes(typeA, typeB);
+  Node t = rowVariable(productType);
+  uint32_t nA = typeA.getTupleLength();
+  uint32_t nB = typeB.getTupleLength();
+  std::vector<Node> elemsA, elemsB;
+  for (uint32_t i = 0; i < nA; i++)
+  {
+    elemsA.push_back(datatypes::TupleUtils::nthElementOfTuple(t, i));
+  }
+  for (uint32_t i = 0; i < nB; i++)
+  {
+    elemsB.push_back(datatypes::TupleUtils::nthElementOfTuple(t, nA + i));
+  }
+  Node tupleA = datatypes::TupleUtils::constructTupleFromElements(
+      typeA, elemsA, 0, nA - 1);
+  Node tupleB = datatypes::TupleUtils::constructTupleFromElements(
+      typeB, elemsB, 0, nB - 1);
+  Node image = applyFunction(f, left ? tupleA : tupleB);
+  if (image.isNull())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  TypeNode imageType = f.getType().getRangeType();
+  uint32_t nI = imageType.getTupleLength();
+  std::vector<Node> result;
+  if (left)
+  {
+    for (uint32_t i = 0; i < nI; i++)
+    {
+      result.push_back(datatypes::TupleUtils::nthElementOfTuple(image, i));
+    }
+    result.insert(result.end(), elemsB.begin(), elemsB.end());
+  }
+  else
+  {
+    result.insert(result.end(), elemsA.begin(), elemsA.end());
+    for (uint32_t i = 0; i < nI; i++)
+    {
+      result.push_back(datatypes::TupleUtils::nthElementOfTuple(image, i));
+    }
+  }
+  TypeNode resultType = n.getType().getBagElementType();
+  Node resultTuple = datatypes::TupleUtils::constructTupleFromElements(
+      resultType, result, 0, result.size() - 1);
+  Node product = d_nm->mkNode(Kind::TABLE_PRODUCT, A, B);
+  Node ret = d_nm->mkNode(Kind::BAG_MAP, mkLambda(t, resultTuple), product);
+  return BagsRewriteResponse(
+      ret, left ? Rewrite::PRODUCT_MAP_LEFT : Rewrite::PRODUCT_MAP_RIGHT);
 }
 
 BagsRewriteResponse BagsRewriter::postRewriteProject(const TNode& n) const
@@ -3424,10 +4608,13 @@ BagsRewriteResponse BagsRewriter::rewriteFoldOfTuple(const TNode& n) const
 
 BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
 {
-  // SETOF_PROJECTION_SORT: the set of a map that projects onto columns in
-  // another order than theirs is the set of the projection onto the sorted
-  // columns, mapped back by the permutation, which is injective and so
-  // commutes with duplicate removal,
+  // SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
+  // * f a constant c:
+  //     (bag.setof (bag.map (lambda ((t T)) c) Y))
+  //     ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
+  // * f a projection onto columns in another order than theirs: the set of
+  //   the projection onto the sorted columns, mapped back by the
+  //   permutation, which is injective and so commutes with duplicate removal,
   //     (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)
   //                                                ((_ tuple.select 0) t)))
   //                         Y))
@@ -3438,6 +4625,15 @@ BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
   //                                    (tuple ((_ tuple.select 0) t)
   //                                           ((_ tuple.select 2) t)))
   //                                  Y)))
+  // * f a tuple some of whose components are constants: the constants are
+  //   put back by an injective map over the set of the other components,
+  //     (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t) 5))
+  //                         Y))
+  //     --->
+  //     (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r) 5))
+  //              (bag.setof (bag.map (lambda ((t T))
+  //                                    (tuple ((_ tuple.select 1) t)))
+  //                                  Y)))
   Node f = asLambda(n[0][0]);
   Node Y = n[0][1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 1)
@@ -3446,6 +4642,13 @@ BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
   }
   Node var = f[0][0];
   Node body = f[1];
+  if (!occursFree(body, var))
+  {
+    Node empty = d_nm->mkConst(EmptyBag(Y.getType()));
+    Node count = d_nm->mkNode(Kind::ITE, Y.eqNode(empty), d_zero, d_one);
+    Node ret = d_nm->mkNode(Kind::BAG_MAKE, body, count);
+    return BagsRewriteResponse(ret, Rewrite::SETOF_MAP_CONSTANT);
+  }
   if (body.getKind() != Kind::APPLY_CONSTRUCTOR || !body.getType().isTuple())
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
@@ -3493,7 +4696,684 @@ BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
       }
     }
   }
+  std::vector<Node> kept;
+  std::vector<TypeNode> keptTypes;
+  std::vector<int> where;  // component -> position among the kept ones, or -1
+  for (const Node& c : body)
+  {
+    if (occursFree(c, var))
+    {
+      where.push_back(static_cast<int>(kept.size()));
+      kept.push_back(c);
+      keptTypes.push_back(c.getType());
+    }
+    else
+    {
+      where.push_back(-1);
+    }
+  }
+  if (kept.size() == body.getNumChildren())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  TypeNode keptType = d_nm->mkTupleType(keptTypes);
+  Node g = mkLambda(var,
+                    datatypes::TupleUtils::constructTupleFromElements(
+                        keptType, kept, 0, kept.size() - 1));
+  Node inner = d_nm->mkNode(Kind::BAG_SETOF, d_nm->mkNode(Kind::BAG_MAP, g, Y));
+  Node r = rowVariable(keptType);
+  std::vector<Node> cells;
+  for (size_t k = 0; k < body.getNumChildren(); k++)
+  {
+    if (where[k] < 0)
+    {
+      if (occursFree(body[k], r))
+      {
+        return BagsRewriteResponse(n, Rewrite::NONE);
+      }
+      cells.push_back(body[k]);
+    }
+    else
+    {
+      cells.push_back(datatypes::TupleUtils::nthElementOfTuple(r, where[k]));
+    }
+  }
+  Node back = mkLambda(r,
+                       datatypes::TupleUtils::constructTupleFromElements(
+                           body.getType(), cells, 0, cells.size() - 1));
+  Node ret = d_nm->mkNode(Kind::BAG_MAP, back, inner);
+  return BagsRewriteResponse(ret, Rewrite::SETOF_MAP_CONSTANT);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteSemiJoin(const TNode& n,
+                                                  size_t side) const
+{
+  // SEMI_JOIN: (bag.map f (bag.filter p (table.product X0 (table.product X1
+  // ..)))) with a component B = Xj that is a set (a bag.setof, or a table
+  // with a key, whose rows are distinct), f reading none of B's columns
+  // (or only columns that p equates to columns of the others), and p having,
+  // for every column of B or for every column of a key of B, a conjunct
+  // (= ((_ tuple.select c) t) e) with e reading no column of B: a row of the
+  // other components meets at most one row of B that passes, so the product
+  // passes each of their rows once when one does. With Y of two columns and
+  // the key {0} of B = Z,
+  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)))
+  //            (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+  //                                           ((_ tuple.select 2) t)))
+  //                        (table.product Y Z)))
+  //   --->
+  //   (bag.map (lambda ((a U)) (tuple ((_ tuple.select 1) a)))
+  //            (bag.filter (lambda ((a U))
+  //                          (not (= (bag.filter (lambda ((b W))
+  //                                                (= ((_ tuple.select 0) a)
+  //                                                   ((_ tuple.select 0) b)))
+  //                                              Z)
+  //                                  (as bag.empty (Bag W)))))
+  //                        Y))
+  // the product of the other components A (Y here) filtered by pA, the
+  // conjuncts reading no column of B, and the existence of a row of B that
+  // passes pAB, the others: the shape of SQL's EXISTS and IN, which other
+  // rules decorrelate (see rewriteEmptyFilter). Called with side 0 only;
+  // every component is tried, the one with the smallest node first, so that
+  // one join written in two orders is rewritten alike.
+  if (side != 0)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node f = asLambda(n[0]);
+  Node p = asLambda(n[1][0]);
+  Node prod = n[1][1];
+  if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 1
+      || p.getKind() != Kind::LAMBDA || p[0].getNumChildren() != 1)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  // the components, left to right, and where each one's columns start
+  std::vector<Node> comps;
+  Node rest = prod;
+  while (rest.getKind() == Kind::TABLE_PRODUCT)
+  {
+    comps.push_back(rest[0]);
+    rest = rest[1];
+  }
+  comps.push_back(rest);
+  std::vector<size_t> starts, widths;
+  size_t at = 0;
+  for (const Node& c : comps)
+  {
+    TypeNode t = c.getType().getBagElementType();
+    if (!t.isTuple())
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    starts.push_back(at);
+    widths.push_back(t.getTupleLength());
+    at += t.getTupleLength();
+  }
+  Node ft = f[0][0];
+  Node pt = p[0][0];
+  std::set<uint32_t> fPositions;
+  if (!readPositions(f[1], ft, fPositions) || bindsVariable(f[1], ft)
+      || bindsVariable(p[1], pt))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<Node> conjuncts;
+  if (p[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), p[1].begin(), p[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(p[1]);
+  }
+  std::vector<std::set<uint32_t>> reads(conjuncts.size());
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (!readPositions(conjuncts[k], pt, reads[k]))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+  }
+  // the component to join away: of those that qualify, the one with the
+  // smallest node, so that one join written in two orders is rewritten alike
+  std::vector<size_t> order(comps.size());
+  for (size_t k = 0; k < order.size(); k++)
+  {
+    order[k] = k;
+  }
+  std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+    return comps[a].getId() < comps[b].getId();
+  });
+  for (size_t j : order)
+  {
+    Node B = comps[j];
+    std::vector<std::set<uint32_t>> keys = keysOf(B);
+    if (B.getType().getBagElementType().isTuple())
+    {
+      std::vector<std::set<uint32_t>> more = rowKeys(B);
+      keys.insert(keys.end(), more.begin(), more.end());
+    }
+    if (!isSet(B) && keys.empty())
+    {
+      continue;
+    }
+    size_t bStart = starts[j], wb = widths[j];
+    auto inB = [&](uint32_t pos) { return pos >= bStart && pos < bStart + wb; };
+    std::vector<Node> onA, onAB;
+    std::set<uint32_t> determined;
+    // a column of B that an equation sets equal to a column of the others
+    std::map<uint32_t, uint32_t> aliases;
+    for (size_t k = 0; k < conjuncts.size(); k++)
+    {
+      const Node& c = conjuncts[k];
+      bool readsB = false;
+      for (uint32_t pos : reads[k])
+      {
+        readsB = readsB || inB(pos);
+      }
+      (readsB ? onAB : onA).push_back(c);
+      if (!readsB || c.getKind() != Kind::EQUAL)
+      {
+        continue;
+      }
+      for (size_t sd = 0; sd < 2; sd++)
+      {
+        Node col = c[sd];
+        std::set<uint32_t> other;
+        if (col.getKind() == Kind::APPLY_SELECTOR && col[0] == pt
+            && readPositions(c[1 - sd], pt, other))
+        {
+          uint32_t pos = datatypes::utils::indexOf(col.getOperator());
+          bool fromRest = inB(pos);
+          for (uint32_t o : other)
+          {
+            fromRest = fromRest && !inB(o);
+          }
+          if (fromRest)
+          {
+            determined.insert(pos - bStart);
+            Node e = c[1 - sd];
+            if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == pt)
+            {
+              aliases[pos] = datatypes::utils::indexOf(e.getOperator());
+            }
+          }
+        }
+      }
+    }
+    // f reads B only through columns equal to columns of the others, aliases
+    // maps such a column of B to that column of the others
+    bool fReadsB = false;
+    for (uint32_t pos : fPositions)
+    {
+      fReadsB = fReadsB || (inB(pos) && !aliases.count(pos));
+    }
+    if (fReadsB)
+    {
+      continue;
+    }
+    bool fixesRow = determined.size() == wb;
+    for (const std::set<uint32_t>& key : keys)
+    {
+      bool all = true;
+      for (uint32_t c : key)
+      {
+        all = all && determined.count(c) > 0;
+      }
+      fixesRow = fixesRow || all;
+    }
+    if (onAB.empty() || !fixesRow)
+    {
+      continue;
+    }
+    // A: the product of the other components, right-nested in their order
+    std::vector<Node> others;
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      if (k != j)
+      {
+        others.push_back(comps[k]);
+      }
+    }
+    Node A = others.back();
+    for (size_t k = others.size() - 1; k-- > 0;)
+    {
+      A = d_nm->mkNode(Kind::TABLE_PRODUCT, others[k], A);
+    }
+    TypeNode aType = A.getType().getBagElementType();
+    TypeNode bType = B.getType().getBagElementType();
+    // a, the rows of A, and b, the rows of B: two variables even when A and
+    // B have one row sort
+    Node a = rowVariable(aType);
+    Node b = aType == bType ? accumulatorVariable(bType) : rowVariable(bType);
+    if (expr::hasSubterm(p[1], a) || expr::hasSubterm(p[1], b)
+        || expr::hasSubterm(f[1], a))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    // a column of the whole row, read from a or from b
+    std::vector<Node> from, to;
+    size_t aPos = 0;
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      for (size_t c = 0; c < widths[k]; c++)
+      {
+        Node whole =
+            datatypes::TupleUtils::nthElementOfTuple(pt, starts[k] + c);
+        if (k == j)
+        {
+          to.push_back(datatypes::TupleUtils::nthElementOfTuple(b, c));
+        }
+        else
+        {
+          to.push_back(datatypes::TupleUtils::nthElementOfTuple(a, aPos++));
+        }
+        from.push_back(whole);
+      }
+    }
+    // f reads an aliased column of B as the column of the others it equals
+    std::vector<Node> fFrom, fTo;
+    {
+      std::map<uint32_t, Node> aCell;
+      size_t ap = 0;
+      for (size_t k = 0; k < comps.size(); k++)
+      {
+        for (size_t c = 0; c < widths[k]; c++)
+        {
+          if (k != j)
+          {
+            aCell[starts[k] + c] =
+                datatypes::TupleUtils::nthElementOfTuple(a, ap++);
+          }
+        }
+      }
+      for (size_t k = 0; k < comps.size(); k++)
+      {
+        for (size_t c = 0; c < widths[k]; c++)
+        {
+          uint32_t pos = starts[k] + c;
+          if (k == j && !aliases.count(pos))
+          {
+            continue;
+          }
+          fFrom.push_back(datatypes::TupleUtils::nthElementOfTuple(ft, pos));
+          fTo.push_back(aCell[k == j ? aliases[pos] : pos]);
+        }
+      }
+    }
+    Node pA = onA.empty()
+                  ? d_nm->mkConst(true)
+                  : (onA.size() == 1 ? onA[0] : d_nm->mkNode(Kind::AND, onA));
+    Node pAB = onAB.size() == 1 ? onAB[0] : d_nm->mkNode(Kind::AND, onAB);
+    pA = pA.substitute(from.begin(), from.end(), to.begin(), to.end());
+    pAB = pAB.substitute(from.begin(), from.end(), to.begin(), to.end());
+    Node fBody =
+        f[1].substitute(fFrom.begin(), fFrom.end(), fTo.begin(), fTo.end());
+    if (occursFree(pA, pt) || occursFree(pAB, pt) || occursFree(fBody, ft)
+        || occursFree(pA, b) || occursFree(fBody, b))
+    {
+      continue;
+    }
+    // (not (= (bag.filter (lambda ((b W)) pAB) B) (as bag.empty (Bag W))))
+    Node matches = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(b, pAB), B);
+    Node empty = d_nm->mkConst(EmptyBag(B.getType()));
+    Node exists = matches.eqNode(empty).notNode();
+    Node filtered =
+        d_nm->mkNode(Kind::BAG_FILTER, mkLambda(a, pA.andNode(exists)), A);
+    Node ret = d_nm->mkNode(Kind::BAG_MAP, mkLambda(a, fBody), filtered);
+    return BagsRewriteResponse(ret, Rewrite::SEMI_JOIN);
+  }
   return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+Node BagsRewriter::rewriteEmptyFilter(const Node& F) const
+{
+  // EQ_EMPTY_FILTER_DECORRELATE, for the emptiness of a filter F in the body
+  // of an enclosing lambda over a row r:
+  //   (= (as bag.empty (Bag T)) (bag.filter (lambda ((s T)) (and c q e)) X))
+  // where c reads no s (only r, or nothing), q reads only s, and each
+  // equation e ties a column of s to a term E that reads no s, such as
+  // (= ((_ tuple.select 1) s) ((_ tuple.select 0) r)): no row of X passes
+  // when c fails, or when the tuple of the E is not among the columns of the
+  // rows that pass q,
+  //   --->
+  //   (or (not c)
+  //       (not (>= (bag.count (tuple ((_ tuple.select 0) r))
+  //                           (bag.map (lambda ((s T))
+  //                                      (tuple ((_ tuple.select 1) s)))
+  //                                    (bag.filter (lambda ((s T)) q) X)))
+  //                1)))
+  // The bag no longer depends on the enclosing row, so a filter over this
+  // predicate is not a new bag per row the solver reads. Returns that
+  // formula, or null when F is not of that shape.
+  Node P = asLambda(F[0]);
+  Node X = F[1];
+  if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1)
+  {
+    return Node::null();
+  }
+  Node sv = P[0][0];
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  std::vector<Node> outer, inner, keysS, keysE;
+  for (const Node& c : conjuncts)
+  {
+    std::unordered_set<Node> fvs;
+    expr::getFreeVariables(c, fvs);
+    bool hasS = fvs.erase(sv) > 0;
+    if (!hasS)
+    {
+      outer.push_back(c);
+      continue;
+    }
+    bool matched = false;
+    if (fvs.empty())
+    {
+      // an equation between a column and a constant is a key as well:
+      //   (= (as bag.empty (Bag T))
+      //      (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 10)) X))
+      // says 10 is not among the column's values
+      if (c.getKind() == Kind::EQUAL)
+      {
+        for (size_t side = 0; side < 2 && !matched; side++)
+        {
+          if (c[side].getKind() == Kind::APPLY_SELECTOR && c[side][0] == sv
+              && c[1 - side].isConst())
+          {
+            keysS.push_back(c[side]);
+            keysE.push_back(c[1 - side]);
+            matched = true;
+          }
+        }
+      }
+      if (!matched)
+      {
+        inner.push_back(c);
+      }
+      continue;
+    }
+    if (c.getKind() == Kind::EQUAL)
+    {
+      for (size_t side = 0; side < 2 && !matched; side++)
+      {
+        if (c[side].getKind() == Kind::APPLY_SELECTOR && c[side][0] == sv
+            && !occursFree(c[1 - side], sv))
+        {
+          keysS.push_back(c[side]);
+          keysE.push_back(c[1 - side]);
+          matched = true;
+        }
+      }
+    }
+    if (!matched)
+    {
+      return Node::null();
+    }
+  }
+  if (outer.empty() && keysS.empty())
+  {
+    return Node::null();
+  }
+  {
+    // the keys in the order of their columns, so that one join written two
+    // ways probes one tuple in one bag
+    std::vector<size_t> order(keysS.size());
+    for (size_t k = 0; k < order.size(); k++)
+    {
+      order[k] = k;
+    }
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+      uint32_t ia = datatypes::utils::indexOf(keysS[a].getOperator());
+      uint32_t ib = datatypes::utils::indexOf(keysS[b].getOperator());
+      return ia < ib;
+    });
+    std::vector<Node> ks, ke;
+    for (size_t k : order)
+    {
+      ks.push_back(keysS[k]);
+      ke.push_back(keysE[k]);
+    }
+    keysS = ks;
+    keysE = ke;
+  }
+  if (!keysS.empty())
+  {
+    // an inner conjunct that reads only equated columns says the same of the
+    // expressions they equal: (nullable.is_some ((_ tuple.select 1) s)) with
+    // (= ((_ tuple.select 1) s) E) is (nullable.is_some E). Moved out, it no
+    // longer depends on which side of the equation was written first (the
+    // three-valued = tests its first operand for NULL)
+    std::vector<Node> from, to;
+    std::set<uint32_t> keyPositions;
+    for (size_t k = 0; k < keysS.size(); k++)
+    {
+      uint32_t pos = datatypes::utils::indexOf(keysS[k].getOperator());
+      if (keyPositions.insert(pos).second)
+      {
+        from.push_back(keysS[k]);
+        to.push_back(keysE[k]);
+      }
+    }
+    std::vector<Node> stays;
+    for (const Node& c : inner)
+    {
+      std::set<uint32_t> positions;
+      bool onKeys = readPositions(c, sv, positions) && !bindsVariable(c, sv);
+      for (uint32_t pos : positions)
+      {
+        onKeys = onKeys && keyPositions.count(pos) > 0;
+      }
+      if (onKeys && !positions.empty())
+      {
+        Node moved =
+            c.substitute(from.begin(), from.end(), to.begin(), to.end());
+        if (!occursFree(moved, sv))
+        {
+          outer.push_back(moved);
+          continue;
+        }
+      }
+      stays.push_back(c);
+    }
+    inner = stays;
+  }
+  Node rest =
+      inner.empty()
+          ? d_nm->mkConst(true)
+          : (inner.size() == 1 ? inner[0] : d_nm->mkNode(Kind::AND, inner));
+  Node passing = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(sv, rest), X);
+  Node none;
+  if (keysS.empty())
+  {
+    none = passing.eqNode(d_nm->mkConst(EmptyBag(X.getType())));
+  }
+  else
+  {
+    std::vector<TypeNode> types;
+    for (const Node& k : keysS)
+    {
+      types.push_back(k.getType());
+    }
+    TypeNode keyType = d_nm->mkTupleType(types);
+    Node columns = mkLambda(sv,
+                            datatypes::TupleUtils::constructTupleFromElements(
+                                keyType, keysS, 0, keysS.size() - 1));
+    Node projected = d_nm->mkNode(Kind::BAG_MAP, columns, passing);
+    Node probe = datatypes::TupleUtils::constructTupleFromElements(
+        keyType, keysE, 0, keysE.size() - 1);
+    Node count = d_nm->mkNode(Kind::BAG_COUNT, probe, projected);
+    none = d_nm->mkNode(Kind::GEQ, count, d_one).notNode();
+  }
+  std::vector<Node> disjuncts;
+  for (const Node& c : outer)
+  {
+    disjuncts.push_back(c.notNode());
+  }
+  disjuncts.push_back(none);
+  return disjuncts.size() == 1 ? disjuncts[0]
+                               : d_nm->mkNode(Kind::OR, disjuncts);
+}
+
+Node BagsRewriter::emptinessAtom(const Node& atom) const
+{
+  // an atom of a lambda body that asks about a bag, as the formula it stands
+  // for, or null:
+  //   (>= (bag.count e (bag.inter_min X Y)) 1)
+  //   ---> (and (>= (bag.count e X) 1) (>= (bag.count e Y) 1))
+  //   (>= (bag.count e (bag.setof X)) 1) ---> (>= (bag.count e X) 1)
+  //   (>= (ite b x 0) 1) ---> (and b (>= x 1))
+  //   (= (nullable.val (bag.fold f (nullable.some 0) X)) 0)
+  //   ---> (= X (as bag.empty (Bag T))), for f counting the rows of X
+  //   (= (as bag.empty (Bag V)) (bag.filter Q ((_ table.aggr K) f i Y)))
+  //   ---> (= Y (as bag.empty (Bag T))), for Q the counter test alone: the
+  //        groups some row reached, none exactly when there is no row
+  //   (= (as bag.empty (Bag T)) F) for a filter F, decorrelated, see
+  //   rewriteEmptyFilter
+  //   (= (as bag.empty (Bag T)) (bag.inter_min X Y)), whose filters fix
+  //   every column of an element to a term E of the enclosing rows
+  //   ---> (not (and (>= (bag.count E X) 1) (>= (bag.count E Y) 1)))
+  //   (= (as bag.empty (Bag T)) (bag x c)) ---> (<= c 0)
+  // Done here, from the bodies (normalizeEmptiness), rather than by the
+  // rewriting of the equality, which must stay an equality.
+  if (atom.getKind() == Kind::GEQ && atom[1].isConst()
+      && atom[1].getConst<Rational>() == Rational(1))
+  {
+    Node c = atom[0];
+    // (>= (bag.count e (bag.inter_min X Y)) 1) is membership in both
+    if (c.getKind() == Kind::BAG_COUNT && c[1].getKind() == Kind::BAG_INTER_MIN)
+    {
+      Node x = d_nm->mkNode(Kind::BAG_COUNT, c[0], c[1][0]);
+      Node y = d_nm->mkNode(Kind::BAG_COUNT, c[0], c[1][1]);
+      return d_nm->mkNode(Kind::AND,
+                          {d_nm->mkNode(Kind::GEQ, x, d_one),
+                           d_nm->mkNode(Kind::GEQ, y, d_one)});
+    }
+    // (>= (bag.count e (bag.setof X)) 1) is membership in X
+    if (c.getKind() == Kind::BAG_COUNT && c[1].getKind() == Kind::BAG_SETOF)
+    {
+      Node x = d_nm->mkNode(Kind::BAG_COUNT, c[0], c[1][0]);
+      return d_nm->mkNode(Kind::GEQ, x, d_one);
+    }
+    // (>= (ite b x 0) 1) is b and (>= x 1)
+    if (c.getKind() == Kind::ITE && c[2].isConst()
+        && c[2].getConst<Rational>() < Rational(1))
+    {
+      return d_nm->mkNode(
+          Kind::AND, c[0], d_nm->mkNode(Kind::GEQ, c[1], d_one));
+    }
+    return Node::null();
+  }
+  if (atom.getKind() == Kind::EQUAL && atom[0].getType().isInteger())
+  {
+    // (= (nullable.val F) 0) with F counting the rows of X from (some 0):
+    // X has no row
+    for (size_t i = 0; i < 2; i++)
+    {
+      const Node& z = atom[i];
+      const Node& v = atom[1 - i];
+      if (!z.isConst() || !z.getConst<Rational>().isZero()
+          || v.getKind() != Kind::APPLY_SELECTOR
+          || v[0].getKind() != Kind::BAG_FOLD)
+      {
+        continue;
+      }
+      Node F = v[0];
+      Node l = asLambda(F[0]);
+      if (l.getKind() == Kind::LAMBDA && l[0].getNumChildren() == 2
+          && isCountStep(l[1], l[0][1], F[1]) && l[1].getKind() != Kind::ITE)
+      {
+        return F[2].eqNode(d_nm->mkConst(EmptyBag(F[2].getType())));
+      }
+    }
+    return Node::null();
+  }
+  if (atom.getKind() != Kind::EQUAL || !atom[0].getType().isBag())
+  {
+    return Node::null();
+  }
+  for (size_t i = 0; i < 2; i++)
+  {
+    if (atom[i].getKind() != Kind::BAG_EMPTY)
+    {
+      continue;
+    }
+    Node F = atom[1 - i];
+    if (F.getKind() == Kind::BAG_FILTER
+        && F[1].getKind() == Kind::TABLE_AGGREGATE
+        && !F[1].getOperator().getConst<ProjectOp>().getIndices().empty()
+        && asLambda(F[0]).getKind() == Kind::LAMBDA
+        && asLambda(F[0])[1].getKind() != Kind::AND
+        && counterColumn(F[0], asLambda(F[1][0]), F[1][1]) >= 0)
+    {
+      // the groups some row reached: none exactly when there is no row
+      Node Y = F[1][2];
+      if (Y.getKind() == Kind::BAG_FILTER)
+      {
+        return rewriteEmptyFilter(Y);
+      }
+      return Y.eqNode(d_nm->mkConst(EmptyBag(Y.getType())));
+    }
+    if (F.getKind() == Kind::BAG_FILTER)
+    {
+      return rewriteEmptyFilter(F);
+    }
+    if (F.getKind() == Kind::BAG_INTER_MIN
+        && F.getType().getBagElementType().isTuple())
+    {
+      // (= bag.empty (bag.inter_min X Y)) where the filters of X and Y fix
+      // every column of an element to an expression of the enclosing rows:
+      // that tuple E is the only candidate,
+      //   (not (and (>= (bag.count E X) 1) (>= (bag.count E Y) 1)))
+      TypeNode et = F.getType().getBagElementType();
+      Node w = rowVariable(et);
+      std::set<Node> conds;
+      elementConditions(F, w, conds);
+      size_t m = et.getTupleLength();
+      std::vector<Node> cols(m);
+      for (const Node& c : conds)
+      {
+        if (c.getKind() != Kind::EQUAL)
+        {
+          continue;
+        }
+        for (size_t sd = 0; sd < 2; sd++)
+        {
+          if (c[sd].getKind() == Kind::APPLY_SELECTOR && c[sd][0] == w
+              && !occursFree(c[1 - sd], w))
+          {
+            size_t k = datatypes::utils::indexOf(c[sd].getOperator());
+            if (cols[k].isNull())
+            {
+              cols[k] = c[1 - sd];
+            }
+          }
+        }
+      }
+      if (std::find(cols.begin(), cols.end(), Node::null()) == cols.end())
+      {
+        Node E = datatypes::TupleUtils::constructTupleFromElements(
+            et, cols, 0, m - 1);
+        Node inX = d_nm->mkNode(
+            Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, E, F[0]), d_one);
+        Node inY = d_nm->mkNode(
+            Kind::GEQ, d_nm->mkNode(Kind::BAG_COUNT, E, F[1]), d_one);
+        return d_nm->mkNode(Kind::AND, inX, inY).notNode();
+      }
+    }
+    if (F.getKind() == Kind::BAG_MAKE)
+    {
+      return d_nm->mkNode(Kind::LEQ, F[1], d_zero);
+    }
+  }
+  return Node::null();
 }
 
 Node BagsRewriter::truthOf(const Node& X) const
@@ -3600,6 +5480,65 @@ Node BagsRewriter::normalizeTruth(const Node& body) const
     return body;
   }
   return out.size() == 1 ? out[0] : d_nm->mkNode(Kind::AND, out);
+}
+
+Node BagsRewriter::normalizeEmptiness(const Node& body) const
+{
+  // EQ_EMPTY_FILTER_DECORRELATE: the emptiness atoms of body outside of any
+  // binder inside it, replaced by emptinessAtom; those under an inner binder
+  // belong to that lambda's own filter or map, which does the same when it
+  // is rewritten
+  std::unordered_map<TNode, Node> cache;
+  std::vector<TNode> todo{body};
+  while (!todo.empty())
+  {
+    TNode n = todo.back();
+    if (cache.count(n))
+    {
+      todo.pop_back();
+      continue;
+    }
+    if (n.isClosure() || n.getNumChildren() == 0)
+    {
+      cache[n] = n;
+      todo.pop_back();
+      continue;
+    }
+    Node replaced = emptinessAtom(n);
+    if (!replaced.isNull())
+    {
+      cache[n] = replaced;
+      todo.pop_back();
+      continue;
+    }
+    bool ready = true;
+    for (const Node& c : n)
+    {
+      if (!cache.count(c))
+      {
+        todo.push_back(c);
+        ready = false;
+      }
+    }
+    if (!ready)
+    {
+      continue;
+    }
+    todo.pop_back();
+    std::vector<Node> children;
+    if (n.getMetaKind() == kind::metakind::PARAMETERIZED)
+    {
+      children.push_back(n.getOperator());
+    }
+    bool changed = false;
+    for (const Node& c : n)
+    {
+      changed = changed || cache[c] != c;
+      children.push_back(cache[c]);
+    }
+    cache[n] = changed ? d_nm->mkNode(n.getKind(), children) : Node(n);
+  }
+  return cache[body];
 }
 
 BagsRewriteResponse BagsRewriter::rewriteAggregateDeadColumns(
@@ -3969,6 +5908,431 @@ int BagsRewriter::counterColumn(const Node& P,
     }
   }
   return -1;
+}
+
+bool BagsRewriter::isCountStep(const Node& step,
+                               const Node& acc,
+                               const Node& seed) const
+{
+  // (nullable.some (+ (nullable.val acc) 1)) from (nullable.some 0), or an
+  // ite that keeps acc on some rows and does that on the others: COUNT(*)
+  // and COUNT(x), the latter as
+  //   (ite (= (as nullable.null (Nullable Int)) ((_ tuple.select 1) t))
+  //        acc
+  //        (nullable.some (+ (nullable.val acc) 1)))
+  auto increments = [&](const Node& t) {
+    if (t.getKind() != Kind::APPLY_CONSTRUCTOR || t.getNumChildren() != 1
+        || t[0].getKind() != Kind::ADD || t[0].getNumChildren() != 2)
+    {
+      return false;
+    }
+    for (size_t k = 0; k < 2; k++)
+    {
+      if (t[0][1 - k] == d_one && t[0][k].getKind() == Kind::APPLY_SELECTOR
+          && t[0][k][0] == acc)
+      {
+        return true;
+      }
+    }
+    return false;
+  };
+  bool zero = seed.getKind() == Kind::APPLY_CONSTRUCTOR
+              && seed.getNumChildren() == 1 && seed[0].isConst()
+              && seed[0].getConst<Rational>().isZero();
+  if (!zero)
+  {
+    return false;
+  }
+  if (increments(step))
+  {
+    return true;
+  }
+  return step.getKind() == Kind::ITE && !occursFree(step[0], acc)
+         && ((step[1] == acc && increments(step[2]))
+             || (step[2] == acc && increments(step[1])));
+}
+
+Node BagsRewriter::dropKnownMemberships(const Node& body,
+                                        const Node& t,
+                                        const Node& A) const
+{
+  // FILTER_KNOWN_MEMBERSHIP: the conjuncts of a filter's body over rows t of
+  // A that say what holds of every such row, or what another conjunct says,
+  // go:
+  // * (>= (bag.count (g c) (bag.map g X)) 1) where c is the part of t a
+  //   component X of A (or a filter over X) gives: c is a row of X;
+  // * the same where the component is an aggregate over X (or a map of X)
+  //   in a group some row of X reached, and g reads only its group columns:
+  //   some row of X has those values;
+  // * (>= (bag.count E' (bag.map g' X)) 1) beside (>= (bag.count E (bag.map
+  //   g X)) 1) where g' and E' select columns of g and E: the second says it.
+  // With A = (table.product X Y),
+  //   (and (>= (bag.count (tuple ((_ tuple.select 0) t))
+  //                       (bag.map (lambda ((s T))
+  //                                  (tuple ((_ tuple.select 0) s)))
+  //                                X))
+  //            1)
+  //        q)
+  //   ---> q
+  // the membership SQL's IN (SELECT a FROM X) leaves after a join with X
+  if (d_rewriter == nullptr)
+  {
+    return body;
+  }
+  auto membership = [](const Node& c, Node& E, Node& g, Node& X) {
+    if (c.getKind() != Kind::GEQ || !c[1].isConst()
+        || c[1].getConst<Rational>() != Rational(1)
+        || c[0].getKind() != Kind::BAG_COUNT
+        || c[0][1].getKind() != Kind::BAG_MAP)
+    {
+      return false;
+    }
+    E = c[0][0];
+    g = c[0][1][0];
+    X = c[0][1][1];
+    return true;
+  };
+  // the components of A and where their columns start
+  std::vector<Node> comps;
+  std::vector<size_t> starts;
+  {
+    Node rest = A;
+    size_t at = 0;
+    while (true)
+    {
+      Node c = rest.getKind() == Kind::TABLE_PRODUCT ? rest[0] : rest;
+      if (!c.getType().getBagElementType().isTuple())
+      {
+        return body;
+      }
+      comps.push_back(c);
+      starts.push_back(at);
+      at += c.getType().getBagElementType().getTupleLength();
+      if (rest.getKind() != Kind::TABLE_PRODUCT)
+      {
+        break;
+      }
+      rest = rest[1];
+    }
+  }
+  std::vector<Node> conjuncts;
+  if (body.getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), body.begin(), body.end());
+  }
+  else
+  {
+    conjuncts.push_back(body);
+  }
+  std::vector<bool> drop(conjuncts.size(), false);
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    Node E, g, X;
+    if (!membership(conjuncts[k], E, g, X))
+    {
+      continue;
+    }
+    // the group key of a component that is an aggregate over X, or a filter
+    // over one, in a group some row of X reached
+    for (size_t c = 0; c < comps.size() && !drop[k]; c++)
+    {
+      Node base = comps[c];
+      bool reached = false;
+      while (base.getKind() == Kind::BAG_FILTER)
+      {
+        if (base[1].getKind() == Kind::TABLE_AGGREGATE
+            && counterColumn(base[0], asLambda(base[1][0]), base[1][1]) >= 0)
+        {
+          reached = true;
+        }
+        base = base[1];
+      }
+      if (base.getKind() != Kind::TABLE_AGGREGATE)
+      {
+        continue;
+      }
+      // the aggregate's input: X, or rows (bag.map g2 X) under a bag.setof
+      Node input = base[2];
+      if (input.getKind() == Kind::BAG_SETOF)
+      {
+        input = input[0];
+      }
+      Node g2;
+      if (input != X && input.getKind() == Kind::BAG_MAP && input[1] == X)
+      {
+        g2 = asLambda(input[0]);
+        if (g2.getKind() != Kind::LAMBDA || g2[0].getNumChildren() != 1
+            || g2[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+        {
+          continue;
+        }
+      }
+      else if (input != X || base[2].getKind() == Kind::BAG_SETOF)
+      {
+        continue;
+      }
+      Node fa = asLambda(base[0]);
+      if (fa.getKind() != Kind::LAMBDA || fa[0].getNumChildren() != 2
+          || fa[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+      {
+        continue;
+      }
+      if (!reached)
+      {
+        // or the body asks the component's counter to be positive
+        Node r = rowVariable(base.getType().getBagElementType());
+        for (const Node& d : conjuncts)
+        {
+          if (d.getKind() == Kind::GEQ && d[1].isConst()
+              && d[1].getConst<Rational>() == Rational(1)
+              && d[0].getKind() == Kind::APPLY_SELECTOR && d[0][0] == t)
+          {
+            size_t pos = datatypes::utils::indexOf(d[0].getOperator());
+            size_t w = base.getType().getBagElementType().getTupleLength();
+            if (pos >= starts[c] && pos < starts[c] + w)
+            {
+              Node local = mkLambda(
+                  r,
+                  d_nm->mkNode(Kind::GEQ,
+                               datatypes::TupleUtils::nthElementOfTuple(
+                                   r, pos - starts[c]),
+                               d_one));
+              reached = reached
+                        || counterColumn(local, fa, base[1])
+                               == static_cast<int>(pos - starts[c]);
+            }
+          }
+        }
+      }
+      if (!reached)
+      {
+        continue;
+      }
+      // a row of X with the group's key columns, and placeholders (fresh
+      // variables, holes) elsewhere: g must not read the holes
+      TypeNode xt = X.getType().getBagElementType();
+      size_t wx = xt.getTupleLength();
+      std::vector<Node> cells(wx);
+      std::vector<Node> holes;
+      for (size_t p = 0; p < fa[1].getNumChildren(); p++)
+      {
+        const Node& e = fa[1][p];
+        if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == fa[0][0])
+        {
+          size_t col = datatypes::utils::indexOf(e.getOperator());
+          const std::vector<uint32_t>& K =
+              base.getOperator().getConst<ProjectOp>().getIndices();
+          if (std::find(K.begin(), K.end(), col) == K.end())
+          {
+            continue;
+          }
+          if (!g2.isNull())
+          {
+            // column col of the input is g2's column col of a row of X
+            const Node& ge = g2[1][col];
+            if (ge.getKind() != Kind::APPLY_SELECTOR || ge[0] != g2[0][0])
+            {
+              continue;
+            }
+            col = datatypes::utils::indexOf(ge.getOperator());
+          }
+          if (col < wx && cells[col].isNull())
+          {
+            cells[col] =
+                datatypes::TupleUtils::nthElementOfTuple(t, starts[c] + p);
+          }
+        }
+      }
+      std::vector<TypeNode> xtypes = xt.getTupleTypes();
+      for (size_t col = 0; col < wx; col++)
+      {
+        if (cells[col].isNull())
+        {
+          cells[col] = NodeManager::mkBoundVar("hole", xtypes[col]);
+          holes.push_back(cells[col]);
+        }
+      }
+      Node view = datatypes::TupleUtils::constructTupleFromElements(
+          xt, cells, 0, wx - 1);
+      Node applied = applyFunction(g, view);
+      if (applied.isNull())
+      {
+        continue;
+      }
+      applied = d_rewriter->rewrite(applied);
+      bool closed = true;
+      for (const Node& h : holes)
+      {
+        closed = closed && !expr::hasSubterm(applied, h);
+      }
+      if (closed && applied == E)
+      {
+        drop[k] = true;
+      }
+    }
+    // a row of a component that is X or a filter over X
+    for (size_t c = 0; c < comps.size() && !drop[k]; c++)
+    {
+      Node base = comps[c];
+      while (base.getKind() == Kind::BAG_FILTER)
+      {
+        base = base[1];
+      }
+      if (base != X)
+      {
+        continue;
+      }
+      size_t w = X.getType().getBagElementType().getTupleLength();
+      std::vector<Node> cells;
+      for (size_t i = 0; i < w; i++)
+      {
+        cells.push_back(
+            datatypes::TupleUtils::nthElementOfTuple(t, starts[c] + i));
+      }
+      Node view = datatypes::TupleUtils::constructTupleFromElements(
+          X.getType().getBagElementType(), cells, 0, w - 1);
+      Node applied = applyFunction(g, view);
+      if (!applied.isNull() && d_rewriter->rewrite(applied) == E)
+      {
+        drop[k] = true;
+      }
+    }
+    if (drop[k])
+    {
+      continue;
+    }
+    // implied by another membership in a map of X with more columns
+    std::vector<uint32_t> J = projectionIndices(asLambda(g));
+    if (J.empty() || E.getKind() != Kind::APPLY_CONSTRUCTOR)
+    {
+      continue;
+    }
+    for (size_t o = 0; o < conjuncts.size() && !drop[k]; o++)
+    {
+      Node E2, g2, X2;
+      if (o == k || drop[o] || !membership(conjuncts[o], E2, g2, X2) || X2 != X
+          || E2.getKind() != Kind::APPLY_CONSTRUCTOR)
+      {
+        continue;
+      }
+      std::vector<uint32_t> J2 = projectionIndices(asLambda(g2));
+      if (J2.empty() || J2.size() <= J.size())
+      {
+        continue;
+      }
+      bool implied = true;
+      for (size_t q = 0; q < J.size() && implied; q++)
+      {
+        bool found = false;
+        for (size_t q2 = 0; q2 < J2.size() && !found; q2++)
+        {
+          found = J2[q2] == J[q] && E2[q2] == E[q];
+        }
+        implied = found;
+      }
+      drop[k] = implied;
+    }
+  }
+  std::vector<Node> kept;
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (!drop[k])
+    {
+      kept.push_back(conjuncts[k]);
+    }
+  }
+  if (kept.size() == conjuncts.size())
+  {
+    return body;
+  }
+  if (kept.empty())
+  {
+    return d_nm->mkConst(true);
+  }
+  return kept.size() == 1 ? kept[0] : d_nm->mkNode(Kind::AND, kept);
+}
+
+bool BagsRewriter::isSet(const Node& X) const
+{
+  // whether no element of X occurs twice, syntactically: a bag.setof, a table
+  // with a key, a filter over a set, a product of sets, or a map over one of
+  // these that keeps, of every component, all its columns or a key; with
+  // the key {0} of X and of Y, true for
+  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 0) t)
+  //                                   ((_ tuple.select 2) t)))
+  //            (table.product X Y))
+  if (X.getType().getBagElementType().isTuple() && !rowKeys(X).empty())
+  {
+    return true;
+  }
+  switch (X.getKind())
+  {
+    case Kind::BAG_SETOF: return true;
+    case Kind::BAG_EMPTY: return true;
+    case Kind::BAG_INTER_MIN: return isSet(X[0]) || isSet(X[1]);
+    case Kind::BAG_FILTER: return isSet(X[1]);
+    case Kind::TABLE_PRODUCT: return isSet(X[0]) && isSet(X[1]);
+    case Kind::TABLE_AGGREGATE: return !rowKeys(X).empty();
+    case Kind::BAG_MAP:
+    {
+      Node Y = X[1];
+      if (!isSet(Y))
+      {
+        return false;
+      }
+      std::vector<uint32_t> J = projectionIndices(asLambda(X[0]));
+      if (J.empty())
+      {
+        return false;
+      }
+      std::set<uint32_t> kept(J.begin(), J.end());
+      // the components of Y, below the filters over it
+      std::vector<Node> comps;
+      Node rest = Y;
+      while (rest.getKind() == Kind::BAG_FILTER)
+      {
+        rest = rest[1];
+      }
+      while (rest.getKind() == Kind::TABLE_PRODUCT)
+      {
+        comps.push_back(rest[0]);
+        rest = rest[1];
+      }
+      comps.push_back(rest);
+      size_t at = 0;
+      for (const Node& c : comps)
+      {
+        TypeNode t = c.getType().getBagElementType();
+        if (!t.isTuple())
+        {
+          return false;
+        }
+        size_t w = t.getTupleLength();
+        bool all = true;
+        for (size_t k = 0; k < w; k++)
+        {
+          all = all && kept.count(at + k) > 0;
+        }
+        bool key = false;
+        for (const std::set<uint32_t>& K : keysOf(c))
+        {
+          bool covered = true;
+          for (uint32_t k : K)
+          {
+            covered = covered && kept.count(at + k) > 0;
+          }
+          key = key || covered;
+        }
+        if (!all && !key)
+        {
+          return false;
+        }
+        at += w;
+      }
+      return true;
+    }
+    default: return X.isVar() && !keysOf(X).empty();
+  }
 }
 
 }  // namespace bags

@@ -74,6 +74,8 @@ class BagsRewriter : public TheoryRewriter
    * that build a lambda where the term has none do not apply, since the theory
    * of uninterpreted functions rejects lambdas there:
    * - FILTER_MAP, MAP_MAP and PROJECT_TO_MAP
+   * - FILTER_FILTER, PRODUCT_MAP_*, PRODUCT_FILTER_* and PRODUCT_SWAP
+   * - COUNT_MAP_CONST_PROBE over a table constant
    * The rewriter does not know the logic, so the default is false: the owner
    * of the rewriter passes true for a higher-order logic.
    */
@@ -153,6 +155,18 @@ class BagsRewriter : public TheoryRewriter
    * rewrites for n include:
    * - COUNT_EMPTY: (bag.count x (as bag.empty (Bag T))) ---> 0
    * - COUNT_BAG_MAKE: (bag.count x (bag x c)) ---> c, c > 0 a constant
+   * - COUNT_MAP_CONST_PROBE, a constant in the probe selects rows of X:
+   *     (bag.count (tuple 5 b)
+   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t)
+   *                                                ((_ tuple.select 0) t)))
+   *                         X))
+   *     ---> (bag.count (tuple b)
+   *                     (bag.map (lambda ((t T))
+   *                                (tuple ((_ tuple.select 0) t)))
+   *                              (bag.filter (lambda ((t T))
+   *                                            (= ((_ tuple.select 1) t) 5))
+   *                                          X)))
+   *   also for a table constant X, as its identity map
    */
   BagsRewriteResponse rewriteBagCount(const TNode& n) const;
 
@@ -161,6 +175,7 @@ class BagsRewriter : public TheoryRewriter
    * (see BagsKeyTermAttribute in the .cpp):
    * - SETOF_BAG_MAKE: (bag.setof (bag x c)) ---> (bag x 1), c > 0 a
    *   constant; (bag.setof (bag x c)) ---> (bag x (ite (>= c 1) 1 0))
+   * - SETOF_MAP_CONSTANT, see rewriteSetofOfMap
    * - SETOF_PROJECTION_SORT, see rewriteSetofOfMap
    */
   BagsRewriteResponse rewriteSetof(const TNode& n) const;
@@ -260,6 +275,11 @@ class BagsRewriter : public TheoryRewriter
    *  - (= A A) = true
    *  - (= A B) = false if A and B are different bag constants
    *  - (= B A) = (= A B) if A < B and at least one of A or B is not a constant
+   *  - EQ_EMPTY_ARG, a map or a bag.setof is empty when its argument is:
+   *      (= (bag.map f X) (as bag.empty (Bag U)))
+   *      ---> (= X (as bag.empty (Bag T)))
+   *      (= (bag.setof X) (as bag.empty (Bag T)))
+   *      ---> (= X (as bag.empty (Bag T)))
    */
   BagsRewriteResponse postRewriteEqual(const TNode& n) const;
 
@@ -282,7 +302,9 @@ class BagsRewriter : public TheoryRewriter
    *               X)
    *      ---> (bag.map (lambda ((t T)) (ite true a b)) X)
    *  - MAP_MAP, see rewriteMapOfMap
+   *  - EQ_EMPTY_FILTER_DECORRELATE, see normalizeEmptiness
    *  - AGGREGATE_DEAD_COLUMNS (rewriteAggregateDeadColumns)
+   *  - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
    *  - MAP_EQUAL_COLUMNS, the first of the columns the filter equates:
    *      (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)))
    *               (bag.filter (lambda ((s T)) (= ((_ tuple.select 0) s)
@@ -302,6 +324,7 @@ class BagsRewriter : public TheoryRewriter
    *                                X))
    *    and, over an aggregate whose counter the filter tests, the constants
    *    its groups compute (see reachedGroupConstants)
+   *  - SEMI_JOIN, see rewriteSemiJoin
    *  - CANONICAL_VARIABLE, see canonicalLambda
    */
   BagsRewriteResponse postRewriteMap(const TNode& n) const;
@@ -320,6 +343,7 @@ class BagsRewriter : public TheoryRewriter
    *      (bag.filter (lambda ((t T)) false) A) ---> (as bag.empty (Bag T))
    *      (bag.filter (lambda ((t T)) (and p (not p))) A)
    *      ---> (as bag.empty (Bag T))
+   *  - EQ_EMPTY_FILTER_DECORRELATE, see normalizeEmptiness
    *  - FILTER_NULLABLE_TRUTH, see normalizeTruth
    *  - FILTER_CONFLICTING_CONSTANTS:
    *      (bag.filter (lambda ((t T)) (and (= ((_ tuple.select 0) t) 1)
@@ -330,7 +354,18 @@ class BagsRewriter : public TheoryRewriter
    *    (= a (nullable.some 5)), the null test of a value that a membership
    *    puts in a never-null column, (>= (* a b) 1) beside (>= a 1) and
    *    (>= b 1)
+   *  - FILTER_KNOWN_MEMBERSHIP, see dropKnownMemberships
+   *  - FILTER_SORT_CONJUNCTS, the conjuncts in the order of their alpha
+   *    keys, without duplicates:
+   *      (bag.filter (lambda ((t T)) (and q p q)) X)
+   *      ---> (bag.filter (lambda ((t T)) (and p q)) X)
    *  - CANONICAL_VARIABLE, see canonicalLambda
+   *  - FILTER_SPLIT_CLOSED, a disjunct c that does not read the row (EXISTS):
+   *      (bag.filter (lambda ((t T)) (or c q)) A)
+   *      ---> (bag.union_disjoint
+   *             (bag.filter (lambda ((t T)) c) A)
+   *             (bag.filter (lambda ((t T)) (and (not c) q)) A))
+   *  - FILTER_FILTER, see rewriteFilterOfFilter
    *  - FILTER_MAP, see rewriteFilterOfMap
    *  - AGGREGATE_KEYED, see keyedAggregateRows: under a filter that drops the
    *    row of initial values (see rejectsInitialRow),
@@ -338,6 +373,9 @@ class BagsRewriter : public TheoryRewriter
    *      ---> (bag.filter Q (bag.map (lambda ((t T)) b[acc := i]) X))
    *    for 0 a key of X, and for an aggregate component of a product whose
    *    groups the filter keeps reached ones of (see reachedComponents)
+   *  - FILTER_SETOF:
+   *      (bag.filter p (bag.setof A)) ---> (bag.setof (bag.filter p A))
+   *  - FILTER_JOIN_TRANSITIVE, see rewriteJoinTransitiveConditions
    */
   BagsRewriteResponse postRewriteFilter(const TNode& n) const;
 
@@ -371,6 +409,10 @@ class BagsRewriter : public TheoryRewriter
    *       (bag.fold f (bag.fold f t A) B) where A < B to break symmetry
    *  where f: T1 -> T2 -> T2
    *  - NOT_NULL_COLUMNS, as for bag.map
+   *  - FOLD_MAP:
+   *      (bag.fold (lambda ((t U) (acc S)) b) i
+   *                (bag.map (lambda ((s T)) e) Y))
+   *      ---> (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
    *  - FOLD_TUPLE, see rewriteFoldOfTuple
    *  - FOLD_CONSTANT_STEP:
    *      (bag.fold (lambda ((t T) (acc S)) c) i X)
@@ -400,6 +442,17 @@ class BagsRewriter : public TheoryRewriter
    * - PRODUCT_EMPTY:
    *     (table.product X (as bag.empty (Bag U))) ---> (as bag.empty (Bag V))
    *   and the same on the left
+   * - PRODUCT_MAP_LEFT, PRODUCT_MAP_RIGHT, PRODUCT_FILTER_LEFT and
+   *   PRODUCT_FILTER_RIGHT, see rewriteProductOfMap and
+   *   rewriteProductOfFilter
+   * - PRODUCT_UNION_DISJOINT:
+   *     (table.product (bag.union_disjoint A B) C)
+   *     ---> (bag.union_disjoint (table.product A C) (table.product B C))
+   *   and the same on the right
+   * - PRODUCT_ASSOC:
+   *     (table.product (table.product A B) C)
+   *     ---> (table.product A (table.product B C))
+   * - PRODUCT_SWAP, see rewriteProductSwap
    */
   BagsRewriteResponse postRewriteProduct(const TNode& n) const;
 
@@ -417,6 +470,12 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
+   * FILTER_FILTER:
+   *   (bag.filter (lambda ((s T)) p) (bag.filter (lambda ((t T)) q) A))
+   *   ---> (bag.filter (lambda ((t T)) (and p[s := t] q)) A)
+   */
+  BagsRewriteResponse rewriteFilterOfFilter(const TNode& n) const;
+  /**
    * FILTER_MAP:
    *   (bag.filter (lambda ((s U)) p) (bag.map (lambda ((t T)) e) A))
    *   ---> (bag.map (lambda ((t T)) e)
@@ -429,6 +488,39 @@ class BagsRewriter : public TheoryRewriter
    *   ---> (bag.map (lambda ((t T)) e[s := g]) A)
    */
   BagsRewriteResponse rewriteMapOfMap(const TNode& n) const;
+  /**
+   * PRODUCT_MAP_LEFT (left) and PRODUCT_MAP_RIGHT: the map of a factor is a
+   * map of the product. With A and B of two columns,
+   *   (table.product (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+   *                           A)
+   *                  B)
+   *   ---> (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+   *                                        ((_ tuple.select 2) t)
+   *                                        ((_ tuple.select 3) t)))
+   *                 (table.product A B))
+   */
+  BagsRewriteResponse rewriteProductOfMap(const TNode& n, bool left) const;
+  /**
+   * PRODUCT_FILTER_LEFT (left) and PRODUCT_FILTER_RIGHT: the filter of a
+   * factor is a filter of the product. With A of two columns,
+   *   (table.product A (bag.filter (lambda ((s U)) (> ((_ tuple.select 1) s)
+   *                                                  3))
+   *                                B))
+   *   ---> (bag.filter (lambda ((t V)) (> ((_ tuple.select 3) t) 3))
+   *                    (table.product A B))
+   */
+  BagsRewriteResponse rewriteProductOfFilter(const TNode& n, bool left) const;
+  /**
+   * PRODUCT_SWAP, the factors in the order of their ids, B < A, under the map
+   * that puts the columns back:
+   *   (table.product A (table.product B C))
+   *   ---> (bag.map perm (table.product B (table.product A C)))
+   * with, for one column each,
+   *   perm = (lambda ((t V)) (tuple ((_ tuple.select 1) t)
+   *                                 ((_ tuple.select 0) t)
+   *                                 ((_ tuple.select 2) t)))
+   */
+  BagsRewriteResponse rewriteProductSwap(const TNode& n) const;
 
   // ---------------------------------------------------------------------------
   // Aggregates ((_ table.aggr K) f i X): X grouped by its columns K, each
@@ -484,6 +576,16 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteAggregateDeadColumns(const TNode& n) const;
   /**
+   * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two
+   * of which share a key value:
+   *   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
+   *                               (bag.union_disjoint U1 U2))))
+   *   ---> (bag.map h (bag.filter Q (bag.union_disjoint
+   *                                   ((_ table.aggr 0) f i U1)
+   *                                   ((_ table.aggr 0) f i U2))))
+   */
+  BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
+  /**
    * For A = ((_ table.aggr K) f i X) with K containing a key of X (see
    * rowKeys): the rows of the groups some row reached, every group one row
    * of X folded once,
@@ -508,8 +610,9 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
-   * SETOF_PROJECTION_SORT, the set of a map that projects onto columns in
-   * another order than theirs:
+   * SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
+   *   (bag.setof (bag.map (lambda ((t T)) c) Y))
+   *   ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
    *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)
    *                                              ((_ tuple.select 0) t)))
    *                       Y))
@@ -519,8 +622,40 @@ class BagsRewriter : public TheoryRewriter
    *                                       (tuple ((_ tuple.select 0) t)
    *                                              ((_ tuple.select 2) t)))
    *                                     Y)))
+   *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t) 5)) Y))
+   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r) 5))
+   *                 (bag.setof (bag.map (lambda ((t T))
+   *                                       (tuple ((_ tuple.select 1) t)))
+   *                                     Y)))
    */
   BagsRewriteResponse rewriteSetofOfMap(const TNode& n) const;
+  /**
+   * SEMI_JOIN, a join with a set B whose row the join equations fix (all its
+   * columns, or a key) and whose columns the map does not read, as a filter
+   * by the existence of the matching row. With the key {0} of Z,
+   *   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)))
+   *            (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+   *                                           ((_ tuple.select 2) t)))
+   *                        (table.product Y Z)))
+   *   ---> (bag.map (lambda ((a U)) (tuple ((_ tuple.select 1) a)))
+   *                 (bag.filter (lambda ((a U))
+   *                               (not (= (bag.filter (lambda ((b W))
+   *                                                     (= ((_ tuple.select 0)
+   *                                                          a)
+   *                                                        ((_ tuple.select 0)
+   *                                                          b)))
+   *                                                   Z)
+   *                                       (as bag.empty (Bag W)))))
+   *                             Y))
+   * Called with side 0 only; every component of the product is tried.
+   */
+  BagsRewriteResponse rewriteSemiJoin(const TNode& n, size_t side) const;
+  /**
+   * Whether no element of X occurs twice, syntactically: a bag.setof, a table
+   * with a key, a filter over a set, a product of sets, or a map over one of
+   * these that keeps, of every component, all its columns or a key.
+   */
+  bool isSet(const Node& X) const;
   /**
    * The keys of B read off its structure: a table's declared keys, kept by
    * filters, intersections and differences, by maps that keep their columns,
@@ -535,6 +670,33 @@ class BagsRewriter : public TheoryRewriter
    * a filter over one: {{0, 2}, {1}} for keys {0, 2} and {1}.
    */
   std::vector<std::set<uint32_t>> keysOf(const Node& B) const;
+  /**
+   * The conditions every element w of A satisfies, read off A's filters,
+   * through projections onto distinct columns, and through the copies of
+   * group columns of an aggregate whose counter a filter tests: for
+   *   A = (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
+   *                (bag.filter (lambda ((s T)) (> ((_ tuple.select 1) s) 3))
+   *                            X))
+   * out gets (> ((_ tuple.select 0) w) 3).
+   */
+  void elementConditions(const Node& A,
+                         const Node& w,
+                         std::set<Node>& out) const;
+  /**
+   * FILTER_KNOWN_MEMBERSHIP: body without the membership conjuncts that
+   * every row t of A satisfies, or that another conjunct implies: with
+   * A = (table.product X Y),
+   *   (and (>= (bag.count (tuple ((_ tuple.select 0) t))
+   *                       (bag.map (lambda ((s T))
+   *                                  (tuple ((_ tuple.select 0) s)))
+   *                                X))
+   *            1)
+   *        q)
+   *   ---> q
+   */
+  Node dropKnownMemberships(const Node& body,
+                            const Node& t,
+                            const Node& A) const;
 
   // ---------------------------------------------------------------------------
   // Facts: keys and NOT NULL columns of table constants
@@ -609,6 +771,12 @@ class BagsRewriter : public TheoryRewriter
    */
   int counterColumn(const Node& P, const Node& f, const Node& i) const;
   /**
+   * Whether step counts rows from seed (nullable.some 0): COUNT(*),
+   * (nullable.some (+ (nullable.val acc) 1)), or COUNT(x), an ite that keeps
+   * acc on the rows where x is null and counts the others.
+   */
+  bool isCountStep(const Node& step, const Node& acc, const Node& seed) const;
+  /**
    * For a filter P over the product of comps, whose columns start at starts:
    * per component, the conjunct of P that tests its counter positive (-1
    * when none), in test, and whether its groups are reached: 1 when tested,
@@ -620,6 +788,21 @@ class BagsRewriter : public TheoryRewriter
                                      const std::vector<Node>& comps,
                                      const std::vector<size_t>& starts,
                                      std::vector<int>& test) const;
+  /**
+   * FILTER_JOIN_TRANSITIVE, a condition the rows of one side of a join
+   * satisfy on a column the join equates holds of the class's first column:
+   *   (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
+   *                                  ((_ tuple.select 2) t)))
+   *               (table.product X (bag.filter (lambda ((s U))
+   *                                              (> ((_ tuple.select 0) s)
+   *                                                 3))
+   *                                            Y)))
+   *   ---> (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
+   *                                            ((_ tuple.select 2) t))
+   *                                         (> ((_ tuple.select 0) t) 3)))
+   *                    (table.product X (bag.filter .. Y)))
+   */
+  BagsRewriteResponse rewriteJoinTransitiveConditions(const TNode& n) const;
   /**
    * The columns a filter predicate fixes to constants: {1 -> 5} for
    * (lambda ((t T)) (and (= ((_ tuple.select 1) t) 5) q)).
@@ -643,6 +826,37 @@ class BagsRewriter : public TheoryRewriter
   // Emptiness tests and SQL's three-valued truth in lambda bodies
   // ---------------------------------------------------------------------------
 
+  /**
+   * The formula an emptiness atom of a filter stands for, decorrelated, or
+   * null (EQ_EMPTY_FILTER_DECORRELATE): for F over the rows s of X, inside a
+   * lambda over a row r,
+   *   (= (as bag.empty (Bag T))
+   *      (bag.filter (lambda ((s T)) (and c q (= ((_ tuple.select 1) s)
+   *                                              ((_ tuple.select 0) r))))
+   *                  X))
+   *   ---> (or (not c)
+   *            (not (>= (bag.count (tuple ((_ tuple.select 0) r))
+   *                                (bag.map (lambda ((s T))
+   *                                           (tuple ((_ tuple.select 1) s)))
+   *                                         (bag.filter (lambda ((s T)) q)
+   *                                                     X)))
+   *                     1)))
+   * for c reading no s and q only s.
+   */
+  Node rewriteEmptyFilter(const Node& F) const;
+  /**
+   * An atom of a lambda body that asks about a bag, as the formula it stands
+   * for, or null: a membership in an intersection or a bag.setof, an
+   * emptiness of a filter (see rewriteEmptyFilter), of a counter filter over
+   * an aggregate, of an intersection whose filters fix its element, or of a
+   * (bag x c), and the count of a fold that counts rows being 0.
+   */
+  Node emptinessAtom(const Node& atom) const;
+  /**
+   * body with its atoms outside inner binders replaced by emptinessAtom:
+   * those under an inner binder belong to that lambda's own filter or map.
+   */
+  Node normalizeEmptiness(const Node& body) const;
   /**
    * The formula X = (nullable.some true) for a nullable Boolean X built of
    * ites over (nullable.some b) and null, or null when X is not one: (ite c b

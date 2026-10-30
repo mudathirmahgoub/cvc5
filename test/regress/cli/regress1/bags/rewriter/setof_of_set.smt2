@@ -1,4 +1,6 @@
 ; REQUIRES: unrestricted-mode
+; DISABLE-TESTER: cpc
+; (the cpc proof signature has no table.aggr)
 ; SETOF_SETOF and SETOF_OF_SET: the set of a set is that set, so the
 ; aggregates over (bag.setof (bag.setof X)) and (bag.setof X) are one term
 (set-logic HO_ALL)

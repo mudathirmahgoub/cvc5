@@ -199,6 +199,10 @@ enum class Rewrite : uint32_t
    */
   PRODUCT_SWAP,
   /**
+   * SETOF_SETOF: (bag.setof (bag.setof A)) ---> (bag.setof A)
+   */
+  SETOF_SETOF,
+  /**
    * EQ_EMPTY_ARG, a map or a bag.setof is empty when its argument is:
    *   (= (bag.map f X) (as bag.empty (Bag U)))
    *   ---> (= X (as bag.empty (Bag T)))
@@ -274,6 +278,17 @@ enum class Rewrite : uint32_t
    */
   FOLD_TUPLE,
   /**
+   * PRODUCT_BAG_MAKE, a product with one row e, present once or when b:
+   *   (table.product A (bag (tuple 7) (ite b 1 0)))
+   *   ---> (bag.filter (lambda ((r V)) b)
+   *                    (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
+   *                                                    ((_ tuple.select 1) t)
+   *                                                    7))
+   *                             A))
+   * side is the factor that is a bag of one row, 1 here.
+   */
+  PRODUCT_BAG_MAKE,
+  /**
    * SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
    *   (bag.setof (bag.map (lambda ((t T)) c) Y))
    *   ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
@@ -338,6 +353,21 @@ enum class Rewrite : uint32_t
    */
   EQ_EMPTY_FILTER_DECORRELATE,
   /**
+   * COUNT_MAP_FILTER_KEYS, a conjunct on projected columns is decided on
+   *   the probe:
+   *     (bag.count (tuple a)
+   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
+   *                         (bag.filter (lambda ((t T)) (and c q)) X)))
+   *     ---> (ite c[((_ tuple.select 0) t) := a]
+   *               (bag.count (tuple a)
+   *                          (bag.map (lambda ((t T))
+   *                                     (tuple ((_ tuple.select 0) t)))
+   *                                   (bag.filter (lambda ((t T)) q) X)))
+   *               0)
+   *   for c reading only column 0 of t
+   */
+  COUNT_MAP_FILTER_KEYS,
+  /**
    * AGGREGATE_DEAD_COLUMNS, a column of the aggregate nothing reads:
    *   (bag.map h ((_ table.aggr 0) (lambda ((t T) (acc S)) (tuple a0 a1 a2))
    *                                (tuple i0 i1 i2) X))
@@ -368,6 +398,14 @@ enum class Rewrite : uint32_t
    */
   MAP_FIXED_COLUMNS,
   /**
+   * MAP_IDENTITY_ON_FILTER, the identity on the rows that pass:
+   *   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t) 5))
+   *            (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5))
+   *                        X))
+   *   ---> (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5)) X)
+   */
+  MAP_IDENTITY_ON_FILTER,
+  /**
    * SETOF_PROJECTION_SORT, the set of a projection onto columns in another
    * order than theirs as the set of the projection onto the sorted columns,
    * mapped back by the permutation (see rewriteSetofOfMap):
@@ -383,6 +421,34 @@ enum class Rewrite : uint32_t
    */
   SETOF_PROJECTION_SORT,
   /**
+   * AGGREGATE_UNION_OF_MAPS, a union of maps by one g is the map of the
+   *   union, which AGGREGATE_MAP then absorbs:
+   *     ((_ table.aggr K) f i (bag.union_disjoint (bag.map g X1)
+   *                                               (bag.map g X2)))
+   *     ---> the AGGREGATE_MAP rewrite of
+   *          ((_ table.aggr K) f i (bag.map g (bag.union_disjoint X1 X2)))
+   */
+  AGGREGATE_UNION_OF_MAPS,
+  /**
+   * AGGREGATE_COLLAPSE, an aggregate over a union of aggregates by the same
+   * columns, which merges them:
+   *   (bag.map h (bag.filter Q ((_ table.aggr K) g j
+   *     (bag.union_disjoint (bag.map pi (bag.filter Qi ((_ table.aggr K) f i0
+   *                                                     X1)))
+   *                         (bag.map pi (bag.filter Qi ((_ table.aggr K) f i0
+   *                                                     X2)))))))
+   *   ---> (bag.map h' (bag.filter Q' ((_ table.aggr K) f i0
+   *                                     (bag.union_disjoint X1 X2))))
+   * for g merging f's columns (a sum of counts or sums, a minimum of
+   * minimums, a maximum of maximums)
+   */
+  AGGREGATE_COLLAPSE,
+  /**
+   * SETOF_ABSORB, an inner bag.setof under maps, filters and unions:
+   *     (bag.setof (bag.map f (bag.setof X))) ---> (bag.setof (bag.map f X))
+   */
+  SETOF_ABSORB,
+  /**
    * FILTER_KNOWN_MEMBERSHIP: body without the membership conjuncts that
    * every row t of A satisfies, or that another conjunct implies: with
    * A = (table.product X Y),
@@ -395,6 +461,26 @@ enum class Rewrite : uint32_t
    *   ---> q
    */
   FILTER_KNOWN_MEMBERSHIP,
+  /**
+   * FILTER_DE_MORGAN:
+   *   (bag.filter (lambda ((t T)) (and p (not (or a b)))) X)
+   *   ---> (bag.filter (lambda ((t T)) (and p (not a) (not b))) X)
+   */
+  FILTER_DE_MORGAN,
+  /**
+   * COUNT_MAP_DUPLICATE_COLUMNS, a map that makes columns i < j equal:
+   *     (bag.count (tuple a b c) (bag.map (lambda ((t T)) (tuple u v u)) X))
+   *     ---> (ite (= a c)
+   *               (bag.count (tuple a b)
+   *                          (bag.map (lambda ((t T)) (tuple u v)) X))
+   *               0)
+   */
+  COUNT_MAP_DUPLICATE_COLUMNS,
+  /**
+   * SETOF_OF_SET, a bag with no element twice (see isSet):
+   *     (bag.setof X) ---> X
+   */
+  SETOF_OF_SET,
   /**
    * COUNT_MAP_CONST_PROBE, a constant in the probe selects rows of X:
    *     (bag.count (tuple 5 b)
@@ -430,6 +516,23 @@ enum class Rewrite : uint32_t
    */
   NOT_NULL_COLUMNS,
   /**
+   * AGGREGATE_INTEGER_SUM, a sum of integers read as reals is the integer
+   * sum read as a real once:
+   *   ((_ table.aggr 0) f i X)
+   *   ---> (bag.map (lambda ((r U)) (tuple .. (ite (= (as nullable.null
+   *                                                     (Nullable Int))
+   *                                                    ((_ tuple.select 1) r))
+   *                                                 (as nullable.null
+   *                                                   (Nullable Real))
+   *                                                 (nullable.some
+   *                                                   (to_real (nullable.val
+   *                                                     ((_ tuple.select 1)
+   *                                                      r)))))))
+   *                 ((_ table.aggr 0) f' i' X))
+   * for column 1 of f the sum of (to_real ..) of an integer column
+   */
+  AGGREGATE_INTEGER_SUM,
+  /**
    * FILTER_NULLABLE_TRUTH, the two conjuncts that say a nullable Boolean X
    * holds as the one formula they say (see normalizeTruth):
    *   (bag.filter (lambda ((t T)) (and (nullable.is_some X) (nullable.val X)))
@@ -438,6 +541,63 @@ enum class Rewrite : uint32_t
    * for X = (ite c (nullable.some b) (as nullable.null (Nullable Bool)))
    */
   FILTER_NULLABLE_TRUTH,
+  /**
+   * AGGREGATE_ROLLUP, an aggregate of an aggregate (Calcite's form of
+   * DISTINCT aggregates) as a join of an aggregate over X with one over the
+   * distinct (keys, c) of X:
+   *   (bag.map h (bag.filter Q ((_ table.aggr Ko) g j
+   *                               (bag.filter P ((_ table.aggr K) f i X)))))
+   *   ---> (bag.map h (bag.filter Q (bag.map rows
+   *          (bag.filter (lambda ((p W)) (= keys of A keys of B))
+   *            (table.product (bag.filter counter ((_ table.aggr Ko) fA iA
+   *                                                X))
+   *                           (bag.filter counter ((_ table.aggr Ko) fB iB
+   *                             (bag.setof (bag.map (lambda ((t T))
+   *                                          (tuple .. c)) X)))))))))
+   */
+  AGGREGATE_ROLLUP,
+  /**
+   * AGGREGATE_SETOF_IDEMPOTENT, for an aggregate that is a component of a
+   * product under (bag.map h (bag.filter P ..)) and computes only copies of
+   * the row's columns, minimums, maximums and a counter that h does not read
+   * and P reads only through (>= c 1): duplicate rows change none of those
+   * (see rewriteAggregateJoinMerge),
+   *   ((_ table.aggr 0) f i (bag.setof Y)) ---> ((_ table.aggr 0) f i Y)
+   */
+  AGGREGATE_SETOF_IDEMPOTENT,
+  /**
+   * AGGREGATE_JOIN_MERGE, two aggregates over one X by the same columns K,
+   * both copying every group column and seeding the copies alike, joined on
+   * those copies, as one aggregate computing the columns of both (see
+   * rewriteAggregateJoinMerge):
+   *   (bag.map h (bag.filter (lambda ((p W)) (= ((_ tuple.select 0) p)
+   *                                             ((_ tuple.select 3) p)))
+   *                          (table.product ((_ table.aggr 0) fa ia X)
+   *                                         ((_ table.aggr 0) fb ib X))))
+   *   ---> (bag.map h' ((_ table.aggr 0) fm im X))
+   * where fm's rows are those of fa followed by fb's columns other than the
+   * copies, and h' reads fb's copies from fa's
+   */
+  AGGREGATE_JOIN_MERGE,
+  /**
+   * AGGREGATE_UNION_SPLIT, an aggregate over a union of parts each of which
+   * gives the arguments of some columns and null to the others, all with the
+   * same keys, as the join of the parts' aggregates:
+   *   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
+   *                               (bag.union_disjoint U1 U2))))
+   *   ---> (bag.map h (bag.filter Q (bag.map rows
+   *          (bag.filter (lambda ((p W)) (= ((_ tuple.select 0) p)
+   *                                         ((_ tuple.select 3) p)))
+   *            (table.product ((_ table.aggr 0) f1 i1 U1)
+   *                           ((_ table.aggr 0) f2 i2 U2))))))
+   */
+  AGGREGATE_UNION_SPLIT,
+  /**
+   * AGGREGATE_GROUP_KEYS, see keysOfReachedGroups:
+   *     (bag.setof (bag.map h (bag.filter Q ((_ table.aggr K) f i X))))
+   *     ---> (bag.setof (bag.map h' X))
+   */
+  AGGREGATE_GROUP_KEYS,
   /**
    * MAP_EQUAL_COLUMNS, the first of the columns the filter equates:
    *   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)))
@@ -457,6 +617,11 @@ enum class Rewrite : uint32_t
    *   ---> (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
    */
   FOLD_MAP,
+  /**
+   * SETOF_UNION_SAME:
+   *     (bag.setof (bag.union_disjoint A A)) ---> (bag.setof A)
+   */
+  SETOF_UNION_SAME,
   /**
    * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two
    * of which share a key value:
@@ -483,6 +648,33 @@ enum class Rewrite : uint32_t
    */
   FILTER_JOIN_TRANSITIVE,
   /**
+   * PRODUCT_AGGREGATE_DEAD_COLUMN, a column of an aggregate component that
+   * nothing reads:
+   *   (bag.map h (table.product ((_ table.aggr 0) (lambda ((t T) (acc S))
+   *                                                 (tuple a0 a1 a2))
+   *                                               (tuple i0 i1 i2) X)
+   *                             Y))
+   *   ---> (bag.map h' (table.product ((_ table.aggr 0)
+   *                                     (lambda ((t T) (acc S'))
+   *                                       (tuple a0 a2'))
+   *                                     (tuple i0 i2) X)
+   *                                   Y))
+   * also under a filter between the map and the product
+   */
+  PRODUCT_AGGREGATE_DEAD_COLUMN,
+  /**
+   * AGGREGATE_DUPLICATE_COLUMN, two columns that fold alike are one, read
+   * twice:
+   *   ((_ table.aggr 0) (lambda ((t T) (acc S)) (tuple a0 s1 s2))
+   *                     (tuple i0 i1 i1) X)
+   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r)
+   *                                        ((_ tuple.select 1) r)
+   *                                        ((_ tuple.select 1) r)))
+   *                 ((_ table.aggr 0) (lambda ((t T) (acc U)) (tuple a0 s1))
+   *                                   (tuple i0 i1) X))
+   */
+  AGGREGATE_DUPLICATE_COLUMN,
+  /**
    * MAP_IDENTITY:
    *   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
    *                                   ((_ tuple.select 1) t)))
@@ -490,6 +682,21 @@ enum class Rewrite : uint32_t
    *   ---> X
    */
   MAP_IDENTITY,
+  /**
+   * FILTER_IMPLIED_COUNTER, a counter test that a join with a reached
+   * aggregate over the same key values implies goes (see reachedComponents):
+   *   (bag.filter (lambda ((t V)) (and (>= ((_ tuple.select 2) t) 1)
+   *                                    (>= ((_ tuple.select 5) t) 1)
+   *                                    (= ((_ tuple.select 0) t)
+   *                                       ((_ tuple.select 3) t))))
+   *               (table.product G1 G2))
+   *   ---> (bag.filter (lambda ((t V)) (and (>= ((_ tuple.select 2) t) 1)
+   *                                         (= ((_ tuple.select 0) t)
+   *                                            ((_ tuple.select 3) t))))
+   *                    (table.product G1 G2))
+   * for G1 and G2 aggregates over one X by its column 0
+   */
+  FILTER_IMPLIED_COUNTER,
   /**
    * FILTER_CONFLICTING_CONSTANTS:
    *   (bag.filter (lambda ((t T)) (and (= ((_ tuple.select 0) t) 1)

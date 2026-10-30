@@ -1,3 +1,6 @@
+; DISABLE-TESTER: model
+; (the debug model check warns that the lambda of the aggregates' reduction,
+; (lambda ((t (Bag T))) (bag.fold f i t)), has no constant value)
 ; AGGREGATE_JOIN_MERGE merges two aggregates joined on their group columns only
 ; when they seed their copies of those columns alike: here (tuple 1 0) and
 ; (tuple 2 0), and for an empty X the join of their rows of initial values is

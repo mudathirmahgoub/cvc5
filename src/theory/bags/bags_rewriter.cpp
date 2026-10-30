@@ -458,10 +458,15 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
       }
     }
   }
-  if ((n[1].getKind() == Kind::BAG_MAP
-       || (n[1].getKind() == Kind::VARIABLE
-           && n[1].getType().getBagElementType().isTuple()
-           && n[1].getType().getBagElementType() == n[0].getType()))
+  // a table constant whose rows have the sort of the probe
+  bool rowProbe = false;
+  if (n[1].getKind() == Kind::VARIABLE)
+  {
+    TypeNode rowType = n[1].getType().getBagElementType();
+    TypeNode probeType = n[0].getType();
+    rowProbe = rowType.isTuple() && rowType == probeType;
+  }
+  if ((n[1].getKind() == Kind::BAG_MAP || rowProbe)
       && n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getNumChildren() > 1)
   {
     // COUNT_MAP_CONST_PROBE: column k of the probe is a constant c and the
@@ -503,9 +508,9 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
       mapped = d_nm->mkNode(
           Kind::BAG_MAP,
           d_nm->mkNode(Kind::LAMBDA,
-                       d_nm->mkNode(Kind::BOUND_VAR_LIST, v),
-                       datatypes::TupleUtils::constructTupleFromElements(
-                           et, cols, 0, cols.size() - 1)),
+                       {d_nm->mkNode(Kind::BOUND_VAR_LIST, v),
+                        datatypes::TupleUtils::constructTupleFromElements(
+                            et, cols, 0, cols.size() - 1)}),
           mapped);
     }
     Node n1 = mapped;
@@ -2173,8 +2178,9 @@ BagsRewriteResponse BagsRewriter::postRewriteEqual(const TNode& n) const
 BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
 {
   Assert(n.getKind() == Kind::BAG_MAP);
-  if (n.getType() == n[1].getType()
-      && n[1].getType().getBagElementType().isTuple())
+  TypeNode mapType = n.getType();
+  TypeNode argType = n[1].getType();
+  if (mapType == argType && argType.getBagElementType().isTuple())
   {
     // MAP_IDENTITY: the map that copies every column in order,
     //   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
@@ -2786,7 +2792,13 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
       std::map<Node, Node> fixed;
       for (const Node& c : flat)
       {
-        if (c.getKind() != Kind::EQUAL || c[0].isConst() == c[1].isConst())
+        if (c.getKind() != Kind::EQUAL)
+        {
+          continue;
+        }
+        bool leftConst = c[0].isConst();
+        bool rightConst = c[1].isConst();
+        if (leftConst == rightConst)
         {
           continue;
         }
@@ -3474,9 +3486,9 @@ BagsRewriteResponse BagsRewriter::rewriteJoinTransitiveConditions(
       // the condition on the class's first column, unless P has it or the
       // first column's own component does: (> ((_ tuple.select 0) u) 3)
       // becomes (> ((_ tuple.select 0) t) 3) for u's column 0 at column 2
-      Node c2 = d_rewriter->rewrite(c.substitute(
-          TNode(datatypes::TupleUtils::nthElementOfTuple(u, k)),
-          TNode(datatypes::TupleUtils::nthElementOfTuple(r, first))));
+      Node fromCol = datatypes::TupleUtils::nthElementOfTuple(u, k);
+      Node toCol = datatypes::TupleUtils::nthElementOfTuple(r, first);
+      Node c2 = d_rewriter->rewrite(c.substitute(TNode(fromCol), TNode(toCol)));
       if (occursFree(c2, u) || present.count(c2) || c2.isConst())
       {
         continue;
@@ -3825,9 +3837,11 @@ BagsRewriteResponse BagsRewriter::rewriteEquiJoinOfSets(const TNode& n) const
   Node P = asLambda(n[0]);
   Node X = n[1][0];
   Node Y = n[1][1];
+  TypeNode xType = X.getType();
+  TypeNode yType = Y.getType();
   if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
-      || X.getType() != Y.getType()
-      || !X.getType().getBagElementType().isTuple() || !isSet(X) || !isSet(Y))
+      || xType != yType || !xType.getBagElementType().isTuple() || !isSet(X)
+      || !isSet(Y))
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
@@ -4235,11 +4249,11 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
               d_nm->mkNode(Kind::APPLY_CONSTRUCTOR, dt[si].getConstructor(), e);
           Node step =
               d_nm->mkNode(Kind::ITE,
-                           null.eqNode(a),
-                           some,
-                           d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
-                                        dt[si].getConstructor(),
-                                        d_nm->mkNode(Kind::ADD, val, e)));
+                           {null.eqNode(a),
+                            some,
+                            d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                         dt[si].getConstructor(),
+                                         d_nm->mkNode(Kind::ADD, val, e))});
           Node S = d_nm->mkNode(Kind::BAG_FOLD,
                                 d_nm->mkNode(Kind::LAMBDA, l[0], step),
                                 null,
@@ -4310,9 +4324,9 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
               k == 3 ? both
                      : d_nm->mkNode(
                            Kind::ITE,
-                           null.eqNode(a),
-                           b,
-                           d_nm->mkNode(Kind::ITE, null.eqNode(b), a, both));
+                           {null.eqNode(a),
+                            b,
+                            d_nm->mkNode(Kind::ITE, null.eqNode(b), a, both)});
           return BagsRewriteResponse(ret, Rewrite::FOLD_UNION_COMBINE);
         }
       }
@@ -5045,23 +5059,23 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionSplit(
         switch (kind[q])
         {
           case 0:
-          case 3: both = some(d_nm->mkNode(Kind::ADD, val(c), val(v))); break;
+          case 3: both = some(d_nm->mkNode(Kind::ADD, {val(c), val(v)})); break;
           case 1:
             both = d_nm->mkNode(
-                Kind::ITE, d_nm->mkNode(Kind::LEQ, val(c), val(v)), c, v);
+                Kind::ITE, d_nm->mkNode(Kind::LEQ, {val(c), val(v)}), c, v);
             break;
           default:
             both = d_nm->mkNode(
-                Kind::ITE, d_nm->mkNode(Kind::GEQ, val(c), val(v)), c, v);
+                Kind::ITE, d_nm->mkNode(Kind::GEQ, {val(c), val(v)}), c, v);
             break;
         }
         c = kind[q] == 3
                 ? both
                 : d_nm->mkNode(
                       Kind::ITE,
-                      null.eqNode(c),
-                      v,
-                      d_nm->mkNode(Kind::ITE, null.eqNode(v), c, both));
+                      {null.eqNode(c),
+                       v,
+                       d_nm->mkNode(Kind::ITE, null.eqNode(v), c, both)});
       }
       cells.push_back(c);
     }
@@ -5317,8 +5331,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
           for (const Node& d : cv)
           {
             Node e = d.substitute(TNode(c[1 - sd]), TNode(c[sd]));
-            if (e != d && !occursFree(e, w)
-                && d_rewriter->rewrite(e) == d_nm->mkConst(false))
+            if (e != d && !occursFree(e, w) && rewritesToFalse(e))
             {
               return true;
             }
@@ -5356,7 +5369,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
       for (const Node& c : conds)
       {
         Node v = c.substitute(from.begin(), from.end(), to.begin(), to.end());
-        if (!occursFree(v, w) && d_rewriter->rewrite(v) == d_nm->mkConst(false))
+        if (!occursFree(v, w) && rewritesToFalse(v))
         {
           refuted = true;
           break;
@@ -5826,7 +5839,7 @@ Node BagsRewriter::eagerAggregation(const Node& f,
     size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
     return d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), c);
   };
-  Node pairs = d_nm->mkNode(Kind::MULT, rowsOf(false), rowsOf(true));
+  Node pairs = d_nm->mkNode(Kind::MULT, {rowsOf(false), rowsOf(true)});
   for (size_t q = 0; q < w; q++)
   {
     Node own3 = datatypes::TupleUtils::nthElementOfTuple(acc3, q);
@@ -5871,11 +5884,11 @@ Node BagsRewriter::eagerAggregation(const Node& f,
         }
         Node m =
             d_nm->mkNode(Kind::ITE,
-                         null.eqNode(v),
-                         null,
-                         d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
-                                      dt[si].getConstructor(),
-                                      d_nm->mkNode(Kind::MULT, val, times)));
+                         {null.eqNode(v),
+                          null,
+                          d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                       dt[si].getConstructor(),
+                                       d_nm->mkNode(Kind::MULT, val, times))});
         std::vector<Node> fr{
             datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
         std::vector<Node> tt{m, own3};
@@ -6174,8 +6187,13 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateDuplicateColumn(
     for (size_t p = 0; p < q; p++)
     {
       Node op = datatypes::TupleUtils::nthElementOfTuple(acc, p);
-      if (init[p] != init[q] || f[1][p].getType() != f[1][q].getType()
-          || f[1][q].substitute(TNode(oq), TNode(op)) != f[1][p])
+      if (init[p] != init[q])
+      {
+        continue;
+      }
+      TypeNode pType = f[1][p].getType();
+      TypeNode qType = f[1][q].getType();
+      if (pType != qType || f[1][q].substitute(TNode(oq), TNode(op)) != f[1][p])
       {
         continue;
       }
@@ -7128,6 +7146,12 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateOfMap(const TNode& n) const
   return BagsRewriteResponse(ret, Rewrite::AGGREGATE_MAP);
 }
 
+bool BagsRewriter::rewritesToFalse(const Node& n) const
+{
+  Node r = d_rewriter->rewrite(n);
+  return r.isConst() && !r.getConst<bool>();
+}
+
 bool BagsRewriter::rejectsInitialRow(const Node& P, const Node& i) const
 {
   // whether P is false on the row of initial values i, the one row of the
@@ -7140,8 +7164,7 @@ bool BagsRewriter::rejectsInitialRow(const Node& P, const Node& i) const
     return false;
   }
   Node applied = applyFunction(P, i);
-  return !applied.isNull()
-         && d_rewriter->rewrite(applied) == d_nm->mkConst(false);
+  return !applied.isNull() && rewritesToFalse(applied);
 }
 
 Node BagsRewriter::keyedAggregateRows(const Node& A) const
@@ -7392,11 +7415,15 @@ Node BagsRewriter::alphaKeyScope(TNode root,
     if (n.getKind() == Kind::BOUND_VARIABLE)
     {
       std::unordered_map<TNode, Node>::iterator b = bound.find(n);
-      cache[n] = b != bound.end() ? b->second
-                                  : mkRewriterVar(d_nm,
-                                                  "alpha-free",
-                                                  d_nm->mkConstInt(Rational(0)),
-                                                  n.getType());
+      if (b != bound.end())
+      {
+        cache[n] = b->second;
+      }
+      else
+      {
+        Node zero = d_nm->mkConstInt(Rational(0));
+        cache[n] = mkRewriterVar(d_nm, "alpha-free", zero, n.getType());
+      }
       todo.pop_back();
       continue;
     }
@@ -7418,10 +7445,8 @@ Node BagsRewriter::alphaKeyScope(TNode root,
       for (size_t i = 0; i < nvars; i++)
       {
         TNode v = n[0][i];
-        Node p = mkRewriterVar(d_nm,
-                               "alpha-bound",
-                               d_nm->mkConstInt(Rational(depth + i)),
-                               v.getType());
+        Node index = d_nm->mkConstInt(Rational(depth + i));
+        Node p = mkRewriterVar(d_nm, "alpha-bound", index, v.getType());
         std::unordered_map<TNode, Node>::iterator b = bound.find(v);
         saved.push_back({v, b != bound.end() ? b->second : Node::null()});
         bound[v] = p;
@@ -7705,8 +7730,8 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateSortOutput(
       Node own = datatypes::TupleUtils::nthElementOfTuple(y, q);
       Node v = NodeManager::mkBoundVar("v", own.getType());
       Node step = d_nm->mkNode(Kind::LAMBDA,
-                               d_nm->mkNode(Kind::BOUND_VAR_LIST, x, v),
-                               c.substitute(TNode(own), TNode(v)));
+                               {d_nm->mkNode(Kind::BOUND_VAR_LIST, x, v),
+                                c.substitute(TNode(own), TNode(v))});
       Node key = d_nm->mkNode(Kind::SEXPR, alphaKey(step), i[q]);
       order.push_back({{1, key.getId()}, q});
     }
@@ -8442,13 +8467,13 @@ BagsRewriteResponse BagsRewriter::rewriteMapSplitClosed(const TNode& n) const
   Node X = n[1];
   Node yes = body.substitute(TNode(c), TNode(d_nm->mkConst(true)));
   Node no = body.substitute(TNode(c), TNode(d_nm->mkConst(false)));
-  Node a = d_nm->mkNode(Kind::BAG_MAP,
-                        mkLambda(t, yes),
-                        d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c), X));
-  Node b =
-      d_nm->mkNode(Kind::BAG_MAP,
-                   mkLambda(t, no),
-                   d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c.notNode()), X));
+  Node a = d_nm->mkNode(
+      Kind::BAG_MAP,
+      {mkLambda(t, yes), d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c), X)});
+  Node b = d_nm->mkNode(
+      Kind::BAG_MAP,
+      {mkLambda(t, no),
+       d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c.notNode()), X)});
   Node ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b);
   return BagsRewriteResponse(ret, Rewrite::MAP_SPLIT_CLOSED);
 }
@@ -8557,8 +8582,9 @@ Node BagsRewriter::rewriteEmptyFilter(const Node& F) const
       order[k] = k;
     }
     std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-      return datatypes::utils::indexOf(keysS[a].getOperator())
-             < datatypes::utils::indexOf(keysS[b].getOperator());
+      uint32_t ia = datatypes::utils::indexOf(keysS[a].getOperator());
+      uint32_t ib = datatypes::utils::indexOf(keysS[b].getOperator());
+      return ia < ib;
     });
     std::vector<Node> ks, ke;
     for (size_t k : order)
@@ -8678,8 +8704,8 @@ Node BagsRewriter::emptinessAtom(const Node& atom) const
       Node x = d_nm->mkNode(Kind::BAG_COUNT, c[0], c[1][0]);
       Node y = d_nm->mkNode(Kind::BAG_COUNT, c[0], c[1][1]);
       return d_nm->mkNode(Kind::AND,
-                          d_nm->mkNode(Kind::GEQ, x, d_one),
-                          d_nm->mkNode(Kind::GEQ, y, d_one));
+                          {d_nm->mkNode(Kind::GEQ, x, d_one),
+                           d_nm->mkNode(Kind::GEQ, y, d_one)});
     }
     // (>= (bag.count e (bag.setof X)) 1) is membership in X
     if (c.getKind() == Kind::BAG_COUNT && c[1].getKind() == Kind::BAG_SETOF)
@@ -9384,7 +9410,13 @@ int BagsRewriter::nullAwareStepKind(const Node& step,
                 || (inner[0][s] == acc && inner[0][1 - s].isConst()
                     && inner[0][1 - s].getNumChildren() == 0);
   }
-  if (!accIsNull || A.getType() != acc.getType() || !A.getType().isDatatype())
+  if (!accIsNull)
+  {
+    return -1;
+  }
+  TypeNode aType = A.getType();
+  TypeNode accType = acc.getType();
+  if (aType != accType || !aType.isDatatype())
   {
     return -1;
   }
@@ -10368,8 +10400,8 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
       }
       Node ret = d_nm->mkNode(
           Kind::BAG_MAP,
-          mkLambda(r2, hBody),
-          d_nm->mkNode(Kind::BAG_FILTER, mkLambda(r2, pBody), rebuild(cs)));
+          {mkLambda(r2, hBody),
+           d_nm->mkNode(Kind::BAG_FILTER, {mkLambda(r2, pBody), rebuild(cs)})});
       return BagsRewriteResponse(ret, Rewrite::AGGREGATE_JOIN_MERGE);
     }
   }
@@ -11862,8 +11894,8 @@ Node BagsRewriter::semiJoinToIntersection(const Node& n, bool underSetof) const
     right = d_nm->mkNode(Kind::BAG_FILTER, lambda, right);
   }
   Node inter = d_nm->mkNode(Kind::BAG_INTER_MIN,
-                            d_nm->mkNode(Kind::BAG_SETOF, left),
-                            d_nm->mkNode(Kind::BAG_SETOF, right));
+                            {d_nm->mkNode(Kind::BAG_SETOF, left),
+                             d_nm->mkNode(Kind::BAG_SETOF, right)});
   // h: g's columns read from the probe row
   std::vector<Node> hCols;
   for (uint32_t j : J)

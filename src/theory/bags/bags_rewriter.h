@@ -921,6 +921,8 @@ class BagsRewriter : public TheoryRewriter
    * AGGREGATE_KEYED uses them where that row is dropped.
    */
   Node keyedAggregateRows(const Node& A) const;
+  /** Whether n, a formula, rewrites to false */
+  bool rewritesToFalse(const Node& n) const;
   /**
    * Whether the predicate P is false on the row of initial values i, the one
    * row an aggregate of an empty table has: (P i) rewrites to false, as for

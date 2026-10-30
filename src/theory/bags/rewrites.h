@@ -122,9 +122,8 @@ enum class Rewrite : uint32_t
    */
   EQ_CONST_FALSE,
   /**
-   * An equality whose sides rewrite to one term is true.
-   * (An equality of one term with itself is IDENTICAL_NODES, before its sides
-   * are rewritten.)
+   * An equality whose sides rewrite to one term is true. (An equality of one
+   * term with itself is IDENTICAL_NODES, before its sides are rewritten.)
    *
    * For A : (Bag Int),
    *
@@ -171,9 +170,21 @@ enum class Rewrite : uint32_t
    */
   FILTER_UNION_DISJOINT,
   /**
-   * FILTER_FILTER:
-   *   (bag.filter (lambda ((s T)) p) (bag.filter (lambda ((t T)) q) A))
-   *   ---> (bag.filter (lambda ((t T)) (and p[s := t] q)) A)
+   * A filter of a filter is one filter, by the conjunction.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter (lambda ((s (Tuple Int Int))) (> ((_ tuple.select 0) s) 3))
+   *               (bag.filter
+   *                 (lambda ((t (Tuple Int Int))) (< ((_ tuple.select 1) t) 7))
+   *                 X))
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int)))
+   *            (and (> ((_ tuple.select 0) t) 3) (< ((_ tuple.select 1) t) 7)))
+   *          X)
+   *
+   * Both predicates must be lambdas; it applies only with the higher-order
+   * flag, see the constructor of BagsRewriter.
    */
   FILTER_FILTER,
   /**
@@ -197,8 +208,16 @@ enum class Rewrite : uint32_t
    */
   FILTER_MAP,
   /**
-   * FILTER_SETOF:
-   *   (bag.filter p (bag.setof A)) ---> (bag.setof (bag.filter p A))
+   * A filter of a set is the set of the filter.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter (lambda ((t (Tuple Int Int))) (> ((_ tuple.select 0) t) 3))
+   *               (bag.setof X))
+   *   ---> (bag.setof
+   *          (bag.filter
+   *            (lambda ((t (Tuple Int Int))) (> ((_ tuple.select 0) t) 3))
+   *            X))
    */
   FILTER_SETOF,
   /**
@@ -220,79 +239,141 @@ enum class Rewrite : uint32_t
    */
   MAP_MAP,
   /**
-   * PRODUCT_MAP_LEFT, the map of the left factor as a map of the product
-   * (see rewriteProductOfMap); with A and B of two columns,
-   *   (table.product (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
-   *                           A)
-   *                  B)
-   *   ---> (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)
-   *                                        ((_ tuple.select 2) t)
-   *                                        ((_ tuple.select 3) t)))
-   *                 (table.product A B))
+   * A map of the left factor of a product is a map of the product
+   * (see BagsRewriter::rewriteProductOfMap), so that the maps of a query end up
+   * above its product.
+   *
+   * For A : (Bag (Tuple Int Int)) and B : (Bag (Tuple Int Int)),
+   *
+   *   (table.product
+   *     (bag.map (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
+   *              A)
+   *     B)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (tuple ((_ tuple.select 1) t)
+   *                   ((_ tuple.select 2) t)
+   *                   ((_ tuple.select 3) t)))
+   *          (table.product A B))
+   *
+   * It applies only with the higher-order flag, see the constructor of
+   * BagsRewriter.
    */
   PRODUCT_MAP_LEFT,
   /**
-   * PRODUCT_MAP_RIGHT, the map of the right factor as a map of the product
-   * (see rewriteProductOfMap); with A and B of two columns,
+   * A map of the right factor of a product is a map of the product, reading the
+   * columns of the right factor after those of the left
+   * (see BagsRewriter::rewriteProductOfMap).
+   *
+   * For A : (Bag (Tuple Int Int)) and B : (Bag (Tuple Int Int)),
+   *
    *   (table.product A
-   *                  (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
-   *                           B))
-   *   ---> (bag.map (lambda ((t V)) (tuple ((_ tuple.select 0) t)
-   *                                        ((_ tuple.select 1) t)
-   *                                        ((_ tuple.select 3) t)))
-   *                 (table.product A B))
+   *                  (bag.map
+   *                    (lambda ((s (Tuple Int Int)))
+   *                      (tuple ((_ tuple.select 1) s)))
+   *                    B))
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (tuple ((_ tuple.select 0) t)
+   *                   ((_ tuple.select 1) t)
+   *                   ((_ tuple.select 3) t)))
+   *          (table.product A B))
+   *
+   * It applies only with the higher-order flag, see the constructor of
+   * BagsRewriter.
    */
   PRODUCT_MAP_RIGHT,
   /**
-   * PRODUCT_FILTER_LEFT, the filter of the left factor as a filter of the
-   * product (see rewriteProductOfFilter):
-   *   (table.product (bag.filter (lambda ((s T)) (> ((_ tuple.select 1) s) 3))
-   *                              A)
-   *                  B)
-   *   ---> (bag.filter (lambda ((t V)) (> ((_ tuple.select 1) t) 3))
-   *                    (table.product A B))
+   * A filter of the left factor of a product is a filter of the product
+   * (see BagsRewriter::rewriteProductOfFilter), so that the filters of a query
+   * end up above its product.
+   *
+   * For A : (Bag (Tuple Int Int)) and B : (Bag (Tuple Int Int)),
+   *
+   *   (table.product
+   *     (bag.filter (lambda ((s (Tuple Int Int))) (> ((_ tuple.select 1) s) 3))
+   *                 A)
+   *     B)
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (> ((_ tuple.select 1) t) 3))
+   *          (table.product A B))
+   *
+   * It applies only with the higher-order flag, see the constructor of
+   * BagsRewriter.
    */
   PRODUCT_FILTER_LEFT,
   /**
-   * PRODUCT_FILTER_RIGHT, the filter of the right factor as a filter of the
-   * product (see rewriteProductOfFilter); with A of two columns,
-   *   (table.product A (bag.filter (lambda ((s U)) (> ((_ tuple.select 1) s)
-   *                                                  3))
-   *                                B))
-   *   ---> (bag.filter (lambda ((t V)) (> ((_ tuple.select 3) t) 3))
-   *                    (table.product A B))
+   * A filter of the right factor of a product is a filter of the product,
+   * reading the columns of the right factor after those of the left
+   * (see BagsRewriter::rewriteProductOfFilter).
+   *
+   * For A : (Bag (Tuple Int Int)) and B : (Bag (Tuple Int Int)),
+   *
+   *   (table.product A
+   *                  (bag.filter
+   *                    (lambda ((s (Tuple Int Int)))
+   *                      (> ((_ tuple.select 1) s) 3))
+   *                    B))
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (> ((_ tuple.select 3) t) 3))
+   *          (table.product A B))
+   *
+   * It applies only with the higher-order flag, see the constructor of
+   * BagsRewriter.
    */
   PRODUCT_FILTER_RIGHT,
   /**
-   * PRODUCT_UNION_DISJOINT:
-   *     (table.product (bag.union_disjoint A B) C)
-   *     ---> (bag.union_disjoint (table.product A C) (table.product B C))
-   *   and the same on the right
+   * A product of a union, on either side, is the union of the products.
+   *
+   * For A : (Bag (Tuple Int)) and B : (Bag (Tuple Int)) and
+   * C : (Bag (Tuple Int)),
+   *
+   *   (table.product (bag.union_disjoint A B) C)
+   *   ---> (bag.union_disjoint (table.product A C) (table.product B C))
    */
   PRODUCT_UNION_DISJOINT,
   /**
-   * PRODUCT_ASSOC:
-   *     (table.product (table.product A B) C)
-   *     ---> (table.product A (table.product B C))
+   * Products are nested to the right: the rows are flat tuples, so the nesting
+   * is only a spelling.
+   *
+   * For A : (Bag (Tuple Int)) and B : (Bag (Tuple Int)) and
+   * C : (Bag (Tuple Int)),
+   *
+   *   (table.product (table.product A B) C)
+   *   ---> (table.product A (table.product B C))
    */
   PRODUCT_ASSOC,
   /**
-   * PRODUCT_SWAP, the factors in the order of their ids, B < A, under the map
-   * that puts the columns back:
-   *   (table.product A (table.product B C))
-   *   ---> (bag.map perm (table.product B (table.product A C)))
-   * with, for one column each,
-   *   perm = (lambda ((t V)) (tuple ((_ tuple.select 1) t)
-   *                                 ((_ tuple.select 0) t)
-   *                                 ((_ tuple.select 2) t)))
+   * The factors of a product in one order, the smaller node first, under a map
+   * that puts the columns back, so that two queries that list their tables in
+   * different orders have one product.
+   *
+   * For A : (Bag (Tuple Int)) and B : (Bag (Tuple Int)),
+   *
+   *   (table.product B A)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int)))
+   *            (tuple ((_ tuple.select 1) t) ((_ tuple.select 0) t)))
+   *          (table.product A B))
+   *
+   * Here A is the smaller node. It applies only with the higher-order flag, see
+   * the constructor of BagsRewriter.
    */
   PRODUCT_SWAP,
   /**
-   * EQ_EMPTY_ARG, a map or a bag.setof is empty when its argument is:
-   *   (= (bag.map f X) (as bag.empty (Bag U)))
-   *   ---> (= X (as bag.empty (Bag T)))
-   *   (= (bag.setof X) (as bag.empty (Bag T)))
-   *   ---> (= X (as bag.empty (Bag T)))
+   * A map, or a bag.setof, is empty when its argument is.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (= (bag.map (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t)))
+   *               X)
+   *      (as bag.empty (Bag (Tuple Int))))
+   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
+   *
+   *   (= (bag.setof X) (as bag.empty (Bag (Tuple Int Int))))
+   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
    */
   EQ_EMPTY_ARG,
   /**
@@ -345,10 +426,22 @@ enum class Rewrite : uint32_t
    */
   FILTER_FALSE,
   /**
-   * FILTER_SORT_CONJUNCTS, the conjuncts in the order of their alpha
-   * keys, without duplicates:
-   *   (bag.filter (lambda ((t T)) (and q p q)) X)
-   *   ---> (bag.filter (lambda ((t T)) (and p q)) X)
+   * The conjuncts of a filter in one order, that of their alpha keys
+   * (see BagsRewriter::alphaKey), and without duplicates, so that two filters
+   * by the same conjuncts are one term.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter
+   *     (lambda ((t (Tuple Int Int)))
+   *       (and (< ((_ tuple.select 1) t) 7)
+   *            (> ((_ tuple.select 0) t) 3)
+   *            (< ((_ tuple.select 1) t) 7)))
+   *     X)
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int)))
+   *            (and (> ((_ tuple.select 0) t) 3) (< ((_ tuple.select 1) t) 7)))
+   *          X)
    */
   FILTER_SORT_CONJUNCTS,
   /**
@@ -428,67 +521,107 @@ enum class Rewrite : uint32_t
    */
   FOLD_TUPLE,
   /**
-   * SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
-   *   (bag.setof (bag.map (lambda ((t T)) c) Y))
-   *   ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
-   *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)
-   *                                              ((_ tuple.select 0) t)))
-   *                       Y))
-   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 1) r)
-   *                                        ((_ tuple.select 0) r)))
-   *                 (bag.setof (bag.map (lambda ((t T))
-   *                                       (tuple ((_ tuple.select 0) t)
-   *                                              ((_ tuple.select 2) t)))
-   *                                     Y)))
-   *   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t) 5)) Y))
-   *   ---> (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r) 5))
-   *                 (bag.setof (bag.map (lambda ((t T))
-   *                                       (tuple ((_ tuple.select 1) t)))
-   *                                     Y)))
+   * The set of a map with constant columns: of a map to a constant, that
+   * constant once, unless the argument is empty; and otherwise the set of the
+   * map without the constant columns, under a map that puts them back.
+   *
+   * For Y : (Bag (Tuple Int Int)),
+   *
+   *   (bag.setof (bag.map (lambda ((t (Tuple Int Int))) (tuple 5)) Y))
+   *   ---> (bag (tuple 5) (ite (= Y (as bag.empty (Bag (Tuple Int Int)))) 0 1))
+   *
+   *   (bag.setof
+   *     (bag.map
+   *       (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 1) t) 5))
+   *       Y))
+   *   ---> (bag.map (lambda ((r (Tuple Int))) (tuple ((_ tuple.select 0) r) 5))
+   *                 (bag.setof
+   *                   (bag.map
+   *                     (lambda ((t (Tuple Int Int)))
+   *                       (tuple ((_ tuple.select 1) t)))
+   *                     Y)))
    */
   SETOF_MAP_CONSTANT,
   /**
-   * FILTER_SPLIT_CLOSED, a disjunct c that does not read the row (EXISTS):
-   *   (bag.filter (lambda ((t T)) (or c q)) A)
-   *   ---> (bag.union_disjoint
-   *          (bag.filter (lambda ((t T)) c) A)
-   *          (bag.filter (lambda ((t T)) (and (not c) q)) A))
+   * A filter by a disjunction with a disjunct c that does not read the row,
+   * such as SQL's EXISTS (subquery), is the union of the filter by c and the
+   * filter by the rest without c: every row passes one of the two exactly when
+   * it passes the disjunction, and never both.
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int)) and
+   *   c = (not (= Y (as bag.empty (Bag (Tuple Int))))),
+   *
+   *   (bag.filter
+   *     (lambda ((t (Tuple Int Int))) (or c (> ((_ tuple.select 0) t) 3)))
+   *     X)
+   *   ---> (bag.union_disjoint (bag.filter (lambda ((t (Tuple Int Int))) c) X)
+   *                            (bag.filter
+   *                              (lambda ((t (Tuple Int Int)))
+   *                                (and (not c) (> ((_ tuple.select 0) t) 3)))
+   *                              X))
+   *
+   * Also for a disjunct that asks about a bag and reads nothing but the row,
+   * such as IN (subquery).
    */
   FILTER_SPLIT_CLOSED,
   /**
-   * SEMI_JOIN, a join with a set B whose row the join equations fix (all its
-   * columns, or a key) and whose columns the map does not read, as a filter
-   * by the existence of the matching row. With the key {0} of Z,
-   *   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)))
-   *            (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
-   *                                           ((_ tuple.select 2) t)))
-   *                        (table.product Y Z)))
-   *   ---> (bag.map (lambda ((a U)) (tuple ((_ tuple.select 1) a)))
-   *                 (bag.filter (lambda ((a U))
-   *                               (not (= (bag.filter (lambda ((b W))
-   *                                                     (= ((_ tuple.select 0)
-   *                                                          a)
-   *                                                        ((_ tuple.select 0)
-   *                                                          b)))
-   *                                                   Z)
-   *                                       (as bag.empty (Bag W)))))
-   *                             Y))
+   * A join with a set Z whose row the join's equations fix, by all its columns
+   * or by a key, and whose columns the map above does not read, is a filter by
+   * the existence of the matching row of Z (see BagsRewriter::rewriteSemiJoin).
+   *
+   * For Y : (Bag (Tuple Int Int)) and Z : (Bag (Tuple Int)),
+   *
+   * given the assertion that column 0 is a key of Z, which makes Z a set
+   * (see BagsRewriter::recordFacts):
+   *
+   *   (assert (= (bag.setof ((_ table.project 0) Z)) ((_ table.project 0) Z)))
+   *
+   *   (bag.map
+   *     (lambda ((t (Tuple Int Int Int))) (tuple ((_ tuple.select 1) t)))
+   *     (bag.filter
+   *       (lambda ((t (Tuple Int Int Int)))
+   *         (= ((_ tuple.select 0) t) ((_ tuple.select 2) t)))
+   *       (table.product Y Z)))
+   *   ---> (bag.map
+   *          (lambda ((a (Tuple Int Int))) (tuple ((_ tuple.select 1) a)))
+   *          (bag.filter
+   *            (lambda ((a (Tuple Int Int)))
+   *              (not (= (bag.filter
+   *                        (lambda ((b (Tuple Int)))
+   *                          (= ((_ tuple.select 0) a) ((_ tuple.select 0) b)))
+   *                        Z)
+   *                      (as bag.empty (Bag (Tuple Int))))))
+   *            Y))
    */
   SEMI_JOIN,
   /**
-   * EQ_EMPTY_FILTER_DECORRELATE, the emptiness of a filter that reads the
-   * row r of an enclosing lambda, as a membership that does not, in the
-   * bodies of filters and maps (see normalizeEmptiness, rewriteEmptyFilter):
-   *   (= (as bag.empty (Bag T))
-   *      (bag.filter (lambda ((s T)) (and q (= ((_ tuple.select 1) s)
-   *                                            ((_ tuple.select 0) r))))
-   *                  X))
-   *   ---> (not (>= (bag.count (tuple ((_ tuple.select 0) r))
-   *                            (bag.map (lambda ((s T))
-   *                                       (tuple ((_ tuple.select 1) s)))
-   *                                     (bag.filter (lambda ((s T)) q) X)))
-   *                 1))
-   * for q reading only s
+   * In the body of a filter or a map over the rows r of Y, the emptiness of a
+   * filter of X that compares a column of X with a column of r becomes a
+   * membership of that column of r in the projection of X, which reads no r
+   * (see BagsRewriter::normalizeEmptiness).
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter
+   *     (lambda ((r (Tuple Int Int)))
+   *       (not (= (bag.filter
+   *                 (lambda ((s (Tuple Int Int)))
+   *                   (= ((_ tuple.select 1) s) ((_ tuple.select 0) r)))
+   *                 X)
+   *               (as bag.empty (Bag (Tuple Int Int))))))
+   *     Y)
+   *   ---> (bag.filter
+   *          (lambda ((r (Tuple Int Int)))
+   *            (>= (bag.count (tuple ((_ tuple.select 0) r))
+   *                           (bag.map
+   *                             (lambda ((s (Tuple Int Int)))
+   *                               (tuple ((_ tuple.select 1) s)))
+   *                             X))
+   *                1))
+   *          Y)
+   *
+   * This is SQL's Y WHERE EXISTS (SELECT * FROM X WHERE X.c1 = Y.c0),
+   * decorrelated.
    */
   EQ_EMPTY_FILTER_DECORRELATE,
   /**
@@ -570,31 +703,54 @@ enum class Rewrite : uint32_t
    */
   SETOF_PROJECTION_SORT,
   /**
-   * FILTER_KNOWN_MEMBERSHIP: body without the membership conjuncts that
-   * every row t of A satisfies, or that another conjunct implies: with
-   * A = (table.product X Y),
-   *   (and (>= (bag.count (tuple ((_ tuple.select 0) t))
-   *                       (bag.map (lambda ((s T))
-   *                                  (tuple ((_ tuple.select 0) s)))
-   *                                X))
-   *            1)
-   *        q)
-   *   ---> q
+   * A conjunct that every row satisfies goes: here that column 0 of a row of
+   * (table.product X Y), which comes from X, is in the projection of X onto
+   * column 0 (see BagsRewriter::dropKnownMemberships).
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter
+   *     (lambda ((t (Tuple Int Int Int Int)))
+   *       (and (>= (bag.count (tuple ((_ tuple.select 0) t))
+   *                           (bag.map
+   *                             (lambda ((s (Tuple Int Int)))
+   *                               (tuple ((_ tuple.select 0) s)))
+   *                             X))
+   *                1)
+   *            (> ((_ tuple.select 3) t) 2)))
+   *     (table.product X Y))
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (> ((_ tuple.select 3) t) 2))
+   *          (table.product X Y))
+   *
+   * Also a membership that another conjunct implies.
    */
   FILTER_KNOWN_MEMBERSHIP,
   /**
-   * COUNT_MAP_CONST_PROBE, a constant in the probe selects rows of X:
-   *     (bag.count (tuple 5 b)
-   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t)
-   *                                                ((_ tuple.select 0) t)))
-   *                         X))
-   *     ---> (bag.count (tuple b)
-   *                     (bag.map (lambda ((t T))
-   *                                (tuple ((_ tuple.select 0) t)))
-   *                              (bag.filter (lambda ((t T))
-   *                                            (= ((_ tuple.select 1) t) 5))
-   *                                          X)))
-   *   also for a table constant X, as its identity map
+   * A count in a map whose probe has a constant where the map copies a column
+   * of its argument: only the rows with that constant in that column can match,
+   * and the column leaves the probe and the map.
+   *
+   * For X : (Bag (Tuple Int Int)) and b : Int,
+   *
+   *   (bag.count (tuple 5 b)
+   *              (bag.map
+   *                (lambda ((t (Tuple Int Int)))
+   *                  (tuple ((_ tuple.select 1) t) ((_ tuple.select 0) t)))
+   *                X))
+   *   ---> (bag.count (tuple b)
+   *                   (bag.map
+   *                     (lambda ((t (Tuple Int Int)))
+   *                       (tuple ((_ tuple.select 0) t)))
+   *                     (bag.filter
+   *                       (lambda ((t (Tuple Int Int)))
+   *                         (= ((_ tuple.select 1) t) 5))
+   *                       X)))
+   *
+   * Also for X a table constant, as its own identity map; that form builds a
+   * lambda, so it needs the higher-order flag, see the constructor of
+   * BagsRewriter.
    */
   COUNT_MAP_CONST_PROBE,
   /**
@@ -699,35 +855,82 @@ enum class Rewrite : uint32_t
    */
   MAP_EQUAL_COLUMNS,
   /**
-   * FOLD_MAP:
-   *   (bag.fold (lambda ((t U) (acc S)) b) i
-   *             (bag.map (lambda ((s T)) e) Y))
-   *   ---> (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
+   * A fold of a map folds the map's argument, reading each row through the map.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (bag.fold
+   *     (lambda ((t (Tuple Int)) (acc Int)) (+ acc ((_ tuple.select 0) t)))
+   *     0
+   *     (bag.map (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
+   *              X))
+   *   ---> (bag.fold
+   *          (lambda ((s (Tuple Int Int)) (acc Int))
+   *            (+ acc ((_ tuple.select 1) s)))
+   *          0
+   *          X)
+   *
+   * The map's function must be a lambda that does not read the accumulator.
    */
   FOLD_MAP,
   /**
-   * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two
-   * of which share a key value:
-   *   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
-   *                               (bag.union_disjoint U1 U2))))
-   *   ---> (bag.map h (bag.filter Q (bag.union_disjoint
-   *                                   ((_ table.aggr 0) f i U1)
-   *                                   ((_ table.aggr 0) f i U2))))
+   * An aggregate over a union of parts that share no value of the group
+   * columns, under a filter that keeps the groups some row reached, is the
+   * union of the aggregates of the parts: every group is one part's.
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
+   *                (+ ((_ tuple.select 2) acc) 1))) and
+   *   Q = (lambda ((r (Tuple Int Int Int))) (>= ((_ tuple.select 2) r) 1)) and
+   *   h = (lambda ((r (Tuple Int Int Int)))
+   *         (tuple ((_ tuple.select 0) r) ((_ tuple.select 1) r))) and
+   *   U1 = (bag.filter
+   *          (lambda ((s (Tuple Int Int))) (= ((_ tuple.select 0) s) 1))
+   *          X) and
+   *   U2 = (bag.filter
+   *          (lambda ((s (Tuple Int Int))) (= ((_ tuple.select 0) s) 2))
+   *          Y),
+   *
+   *   (bag.map h
+   *            (bag.filter Q
+   *                        ((_ table.aggr 0)
+   *                          f
+   *                          (tuple 0 0 0)
+   *                          (bag.union_disjoint U1 U2))))
+   *   ---> (bag.map h
+   *                 (bag.filter Q
+   *                             (bag.union_disjoint
+   *                               ((_ table.aggr 0) f (tuple 0 0 0) U1)
+   *                               ((_ table.aggr 0) f (tuple 0 0 0) U2))))
+   *
+   * Here the rows of U1 have 1 in the group column and those of U2 have 2.
    */
   AGGREGATE_UNION_DISJOINT_KEYS,
   /**
-   * FILTER_JOIN_TRANSITIVE, a condition the rows of one side of a join
-   * satisfy on a column the join equates holds of the class's first column:
-   *   (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
-   *                                  ((_ tuple.select 2) t)))
-   *               (table.product X (bag.filter (lambda ((s U))
-   *                                              (> ((_ tuple.select 0) s)
-   *                                                 3))
-   *                                            Y)))
-   *   ---> (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
-   *                                            ((_ tuple.select 2) t))
-   *                                         (> ((_ tuple.select 0) t) 3)))
-   *                    (table.product X (bag.filter .. Y)))
+   * A condition that the rows of one side of a join satisfy on a column the
+   * join equates holds of the other side's column too, and joins the join's
+   * predicate, so that a condition written on either side of a join is on both.
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)) and
+   *   Z = (bag.setof
+   *         (bag.filter
+   *           (lambda ((s (Tuple Int Int))) (> ((_ tuple.select 0) s) 3))
+   *           Y)),
+   *
+   *   (bag.filter
+   *     (lambda ((t (Tuple Int Int Int Int)))
+   *       (= ((_ tuple.select 0) t) ((_ tuple.select 2) t)))
+   *     (table.product X Z))
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int Int Int)))
+   *            (and (= ((_ tuple.select 0) t) ((_ tuple.select 2) t))
+   *                 (> ((_ tuple.select 0) t) 3)))
+   *          (table.product X Z))
+   *
+   * The rows of Z have column 0 greater than 3, so the rows that pass have
+   * column 0 of X greater than 3 as well.
    */
   FILTER_JOIN_TRANSITIVE,
   /**

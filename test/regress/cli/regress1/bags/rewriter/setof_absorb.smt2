@@ -1,4 +1,6 @@
 ; REQUIRES: unrestricted-mode
+; DISABLE-TESTER: cpc
+; (the cpc proof signature has no table.aggr)
 ; SETOF_ABSORB: an inner bag.setof under a union and a bag.setof goes, so the
 ; aggregates over the two sets are one term
 (set-logic HO_ALL)

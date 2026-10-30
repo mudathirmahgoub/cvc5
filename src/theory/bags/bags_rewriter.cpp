@@ -225,6 +225,7 @@ RewriteResponse BagsRewriter::postRewrite(TNode n)
       case Kind::TABLE_PRODUCT: response = postRewriteProduct(n); break;
       case Kind::TABLE_PROJECT: response = postRewriteProject(n); break;
       case Kind::TABLE_AGGREGATE: response = postRewriteAggregate(n); break;
+      case Kind::TABLE_GROUP: response = postRewriteGroup(n); break;
       default: response = BagsRewriteResponse(n, Rewrite::NONE); break;
     }
   }
@@ -317,6 +318,31 @@ BagsRewriteResponse BagsRewriter::rewriteMakeBag(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
 {
   Assert(n.getKind() == Kind::BAG_COUNT);
+  if (n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getType().isTuple()
+      && n[1].getType().getBagElementType().isTuple())
+  {
+    // COUNT_NULL_IN_NOT_NULL: a probe with a null in a column k that is never
+    // null in X occurs in X 0 times; with column 1 of X never null,
+    //   (bag.count (tuple a (as nullable.null (Nullable Int))) X) ---> 0
+    std::set<uint32_t> nn;
+    bool computed = false;
+    for (size_t k = 0; k < n[0].getNumChildren(); k++)
+    {
+      if (!isNullConstant(n[0][k]))
+      {
+        continue;
+      }
+      if (!computed)
+      {
+        nn = nonNullColumns(n[1]);
+        computed = true;
+      }
+      if (nn.count(k))
+      {
+        return BagsRewriteResponse(d_zero, Rewrite::COUNT_NULL_IN_NOT_NULL);
+      }
+    }
+  }
   if (n[1].getKind() == Kind::BAG_MAP)
   {
     // COUNT_MAP_DUPLICATE_COLUMNS: every row the map makes has equal columns
@@ -372,6 +398,63 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
           Node ret = d_nm->mkNode(Kind::ITE, same, count, d_zero);
           return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_DUPLICATE_COLUMNS);
         }
+      }
+    }
+  }
+  if (n[1].getKind() == Kind::BAG_MAP)
+  {
+    // COUNT_MAP_CONST_COLUMN: column j of every row the map makes is the
+    // constant c, so a probe occurs only when its column j is c, and the
+    // column can be dropped from the probe and the map:
+    //   (bag.count (tuple a b)
+    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t) 5))
+    //                       X))
+    //   --->
+    //   (ite (= b 5)
+    //        (bag.count (tuple a)
+    //                   (bag.map (lambda ((t T))
+    //                              (tuple ((_ tuple.select 0) t)))
+    //                            X))
+    //        0)
+    Node g = asLambda(n[1][0]);
+    if (g.getKind() == Kind::LAMBDA && g[0].getNumChildren() == 1
+        && g[1].getKind() == Kind::APPLY_CONSTRUCTOR && g[1].getType().isTuple()
+        && g[1].getNumChildren() > 1)
+    {
+      Node body = g[1];
+      size_t m = body.getNumChildren();
+      for (size_t j = 0; j < m; j++)
+      {
+        if (!body[j].isConst())
+        {
+          continue;
+        }
+        std::vector<Node> cols, probe;
+        std::vector<TypeNode> types;
+        for (size_t k = 0; k < m; k++)
+        {
+          if (k != j)
+          {
+            cols.push_back(body[k]);
+            types.push_back(body[k].getType());
+            probe.push_back(datatypes::TupleUtils::nthElementOfTuple(n[0], k));
+          }
+        }
+        TypeNode t = d_nm->mkTupleType(types);
+        // g2 is (lambda ((t T)) (tuple ((_ tuple.select 0) t))), e2 is
+        // (tuple a)
+        Node g2 = mkLambda(g[0][0],
+                           datatypes::TupleUtils::constructTupleFromElements(
+                               t, cols, 0, cols.size() - 1));
+        Node e2 = datatypes::TupleUtils::constructTupleFromElements(
+            t, probe, 0, probe.size() - 1);
+        Node count = d_nm->mkNode(
+            Kind::BAG_COUNT, e2, d_nm->mkNode(Kind::BAG_MAP, g2, n[1][1]));
+        // (= b 5)
+        Node same =
+            datatypes::TupleUtils::nthElementOfTuple(n[0], j).eqNode(body[j]);
+        Node ret = d_nm->mkNode(Kind::ITE, same, count, d_zero);
+        return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_CONST_COLUMN);
       }
     }
   }
@@ -496,6 +579,26 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
     //                                          (< ((_ tuple.select 1) t) 7))
     //                                        X)))
     //        0)
+    // COUNT_MAP_FILTER_CORRELATED: a conjunct that equates another column of
+    // the row with a term E that is not a constant and does not read the row
+    // (a column of an enclosing row r, in a correlated subquery) becomes one
+    // more column of the map and of the probe:
+    //   (bag.count (tuple a)
+    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
+    //                       (bag.filter (lambda ((t T))
+    //                                     (and (= ((_ tuple.select 1) t)
+    //                                             ((_ tuple.select 0) r))
+    //                                          (> ((_ tuple.select 0) t) 3)))
+    //                                   X)))
+    //   --->
+    //   (bag.count (tuple a ((_ tuple.select 0) r))
+    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
+    //                                              ((_ tuple.select 1) t)))
+    //                       (bag.filter (lambda ((t T))
+    //                                     (> ((_ tuple.select 0) t) 3))
+    //                                   X)))
+    // which leaves the filter free of r, so that the counts for two
+    // enclosing rows are counts in one bag.
     Node g = asLambda(n[1][0]);
     Node p = asLambda(n[1][1][0]);
     Node X = n[1][1][1];
@@ -524,6 +627,7 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
         }
       }
       std::vector<Node> moved, rest;
+      std::vector<Node> extraS, extraE;
       for (const Node& c : conjuncts)
       {
         std::set<uint32_t> positions;
@@ -542,7 +646,94 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
           moved.push_back(m);
           continue;
         }
-        rest.push_back(c);
+        // an equation (= ((_ tuple.select k) t) E) between another column
+        // and an expression E of an enclosing row: one more column to project
+        // and to probe; a constant E stays in the filter, since
+        // COUNT_MAP_CONST_PROBE would move it back
+        bool extended = false;
+        if (c.getKind() == Kind::EQUAL)
+        {
+          for (size_t sd = 0; sd < 2 && !extended; sd++)
+          {
+            if (c[sd].getKind() == Kind::APPLY_SELECTOR && c[sd][0] == sv
+                && !c[1 - sd].isConst() && !occursFree(c[1 - sd], sv))
+            {
+              extraS.push_back(c[sd]);
+              extraE.push_back(c[1 - sd]);
+              extended = true;
+            }
+          }
+        }
+        if (!extended)
+        {
+          rest.push_back(c);
+        }
+      }
+      if (!extraS.empty())
+      {
+        // COUNT_MAP_FILTER_CORRELATED, see above: cols are the columns of the
+        // map followed by the columns ((_ tuple.select k) t) of the extra
+        // equations, probe the columns of the probe followed by their E's
+        Node g0 = asLambda(n[1][0]);
+        std::vector<Node> cols, probe;
+        std::vector<TypeNode> types;
+        Node gBody = g0[1].substitute(TNode(g0[0][0]), TNode(sv));
+        for (size_t k = 0, w = gBody.getNumChildren(); k < w; k++)
+        {
+          cols.push_back(gBody[k]);
+          types.push_back(gBody[k].getType());
+          probe.push_back(datatypes::TupleUtils::nthElementOfTuple(n[0], k));
+        }
+        for (size_t k = 0; k < extraS.size(); k++)
+        {
+          cols.push_back(extraS[k]);
+          types.push_back(extraS[k].getType());
+          probe.push_back(extraE[k]);
+        }
+        rest.insert(rest.end(), moved.begin(), moved.end());
+        moved.clear();
+        if (gBody.getKind() == Kind::APPLY_CONSTRUCTOR
+            && !bindsVariable(g0[1], g0[0][0]))
+        {
+          TypeNode t = d_nm->mkTupleType(types);
+          // g2 is (lambda ((t T)) (tuple ((_ tuple.select 0) t)
+          //                              ((_ tuple.select 1) t)))
+          // e2 is (tuple a ((_ tuple.select 0) r))
+          Node g2 = mkLambda(sv,
+                             datatypes::TupleUtils::constructTupleFromElements(
+                                 t, cols, 0, cols.size() - 1));
+          Node e2 = datatypes::TupleUtils::constructTupleFromElements(
+              t, probe, 0, probe.size() - 1);
+          // the conjuncts that could move were read through the old
+          // projection: keep them inside, over the row itself
+          std::vector<Node> inner;
+          for (const Node& c : conjuncts)
+          {
+            bool isExtra = false;
+            for (size_t k = 0; k < extraS.size(); k++)
+            {
+              isExtra = isExtra
+                        || (c.getKind() == Kind::EQUAL
+                            && ((c[0] == extraS[k] && c[1] == extraE[k])
+                                || (c[1] == extraS[k] && c[0] == extraE[k])));
+            }
+            if (!isExtra)
+            {
+              inner.push_back(c);
+            }
+          }
+          Node innerBody =
+              inner.empty()
+                  ? d_nm->mkConst(true)
+                  : (inner.size() == 1 ? inner[0]
+                                       : d_nm->mkNode(Kind::AND, inner));
+          // (bag.filter (lambda ((t T)) (> ((_ tuple.select 0) t) 3)) X)
+          Node filteredX =
+              d_nm->mkNode(Kind::BAG_FILTER, mkLambda(sv, innerBody), X);
+          Node ret = d_nm->mkNode(
+              Kind::BAG_COUNT, e2, d_nm->mkNode(Kind::BAG_MAP, g2, filteredX));
+          return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_FILTER_CORRELATED);
+        }
       }
       if (!moved.empty())
       {
@@ -671,12 +862,30 @@ BagsRewriteResponse BagsRewriter::rewriteSetof(const TNode& n) const
       return BagsRewriteResponse(ret, Rewrite::SETOF_ABSORB);
     }
   }
+  if (n[0].getKind() == Kind::BAG_MAP && n[0][1].getKind() == Kind::BAG_FILTER)
+  {
+    // SEMI_TO_INTERSECTION: a projected semi-join as an intersection, see
+    // semiJoinToIntersection
+    Node inter = semiJoinToIntersection(n[0], true);
+    if (!inter.isNull())
+    {
+      return BagsRewriteResponse(inter, Rewrite::SEMI_TO_INTERSECTION);
+    }
+  }
   if (isSet(n[0]))
   {
     // SETOF_OF_SET: a bag with no element twice is its own set, see isSet;
     // with columns 0 and 2 a key of X,
     //   (bag.setof (bag.filter p X)) ---> (bag.filter p X)
     return BagsRewriteResponse(n[0], Rewrite::SETOF_OF_SET);
+  }
+  {
+    // SETOF_PUSHDOWN, see rewriteSetofPushdown
+    BagsRewriteResponse r = rewriteSetofPushdown(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
   }
   if (n[0].getKind() == Kind::BAG_MAP)
   {
@@ -728,6 +937,127 @@ BagsRewriteResponse BagsRewriter::rewriteUnionMax(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteUnionDisjoint(const TNode& n) const
 {
   Assert(n.getKind() == Kind::BAG_UNION_DISJOINT);
+  {
+    // UNION_COMPLEMENTARY_FILTERS: two filters of X that differ in one
+    // conjunct, p in one and (not p) in the other, keep together the rows of
+    // X the other conjuncts keep: every row of X passes one of the two or
+    // neither, never both,
+    //   (bag.union_disjoint
+    //     (bag.filter (lambda ((t T)) (and p q)) X)
+    //     (bag.filter (lambda ((t T)) (and (not p) q)) X))
+    //   --->
+    //   (bag.filter (lambda ((t T)) q) X)
+    // also under one map g of both, (bag.union_disjoint (bag.map g F1)
+    // (bag.map g F2)) ---> (bag.map g F), and for two parts of a longer union,
+    // the other parts unioned to the result. The two filters' variables
+    // may differ, the second is renamed to the first.
+    std::vector<Node> parts;
+    std::vector<Node> todo{n};
+    while (!todo.empty())
+    {
+      Node c = todo.back();
+      todo.pop_back();
+      if (c.getKind() == Kind::BAG_UNION_DISJOINT)
+      {
+        todo.push_back(c[1]);
+        todo.push_back(c[0]);
+      }
+      else
+      {
+        parts.push_back(c);
+      }
+    }
+    // a part (bag.map g (bag.filter (lambda ((x T)) (and c1 c2)) X)) seen as
+    // g, X, x and the conjuncts c1, c2; g is null for a part without a map
+    auto view =
+        [&](const Node& u, Node& g, Node& X, Node& x, std::vector<Node>& cs) {
+          Node F = u;
+          g = Node::null();
+          if (F.getKind() == Kind::BAG_MAP)
+          {
+            g = F[0];
+            F = F[1];
+          }
+          if (F.getKind() != Kind::BAG_FILTER)
+          {
+            return false;
+          }
+          Node P = asLambda(F[0]);
+          if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1)
+          {
+            return false;
+          }
+          X = F[1];
+          x = P[0][0];
+          cs.clear();
+          if (P[1].getKind() == Kind::AND)
+          {
+            cs.insert(cs.end(), P[1].begin(), P[1].end());
+          }
+          else
+          {
+            cs.push_back(P[1]);
+          }
+          return true;
+        };
+    for (size_t i = 0; i < parts.size(); i++)
+    {
+      for (size_t j = i + 1; j < parts.size(); j++)
+      {
+        Node gi, Xi, xi, gj, Xj, xj;
+        std::vector<Node> ci, cj;
+        if (!view(parts[i], gi, Xi, xi, ci) || !view(parts[j], gj, Xj, xj, cj)
+            || Xi != Xj || gi != gj || ci.size() != cj.size())
+        {
+          continue;
+        }
+        for (Node& c : cj)
+        {
+          c = c.substitute(TNode(xj), TNode(xi));
+        }
+        std::multiset<Node> si(ci.begin(), ci.end()), sj(cj.begin(), cj.end());
+        Node shared;
+        for (const Node& c : ci)
+        {
+          Node neg = c.getKind() == Kind::NOT ? c[0] : c.notNode();
+          if (!si.count(neg) && sj.count(neg))
+          {
+            std::multiset<Node> a = si, b = sj;
+            a.erase(a.find(c));
+            b.erase(b.find(neg));
+            if (a == b)
+            {
+              std::vector<Node> keep(a.begin(), a.end());
+              shared = keep.empty()
+                           ? d_nm->mkConst(true)
+                           : (keep.size() == 1 ? keep[0]
+                                               : d_nm->mkNode(Kind::AND, keep));
+              break;
+            }
+          }
+        }
+        if (shared.isNull())
+        {
+          continue;
+        }
+        // (bag.filter (lambda ((t T)) q) X), under (bag.map g ..) if any
+        Node merged = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(xi, shared), Xi);
+        if (!gi.isNull())
+        {
+          merged = d_nm->mkNode(Kind::BAG_MAP, gi, merged);
+        }
+        Node ret = merged;
+        for (size_t k = 0; k < parts.size(); k++)
+        {
+          if (k != i && k != j)
+          {
+            ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, ret, parts[k]);
+          }
+        }
+        return BagsRewriteResponse(ret, Rewrite::UNION_COMPLEMENTARY_FILTERS);
+      }
+    }
+  }
   if (n[1].getKind() == Kind::BAG_EMPTY)
   {
     // (bag.union_disjoint A bag.empty) = A
@@ -803,6 +1133,69 @@ BagsRewriteResponse BagsRewriter::rewriteIntersectionMin(const TNode& n) const
     }
   }
 
+  if (n[1] < n[0])
+  {
+    // INTERSECTION_SORT: bag.inter_min is commutative, the arguments are
+    // ordered by node id,
+    //   (bag.inter_min B A) ---> (bag.inter_min A B) when A < B
+    Node ret = d_nm->mkNode(Kind::BAG_INTER_MIN, n[1], n[0]);
+    return BagsRewriteResponse(ret, Rewrite::INTERSECTION_SORT);
+  }
+  if (d_rewriter != nullptr && n.getType().getBagElementType().isTuple())
+  {
+    // INTERSECTION_SHARE_CONDITIONS: every element of A satisfies the
+    // conditions qA read off A's filters (elementConditions), so an element of
+    // B that is also in A does too, and the other way round; each side gets
+    // the conditions of the other it lacks,
+    //   (bag.inter_min (bag.filter (lambda ((t T)) qA) X)
+    //                  (bag.filter (lambda ((t T)) qB) Y))
+    //   --->
+    //   (bag.inter_min (bag.filter (lambda ((t T)) qB)
+    //                              (bag.filter (lambda ((t T)) qA) X))
+    //                  (bag.filter (lambda ((t T)) qA)
+    //                              (bag.filter (lambda ((t T)) qB) Y)))
+    // which the filter rules merge, so that both sides have the same
+    // filters; each new filter is rewritten here, to see whether anything
+    // changed
+    Node w = rowVariable(n.getType().getBagElementType());
+    std::set<Node> qa, qb;
+    elementConditions(n[0], w, qa);
+    elementConditions(n[1], w, qb);
+    std::vector<Node> toA, toB;
+    for (const Node& c : qb)
+    {
+      if (qa.count(c) == 0)
+      {
+        toA.push_back(c);
+      }
+    }
+    for (const Node& c : qa)
+    {
+      if (qb.count(c) == 0)
+      {
+        toB.push_back(c);
+      }
+    }
+    Node a = n[0];
+    Node b = n[1];
+    if (!toA.empty())
+    {
+      Node q = toA.size() == 1 ? toA[0] : d_nm->mkNode(Kind::AND, toA);
+      a = d_rewriter->rewrite(
+          d_nm->mkNode(Kind::BAG_FILTER, mkLambda(w, q), a));
+    }
+    if (!toB.empty())
+    {
+      Node q = toB.size() == 1 ? toB[0] : d_nm->mkNode(Kind::AND, toB);
+      b = d_rewriter->rewrite(
+          d_nm->mkNode(Kind::BAG_FILTER, mkLambda(w, q), b));
+    }
+    if (a != n[0] || b != n[1])
+    {
+      Node ret = d_nm->mkNode(Kind::BAG_INTER_MIN, a, b);
+      return BagsRewriteResponse(ret, Rewrite::INTERSECTION_SHARE_CONDITIONS);
+    }
+  }
   return BagsRewriteResponse(n, Rewrite::NONE);
 }
 
@@ -1891,6 +2284,14 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
   // the rules for maps of aggregates and of products of aggregates, each
   // documented at its function
   {
+    // MAP_SPLIT_CLOSED, see rewriteMapSplitClosed
+    BagsRewriteResponse r = rewriteMapSplitClosed(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
+  }
+  {
     // AGGREGATE_DEAD_COLUMNS, see rewriteAggregateDeadColumns
     BagsRewriteResponse r = rewriteAggregateDeadColumns(n);
     if (r.d_node != n)
@@ -2123,6 +2524,15 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       }
     }
   }
+  if (n[1].getKind() == Kind::BAG_FILTER)
+  {
+    // SEMI_TO_INTERSECTION, see semiJoinToIntersection
+    Node inter = semiJoinToIntersection(n, false);
+    if (!inter.isNull())
+    {
+      return BagsRewriteResponse(inter, Rewrite::SEMI_TO_INTERSECTION);
+    }
+  }
   if (n[1].getKind() == Kind::BAG_FILTER
       && n[1][1].getKind() == Kind::TABLE_PRODUCT)
   {
@@ -2163,6 +2573,112 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
   TypeNode t = A.getType();
+  {
+    // FILTER_COUNT_AS_COUNTER: an aggregate with a counter column c, whose
+    // step is (+ ((_ tuple.select c) acc) 1) from 0, has on every row a
+    // COUNT(*) column q (one whose step counts rows from (nullable.some 0),
+    // see isCountStep) equal to (nullable.some ((_ tuple.select c) t)); the
+    // filter reads column q so, which makes a test of COUNT(*) a test of the
+    // counter that the solver relates to the group's rows. With c = 2, q = 1,
+    //   (bag.filter (lambda ((t T))
+    //                 (= ((_ tuple.select 1) t) (nullable.some 3)))
+    //               ((_ table.aggr 0) f i X))
+    //   --->
+    //   (bag.filter (lambda ((t T))
+    //                 (= (nullable.some ((_ tuple.select 2) t))
+    //                    (nullable.some 3)))
+    //               ((_ table.aggr 0) f i X))
+    // also for the aggregates among the components of a product; the
+    // components of (table.product G (table.product Y Z)) are G, Y and Z,
+    // whose columns start at starts[i] in the product's rows
+    Node p = asLambda(P);
+    if (p.getKind() == Kind::LAMBDA && p[0].getNumChildren() == 1
+        && (A.getKind() == Kind::TABLE_AGGREGATE
+            || A.getKind() == Kind::TABLE_PRODUCT))
+    {
+      std::vector<Node> comps;
+      std::vector<size_t> starts;
+      Node rest = A;
+      size_t at = 0;
+      bool tuples = true;
+      while (tuples)
+      {
+        Node c = rest.getKind() == Kind::TABLE_PRODUCT ? rest[0] : rest;
+        tuples = c.getType().getBagElementType().isTuple();
+        if (!tuples)
+        {
+          break;
+        }
+        comps.push_back(c);
+        starts.push_back(at);
+        at += c.getType().getBagElementType().getTupleLength();
+        if (rest.getKind() != Kind::TABLE_PRODUCT)
+        {
+          break;
+        }
+        rest = rest[1];
+      }
+      std::vector<Node> from, to;
+      for (size_t i = 0; tuples && i < comps.size(); i++)
+      {
+        const Node& G = comps[i];
+        Node f = G.getKind() == Kind::TABLE_AGGREGATE ? asLambda(G[0])
+                                                      : Node::null();
+        if (f.isNull() || f.getKind() != Kind::LAMBDA
+            || f[0].getNumChildren() != 2
+            || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
+            || G[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+        {
+          continue;
+        }
+        Node acc = f[0][1];
+        int counter = -1;
+        for (size_t q = 0; q < f[1].getNumChildren(); q++)
+        {
+          Node own = datatypes::TupleUtils::nthElementOfTuple(acc, q);
+          const Node& e = f[1][q];
+          if (e.getKind() == Kind::ADD && e.getNumChildren() == 2
+              && ((e[0] == own && e[1] == d_one)
+                  || (e[1] == own && e[0] == d_one))
+              && G[1][q].isConst() && G[1][q].getConst<Rational>().isZero())
+          {
+            counter = static_cast<int>(q);
+          }
+        }
+        for (size_t q = 0; counter >= 0 && q < f[1].getNumChildren(); q++)
+        {
+          Node own = datatypes::TupleUtils::nthElementOfTuple(acc, q);
+          const Node& e = f[1][q];
+          if (static_cast<int>(q) == counter || e.getKind() == Kind::ITE
+              || !isCountStep(e, own, G[1][q]))
+          {
+            continue;
+          }
+          // ((_ tuple.select q) t) is read as
+          // (nullable.some ((_ tuple.select c) t)), si the index of the
+          // constructor nullable.some
+          const DType& dt = e.getType().getDType();
+          size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+          from.push_back(
+              datatypes::TupleUtils::nthElementOfTuple(p[0][0], starts[i] + q));
+          to.push_back(d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                    dt[si].getConstructor(),
+                                    datatypes::TupleUtils::nthElementOfTuple(
+                                        p[0][0], starts[i] + counter)));
+        }
+      }
+      if (!from.empty())
+      {
+        Node b =
+            p[1].substitute(from.begin(), from.end(), to.begin(), to.end());
+        if (b != p[1])
+        {
+          Node ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(p[0][0], b), A);
+          return BagsRewriteResponse(ret, Rewrite::FILTER_COUNT_AS_COUNTER);
+        }
+      }
+    }
+  }
   {
     // NOT_NULL_COLUMNS: the null tests of columns the rows of A never have
     // null are decided, see assumeNonNull; with column 1 of X never null,
@@ -2326,6 +2842,89 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
           }
         }
       }
+      // FILTER_KNOWN_NONEMPTY: a bag that a membership conjunct finds a row
+      // in, or a bag it reaches that row through maps, filters and bag.setof,
+      // is not empty:
+      //   (bag.filter (lambda ((t T))
+      //                 (and (>= (bag.count ((_ tuple.project 0) t)
+      //                                     (bag.map g Y))
+      //                          1)
+      //                      (not (= Y (as bag.empty (Bag U))))))
+      //               X)
+      //   --->
+      //   (bag.filter (lambda ((t T))
+      //                 (>= (bag.count ((_ tuple.project 0) t) (bag.map g Y))
+      //                     1))
+      //               X)
+      // and the filter is empty when the conjunct says that the bag is
+      // empty
+      {
+        std::set<Node> nonEmpty;
+        for (const Node& c : flat)
+        {
+          if (c.getKind() == Kind::GEQ && c[1].isConst()
+              && c[1].getConst<Rational>() == Rational(1)
+              && c[0].getKind() == Kind::BAG_COUNT)
+          {
+            Node X = c[0][1];
+            while (true)
+            {
+              nonEmpty.insert(X);
+              if (X.getKind() == Kind::BAG_MAP
+                  || X.getKind() == Kind::BAG_FILTER)
+              {
+                X = X[1];
+              }
+              else if (X.getKind() == Kind::BAG_SETOF)
+              {
+                X = X[0];
+              }
+              else
+              {
+                break;
+              }
+            }
+          }
+        }
+        bool changed = false;
+        std::vector<Node> rewritten;
+        for (const Node& c : flat)
+        {
+          Node e = c.getKind() == Kind::NOT ? c[0] : c;
+          bool empty = false;
+          if (e.getKind() == Kind::EQUAL && e[0].getType().isBag())
+          {
+            for (size_t sd = 0; sd < 2 && !empty; sd++)
+            {
+              empty = e[sd].getKind() == Kind::BAG_EMPTY
+                      && nonEmpty.count(e[1 - sd]) > 0;
+            }
+          }
+          if (!empty)
+          {
+            rewritten.push_back(c);
+            continue;
+          }
+          changed = true;
+          if (c.getKind() != Kind::NOT)
+          {
+            // a conjunct that is false
+            return BagsRewriteResponse(d_nm->mkConst(EmptyBag(t)),
+                                       Rewrite::FILTER_KNOWN_NONEMPTY);
+          }
+        }
+        if (changed)
+        {
+          Node newBody = rewritten.empty()
+                             ? d_nm->mkConst(true)
+                             : (rewritten.size() == 1
+                                    ? rewritten[0]
+                                    : d_nm->mkNode(Kind::AND, rewritten));
+          Node ret =
+              d_nm->mkNode(Kind::BAG_FILTER, mkLambda(P[0][0], newBody), A);
+          return BagsRewriteResponse(ret, Rewrite::FILTER_KNOWN_NONEMPTY);
+        }
+      }
       // FILTER_CONFLICTING_CONSTANTS also drops the conjuncts that others
       // imply:
       //   (nullable.is_some a) next to (= a (nullable.some 5));
@@ -2392,6 +2991,14 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
         Node ret =
             d_nm->mkNode(Kind::BAG_FILTER, mkLambda(P[0][0], newBody), A);
         return BagsRewriteResponse(ret, Rewrite::FILTER_CONFLICTING_CONSTANTS);
+      }
+    }
+    {
+      // FILTER_INTO_SETOF, see rewriteFilterIntoSetofComponent
+      BagsRewriteResponse r = rewriteFilterIntoSetofComponent(n);
+      if (r.d_node != n)
+      {
+        return r;
       }
     }
     {
@@ -2576,7 +3183,41 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
           return BagsRewriteResponse(ret, Rewrite::AGGREGATE_KEYED);
         }
       }
-      return BagsRewriteResponse(n, Rewrite::NONE);
+      // FILTER_AGGREGATE_ONE_ROW: an aggregate of a single row e, with Q
+      // keeping only the groups some row reached (Q tests the counter
+      // positive, see counterColumn) and m 1 or (ite c 1 0), is that row's
+      // group folded once, m times:
+      //   (bag.filter Q ((_ table.aggr 0) f i (bag e m)))
+      //   ---> (bag.filter Q (bag (f e i) m))
+      // where (f e i) is f's body with t := e and acc := i; with m 0 the
+      // aggregate's row of initial values has counter 0 and Q drops it
+      Node G = A;
+      Node f = asLambda(G[0]);
+      if (G[2].getKind() == Kind::BAG_MAKE && f.getKind() == Kind::LAMBDA
+          && f[0].getNumChildren() == 2 && counterColumn(n[0], f, G[1]) >= 0)
+      {
+        Node m = G[2][1];
+        bool oneOrNone =
+            (m.isConst() && m.getConst<Rational>() == Rational(1))
+            || (m.getKind() == Kind::ITE && m[1].isConst() && m[2].isConst()
+                && ((m[1].getConst<Rational>() == Rational(1)
+                     && m[2].getConst<Rational>().isZero())
+                    || (m[2].getConst<Rational>() == Rational(1)
+                        && m[1].getConst<Rational>().isZero())));
+        if (oneOrNone)
+        {
+          // (f e i), the body of f with t := e and acc := i
+          std::vector<Node> from{f[0][0], f[0][1]};
+          std::vector<Node> to{G[2][0], G[1]};
+          Node row =
+              f[1].substitute(from.begin(), from.end(), to.begin(), to.end());
+          Node ret = d_nm->mkNode(
+              Kind::BAG_FILTER, n[0], d_nm->mkNode(Kind::BAG_MAKE, row, m));
+          return BagsRewriteResponse(ret, Rewrite::FILTER_AGGREGATE_ONE_ROW);
+        }
+      }
+      // FILTER_AGGREGATE, see rewriteFilterOfAggregate
+      return rewriteFilterOfAggregate(n);
     }
     case Kind::BAG_SETOF:
     {
@@ -2585,6 +3226,16 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
       Node inner = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][0]);
       Node ret = d_nm->mkNode(Kind::BAG_SETOF, inner);
       return BagsRewriteResponse(ret, Rewrite::FILTER_SETOF);
+    }
+    case Kind::BAG_INTER_MIN:
+    {
+      // FILTER_INTER_MIN:
+      //   (bag.filter p (bag.inter_min A B))
+      //   ---> (bag.inter_min (bag.filter p A) (bag.filter p B))
+      Node a = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][0]);
+      Node b = d_nm->mkNode(Kind::BAG_FILTER, n[0], n[1][1]);
+      Node ret = d_nm->mkNode(Kind::BAG_INTER_MIN, a, b);
+      return BagsRewriteResponse(ret, Rewrite::FILTER_INTER_MIN);
     }
     case Kind::TABLE_PRODUCT:
     {
@@ -2664,7 +3315,8 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
           return r;
         }
       }
-      return BagsRewriteResponse(n, Rewrite::NONE);
+      // FILTER_EQUI_JOIN_SETS, see rewriteEquiJoinOfSets
+      return rewriteEquiJoinOfSets(n);
     }
     default: return BagsRewriteResponse(n, Rewrite::NONE);
   }
@@ -3172,6 +3824,98 @@ BagsRewriteResponse BagsRewriter::dropImpliedCounters(const TNode& n) const
   return BagsRewriteResponse(n, Rewrite::NONE);
 }
 
+BagsRewriteResponse BagsRewriter::rewriteEquiJoinOfSets(const TNode& n) const
+{
+  // FILTER_EQUI_JOIN_SETS: a join of two sets X and Y of rows of one sort T,
+  // on all their columns, pairs each row of X with the one equal row of Y,
+  // if any: the rows of the intersection, twice. With T of two columns,
+  //   (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
+  //                                       ((_ tuple.select 2) t))
+  //                                    (= ((_ tuple.select 1) t)
+  //                                       ((_ tuple.select 3) t))
+  //                                    q))
+  //               (table.product X Y))
+  //   --->
+  //   (bag.filter (lambda ((t V)) q)
+  //               (bag.map (lambda ((w T)) (tuple ((_ tuple.select 0) w)
+  //                                               ((_ tuple.select 1) w)
+  //                                               ((_ tuple.select 0) w)
+  //                                               ((_ tuple.select 1) w)))
+  //                        (bag.inter_min X Y)))
+  // the shape of SQL's INTERSECT, which the translator writes as
+  // bag.inter_min; X and Y are sets, see isSet
+  Node P = asLambda(n[0]);
+  Node X = n[1][0];
+  Node Y = n[1][1];
+  TypeNode xType = X.getType();
+  TypeNode yType = Y.getType();
+  if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
+      || xType != yType || !xType.getBagElementType().isTuple() || !isSet(X)
+      || !isSet(Y))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node t = P[0][0];
+  size_t m = X.getType().getBagElementType().getTupleLength();
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  std::vector<bool> joined(m, false);
+  std::vector<Node> rest;
+  for (const Node& c : conjuncts)
+  {
+    bool used = false;
+    if (c.getKind() == Kind::EQUAL && c[0].getKind() == Kind::APPLY_SELECTOR
+        && c[1].getKind() == Kind::APPLY_SELECTOR && c[0][0] == t
+        && c[1][0] == t)
+    {
+      size_t i = datatypes::utils::indexOf(c[0].getOperator());
+      size_t j = datatypes::utils::indexOf(c[1].getOperator());
+      size_t lo = std::min(i, j), hi = std::max(i, j);
+      if (lo < m && hi == lo + m)
+      {
+        joined[lo] = true;
+        used = true;
+      }
+    }
+    if (!used)
+    {
+      rest.push_back(c);
+    }
+  }
+  if (std::find(joined.begin(), joined.end(), false) != joined.end())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  TypeNode wType = X.getType().getBagElementType();
+  Node w = rowVariable(wType);
+  std::vector<Node> cols;
+  for (size_t k = 0; k < 2 * m; k++)
+  {
+    cols.push_back(datatypes::TupleUtils::nthElementOfTuple(w, k % m));
+  }
+  TypeNode rowType = n.getType().getBagElementType();
+  // dup is (lambda ((w T)) (tuple ((_ tuple.select 0) w) ((_ tuple.select 1)
+  // w) ((_ tuple.select 0) w) ((_ tuple.select 1) w)))
+  Node dup = mkLambda(w,
+                      datatypes::TupleUtils::constructTupleFromElements(
+                          rowType, cols, 0, cols.size() - 1));
+  Node ret =
+      d_nm->mkNode(Kind::BAG_MAP, dup, d_nm->mkNode(Kind::BAG_INTER_MIN, X, Y));
+  if (!rest.empty())
+  {
+    Node q = rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::AND, rest);
+    ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, q), ret);
+  }
+  return BagsRewriteResponse(ret, Rewrite::FILTER_EQUI_JOIN_SETS);
+}
+
 void BagsRewriter::elementConditions(const Node& A,
                                      const Node& w,
                                      std::set<Node>& out) const
@@ -3423,6 +4167,191 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
     Node l = asLambda(f);
     if (l.getKind() == Kind::LAMBDA && l[0].getNumChildren() == 2)
     {
+      if (l[1] == l[0][1])
+      {
+        // FOLD_IDENTITY_STEP: a step that keeps the accumulator,
+        //   (bag.fold (lambda ((t T) (acc S)) acc) i X) ---> i
+        return BagsRewriteResponse(t, Rewrite::FOLD_IDENTITY_STEP);
+      }
+      if (bag.getKind() == Kind::BAG_FILTER
+          && bag[1].getKind() == Kind::TABLE_PRODUCT
+          && !l[1].getType().isTuple())
+      {
+        // FOLD_OVER_JOIN: a fold over a join, as the fold of the one-column
+        // aggregate of eagerAggregation over the join of the pre-aggregated
+        // sides:
+        //   (bag.fold f i (bag.filter P (table.product X Y)))
+        //   --->
+        //   (bag.fold f' i J')
+        // where (f1, i1) is f as a one-column tuple fold,
+        //   f1 = (lambda ((t V) (acc (Tuple S))) (tuple b[acc := a0]))
+        //   i1 = (tuple i)
+        // with a0 = ((_ tuple.select 0) acc), eagerAggregation gives
+        // (f3, i3, J') for it, and f' is f3 back on S
+        Node a = l[0][1];
+        TypeNode tt = d_nm->mkTupleType({a.getType()});
+        Node acc = NodeManager::mkBoundVar("acc", tt);
+        Node a0 = datatypes::TupleUtils::nthElementOfTuple(acc, 0);
+        Node body = datatypes::TupleUtils::constructTupleFromElements(
+            tt, {l[1].substitute(TNode(a), TNode(a0))}, 0, 0);
+        Node f1 = d_nm->mkNode(Kind::LAMBDA,
+                               d_nm->mkNode(Kind::BOUND_VAR_LIST, l[0][0], acc),
+                               body);
+        Node i1 =
+            datatypes::TupleUtils::constructTupleFromElements(tt, {t}, 0, 0);
+        Node e = eagerAggregation(f1, i1, bag, {});
+        if (!e.isNull())
+        {
+          // f3 = (lambda ((s W) (acc3 (Tuple S))) (tuple b3)), and the step
+          // of f' is b3 with ((_ tuple.select 0) acc3) := a3
+          Node f3 = e[0];
+          Node acc3 = f3[0][1];
+          Node a3 = NodeManager::mkBoundVar("acc", a.getType());
+          Node step = f3[1][0].substitute(
+              TNode(datatypes::TupleUtils::nthElementOfTuple(acc3, 0)),
+              TNode(a3));
+          Node lambda =
+              d_nm->mkNode(Kind::LAMBDA,
+                           d_nm->mkNode(Kind::BOUND_VAR_LIST, f3[0][0], a3),
+                           step);
+          Node ret = d_nm->mkNode(Kind::BAG_FOLD, lambda, t, e[1]);
+          return BagsRewriteResponse(ret, Rewrite::FOLD_OVER_JOIN);
+        }
+      }
+      if (t.getKind() == Kind::APPLY_CONSTRUCTOR && t.getNumChildren() == 1
+          && t[0].isConst() && t[0].getConst<Rational>().isZero()
+          && l[1].getKind() == Kind::APPLY_CONSTRUCTOR
+          && l[1].getNumChildren() == 1 && l[1][0].getKind() == Kind::ADD
+          && t.getType().isNullable())
+      {
+        // FOLD_SUM_FROM_ZERO: a sum from (nullable.some 0) of a term e that
+        // does not read the accumulator is 0 over no row, and otherwise the
+        // sum that skips nulls from null: one fold S then stands for both
+        // SUM (from null) and COALESCE(SUM, 0) (from 0),
+        //   (bag.fold (lambda ((t T) (acc (Nullable Int)))
+        //               (nullable.some (+ (nullable.val acc) e)))
+        //             (nullable.some 0)
+        //             X)
+        //   --->
+        //   (ite (= (as nullable.null (Nullable Int)) S) (nullable.some 0) S)
+        // where
+        //   S = (bag.fold (lambda ((t T) (acc (Nullable Int)))
+        //                   (ite (= (as nullable.null (Nullable Int)) acc)
+        //                        (nullable.some e)
+        //                        (nullable.some (+ (nullable.val acc) e))))
+        //                 (as nullable.null (Nullable Int))
+        //                 X)
+        Node a = l[0][1];
+        const DType& dt = t.getType().getDType();
+        size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+        Node val =
+            d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), a);
+        std::vector<Node> rest;
+        bool once = false;
+        for (const Node& c : l[1][0])
+        {
+          if (c == val && !once)
+          {
+            once = true;
+          }
+          else
+          {
+            rest.push_back(c);
+          }
+        }
+        Node e = rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::ADD, rest);
+        // not a count, a sum of a constant, which stays a count from 0
+        if (once && !rest.empty() && !occursFree(e, a) && !e.isConst())
+        {
+          // null is (as nullable.null (Nullable Int)), some is
+          // (nullable.some e), step the step of S above
+          Node null = d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                   dt[1 - si].getConstructor());
+          Node some =
+              d_nm->mkNode(Kind::APPLY_CONSTRUCTOR, dt[si].getConstructor(), e);
+          Node step =
+              d_nm->mkNode(Kind::ITE,
+                           {null.eqNode(a),
+                            some,
+                            d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                         dt[si].getConstructor(),
+                                         d_nm->mkNode(Kind::ADD, val, e))});
+          Node S = d_nm->mkNode(Kind::BAG_FOLD,
+                                d_nm->mkNode(Kind::LAMBDA, l[0], step),
+                                null,
+                                bag);
+          Node ret = d_nm->mkNode(Kind::ITE, null.eqNode(S), t, S);
+          return BagsRewriteResponse(ret, Rewrite::FOLD_SUM_FROM_ZERO);
+        }
+      }
+      if (bag.getKind() == Kind::BAG_UNION_DISJOINT && t.getType().isNullable())
+      {
+        // FOLD_UNION_COMBINE: a sum, minimum or maximum that skips nulls from
+        // null (see nullAwareStepKind), or a count from (nullable.some 0) (see
+        // isCountStep), over a union: the two folds combined by the
+        // operation, which does not depend on the order the fold visits the
+        // rows in, unlike FOLD_UNION_DISJOINT below. For a sum f,
+        //   (bag.fold f (as nullable.null (Nullable Int))
+        //             (bag.union_disjoint A B))
+        //   --->
+        //   (ite (= (as nullable.null (Nullable Int)) a)
+        //        b
+        //        (ite (= (as nullable.null (Nullable Int)) b)
+        //             a
+        //             (nullable.some (+ (nullable.val a) (nullable.val b)))))
+        // where a = (bag.fold f (as nullable.null (Nullable Int)) A) and b
+        // the same over B; a minimum combines as
+        // (ite (<= (nullable.val a) (nullable.val b)) a b), a maximum with >=,
+        // and two counts from (nullable.some 0) as
+        // (nullable.some (+ (nullable.val a) (nullable.val b))), without the
+        // null tests. k is 0 for a sum, 1 for a minimum, 2 for a maximum and 3
+        // for a count
+        Node arg;
+        int k = isNullConstant(t) ? nullAwareStepKind(l[1], l[0][1], arg) : -1;
+        if (k < 0 && isCountStep(l[1], l[0][1], t))
+        {
+          k = 3;
+        }
+        if (k >= 0)
+        {
+          Node a = d_nm->mkNode(Kind::BAG_FOLD, f, t, bag[0]);
+          Node b = d_nm->mkNode(Kind::BAG_FOLD, f, t, bag[1]);
+          const DType& dt = t.getType().getDType();
+          size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+          Node null = d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                   dt[1 - si].getConstructor());
+          Node va =
+              d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), a);
+          Node vb =
+              d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), b);
+          Node both;
+          switch (k)
+          {
+            case 0:
+            case 3:
+              both = d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                  dt[si].getConstructor(),
+                                  d_nm->mkNode(Kind::ADD, va, vb));
+              break;
+            case 1:
+              both = d_nm->mkNode(
+                  Kind::ITE, d_nm->mkNode(Kind::LEQ, va, vb), a, b);
+              break;
+            default:
+              both = d_nm->mkNode(
+                  Kind::ITE, d_nm->mkNode(Kind::GEQ, va, vb), a, b);
+              break;
+          }
+          Node ret =
+              k == 3 ? both
+                     : d_nm->mkNode(
+                           Kind::ITE,
+                           {null.eqNode(a),
+                            b,
+                            d_nm->mkNode(Kind::ITE, null.eqNode(b), a, both)});
+          return BagsRewriteResponse(ret, Rewrite::FOLD_UNION_COMBINE);
+        }
+      }
       if (bag.getType().getBagElementType().isTuple())
       {
         // NOT_NULL_COLUMNS: the null tests of columns the rows of X never
@@ -4478,6 +5407,579 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
   return BagsRewriteResponse(ret, Rewrite::AGGREGATE_UNION_DISJOINT_KEYS);
 }
 
+Node BagsRewriter::eagerAggregation(const Node& f,
+                                    const Node& init,
+                                    const Node& J,
+                                    const std::vector<uint32_t>& K) const
+{
+  // Eager aggregation, the SQL rewrite that pushes an aggregate through a
+  // join. f folds the rows of J = (bag.filter P (table.product X Y)),
+  // grouped by the columns K of J's rows (none for a fold), with P equating
+  // columns of X with columns of Y besides conditions on X alone and on Y
+  // alone, and every column of f a key copy, the counter, or a sum, minimum,
+  // maximum or count over a column of one side: the groups of the join are
+  // made of the groups of X and of Y by their join and key columns, X's sum
+  // over a pair of groups is X's sum times Y's rows, a minimum is X's
+  // minimum, a count X's count times Y's rows. Returns
+  //   (SEXPR f3 J' (SEXPR k0 ..))
+  // where f3 folds J', the join of those two aggregates, the same way (from
+  // the same initial value), and k0 .. are the columns of J' rows that hold
+  // the group columns K; null when J is not of that shape. For SQL's
+  //   SELECT x.k, SUM(y.b) FROM X x JOIN Y y ON x.a = y.a GROUP BY x.k
+  // with X rows (tuple k a) and Y rows (tuple a b),
+  //   J = (bag.filter (lambda ((t V)) (= ((_ tuple.select 1) t)
+  //                                      ((_ tuple.select 2) t)))
+  //                   (table.product X Y))
+  // and f's rows (tuple k sum-of-b counter), K = {0}:
+  //   AX = ((_ table.aggr 1 0) fx ix X), rows (tuple a k rows-x counter-x)
+  //   AY = ((_ table.aggr 0) fy iy Y), rows (tuple a sum-of-b rows-y
+  //                                              counter-y)
+  //   J' = (bag.filter (lambda ((p W)) (and (= ((_ tuple.select 0) p)
+  //                                            ((_ tuple.select 4) p))
+  //                                         (>= ((_ tuple.select 3) p) 1)
+  //                                         (>= ((_ tuple.select 7) p) 1)))
+  //                    (table.product AX AY))
+  //   f3 = (lambda ((p W) (acc S))
+  //          (tuple ((_ tuple.select 1) p)
+  //                 [the step of f's sum, with argument
+  //                  (ite (= (as nullable.null (Nullable Int))
+  //                          ((_ tuple.select 5) p))
+  //                       (as nullable.null (Nullable Int))
+  //                       (nullable.some
+  //                         (* (nullable.val ((_ tuple.select 5) p))
+  //                            (nullable.val ((_ tuple.select 2) p)))))]
+  //                 (+ ((_ tuple.select 2) acc)
+  //                    (* ((_ tuple.select 3) p) ((_ tuple.select 7) p)))))
+  // and the group columns (SEXPR 1), where AX has k. rows-x and rows-y are
+  // COUNT(*) columns, (nullable.some 0) plus one per row.
+  if (J.getKind() != Kind::BAG_FILTER || J[1].getKind() != Kind::TABLE_PRODUCT
+      || J[1][1].getKind() == Kind::TABLE_PRODUCT || d_rewriter == nullptr)
+  {
+    return Node::null();
+  }
+  Node P = asLambda(J[0]);
+  Node X = J[1][0];
+  Node Y = J[1][1];
+  auto aggregated = [&](Node B) {
+    while (B.getKind() == Kind::BAG_FILTER || B.getKind() == Kind::BAG_MAP
+           || B.getKind() == Kind::BAG_SETOF)
+    {
+      B = B.getKind() == Kind::BAG_SETOF ? B[0] : B[1];
+    }
+    return B.getKind() == Kind::TABLE_AGGREGATE;
+  };
+  if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1 || aggregated(X)
+      || aggregated(Y) || !X.getType().getBagElementType().isTuple()
+      || !Y.getType().getBagElementType().isTuple())
+  {
+    return Node::null();
+  }
+  Node r = P[0][0];
+  size_t wx = X.getType().getBagElementType().getTupleLength();
+  size_t wy = Y.getType().getBagElementType().getTupleLength();
+  // the conjuncts: join equations (= ((_ tuple.select a) r)
+  // ((_ tuple.select b) r)) with a a column of X and b one of Y, and
+  // conditions on one side, onX over X's rows xv and onY over Y's rows yv
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  std::vector<std::pair<uint32_t, uint32_t>> joins;  // (X column, Y column)
+  std::vector<Node> onX, onY;
+  Node xv = rowVariable(X.getType().getBagElementType());
+  Node yv = rowVariable(Y.getType().getBagElementType());
+  std::vector<Node> rx, tx, ry, ty;
+  for (size_t k = 0; k < wx; k++)
+  {
+    rx.push_back(datatypes::TupleUtils::nthElementOfTuple(r, k));
+    tx.push_back(datatypes::TupleUtils::nthElementOfTuple(xv, k));
+  }
+  for (size_t k = 0; k < wy; k++)
+  {
+    ry.push_back(datatypes::TupleUtils::nthElementOfTuple(r, wx + k));
+    ty.push_back(datatypes::TupleUtils::nthElementOfTuple(yv, k));
+  }
+  for (const Node& c : conjuncts)
+  {
+    std::set<uint32_t> pos;
+    if (!readPositions(c, r, pos) || bindsVariable(c, r))
+    {
+      return Node::null();
+    }
+    bool inX = true, inY = true;
+    for (uint32_t q : pos)
+    {
+      inX = inX && q < wx;
+      inY = inY && q >= wx;
+    }
+    if (inX)
+    {
+      onX.push_back(c.substitute(rx.begin(), rx.end(), tx.begin(), tx.end()));
+      continue;
+    }
+    if (inY)
+    {
+      onY.push_back(c.substitute(ry.begin(), ry.end(), ty.begin(), ty.end()));
+      continue;
+    }
+    if (c.getKind() == Kind::EQUAL && c[0].getKind() == Kind::APPLY_SELECTOR
+        && c[1].getKind() == Kind::APPLY_SELECTOR && c[0][0] == r
+        && c[1][0] == r)
+    {
+      uint32_t a = datatypes::utils::indexOf(c[0].getOperator());
+      uint32_t b = datatypes::utils::indexOf(c[1].getOperator());
+      if (a > b)
+      {
+        std::swap(a, b);
+      }
+      if (a < wx && b >= wx)
+      {
+        joins.push_back({a, b - wx});
+        continue;
+      }
+    }
+    return Node::null();
+  }
+  if (joins.empty())
+  {
+    return Node::null();
+  }
+  // the inner group columns of each side: its join columns and its keys,
+  // gx = {1, 0} and gy = {0} in the example
+  std::vector<uint32_t> gx, gy;
+  auto addTo = [](std::vector<uint32_t>& v, uint32_t c) {
+    if (std::find(v.begin(), v.end(), c) == v.end())
+    {
+      v.push_back(c);
+    }
+  };
+  for (const std::pair<uint32_t, uint32_t>& jn : joins)
+  {
+    addTo(gx, jn.first);
+    addTo(gy, jn.second);
+  }
+  for (uint32_t k : K)
+  {
+    if (k < wx)
+    {
+      addTo(gx, k);
+    }
+    else
+    {
+      addTo(gy, k - wx);
+    }
+  }
+  // the columns of f: a KEY copy ((_ tuple.select k) t) of a group column,
+  // the COUNTER (+ ((_ tuple.select q) acc) 1) from 0, a SUM or an
+  // extremum (EXT, a minimum or a maximum) of a column of X or of Y that
+  // skips nulls (see nullAwareStepKind), a count of the rows where a column
+  // of X or of Y is not null (CNT), or COUNT(*) (STAR); src[q] is the column
+  // of J the role reads
+  Node xr = f[0][0];
+  Node acc = f[0][1];
+  size_t w = f[1].getNumChildren();
+  enum Role
+  {
+    KEY,
+    COUNTER,
+    SUM_X,
+    SUM_Y,
+    EXT_X,
+    EXT_Y,
+    CNT_X,
+    CNT_Y,
+    STAR
+  };
+  std::vector<Role> role(w);
+  std::vector<uint32_t> src(w, 0);
+  for (size_t q = 0; q < w; q++)
+  {
+    Node e = f[1][q];
+    Node own = datatypes::TupleUtils::nthElementOfTuple(acc, q);
+    if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == xr)
+    {
+      uint32_t k = datatypes::utils::indexOf(e.getOperator());
+      if (std::find(K.begin(), K.end(), k) == K.end())
+      {
+        return Node::null();
+      }
+      role[q] = KEY;
+      src[q] = k;
+      continue;
+    }
+    if (e.getKind() == Kind::ADD && e.getNumChildren() == 2
+        && ((e[0] == own && e[1] == d_one) || (e[1] == own && e[0] == d_one))
+        && init[q].isConst() && init[q].getConst<Rational>().isZero())
+    {
+      role[q] = COUNTER;
+      continue;
+    }
+    std::set<uint32_t> accRead, read;
+    if (!readPositions(e, acc, accRead) || accRead.size() > 1
+        || (accRead.size() == 1 && !accRead.count(q))
+        || !readPositions(e, xr, read) || read.size() > 1)
+    {
+      return Node::null();
+    }
+    Node arg;
+    int k = isNullConstant(init[q]) ? nullAwareStepKind(e, own, arg) : -1;
+    if (k >= 0 && read.size() == 1)
+    {
+      uint32_t c = *read.begin();
+      role[q] = k == 0 ? (c < wx ? SUM_X : SUM_Y) : (c < wx ? EXT_X : EXT_Y);
+      src[q] = c;
+      continue;
+    }
+    if (isCountStep(e, own, init[q]))
+    {
+      if (read.empty())
+      {
+        role[q] = STAR;
+        continue;
+      }
+      uint32_t c = *read.begin();
+      role[q] = c < wx ? CNT_X : CNT_Y;
+      src[q] = c;
+      continue;
+    }
+    return Node::null();
+  }
+  // the inner aggregate of one side (Y when side, X otherwise), over the
+  // side's rows that satisfy its conditions: its group columns copied, f's
+  // steps of the side's columns, its COUNT(*) and a counter; at[q] is the
+  // column of the inner rows that holds column q of f, starAt and counterAt
+  // those of COUNT(*) and of the counter. In the example, AY's rows are
+  // (tuple a sum-of-b rows-y counter-y), with the steps
+  //   ((_ tuple.select 0) s), [f's sum over (_ tuple.select 1) of s],
+  //   (nullable.some (+ (nullable.val ((_ tuple.select 2) acc)) 1)),
+  //   (+ ((_ tuple.select 3) acc) 1)
+  auto inner = [&](bool side,
+                   std::vector<size_t>& at,
+                   size_t& counterAt,
+                   size_t& starAt) {
+    Node B = side ? Y : X;
+    const std::vector<Node>& cond = side ? onY : onX;
+    const std::vector<uint32_t>& g = side ? gy : gx;
+    size_t off = side ? wx : 0;
+    size_t wb = side ? wy : wx;
+    Node bv = rowVariable(B.getType().getBagElementType());
+    if (!cond.empty())
+    {
+      Node v = side ? yv : xv;
+      Node body = cond.size() == 1 ? cond[0] : d_nm->mkNode(Kind::AND, cond);
+      B = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(v, body), B);
+    }
+    std::vector<Node> from, to;
+    for (size_t k = 0; k < wb; k++)
+    {
+      from.push_back(datatypes::TupleUtils::nthElementOfTuple(xr, off + k));
+      to.push_back(datatypes::TupleUtils::nthElementOfTuple(bv, k));
+    }
+    std::vector<size_t> cols;
+    for (size_t q = 0; q < w; q++)
+    {
+      bool mine =
+          side ? (role[q] == SUM_Y || role[q] == EXT_Y || role[q] == CNT_Y)
+               : (role[q] == SUM_X || role[q] == EXT_X || role[q] == CNT_X);
+      if (mine)
+      {
+        cols.push_back(q);
+      }
+    }
+    std::vector<TypeNode> types;
+    std::vector<TypeNode> btypes =
+        B.getType().getBagElementType().getTupleTypes();
+    for (uint32_t c : g)
+    {
+      types.push_back(btypes[c]);
+    }
+    for (size_t q : cols)
+    {
+      types.push_back(f[1][q].getType());
+    }
+    types.push_back(d_nm->integerType());
+    TypeNode accType = d_nm->mkTupleType(types);
+    Node acc2 = NodeManager::mkBoundVar("acc", accType);
+    std::vector<Node> cells, seeds;
+    for (size_t k = 0; k < g.size(); k++)
+    {
+      cells.push_back(datatypes::TupleUtils::nthElementOfTuple(bv, g[k]));
+      const DType& dt = btypes[g[k]].getDType();
+      seeds.push_back(
+          d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                       dt[dt[0].getNumArgs() == 0 ? 0 : 1].getConstructor()));
+    }
+    at.assign(w, 0);
+    for (size_t c = 0; c < cols.size(); c++)
+    {
+      size_t q = cols[c];
+      at[q] = g.size() + c;
+      std::vector<Node> f2 = from, t2 = to;
+      f2.push_back(datatypes::TupleUtils::nthElementOfTuple(acc, q));
+      t2.push_back(
+          datatypes::TupleUtils::nthElementOfTuple(acc2, g.size() + c));
+      cells.push_back(
+          f[1][q].substitute(f2.begin(), f2.end(), t2.begin(), t2.end()));
+      seeds.push_back(init[q]);
+    }
+    // COUNT(*), the side's rows per group,
+    // (nullable.some (+ (nullable.val ((_ tuple.select q) acc)) 1)) from
+    // (nullable.some 0), then the counter
+    {
+      TypeNode ni = d_nm->mkNullableType(d_nm->integerType());
+      const DType& dt = ni.getDType();
+      size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+      size_t q = g.size() + cols.size();
+      types.insert(types.end() - 1, ni);
+      accType = d_nm->mkTupleType(types);
+      Node acc3 = NodeManager::mkBoundVar("acc", accType);
+      // re-point the cells already built at the wider accumulator
+      std::vector<Node> o, nn;
+      for (size_t k = 0; k < q; k++)
+      {
+        o.push_back(datatypes::TupleUtils::nthElementOfTuple(acc2, k));
+        nn.push_back(datatypes::TupleUtils::nthElementOfTuple(acc3, k));
+      }
+      for (Node& c : cells)
+      {
+        c = c.substitute(o.begin(), o.end(), nn.begin(), nn.end());
+      }
+      acc2 = acc3;
+      Node valAcc =
+          d_nm->mkNode(Kind::APPLY_SELECTOR,
+                       dt[si][0].getSelector(),
+                       datatypes::TupleUtils::nthElementOfTuple(acc2, q));
+      cells.push_back(d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                   dt[si].getConstructor(),
+                                   d_nm->mkNode(Kind::ADD, valAcc, d_one)));
+      seeds.push_back(d_nm->mkNode(
+          Kind::APPLY_CONSTRUCTOR, dt[si].getConstructor(), d_zero));
+      starAt = q;
+    }
+    counterAt = g.size() + cols.size() + 1;
+    cells.push_back(
+        d_nm->mkNode(Kind::ADD,
+                     datatypes::TupleUtils::nthElementOfTuple(acc2, counterAt),
+                     d_one));
+    seeds.push_back(d_zero);
+    Node body = datatypes::TupleUtils::constructTupleFromElements(
+        accType, cells, 0, cells.size() - 1);
+    Node seed = datatypes::TupleUtils::constructTupleFromElements(
+        accType, seeds, 0, seeds.size() - 1);
+    Node fb = d_nm->mkNode(
+        Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, bv, acc2), body);
+    for (size_t q = 0; q < w; q++)
+    {
+      if (role[q] == KEY)
+      {
+        uint32_t k = src[q];
+        bool here = side ? k >= wx : k < wx;
+        if (here)
+        {
+          at[q] = std::find(g.begin(), g.end(), k - off) - g.begin();
+        }
+      }
+    }
+    std::vector<uint32_t> idx(g.begin(), g.end());
+    Node op = d_nm->mkConst(Kind::TABLE_AGGREGATE_OP, ProjectOp(idx));
+    std::vector<Node> children{op, fb, seed, B};
+    return d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+  };
+  std::vector<size_t> atX, atY;
+  size_t cx = 0, cy = 0, sx = 0, sy = 0;
+  Node AX = inner(false, atX, cx, sx);
+  Node AY = inner(true, atY, cy, sy);
+  // J' tests both counters positive, so a keyed inner aggregate is its
+  // reached groups' rows, AGGREGATE_KEYED (see keyedAggregateRows): rows of
+  // the same columns
+  for (Node* side : {&AX, &AY})
+  {
+    Node rows = keyedAggregateRows(*side);
+    if (!rows.isNull())
+    {
+      *side = rows;
+    }
+  }
+  size_t wax = AX.getType().getBagElementType().getTupleLength();
+  Node product = d_nm->mkNode(Kind::TABLE_PRODUCT, AX, AY);
+  Node pr = rowVariable(product.getType().getBagElementType());
+  auto colX = [&](size_t p) {
+    return datatypes::TupleUtils::nthElementOfTuple(pr, p);
+  };
+  auto colY = [&](size_t p) {
+    return datatypes::TupleUtils::nthElementOfTuple(pr, wax + p);
+  };
+  // J', the pairs of groups that join, each reached by a row: the join
+  // equations over the copies of the join columns, and the two counters
+  // positive
+  std::vector<Node> cond;
+  for (const std::pair<uint32_t, uint32_t>& jn : joins)
+  {
+    size_t a = std::find(gx.begin(), gx.end(), jn.first) - gx.begin();
+    size_t b = std::find(gy.begin(), gy.end(), jn.second) - gy.begin();
+    cond.push_back(colX(a).eqNode(colY(b)));
+  }
+  cond.push_back(d_nm->mkNode(Kind::GEQ, colX(cx), d_one));
+  cond.push_back(d_nm->mkNode(Kind::GEQ, colY(cy), d_one));
+  Node joined = d_nm->mkNode(
+      Kind::BAG_FILTER, mkLambda(pr, d_nm->mkNode(Kind::AND, cond)), product);
+  // the outer steps: f's columns over the pairs of groups, each side's rows
+  // per group its COUNT(*); pairs is the number of joined rows a pair of
+  // groups stands for,
+  //   (* (nullable.val ((_ tuple.select sx) p))
+  //      (nullable.val ((_ tuple.select sy) p)))
+  Node acc3 = NodeManager::mkBoundVar("acc", acc.getType());
+  std::vector<Node> cells;
+  auto rowsOf = [&](bool side) {
+    Node c = side ? colY(sy) : colX(sx);
+    const DType& dt = c.getType().getDType();
+    size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+    return d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), c);
+  };
+  Node pairs = d_nm->mkNode(Kind::MULT, {rowsOf(false), rowsOf(true)});
+  for (size_t q = 0; q < w; q++)
+  {
+    Node own3 = datatypes::TupleUtils::nthElementOfTuple(acc3, q);
+    Node own = datatypes::TupleUtils::nthElementOfTuple(acc, q);
+    Node e = f[1][q];
+    TypeNode t = e.getType();
+    switch (role[q])
+    {
+      case KEY:
+        cells.push_back(src[q] < wx ? colX(atX[q]) : colY(atY[q]));
+        break;
+      case COUNTER:
+        cells.push_back(d_nm->mkNode(
+            Kind::ADD, own3, d_nm->mkNode(Kind::MULT, colX(cx), colY(cy))));
+        break;
+      case EXT_X:
+      case EXT_Y:
+      {
+        Node v = role[q] == EXT_X ? colX(atX[q]) : colY(atY[q]);
+        std::vector<Node> fr{
+            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        std::vector<Node> tt{v, own3};
+        cells.push_back(
+            e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));
+        break;
+      }
+      case SUM_X:
+      case SUM_Y:
+      {
+        // the side's sum times the other side's count, null when the sum is
+        Node v = role[q] == SUM_X ? colX(atX[q]) : colY(atY[q]);
+        Node times = rowsOf(role[q] == SUM_X);
+        const DType& dt = t.getDType();
+        size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+        Node null =
+            d_nm->mkNode(Kind::APPLY_CONSTRUCTOR, dt[1 - si].getConstructor());
+        Node val =
+            d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), v);
+        if (val.getType().isReal() && !val.getType().isInteger())
+        {
+          times = d_nm->mkNode(Kind::TO_REAL, times);
+        }
+        Node m =
+            d_nm->mkNode(Kind::ITE,
+                         {null.eqNode(v),
+                          null,
+                          d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                       dt[si].getConstructor(),
+                                       d_nm->mkNode(Kind::MULT, val, times))});
+        std::vector<Node> fr{
+            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        std::vector<Node> tt{m, own3};
+        cells.push_back(
+            e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));
+        break;
+      }
+      case CNT_X:
+      case CNT_Y:
+      case STAR:
+      {
+        // counts add up: the side's count, or the number of pairs, per pair of
+        // groups
+        const DType& dt = t.getDType();
+        size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+        Node by;
+        if (role[q] == STAR)
+        {
+          by = pairs;
+        }
+        else
+        {
+          Node v = role[q] == CNT_X ? colX(atX[q]) : colY(atY[q]);
+          Node val =
+              d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), v);
+          by = d_nm->mkNode(Kind::MULT, val, rowsOf(role[q] == CNT_X));
+        }
+        Node valAcc =
+            d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), own3);
+        cells.push_back(d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
+                                     dt[si].getConstructor(),
+                                     d_nm->mkNode(Kind::ADD, valAcc, by)));
+        break;
+      }
+    }
+  }
+  Node body = datatypes::TupleUtils::constructTupleFromElements(
+      acc.getType(), cells, 0, w - 1);
+  Node f3 = d_nm->mkNode(
+      Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, pr, acc3), body);
+  // the outer keys: where the key copies are
+  std::vector<Node> out{f3, joined};
+  std::vector<Node> keyPos;
+  for (uint32_t k : K)
+  {
+    size_t p =
+        k < wx ? std::find(gx.begin(), gx.end(), k) - gx.begin()
+               : wax + (std::find(gy.begin(), gy.end(), k - wx) - gy.begin());
+    keyPos.push_back(d_nm->mkConstInt(Rational(p)));
+  }
+  out.push_back(d_nm->mkNode(
+      Kind::SEXPR, keyPos.empty() ? std::vector<Node>{d_zero} : keyPos));
+  return d_nm->mkNode(Kind::SEXPR, out);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteAggregateOverJoin(const TNode& n) const
+{
+  // AGGREGATE_OVER_JOIN: an aggregate over a join as the aggregate over the
+  // join of the two sides' groups, see eagerAggregation,
+  //   ((_ table.aggr K) f i (bag.filter P (table.product X Y)))
+  //   ---> ((_ table.aggr K') f3 i J')
+  // with (f3, J', K') from eagerAggregation; in its example,
+  //   ((_ table.aggr 1) f3 i J')
+  // the shape of both sides of Calcite's AggregateJoinTransposeRule pairs
+  Node f = asLambda(n[0]);
+  const std::vector<uint32_t>& K =
+      n.getOperator().getConst<ProjectOp>().getIndices();
+  if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
+      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
+      || n[1].getKind() != Kind::APPLY_CONSTRUCTOR || K.empty())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node e = eagerAggregation(f, n[1], n[2], K);
+  if (e.isNull())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<uint32_t> keys;
+  for (const Node& k : e[2])
+  {
+    keys.push_back(k.getConst<Rational>().getNumerator().toUnsignedInt());
+  }
+  Node op = d_nm->mkConst(Kind::TABLE_AGGREGATE_OP, ProjectOp(keys));
+  std::vector<Node> children{op, e[0], n[1], e[1]};
+  return BagsRewriteResponse(d_nm->mkNode(Kind::TABLE_AGGREGATE, children),
+                             Rewrite::AGGREGATE_OVER_JOIN);
+}
+
 BagsRewriteResponse BagsRewriter::rewriteProductAggregateColumns(
     const TNode& n) const
 {
@@ -4775,6 +6277,14 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
     }
   }
   {
+    // AGGREGATE_OVER_JOIN, see rewriteAggregateOverJoin
+    BagsRewriteResponse r = rewriteAggregateOverJoin(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
+  }
+  {
     // AGGREGATE_DUPLICATE_COLUMN, see rewriteAggregateDuplicateColumn
     BagsRewriteResponse r = rewriteAggregateDuplicateColumn(n);
     if (r.d_node != n)
@@ -4798,6 +6308,14 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
         Node ret = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
         return BagsRewriteResponse(ret, Rewrite::NOT_NULL_COLUMNS);
       }
+    }
+  }
+  {
+    // AGGREGATE_SEMI_JOIN, see rewriteAggregateSemiJoin
+    BagsRewriteResponse r = rewriteAggregateSemiJoin(n);
+    if (r.d_node != n)
+    {
+      return r;
     }
   }
   if (n[2].getKind() == Kind::BAG_UNION_DISJOINT)
@@ -4847,6 +6365,49 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
       }
     }
   }
+  if (n[2].getKind() == Kind::BAG_FILTER && n[0].getKind() == Kind::LAMBDA
+      && n[0][0].getNumChildren() == 2)
+  {
+    // AGGREGATE_FIXED_COLUMNS: the rows of every group pass the filter, they
+    // have the constants it fixes (see fixedColumns, readFixed), and a group
+    // column it fixes splits no group:
+    //   ((_ table.aggr 0 1) (lambda ((t T) (acc S)) b)
+    //                       i
+    //                       (bag.filter (lambda ((s T))
+    //                                     (= ((_ tuple.select 1) s) 5))
+    //                                   X))
+    //   --->
+    //   ((_ table.aggr 0) (lambda ((t T) (acc S)) b[((_ tuple.select 1) t)
+    //                                               := 5])
+    //                     i
+    //                     (bag.filter (lambda ((s T))
+    //                                   (= ((_ tuple.select 1) s) 5))
+    //                                 X))
+    std::map<uint32_t, Node> fixed = fixedColumns(n[2][0]);
+    if (!fixed.empty())
+    {
+      Node f = n[0];
+      Node body = readFixed(f[1], f[0][0], fixed);
+      const std::vector<uint32_t>& K =
+          n.getOperator().getConst<ProjectOp>().getIndices();
+      std::vector<uint32_t> keys;
+      for (uint32_t k : K)
+      {
+        if (!fixed.count(k))
+        {
+          keys.push_back(k);
+        }
+      }
+      if (body != f[1] || keys.size() != K.size())
+      {
+        Node lambda = d_nm->mkNode(Kind::LAMBDA, f[0], body);
+        Node op = d_nm->mkConst(Kind::TABLE_AGGREGATE_OP, ProjectOp(keys));
+        std::vector<Node> children{op, lambda, n[1], n[2]};
+        Node ret = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+        return BagsRewriteResponse(ret, Rewrite::AGGREGATE_FIXED_COLUMNS);
+      }
+    }
+  }
   if (n.getOperator().getConst<ProjectOp>().getIndices().empty())
   {
     // AGGREGATE_NO_KEYS: grouping by no column makes one part, all of X, even
@@ -4855,6 +6416,14 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
     Node fold = d_nm->mkNode(Kind::BAG_FOLD, n[0], n[1], n[2]);
     Node ret = d_nm->mkNode(Kind::BAG_MAKE, fold, d_one);
     return BagsRewriteResponse(ret, Rewrite::AGGREGATE_NO_KEYS);
+  }
+  {
+    // SORTED_KEYS, see rewriteSortedKeys
+    BagsRewriteResponse r = rewriteSortedKeys(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
   }
   {
     // AGGREGATE_SORT_OUTPUT, see rewriteAggregateSortOutput
@@ -5633,6 +7202,163 @@ Node BagsRewriter::keyedAggregateRows(const Node& A) const
   }
   Node body = f[1].substitute(TNode(f[0][1]), TNode(A[1]));
   return d_nm->mkNode(Kind::BAG_MAP, mkLambda(f[0][0], body), A[2]);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteFilterOfAggregate(const TNode& n) const
+{
+  // FILTER_AGGREGATE: a conjunct of p that reads only positions of the
+  // result where f copies a group column of the row filters the groups by
+  // their keys, which is filtering the rows of X by the same columns before
+  // grouping: every group is kept or dropped whole. With f copying column 0
+  // of X to column 0 of its rows and counting them in column 2,
+  //   (bag.filter (lambda ((r V)) (and (> ((_ tuple.select 0) r) 3)
+  //                                    (>= ((_ tuple.select 2) r) 1)))
+  //               ((_ table.aggr 0) f i X))
+  //   --->
+  //   (bag.filter (lambda ((r V)) (>= ((_ tuple.select 2) r) 1))
+  //               ((_ table.aggr 0) f i (bag.filter (lambda ((t T))
+  //                                                   (> ((_ tuple.select 0)
+  //                                                         t)
+  //                                                      3))
+  //                                                 X)))
+  // The conjuncts that stay must reject the row of initial values i, as the
+  // counter test does (see rejectsInitialRow): when no row of X passes the
+  // moved conjuncts, the aggregate of the empty bag still has that row,
+  // (bag i 1), which the moved conjuncts would have dropped
+  Node p = asLambda(n[0]);
+  Node aggr = n[1];
+  Node f = asLambda(aggr[0]);
+  Node i = aggr[1];
+  Node X = aggr[2];
+  if (p.getKind() != Kind::LAMBDA || p[0].getNumChildren() != 1
+      || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
+      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR || !f[1].getType().isTuple()
+      || i.getKind() != Kind::APPLY_CONSTRUCTOR
+      || i.getNumChildren() != f[1].getNumChildren())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  const std::vector<uint32_t>& K =
+      aggr.getOperator().getConst<ProjectOp>().getIndices();
+  std::set<uint32_t> keys(K.begin(), K.end());
+  Node fx = f[0][0];
+  // result position -> the key column of the row it copies
+  std::map<uint32_t, uint32_t> copies;
+  for (size_t q = 0, m = f[1].getNumChildren(); q < m; q++)
+  {
+    Node c = f[1][q];
+    if (c.getKind() == Kind::APPLY_SELECTOR && c[0] == fx)
+    {
+      uint32_t column = datatypes::utils::indexOf(c.getOperator());
+      if (keys.count(column))
+      {
+        copies[q] = column;
+      }
+    }
+  }
+  if (copies.empty())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node r = p[0][0];
+  std::vector<Node> conjuncts;
+  if (p[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), p[1].begin(), p[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(p[1]);
+  }
+  std::vector<Node> onKeys, rest;
+  for (const Node& c : conjuncts)
+  {
+    std::set<uint32_t> positions;
+    bool keysOnly = readPositions(c, r, positions) && !bindsVariable(c, r);
+    for (uint32_t pos : positions)
+    {
+      if (!copies.count(pos))
+      {
+        keysOnly = false;
+      }
+    }
+    (keysOnly ? onKeys : rest).push_back(c);
+  }
+  if (onKeys.empty() || rest.empty()
+      || !rejectsInitialRow(
+          mkLambda(r,
+                   rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::AND, rest)),
+          i))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  // the predicate on a row of X: the result row whose key positions are the
+  // row's key columns and whose other positions are the initial values, which
+  // the conjuncts do not read
+  TypeNode rowType = X.getType().getBagElementType();
+  Node x = rowVariable(rowType);
+  std::vector<Node> elems;
+  for (size_t q = 0, m = f[1].getNumChildren(); q < m; q++)
+  {
+    std::map<uint32_t, uint32_t>::iterator it = copies.find(q);
+    elems.push_back(
+        it != copies.end()
+            ? datatypes::TupleUtils::nthElementOfTuple(x, it->second)
+            : i[q]);
+  }
+  Node row = datatypes::TupleUtils::constructTupleFromElements(
+      r.getType(), elems, 0, elems.size() - 1);
+  Node keysBody =
+      onKeys.size() == 1 ? onKeys[0] : d_nm->mkNode(Kind::AND, onKeys);
+  if (bindsVariable(keysBody, x) || (x != r && expr::hasSubterm(keysBody, x)))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node onX = keysBody.substitute(TNode(r), TNode(row));
+  Node filteredX = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(x, onX), X);
+  std::vector<Node> children{aggr.getOperator(), f, i, filteredX};
+  Node ret = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+  if (!rest.empty())
+  {
+    Node restBody = rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::AND, rest);
+    ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(r, restBody), ret);
+  }
+  return BagsRewriteResponse(ret, Rewrite::FILTER_AGGREGATE);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteSortedKeys(const TNode& n) const
+{
+  // SORTED_KEYS: grouping partitions the rows by equality on the key
+  // columns, so the order and repetitions of the keys in the operator do not
+  // matter: keep them sorted and distinct, which makes two groupings by the
+  // same columns equal,
+  //   ((_ table.aggr 2 0 2) f i X) ---> ((_ table.aggr 0 2) f i X)
+  //   ((_ table.group 1 0) X) ---> ((_ table.group 0 1) X)
+  Assert(n.getKind() == Kind::TABLE_GROUP
+         || n.getKind() == Kind::TABLE_AGGREGATE);
+  const std::vector<uint32_t>& indices =
+      n.getOperator().getConst<ProjectOp>().getIndices();
+  std::vector<uint32_t> sorted(indices.begin(), indices.end());
+  std::sort(sorted.begin(), sorted.end());
+  sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+  if (sorted == indices)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Kind opKind = n.getKind() == Kind::TABLE_GROUP ? Kind::TABLE_GROUP_OP
+                                                 : Kind::TABLE_AGGREGATE_OP;
+  Node op = d_nm->mkConst(opKind, ProjectOp(sorted));
+  std::vector<Node> children{op};
+  children.insert(children.end(), n.begin(), n.end());
+  Node ret = d_nm->mkNode(n.getKind(), children);
+  return BagsRewriteResponse(ret, Rewrite::SORTED_KEYS);
+}
+
+BagsRewriteResponse BagsRewriter::postRewriteGroup(const TNode& n) const
+{
+  // SORTED_KEYS, see rewriteSortedKeys
+  Assert(n.getKind() == Kind::TABLE_GROUP);
+  return rewriteSortedKeys(n);
 }
 
 Node BagsRewriter::accumulatorVariable(TypeNode type) const
@@ -6668,6 +8394,90 @@ BagsRewriteResponse BagsRewriter::rewriteSemiJoin(const TNode& n,
     return BagsRewriteResponse(ret, Rewrite::SEMI_JOIN);
   }
   return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteMapSplitClosed(const TNode& n) const
+{
+  // MAP_SPLIT_CLOSED: a map whose body has a Boolean subterm c that asks
+  // about a bag and reads no variable but the row, such as EXISTS (subquery)
+  // or IN (subquery) as a column, splits on c:
+  //   (bag.map (lambda ((t T)) b) X)
+  //   --->
+  //   (bag.union_disjoint (bag.map (lambda ((t T)) b[c := true])
+  //                                (bag.filter (lambda ((t T)) c) X))
+  //                       (bag.map (lambda ((t T)) b[c := false])
+  //                                (bag.filter (lambda ((t T)) (not c)) X)))
+  // so that the question becomes a filter, which the filter rules
+  // decorrelate
+  Node f = n[0];
+  if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 1)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node t = f[0][0];
+  Node body = f[1];
+  if (bindsVariable(body, t))
+  {
+    // an inner binder of t: a subterm equal to c there would read another t
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node c;
+  std::unordered_set<TNode> visited;
+  std::vector<TNode> todo{body};
+  while (!todo.empty() && c.isNull())
+  {
+    TNode cur = todo.back();
+    todo.pop_back();
+    if (!visited.insert(cur).second || cur.isConst())
+    {
+      continue;
+    }
+    if (cur.getType().isBoolean()
+        && expr::hasSubtermKinds({Kind::BAG_FILTER,
+                                  Kind::BAG_MAP,
+                                  Kind::BAG_COUNT,
+                                  Kind::BAG_SETOF,
+                                  Kind::TABLE_PRODUCT,
+                                  Kind::TABLE_AGGREGATE,
+                                  Kind::TABLE_PROJECT},
+                                 cur))
+    {
+      // a question about a bag, the row's own (IN (subquery)) or not
+      // (EXISTS (subquery)), reading no other variable
+      std::unordered_set<Node> fvs;
+      expr::getFreeVariables(cur, fvs);
+      fvs.erase(t);
+      if (fvs.empty())
+      {
+        c = cur;
+        break;
+      }
+    }
+    if (cur.isClosure())
+    {
+      continue;
+    }
+    for (const Node& ch : cur)
+    {
+      todo.push_back(ch);
+    }
+  }
+  if (c.isNull())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node X = n[1];
+  Node yes = body.substitute(TNode(c), TNode(d_nm->mkConst(true)));
+  Node no = body.substitute(TNode(c), TNode(d_nm->mkConst(false)));
+  Node a = d_nm->mkNode(
+      Kind::BAG_MAP,
+      {mkLambda(t, yes), d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c), X)});
+  Node b = d_nm->mkNode(
+      Kind::BAG_MAP,
+      {mkLambda(t, no),
+       d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, c.notNode()), X)});
+  Node ret = d_nm->mkNode(Kind::BAG_UNION_DISJOINT, a, b);
+  return BagsRewriteResponse(ret, Rewrite::MAP_SPLIT_CLOSED);
 }
 
 Node BagsRewriter::rewriteEmptyFilter(const Node& F) const
@@ -9259,6 +11069,849 @@ bool BagsRewriter::isSet(const Node& X) const
     }
     default: return X.isVar() && !keysOf(X).empty();
   }
+}
+
+BagsRewriteResponse BagsRewriter::rewriteSetofPushdown(const TNode& n) const
+{
+  // SETOF_PUSHDOWN: under duplicate removal only membership counts, so each
+  // component of a product may be replaced by the set of the columns that g
+  // and the rest of p read of it, after the conjuncts of p that read that
+  // component alone:
+  //   (bag.setof (bag.map g (bag.filter p (table.product C1 C2))))
+  //   --->
+  //   (bag.setof (bag.map g' (bag.filter p' (table.product
+  //     (bag.setof (bag.map pi1 (bag.filter p1 C1)))
+  //     (bag.setof (bag.map pi2 (bag.filter p2 C2)))))))
+  // where pi1 projects C1 onto the columns read, p1 is the conjuncts of p on
+  // C1 alone, and g' and p' read the projected columns. With C1 of two
+  // columns of which only column 0 is read,
+  //   pi1 = (lambda ((v T)) (tuple ((_ tuple.select 0) v)))
+  // A component that is a set whose rows those columns tell apart (all of
+  // them, or a key) stays, with its conjuncts above. SQL's SELECT DISTINCT
+  // over a join, which Calcite may write with the DISTINCT pushed into a side.
+  Node inner = n[0];
+  if (inner.getKind() != Kind::BAG_MAP)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node g = asLambda(inner[0]);
+  Node F = inner[1];
+  Node P;
+  Node prod = F;
+  if (F.getKind() == Kind::BAG_FILTER)
+  {
+    P = asLambda(F[0]);
+    prod = F[1];
+  }
+  if (prod.getKind() != Kind::TABLE_PRODUCT || g.getKind() != Kind::LAMBDA
+      || g[0].getNumChildren() != 1
+      || (!P.isNull()
+          && (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1)))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::set<uint32_t> gRead;
+  if (!readPositions(g[1], g[0][0], gRead) || bindsVariable(g[1], g[0][0]))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<Node> comps;
+  Node rest = prod;
+  while (rest.getKind() == Kind::TABLE_PRODUCT)
+  {
+    comps.push_back(rest[0]);
+    rest = rest[1];
+  }
+  comps.push_back(rest);
+  std::vector<size_t> starts, widths;
+  size_t total = 0;
+  for (const Node& c : comps)
+  {
+    TypeNode t = c.getType().getBagElementType();
+    if (!t.isTuple())
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    starts.push_back(total);
+    widths.push_back(t.getTupleLength());
+    total += t.getTupleLength();
+  }
+  auto compOf = [&](uint32_t pos) {
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      if (pos >= starts[k] && pos < starts[k] + widths[k])
+      {
+        return static_cast<int>(k);
+      }
+    }
+    return -1;
+  };
+  // the conjuncts, and the one component each reads alone (-1 for several)
+  std::vector<Node> conjuncts;
+  std::vector<int> owner;
+  std::vector<std::set<uint32_t>> creads;
+  if (!P.isNull())
+  {
+    Node pt = P[0][0];
+    if (bindsVariable(P[1], pt))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    if (P[1].getKind() == Kind::AND)
+    {
+      conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+    }
+    else
+    {
+      conjuncts.push_back(P[1]);
+    }
+    for (const Node& c : conjuncts)
+    {
+      std::set<uint32_t> pos;
+      if (!readPositions(c, pt, pos))
+      {
+        return BagsRewriteResponse(n, Rewrite::NONE);
+      }
+      int o = -2;
+      for (uint32_t q : pos)
+      {
+        int k = compOf(q);
+        o = o == -2 ? k : (o == k ? o : -1);
+      }
+      owner.push_back(o == -2 ? -1 : o);
+      creads.push_back(pos);
+    }
+  }
+  // global reads: g and the conjuncts reading several components
+  std::set<uint32_t> global = gRead;
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (owner[k] < 0)
+    {
+      global.insert(creads[k].begin(), creads[k].end());
+    }
+  }
+  std::vector<bool> keep(comps.size(), false);
+  for (size_t c = 0; c < comps.size(); c++)
+  {
+    bool all = true;
+    for (size_t k = 0; k < widths[c]; k++)
+    {
+      all = all && global.count(starts[c] + k) > 0;
+    }
+    bool keyRead = false;
+    for (const std::set<uint32_t>& K : keysOf(comps[c]))
+    {
+      bool covered = true;
+      for (uint32_t k : K)
+      {
+        covered = covered && global.count(starts[c] + k) > 0;
+      }
+      keyRead = keyRead || covered;
+    }
+    keep[c] = (all || keyRead) && isSet(comps[c]);
+  }
+  // a kept component's own conjuncts stay above, and so do the columns they
+  // read
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (owner[k] >= 0 && keep[owner[k]])
+    {
+      global.insert(creads[k].begin(), creads[k].end());
+    }
+  }
+  bool changed = false;
+  std::vector<Node> newComps;
+  std::map<uint32_t, uint32_t> moved;
+  size_t newAt = 0;
+  for (size_t c = 0; c < comps.size(); c++)
+  {
+    if (keep[c])
+    {
+      newComps.push_back(comps[c]);
+      for (size_t k = 0; k < widths[c]; k++)
+      {
+        moved[starts[c] + k] = newAt + k;
+      }
+      newAt += widths[c];
+      continue;
+    }
+    changed = true;
+    TypeNode t = comps[c].getType().getBagElementType();
+    Node v = rowVariable(t);
+    // the component's own conjuncts, over its own rows
+    std::vector<Node> local;
+    for (size_t k = 0; k < conjuncts.size(); k++)
+    {
+      if (owner[k] != static_cast<int>(c))
+      {
+        continue;
+      }
+      std::vector<Node> from, to;
+      for (size_t i = 0; i < widths[c]; i++)
+      {
+        from.push_back(
+            datatypes::TupleUtils::nthElementOfTuple(P[0][0], starts[c] + i));
+        to.push_back(datatypes::TupleUtils::nthElementOfTuple(v, i));
+      }
+      Node l = conjuncts[k].substitute(
+          from.begin(), from.end(), to.begin(), to.end());
+      if (occursFree(l, P[0][0]))
+      {
+        return BagsRewriteResponse(n, Rewrite::NONE);
+      }
+      local.push_back(l);
+    }
+    Node source = comps[c];
+    if (!local.empty())
+    {
+      Node body = local.size() == 1 ? local[0] : d_nm->mkNode(Kind::AND, local);
+      source = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(v, body), source);
+    }
+    std::vector<uint32_t> cols;
+    for (size_t k = 0; k < widths[c]; k++)
+    {
+      if (global.count(starts[c] + k))
+      {
+        cols.push_back(k);
+      }
+    }
+    if (cols.empty())
+    {
+      // nothing reads it: whether it has a row that passes is all it says
+      cols.push_back(0);
+    }
+    std::vector<Node> sel;
+    std::vector<TypeNode> types;
+    for (uint32_t k : cols)
+    {
+      sel.push_back(datatypes::TupleUtils::nthElementOfTuple(v, k));
+      types.push_back(t.getTupleTypes()[k]);
+    }
+    TypeNode pt = d_nm->mkTupleType(types);
+    Node pi = mkLambda(v,
+                       datatypes::TupleUtils::constructTupleFromElements(
+                           pt, sel, 0, sel.size() - 1));
+    newComps.push_back(
+        d_nm->mkNode(Kind::BAG_SETOF, d_nm->mkNode(Kind::BAG_MAP, pi, source)));
+    for (size_t q = 0; q < cols.size(); q++)
+    {
+      moved[starts[c] + cols[q]] = newAt + q;
+    }
+    newAt += cols.size();
+  }
+  if (!changed)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node np = newComps.back();
+  for (size_t k = newComps.size() - 1; k-- > 0;)
+  {
+    np = d_nm->mkNode(Kind::TABLE_PRODUCT, newComps[k], np);
+  }
+  TypeNode newRow = np.getType().getBagElementType();
+  Node r = rowVariable(newRow);
+  auto reread = [&](const Node& body, const Node& var) {
+    std::vector<Node> from, to;
+    for (const std::pair<const uint32_t, uint32_t>& m : moved)
+    {
+      from.push_back(datatypes::TupleUtils::nthElementOfTuple(var, m.first));
+      to.push_back(datatypes::TupleUtils::nthElementOfTuple(r, m.second));
+    }
+    return body.substitute(from.begin(), from.end(), to.begin(), to.end());
+  };
+  if (expr::hasSubterm(g[1], r) || (!P.isNull() && expr::hasSubterm(P[1], r)))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node gBody = reread(g[1], g[0][0]);
+  if (occursFree(gBody, g[0][0]))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<Node> remaining;
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (owner[k] >= 0 && !keep[owner[k]])
+    {
+      continue;
+    }
+    Node c = reread(conjuncts[k], P[0][0]);
+    if (occursFree(c, P[0][0]))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    remaining.push_back(c);
+  }
+  Node below = np;
+  if (!remaining.empty())
+  {
+    Node body = remaining.size() == 1 ? remaining[0]
+                                      : d_nm->mkNode(Kind::AND, remaining);
+    below = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(r, body), np);
+  }
+  Node ret = d_nm->mkNode(
+      Kind::BAG_SETOF, d_nm->mkNode(Kind::BAG_MAP, mkLambda(r, gBody), below));
+  return BagsRewriteResponse(ret, Rewrite::SETOF_PUSHDOWN);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteFilterIntoSetofComponent(
+    const TNode& n) const
+{
+  // FILTER_INTO_SETOF: a conjunct c of the filter that reads only a
+  // component that is a set moves into it, where the rule that lifts filters
+  // out of products does not reach it:
+  //   (bag.filter (lambda ((t V)) (and c q))
+  //               (table.product X (bag.setof Z)))
+  //   --->
+  //   (bag.filter (lambda ((t V)) q)
+  //               (table.product X (bag.setof (bag.filter (lambda ((v U)) c')
+  //                                                       Z))))
+  // with c' the conjunct over the component's own rows, column w + k of t
+  // read as column k of v, for X of w columns
+  Node P = asLambda(n[0]);
+  Node A = n[1];
+  if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
+      || A.getKind() != Kind::TABLE_PRODUCT)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node t = P[0][0];
+  if (bindsVariable(P[1], t))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<Node> comps;
+  Node rest = A;
+  while (rest.getKind() == Kind::TABLE_PRODUCT)
+  {
+    comps.push_back(rest[0]);
+    rest = rest[1];
+  }
+  comps.push_back(rest);
+  std::vector<size_t> starts, widths;
+  size_t total = 0;
+  for (const Node& c : comps)
+  {
+    TypeNode ty = c.getType().getBagElementType();
+    if (!ty.isTuple())
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    starts.push_back(total);
+    widths.push_back(ty.getTupleLength());
+    total += ty.getTupleLength();
+  }
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  for (size_t ci = 0; ci < conjuncts.size(); ci++)
+  {
+    std::set<uint32_t> pos;
+    if (!readPositions(conjuncts[ci], t, pos) || pos.empty())
+    {
+      continue;
+    }
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      bool inside = true;
+      for (uint32_t q : pos)
+      {
+        inside = inside && q >= starts[k] && q < starts[k] + widths[k];
+      }
+      if (!inside || comps[k].getKind() != Kind::BAG_SETOF)
+      {
+        continue;
+      }
+      // the conjunct over the component's own rows
+      TypeNode cty = comps[k].getType().getBagElementType();
+      Node v = rowVariable(cty);
+      std::vector<Node> from, to;
+      for (size_t i = 0; i < widths[k]; i++)
+      {
+        from.push_back(
+            datatypes::TupleUtils::nthElementOfTuple(t, starts[k] + i));
+        to.push_back(datatypes::TupleUtils::nthElementOfTuple(v, i));
+      }
+      Node local = conjuncts[ci].substitute(
+          from.begin(), from.end(), to.begin(), to.end());
+      if (occursFree(local, t) || expr::hasSubterm(conjuncts[ci], v))
+      {
+        continue;
+      }
+      Node filtered =
+          d_nm->mkNode(Kind::BAG_FILTER, mkLambda(v, local), comps[k][0]);
+      Node newComp = d_nm->mkNode(Kind::BAG_SETOF, filtered);
+      std::vector<Node> nc = comps;
+      nc[k] = newComp;
+      Node np = nc.back();
+      for (size_t j = nc.size() - 1; j-- > 0;)
+      {
+        np = d_nm->mkNode(Kind::TABLE_PRODUCT, nc[j], np);
+      }
+      std::vector<Node> restConj;
+      for (size_t j = 0; j < conjuncts.size(); j++)
+      {
+        if (j != ci)
+        {
+          restConj.push_back(conjuncts[j]);
+        }
+      }
+      Node ret = np;
+      if (!restConj.empty())
+      {
+        Node body = restConj.size() == 1 ? restConj[0]
+                                         : d_nm->mkNode(Kind::AND, restConj);
+        ret = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(t, body), np);
+      }
+      return BagsRewriteResponse(ret, Rewrite::FILTER_INTO_SETOF);
+    }
+  }
+  return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+BagsRewriteResponse BagsRewriter::rewriteAggregateSemiJoin(const TNode& n) const
+{
+  // AGGREGATE_SEMI_JOIN, SEMI_JOIN under an aggregate: B is a set whose row
+  // the equations of p fix (all its columns, or a key), and f and K read of B
+  // only columns that p equates to columns of the other components: read
+  // those instead, and the product is a semi-join,
+  //   ((_ table.aggr K) f i (bag.filter p (table.product A B)))
+  //   --->
+  //   ((_ table.aggr K') f' i
+  //     (bag.filter (lambda ((a U))
+  //                   (and pA
+  //                        (not (= (bag.filter (lambda ((b W)) pAB) B)
+  //                                (as bag.empty (Bag W))))))
+  //                 A))
+  // with pA the conjuncts that read no column of B and pAB the others, see
+  // rewriteSemiJoin; K' and f' read the columns of A
+  Node f = n[0];
+  Node i = n[1];
+  if (n[2].getKind() != Kind::BAG_FILTER
+      || n[2][1].getKind() != Kind::TABLE_PRODUCT || f.getKind() != Kind::LAMBDA
+      || f[0].getNumChildren() != 2)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node p = asLambda(n[2][0]);
+  Node prod = n[2][1];
+  if (p.getKind() != Kind::LAMBDA || p[0].getNumChildren() != 1)
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node x = f[0][0];
+  Node pt = p[0][0];
+  if (bindsVariable(f[1], x) || bindsVariable(p[1], pt))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  std::vector<Node> comps;
+  Node rest = prod;
+  while (rest.getKind() == Kind::TABLE_PRODUCT)
+  {
+    comps.push_back(rest[0]);
+    rest = rest[1];
+  }
+  comps.push_back(rest);
+  std::vector<size_t> starts, widths;
+  size_t total = 0;
+  for (const Node& c : comps)
+  {
+    TypeNode t = c.getType().getBagElementType();
+    if (!t.isTuple())
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    starts.push_back(total);
+    widths.push_back(t.getTupleLength());
+    total += t.getTupleLength();
+  }
+  std::set<uint32_t> fRead;
+  if (!readPositions(f[1], x, fRead))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  const std::vector<uint32_t>& K =
+      n.getOperator().getConst<ProjectOp>().getIndices();
+  std::vector<Node> conjuncts;
+  if (p[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), p[1].begin(), p[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(p[1]);
+  }
+  std::vector<std::set<uint32_t>> reads(conjuncts.size());
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (!readPositions(conjuncts[k], pt, reads[k]))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+  }
+  // the component to join away: of those that qualify, the one with the
+  // smallest node, so that one join written in two orders is rewritten alike
+  std::vector<size_t> order(comps.size());
+  for (size_t k = 0; k < order.size(); k++)
+  {
+    order[k] = k;
+  }
+  std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+    return comps[a].getId() < comps[b].getId();
+  });
+  for (size_t j : order)
+  {
+    Node B = comps[j];
+    std::vector<std::set<uint32_t>> keys = keysOf(B);
+    if (B.getKind() != Kind::BAG_SETOF && keys.empty())
+    {
+      continue;
+    }
+    size_t bStart = starts[j], wb = widths[j];
+    auto inB = [&](uint32_t pos) { return pos >= bStart && pos < bStart + wb; };
+    std::vector<Node> onA, onAB;
+    std::set<uint32_t> determined;
+    // a column of B equal to a column of the others: B position -> that one
+    std::map<uint32_t, uint32_t> aliases;
+    for (size_t k = 0; k < conjuncts.size(); k++)
+    {
+      const Node& c = conjuncts[k];
+      bool readsB = false;
+      for (uint32_t pos : reads[k])
+      {
+        readsB = readsB || inB(pos);
+      }
+      (readsB ? onAB : onA).push_back(c);
+      if (!readsB || c.getKind() != Kind::EQUAL)
+      {
+        continue;
+      }
+      for (size_t sd = 0; sd < 2; sd++)
+      {
+        Node col = c[sd];
+        std::set<uint32_t> other;
+        if (col.getKind() == Kind::APPLY_SELECTOR && col[0] == pt
+            && readPositions(c[1 - sd], pt, other))
+        {
+          uint32_t pos = datatypes::utils::indexOf(col.getOperator());
+          bool fromRest = inB(pos);
+          for (uint32_t o : other)
+          {
+            fromRest = fromRest && !inB(o);
+          }
+          if (fromRest)
+          {
+            determined.insert(pos - bStart);
+            Node e = c[1 - sd];
+            if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == pt)
+            {
+              aliases[pos] = datatypes::utils::indexOf(e.getOperator());
+            }
+          }
+        }
+      }
+    }
+    bool fixesRow = determined.size() == wb;
+    for (const std::set<uint32_t>& key : keys)
+    {
+      bool all = true;
+      for (uint32_t c : key)
+      {
+        all = all && determined.count(c) > 0;
+      }
+      fixesRow = fixesRow || all;
+    }
+    if (onAB.empty() || !fixesRow)
+    {
+      continue;
+    }
+    // f and K read B only through aliased columns
+    bool readable = true;
+    for (uint32_t pos : fRead)
+    {
+      readable = readable && (!inB(pos) || aliases.count(pos));
+    }
+    for (uint32_t k : K)
+    {
+      readable = readable && (!inB(k) || aliases.count(k));
+    }
+    if (!readable)
+    {
+      continue;
+    }
+    // old position of a column of the others -> its position in A
+    std::map<uint32_t, uint32_t> inA;
+    size_t aPos = 0;
+    std::vector<Node> others;
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      if (k == j)
+      {
+        continue;
+      }
+      others.push_back(comps[k]);
+      for (size_t c = 0; c < widths[k]; c++)
+      {
+        inA[starts[k] + c] = aPos++;
+      }
+    }
+    auto toA = [&](uint32_t pos) { return inA[inB(pos) ? aliases[pos] : pos]; };
+    Node A = others.back();
+    for (size_t k = others.size() - 1; k-- > 0;)
+    {
+      A = d_nm->mkNode(Kind::TABLE_PRODUCT, others[k], A);
+    }
+    TypeNode aType = A.getType().getBagElementType();
+    TypeNode bType = B.getType().getBagElementType();
+    Node a = rowVariable(aType);
+    Node b = aType == bType ? accumulatorVariable(bType) : rowVariable(bType);
+    Node xa = rowVariable(aType);
+    if (expr::hasSubterm(p[1], a) || expr::hasSubterm(p[1], b)
+        || expr::hasSubterm(f[1], xa) || f[0][1] == xa)
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    std::vector<Node> pFrom, pTo, fFrom, fTo;
+    for (size_t k = 0; k < comps.size(); k++)
+    {
+      for (size_t c = 0; c < widths[k]; c++)
+      {
+        uint32_t pos = starts[k] + c;
+        pFrom.push_back(datatypes::TupleUtils::nthElementOfTuple(pt, pos));
+        pTo.push_back(
+            k == j ? datatypes::TupleUtils::nthElementOfTuple(b, c)
+                   : datatypes::TupleUtils::nthElementOfTuple(a, inA[pos]));
+        if (k != j || aliases.count(pos))
+        {
+          fFrom.push_back(datatypes::TupleUtils::nthElementOfTuple(x, pos));
+          fTo.push_back(datatypes::TupleUtils::nthElementOfTuple(xa, toA(pos)));
+        }
+      }
+    }
+    Node pA = onA.empty()
+                  ? d_nm->mkConst(true)
+                  : (onA.size() == 1 ? onA[0] : d_nm->mkNode(Kind::AND, onA));
+    Node pAB = onAB.size() == 1 ? onAB[0] : d_nm->mkNode(Kind::AND, onAB);
+    pA = pA.substitute(pFrom.begin(), pFrom.end(), pTo.begin(), pTo.end());
+    pAB = pAB.substitute(pFrom.begin(), pFrom.end(), pTo.begin(), pTo.end());
+    Node fBody =
+        f[1].substitute(fFrom.begin(), fFrom.end(), fTo.begin(), fTo.end());
+    if (occursFree(pA, pt) || occursFree(pAB, pt) || occursFree(fBody, x)
+        || occursFree(pA, b))
+    {
+      continue;
+    }
+    std::vector<uint32_t> K2;
+    for (uint32_t k : K)
+    {
+      K2.push_back(toA(k));
+    }
+    Node matches = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(b, pAB), B);
+    Node empty = d_nm->mkConst(EmptyBag(B.getType()));
+    Node exists = matches.eqNode(empty).notNode();
+    Node filtered =
+        d_nm->mkNode(Kind::BAG_FILTER, mkLambda(a, pA.andNode(exists)), A);
+    Node f2 = d_nm->mkNode(
+        Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, xa, f[0][1]), fBody);
+    Node op = d_nm->mkConst(Kind::TABLE_AGGREGATE_OP, ProjectOp(K2));
+    std::vector<Node> children{op, f2, i, filtered};
+    Node ret = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+    return BagsRewriteResponse(ret, Rewrite::AGGREGATE_SEMI_JOIN);
+  }
+  return BagsRewriteResponse(n, Rewrite::NONE);
+}
+
+Node BagsRewriter::semiJoinToIntersection(const Node& n, bool underSetof) const
+{
+  // SEMI_TO_INTERSECTION:
+  //   (bag.map g (bag.filter (lambda ((x T)) (and (>= (bag.count (pi x) M) 1)
+  //                                               q r))
+  //                          X))
+  // with pi a projection, (pi x) = (tuple ((_ tuple.select 0) x)
+  // ((_ tuple.select 1) x)), g a projection of pi's columns (g is h applied
+  // to the result of pi), q
+  // reading only pi's columns and r the others: the projected rows of the
+  // r-filtered X that are in M and pass q. Under duplicate removal
+  // (underSetof), or when those projected rows are a set, that is
+  //   (bag.map h (bag.inter_min
+  //                (bag.setof (bag.filter q' (bag.map pi (bag.filter r X))))
+  //                (bag.setof (bag.filter q' M))))
+  // with q' the conjuncts q over the rows w of M, which reads the same
+  // whichever side the join was written from: SQL's
+  //   SELECT a, b FROM X WHERE (a, b) IN (SELECT .. FROM ..)
+  // and the join of X with that subquery. Null when n is not of that shape.
+  Node g = asLambda(n[0]);
+  Node P = asLambda(n[1][0]);
+  Node X = n[1][1];
+  if (g.getKind() != Kind::LAMBDA || g[0].getNumChildren() != 1
+      || P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
+      || d_rewriter == nullptr)
+  {
+    return Node::null();
+  }
+  std::vector<uint32_t> J = projectionIndices(g);
+  if (J.empty())
+  {
+    return Node::null();
+  }
+  Node x = P[0][0];
+  if (bindsVariable(P[1], x))
+  {
+    return Node::null();
+  }
+  std::vector<Node> conjuncts;
+  if (P[1].getKind() == Kind::AND)
+  {
+    conjuncts.insert(conjuncts.end(), P[1].begin(), P[1].end());
+  }
+  else
+  {
+    conjuncts.push_back(P[1]);
+  }
+  // the membership whose probe is a projection of x covering g's columns
+  Node M;
+  std::vector<uint32_t> Jp;
+  size_t which = conjuncts.size();
+  for (size_t k = 0; k < conjuncts.size() && M.isNull(); k++)
+  {
+    const Node& c = conjuncts[k];
+    if (c.getKind() != Kind::GEQ || !c[1].isConst()
+        || c[1].getConst<Rational>() != Rational(1)
+        || c[0].getKind() != Kind::BAG_COUNT || occursFree(c[0][1], x))
+    {
+      continue;
+    }
+    Node E = c[0][0];
+    if (E.getKind() != Kind::APPLY_CONSTRUCTOR)
+    {
+      continue;
+    }
+    std::vector<uint32_t> cols;
+    bool selectors = true;
+    for (const Node& e : E)
+    {
+      if (e.getKind() == Kind::APPLY_SELECTOR && e[0] == x)
+      {
+        cols.push_back(datatypes::utils::indexOf(e.getOperator()));
+      }
+      else
+      {
+        selectors = false;
+      }
+    }
+    if (!selectors)
+    {
+      continue;
+    }
+    bool covers = true;
+    for (uint32_t j : J)
+    {
+      covers = covers && std::find(cols.begin(), cols.end(), j) != cols.end();
+    }
+    if (covers)
+    {
+      M = c[0][1];
+      Jp = cols;
+      which = k;
+    }
+  }
+  if (M.isNull())
+  {
+    return Node::null();
+  }
+  std::set<uint32_t> probed(Jp.begin(), Jp.end());
+  std::vector<Node> qs, rs;
+  for (size_t k = 0; k < conjuncts.size(); k++)
+  {
+    if (k == which)
+    {
+      continue;
+    }
+    std::set<uint32_t> pos;
+    if (!readPositions(conjuncts[k], x, pos))
+    {
+      return Node::null();
+    }
+    bool onProbe = true;
+    for (uint32_t q : pos)
+    {
+      onProbe = onProbe && probed.count(q) > 0;
+    }
+    (onProbe ? qs : rs).push_back(conjuncts[k]);
+  }
+  TypeNode rowType = X.getType().getBagElementType();
+  TypeNode wType = M.getType().getBagElementType();
+  Node xr = rowVariable(rowType);
+  // pi over the rows of X
+  std::vector<Node> piCols;
+  for (uint32_t j : Jp)
+  {
+    piCols.push_back(datatypes::TupleUtils::nthElementOfTuple(xr, j));
+  }
+  Node pi = mkLambda(xr,
+                     datatypes::TupleUtils::constructTupleFromElements(
+                         wType, piCols, 0, piCols.size() - 1));
+  Node source = X;
+  if (!rs.empty())
+  {
+    Node r = rs.size() == 1 ? rs[0] : d_nm->mkNode(Kind::AND, rs);
+    source = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(x, r), X);
+  }
+  Node projected = d_nm->mkNode(Kind::BAG_MAP, pi, source);
+  if (!underSetof && !isSet(projected))
+  {
+    return Node::null();
+  }
+  Node w = rowVariable(wType);
+  std::vector<Node> from, to;
+  for (size_t k = 0; k < Jp.size(); k++)
+  {
+    Node col = datatypes::TupleUtils::nthElementOfTuple(x, Jp[k]);
+    if (std::find(from.begin(), from.end(), col) == from.end())
+    {
+      from.push_back(col);
+      to.push_back(datatypes::TupleUtils::nthElementOfTuple(w, k));
+    }
+  }
+  Node left = projected;
+  Node right = M;
+  if (!qs.empty())
+  {
+    Node q = qs.size() == 1 ? qs[0] : d_nm->mkNode(Kind::AND, qs);
+    Node qw = q.substitute(from.begin(), from.end(), to.begin(), to.end());
+    if (occursFree(qw, x))
+    {
+      return Node::null();
+    }
+    Node lambda = mkLambda(w, qw);
+    left = d_nm->mkNode(Kind::BAG_FILTER, lambda, left);
+    right = d_nm->mkNode(Kind::BAG_FILTER, lambda, right);
+  }
+  Node inter = d_nm->mkNode(Kind::BAG_INTER_MIN,
+                            {d_nm->mkNode(Kind::BAG_SETOF, left),
+                             d_nm->mkNode(Kind::BAG_SETOF, right)});
+  // h: g's columns read from the probe row
+  std::vector<Node> hCols;
+  for (uint32_t j : J)
+  {
+    size_t at = std::find(Jp.begin(), Jp.end(), j) - Jp.begin();
+    hCols.push_back(datatypes::TupleUtils::nthElementOfTuple(w, at));
+  }
+  Node hBody = datatypes::TupleUtils::constructTupleFromElements(
+      g[1].getType(), hCols, 0, hCols.size() - 1);
+  if (J == Jp)
+  {
+    return inter;
+  }
+  return d_nm->mkNode(Kind::BAG_MAP, mkLambda(w, hBody), inter);
 }
 
 }  // namespace bags

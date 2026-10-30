@@ -52,6 +52,8 @@ const char* toString(Rewrite r)
     case Rewrite::SETOF_SETOF: return "SETOF_SETOF";
     case Rewrite::EQ_EMPTY_ARG: return "EQ_EMPTY_ARG";
     case Rewrite::AGGREGATE_MAP: return "AGGREGATE_MAP";
+    case Rewrite::FILTER_AGGREGATE: return "FILTER_AGGREGATE";
+    case Rewrite::SORTED_KEYS: return "SORTED_KEYS";
     case Rewrite::FILTER_TRUE: return "FILTER_TRUE";
     case Rewrite::FILTER_FALSE: return "FILTER_FALSE";
     case Rewrite::FILTER_SORT_CONJUNCTS: return "FILTER_SORT_CONJUNCTS";
@@ -63,12 +65,14 @@ const char* toString(Rewrite r)
     case Rewrite::SETOF_MAP_CONSTANT: return "SETOF_MAP_CONSTANT";
     case Rewrite::FILTER_SPLIT_CLOSED: return "FILTER_SPLIT_CLOSED";
     case Rewrite::SEMI_JOIN: return "SEMI_JOIN";
+    case Rewrite::MAP_SPLIT_CLOSED: return "MAP_SPLIT_CLOSED";
     case Rewrite::EQ_EMPTY_FILTER_DECORRELATE:
       return "EQ_EMPTY_FILTER_DECORRELATE";
     case Rewrite::COUNT_MAP_FILTER_KEYS: return "COUNT_MAP_FILTER_KEYS";
     case Rewrite::AGGREGATE_DEAD_COLUMNS: return "AGGREGATE_DEAD_COLUMNS";
     case Rewrite::FOLD_CONSTANT_STEP: return "FOLD_CONSTANT_STEP";
     case Rewrite::MAP_FIXED_COLUMNS: return "MAP_FIXED_COLUMNS";
+    case Rewrite::AGGREGATE_FIXED_COLUMNS: return "AGGREGATE_FIXED_COLUMNS";
     case Rewrite::MAP_IDENTITY_ON_FILTER: return "MAP_IDENTITY_ON_FILTER";
     case Rewrite::SETOF_PROJECTION_SORT: return "SETOF_PROJECTION_SORT";
     case Rewrite::AGGREGATE_UNION_OF_MAPS: return "AGGREGATE_UNION_OF_MAPS";
@@ -78,8 +82,17 @@ const char* toString(Rewrite r)
     case Rewrite::FILTER_DE_MORGAN: return "FILTER_DE_MORGAN";
     case Rewrite::COUNT_MAP_DUPLICATE_COLUMNS:
       return "COUNT_MAP_DUPLICATE_COLUMNS";
+    case Rewrite::COUNT_MAP_FILTER_CORRELATED:
+      return "COUNT_MAP_FILTER_CORRELATED";
     case Rewrite::SETOF_OF_SET: return "SETOF_OF_SET";
+    case Rewrite::SETOF_PUSHDOWN: return "SETOF_PUSHDOWN";
+    case Rewrite::FILTER_INTO_SETOF: return "FILTER_INTO_SETOF";
+    case Rewrite::AGGREGATE_SEMI_JOIN: return "AGGREGATE_SEMI_JOIN";
+    case Rewrite::SEMI_TO_INTERSECTION: return "SEMI_TO_INTERSECTION";
+    case Rewrite::INTERSECTION_SORT: return "INTERSECTION_SORT";
     case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
+    case Rewrite::COUNT_MAP_CONST_COLUMN: return "COUNT_MAP_CONST_COLUMN";
+    case Rewrite::FILTER_INTER_MIN: return "FILTER_INTER_MIN";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
     case Rewrite::AGGREGATE_INTEGER_SUM: return "AGGREGATE_INTEGER_SUM";
@@ -91,17 +104,31 @@ const char* toString(Rewrite r)
     case Rewrite::AGGREGATE_UNION_SPLIT: return "AGGREGATE_UNION_SPLIT";
     case Rewrite::AGGREGATE_GROUP_KEYS: return "AGGREGATE_GROUP_KEYS";
     case Rewrite::MAP_EQUAL_COLUMNS: return "MAP_EQUAL_COLUMNS";
+    case Rewrite::FOLD_IDENTITY_STEP: return "FOLD_IDENTITY_STEP";
     case Rewrite::FOLD_MAP: return "FOLD_MAP";
     case Rewrite::SETOF_UNION_SAME: return "SETOF_UNION_SAME";
+    case Rewrite::FOLD_UNION_COMBINE: return "FOLD_UNION_COMBINE";
     case Rewrite::AGGREGATE_UNION_DISJOINT_KEYS:
       return "AGGREGATE_UNION_DISJOINT_KEYS";
+    case Rewrite::FILTER_AGGREGATE_ONE_ROW: return "FILTER_AGGREGATE_ONE_ROW";
     case Rewrite::FILTER_JOIN_TRANSITIVE: return "FILTER_JOIN_TRANSITIVE";
+    case Rewrite::AGGREGATE_OVER_JOIN: return "AGGREGATE_OVER_JOIN";
+    case Rewrite::FOLD_OVER_JOIN: return "FOLD_OVER_JOIN";
     case Rewrite::PRODUCT_AGGREGATE_DEAD_COLUMN:
       return "PRODUCT_AGGREGATE_DEAD_COLUMN";
     case Rewrite::AGGREGATE_DUPLICATE_COLUMN:
       return "AGGREGATE_DUPLICATE_COLUMN";
+    case Rewrite::FOLD_SUM_FROM_ZERO: return "FOLD_SUM_FROM_ZERO";
     case Rewrite::MAP_IDENTITY: return "MAP_IDENTITY";
+    case Rewrite::FILTER_COUNT_AS_COUNTER: return "FILTER_COUNT_AS_COUNTER";
+    case Rewrite::UNION_COMPLEMENTARY_FILTERS:
+      return "UNION_COMPLEMENTARY_FILTERS";
+    case Rewrite::FILTER_KNOWN_NONEMPTY: return "FILTER_KNOWN_NONEMPTY";
     case Rewrite::FILTER_IMPLIED_COUNTER: return "FILTER_IMPLIED_COUNTER";
+    case Rewrite::COUNT_NULL_IN_NOT_NULL: return "COUNT_NULL_IN_NOT_NULL";
+    case Rewrite::FILTER_EQUI_JOIN_SETS: return "FILTER_EQUI_JOIN_SETS";
+    case Rewrite::INTERSECTION_SHARE_CONDITIONS:
+      return "INTERSECTION_SHARE_CONDITIONS";
     case Rewrite::FILTER_CONFLICTING_CONSTANTS:
       return "FILTER_CONFLICTING_CONSTANTS";
     case Rewrite::PROJECT_TO_MAP: return "PROJECT_TO_MAP";

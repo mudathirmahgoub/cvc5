@@ -90,7 +90,7 @@ class BagsRewriter : public TheoryRewriter
    * BAG_UNION_MAX, BAG_UNION_DISJOINT, BAG_INTER_MIN,
    * BAG_DIFFERENCE_SUBTRACT, BAG_DIFFERENCE_REMOVE, BAG_CHOOSE, BAG_CARD,
    * BAG_MAP, BAG_FILTER, BAG_ALL, BAG_SOME, BAG_FOLD, BAG_PARTITION,
-   * TABLE_PRODUCT, TABLE_PROJECT and TABLE_AGGREGATE; a node
+   * TABLE_PRODUCT, TABLE_PROJECT, TABLE_AGGREGATE and TABLE_GROUP; a node
    * whose children are constants is evaluated. See the rewrite rules for
    * these kinds below.
    */
@@ -156,11 +156,23 @@ class BagsRewriter : public TheoryRewriter
    * rewrites for n include:
    * - COUNT_EMPTY: (bag.count x (as bag.empty (Bag T))) ---> 0
    * - COUNT_BAG_MAKE: (bag.count x (bag x c)) ---> c, c > 0 a constant
+   * - COUNT_NULL_IN_NOT_NULL, a null in a column X has no null in:
+   *     (bag.count (tuple a (as nullable.null (Nullable Int))) X) ---> 0
    * - COUNT_MAP_DUPLICATE_COLUMNS, a map that makes columns i < j equal:
    *     (bag.count (tuple a b c) (bag.map (lambda ((t T)) (tuple u v u)) X))
    *     ---> (ite (= a c)
    *               (bag.count (tuple a b)
    *                          (bag.map (lambda ((t T)) (tuple u v)) X))
+   *               0)
+   * - COUNT_MAP_CONST_COLUMN, a map that makes column j a constant:
+   *     (bag.count (tuple a b)
+   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t) 5))
+   *                         X))
+   *     ---> (ite (= b 5)
+   *               (bag.count (tuple a)
+   *                          (bag.map (lambda ((t T))
+   *                                     (tuple ((_ tuple.select 0) t)))
+   *                                   X))
    *               0)
    * - COUNT_MAP_CONST_PROBE, a constant in the probe selects rows of X:
    *     (bag.count (tuple 5 b)
@@ -186,6 +198,19 @@ class BagsRewriter : public TheoryRewriter
    *                                   (bag.filter (lambda ((t T)) q) X)))
    *               0)
    *   for c reading only column 0 of t
+   * - COUNT_MAP_FILTER_CORRELATED, an equation of a column with a term E of
+   *   an enclosing row becomes a column of the map and the probe:
+   *     (bag.count (tuple a)
+   *                (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
+   *                         (bag.filter (lambda ((t T))
+   *                                       (and (= ((_ tuple.select 1) t) E)
+   *                                            q))
+   *                                     X)))
+   *     ---> (bag.count (tuple a E)
+   *                     (bag.map (lambda ((t T))
+   *                                (tuple ((_ tuple.select 0) t)
+   *                                       ((_ tuple.select 1) t)))
+   *                              (bag.filter (lambda ((t T)) q) X)))
    */
   BagsRewriteResponse rewriteBagCount(const TNode& n) const;
 
@@ -204,6 +229,8 @@ class BagsRewriter : public TheoryRewriter
    * - AGGREGATE_GROUP_KEYS, see keysOfReachedGroups:
    *     (bag.setof (bag.map h (bag.filter Q ((_ table.aggr K) f i X))))
    *     ---> (bag.setof (bag.map h' X))
+   * - SEMI_TO_INTERSECTION, see semiJoinToIntersection
+   * - SETOF_PUSHDOWN, see rewriteSetofPushdown
    * - SETOF_MAP_CONSTANT, see rewriteSetofOfMap
    * - SETOF_PROJECTION_SORT, see rewriteSetofOfMap
    */
@@ -234,6 +261,11 @@ class BagsRewriter : public TheoryRewriter
    *         (bag.union_disjoint A B) // sum(a,b) = max(a,b) + min(a,b)
    * - other permutations of the above like swapping A and B, or swapping
    *   bag.intersection_min and bag.union_max
+   * - UNION_COMPLEMENTARY_FILTERS, filters of X by p and by (not p):
+   *     (bag.union_disjoint (bag.filter (lambda ((t T)) (and p q)) X)
+   *                         (bag.filter (lambda ((t T)) (and (not p) q)) X))
+   *     ---> (bag.filter (lambda ((t T)) q) X)
+   *   also under one map of both, and for two parts of a longer union
    * - otherwise = n
    */
   BagsRewriteResponse rewriteUnionDisjoint(const TNode& n) const;
@@ -251,6 +283,15 @@ class BagsRewriter : public TheoryRewriter
    * - (bag.inter_min A (bag.union_max B A)) = A
    * - (bag.inter_min (bag.union_max A B) A) = A
    * - (bag.inter_min (bag.union_max B A) A) = A
+   * - INTERSECTION_SORT: (bag.inter_min B A) ---> (bag.inter_min A B) for
+   *   A < B
+   * - INTERSECTION_SHARE_CONDITIONS, each side gets the conditions the
+   *   elements of the other satisfy (see elementConditions):
+   *     (bag.inter_min (bag.filter (lambda ((t T)) qA) X)
+   *                    (bag.filter (lambda ((t T)) qB) Y))
+   *     ---> (bag.inter_min (bag.filter (lambda ((t T)) (and qA qB)) X)
+   *                         (bag.filter (lambda ((t T)) (and qA qB)) Y))
+   *   up to the order of the conjuncts
    * - otherwise = n
    */
   BagsRewriteResponse rewriteIntersectionMin(const TNode& n) const;
@@ -332,6 +373,7 @@ class BagsRewriter : public TheoryRewriter
    *      ---> (bag.map (lambda ((t T)) (ite true a b)) X)
    *  - MAP_MAP, see rewriteMapOfMap
    *  - EQ_EMPTY_FILTER_DECORRELATE, see normalizeEmptiness
+   *  - MAP_SPLIT_CLOSED (rewriteMapSplitClosed)
    *  - AGGREGATE_DEAD_COLUMNS (rewriteAggregateDeadColumns)
    *  - AGGREGATE_COLLAPSE (rewriteAggregateCollapse)
    *  - AGGREGATE_ROLLUP (rewriteAggregateRollup)
@@ -367,6 +409,7 @@ class BagsRewriter : public TheoryRewriter
    *               (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5))
    *                           X))
    *      ---> (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5)) X)
+   *  - SEMI_TO_INTERSECTION, see semiJoinToIntersection
    *  - SEMI_JOIN, see rewriteSemiJoin
    *  - CANONICAL_VARIABLE, see canonicalLambda
    */
@@ -380,6 +423,15 @@ class BagsRewriter : public TheoryRewriter
    *  - (bag.filter p (bag.union_disjoint A B)) =
    *       (bag.union_disjoint (bag.filter p A) (bag.filter p B))
    *  where p: T -> Bool
+   *  - FILTER_COUNT_AS_COUNTER, COUNT(*) read as the counter c of the
+   *    aggregate:
+   *      (bag.filter (lambda ((t T)) (= ((_ tuple.select 1) t)
+   *                                     (nullable.some 3)))
+   *                  ((_ table.aggr 0) f i X))
+   *      ---> (bag.filter (lambda ((t T))
+   *                         (= (nullable.some ((_ tuple.select 2) t))
+   *                            (nullable.some 3)))
+   *                       ((_ table.aggr 0) f i X))
    *  - NOT_NULL_COLUMNS, as for bag.map
    *  - FILTER_TRUE and FILTER_FALSE:
    *      (bag.filter (lambda ((t T)) true) A) ---> A
@@ -400,6 +452,13 @@ class BagsRewriter : public TheoryRewriter
    *    (= a (nullable.some 5)), the null test of a value that a membership
    *    puts in a never-null column, (>= (* a b) 1) beside (>= a 1) and
    *    (>= b 1)
+   *  - FILTER_KNOWN_NONEMPTY, a bag a membership conjunct finds a row in is
+   *    not empty:
+   *      (and (>= (bag.count e (bag.map g Y)) 1)
+   *           (not (= Y (as bag.empty (Bag U)))))
+   *      ---> (>= (bag.count e (bag.map g Y)) 1)
+   *    in the predicate, and the filter is empty when it says Y is empty
+   *  - FILTER_INTO_SETOF, see rewriteFilterIntoSetofComponent
    *  - FILTER_KNOWN_MEMBERSHIP, see dropKnownMemberships
    *  - FILTER_SORT_CONJUNCTS, the conjuncts in the order of their alpha
    *    keys, without duplicates:
@@ -419,10 +478,19 @@ class BagsRewriter : public TheoryRewriter
    *      ---> (bag.filter Q (bag.map (lambda ((t T)) b[acc := i]) X))
    *    for 0 a key of X, and for an aggregate component of a product whose
    *    groups the filter keeps reached ones of (see reachedComponents)
+   *  - FILTER_AGGREGATE_ONE_ROW, an aggregate of one row e:
+   *      (bag.filter Q ((_ table.aggr 0) f i (bag e m)))
+   *      ---> (bag.filter Q (bag (f e i) m))
+   *    for Q testing the counter, m 1 or (ite c 1 0)
+   *  - FILTER_AGGREGATE, see rewriteFilterOfAggregate
    *  - FILTER_SETOF:
    *      (bag.filter p (bag.setof A)) ---> (bag.setof (bag.filter p A))
+   *  - FILTER_INTER_MIN:
+   *      (bag.filter p (bag.inter_min A B))
+   *      ---> (bag.inter_min (bag.filter p A) (bag.filter p B))
    *  - FILTER_IMPLIED_COUNTER, see dropImpliedCounters
    *  - FILTER_JOIN_TRANSITIVE, see rewriteJoinTransitiveConditions
+   *  - FILTER_EQUI_JOIN_SETS, see rewriteEquiJoinOfSets
    */
   BagsRewriteResponse postRewriteFilter(const TNode& n) const;
 
@@ -455,6 +523,25 @@ class BagsRewriter : public TheoryRewriter
    *  - (bag.fold f t (bag.union_disjoint A B)) =
    *       (bag.fold f (bag.fold f t A) B) where A < B to break symmetry
    *  where f: T1 -> T2 -> T2
+   *  - FOLD_IDENTITY_STEP: (bag.fold (lambda ((t T) (acc S)) acc) i X) ---> i
+   *  - FOLD_OVER_JOIN, the eager form of a fold over a join, see
+   *    eagerAggregation:
+   *      (bag.fold f i (bag.filter P (table.product X Y)))
+   *      ---> (bag.fold f' i J')
+   *  - FOLD_SUM_FROM_ZERO, SUM from 0 is the sum from null, or 0:
+   *      (bag.fold (lambda ((t T) (acc (Nullable Int)))
+   *                  (nullable.some (+ (nullable.val acc) e)))
+   *                (nullable.some 0) X)
+   *      ---> (ite (= (as nullable.null (Nullable Int)) S) (nullable.some 0) S)
+   *    with S the fold that skips nulls from null
+   *  - FOLD_UNION_COMBINE, a sum, minimum, maximum or count over a union is
+   *    the two folds combined:
+   *      (bag.fold f (as nullable.null (Nullable Int))
+   *                (bag.union_disjoint A B))
+   *      ---> (ite (= (as nullable.null (Nullable Int)) a) b
+   *                (ite (= (as nullable.null (Nullable Int)) b) a
+   *                     (nullable.some (+ (nullable.val a) (nullable.val b)))))
+   *    for a sum f, with a and b the folds over A and B
    *  - NOT_NULL_COLUMNS, as for bag.map
    *  - FOLD_MAP:
    *      (bag.fold (lambda ((t U) (acc S)) b) i
@@ -476,16 +563,31 @@ class BagsRewriter : public TheoryRewriter
   /**
    * rewrites for n = ((_ table.aggr K) f i X) include:
    * - AGGREGATE_INTEGER_SUM, see rewriteAggregateIntegerSum
+   * - AGGREGATE_OVER_JOIN, see rewriteAggregateOverJoin
    * - AGGREGATE_DUPLICATE_COLUMN, see rewriteAggregateDuplicateColumn
    * - NOT_NULL_COLUMNS, as for bag.map, in the steps of f
+   * - AGGREGATE_SEMI_JOIN, see rewriteAggregateSemiJoin
    * - AGGREGATE_UNION_OF_MAPS, a union of maps by one g is the map of the
    *   union, which AGGREGATE_MAP then absorbs:
    *     ((_ table.aggr K) f i (bag.union_disjoint (bag.map g X1)
    *                                               (bag.map g X2)))
    *     ---> the AGGREGATE_MAP rewrite of
    *          ((_ table.aggr K) f i (bag.map g (bag.union_disjoint X1 X2)))
+   * - AGGREGATE_FIXED_COLUMNS, the rows of every group have the constants
+   *   the filter fixes, and a group column fixed splits no group:
+   *     ((_ table.aggr 0 1) (lambda ((t T) (acc S)) b) i
+   *                         (bag.filter (lambda ((s T))
+   *                                       (= ((_ tuple.select 1) s) 5))
+   *                                     X))
+   *     ---> ((_ table.aggr 0) (lambda ((t T) (acc S))
+   *                              b[((_ tuple.select 1) t) := 5])
+   *                            i
+   *                            (bag.filter (lambda ((s T))
+   *                                          (= ((_ tuple.select 1) s) 5))
+   *                                        X))
    * - AGGREGATE_NO_KEYS, one group of all of X, even an empty X:
    *     ((_ table.aggr) f i X) ---> (bag (bag.fold f i X) 1)
+   * - SORTED_KEYS, see rewriteSortedKeys
    * - AGGREGATE_SORT_OUTPUT, see rewriteAggregateSortOutput
    * - AGGREGATE_MAP, see rewriteAggregateOfMap
    * - CANONICAL_VARIABLE, see canonicalLambda
@@ -518,6 +620,8 @@ class BagsRewriter : public TheoryRewriter
    *   ---> (bag.map (lambda ((t T)) ((_ tuple.project 1 0) t)) X)
    */
   BagsRewriteResponse postRewriteProject(const TNode& n) const;
+  /** SORTED_KEYS for a table.group, see rewriteSortedKeys */
+  BagsRewriteResponse postRewriteGroup(const TNode& n) const;
 
   // ---------------------------------------------------------------------------
   // The normal form of select-project-join: maps above filters above
@@ -589,6 +693,17 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteProductOfBagMake(const TNode& n,
                                               size_t side) const;
+  /**
+   * MAP_SPLIT_CLOSED, a map whose body asks a question c about a bag that
+   * reads no variable but the row (EXISTS or IN as a column):
+   *   (bag.map (lambda ((t T)) b) X)
+   *   ---> (bag.union_disjoint
+   *          (bag.map (lambda ((t T)) b[c := true])
+   *                   (bag.filter (lambda ((t T)) c) X))
+   *          (bag.map (lambda ((t T)) b[c := false])
+   *                   (bag.filter (lambda ((t T)) (not c)) X)))
+   */
+  BagsRewriteResponse rewriteMapSplitClosed(const TNode& n) const;
 
   // ---------------------------------------------------------------------------
   // Aggregates ((_ table.aggr K) f i X): X grouped by its columns K, each
@@ -611,6 +726,12 @@ class BagsRewriter : public TheoryRewriter
    *                          i X)
    */
   BagsRewriteResponse rewriteAggregateOfMap(const TNode& n) const;
+  /**
+   * SORTED_KEYS, the group columns sorted and without repeats:
+   *   ((_ table.aggr 2 0 2) f i X) ---> ((_ table.aggr 0 2) f i X)
+   *   ((_ table.group 1 0) X) ---> ((_ table.group 0 1) X)
+   */
+  BagsRewriteResponse rewriteSortedKeys(const TNode& n) const;
   /**
    * AGGREGATE_SORT_OUTPUT, the columns of the aggregate's rows in one order,
    * copies of group columns first:
@@ -728,6 +849,25 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
   /**
+   * Eager aggregation, an aggregate pushed through a join: for f folding the
+   * rows of J = (bag.filter P (table.product X Y)) grouped by K, returns
+   * (SEXPR f3 J' (SEXPR k..)) where J' joins the aggregates of X and of Y by
+   * their join and group columns, f3 folds the pairs of groups (a sum of X
+   * times the rows of Y, a minimum of X, a count of X times the rows of Y),
+   * and k.. are the columns of J' that hold K; null when J or f is not of
+   * that shape. See the example in the .cpp.
+   */
+  Node eagerAggregation(const Node& f,
+                        const Node& init,
+                        const Node& J,
+                        const std::vector<uint32_t>& K) const;
+  /**
+   * AGGREGATE_OVER_JOIN, see eagerAggregation:
+   *   ((_ table.aggr K) f i (bag.filter P (table.product X Y)))
+   *   ---> ((_ table.aggr K') f3 i J')
+   */
+  BagsRewriteResponse rewriteAggregateOverJoin(const TNode& n) const;
+  /**
    * PRODUCT_AGGREGATE_DEAD_COLUMN, a column of an aggregate component that
    * nothing reads:
    *   (bag.map h (table.product ((_ table.aggr 0) (lambda ((t T) (acc S))
@@ -764,6 +904,22 @@ class BagsRewriter : public TheoryRewriter
    */
   Node keysOfReachedGroups(const Node& h, const Node& F, bool covering) const;
   /**
+   * FILTER_AGGREGATE, a conjunct on the copies of group columns filters the
+   * rows of X before grouping:
+   *   (bag.filter (lambda ((r V)) (and (> ((_ tuple.select 0) r) 3) q))
+   *               ((_ table.aggr 0) f i X))
+   *   ---> (bag.filter (lambda ((r V)) q)
+   *                    ((_ table.aggr 0) f i
+   *                                      (bag.filter (lambda ((t T))
+   *                                                    (> ((_ tuple.select 0)
+   *                                                          t)
+   *                                                       3))
+   *                                                  X)))
+   * when f copies column 0 of X to column 0, and q, which stays, rejects the
+   * row of initial values (see rejectsInitialRow)
+   */
+  BagsRewriteResponse rewriteFilterOfAggregate(const TNode& n) const;
+  /**
    * For A = ((_ table.aggr K) f i X) with K containing a key of X (see
    * rowKeys): the rows of the groups some row reached, every group one row
    * of X folded once,
@@ -782,6 +938,18 @@ class BagsRewriter : public TheoryRewriter
    *   i = (tuple (as nullable.null (Nullable Int)) (nullable.some 0) 0)
    */
   bool rejectsInitialRow(const Node& P, const Node& i) const;
+  /**
+   * AGGREGATE_SEMI_JOIN, SEMI_JOIN under an aggregate (see rewriteSemiJoin):
+   *   ((_ table.aggr K) f i (bag.filter p (table.product A B)))
+   *   ---> ((_ table.aggr K') f' i
+   *          (bag.filter (lambda ((a U))
+   *                        (and pA (not (= (bag.filter (lambda ((b W)) pAB) B)
+   *                                        (as bag.empty (Bag W))))))
+   *                      A))
+   * for B a set whose row p fixes, read by f and K only through columns p
+   * equates to columns of A
+   */
+  BagsRewriteResponse rewriteAggregateSemiJoin(const TNode& n) const;
 
   // ---------------------------------------------------------------------------
   // Sets, keys and semi-joins
@@ -828,6 +996,55 @@ class BagsRewriter : public TheoryRewriter
    * Called with side 0 only; every component of the product is tried.
    */
   BagsRewriteResponse rewriteSemiJoin(const TNode& n, size_t side) const;
+  /**
+   * SETOF_PUSHDOWN, under duplicate removal each component of a product is
+   * the set of the columns read of it:
+   *   (bag.setof (bag.map g (bag.filter p (table.product C1 C2))))
+   *   ---> (bag.setof (bag.map g' (bag.filter p'
+   *          (table.product (bag.setof (bag.map pi1 (bag.filter p1 C1)))
+   *                         (bag.setof (bag.map pi2 (bag.filter p2 C2)))))))
+   */
+  BagsRewriteResponse rewriteSetofPushdown(const TNode& n) const;
+  /**
+   * FILTER_INTO_SETOF, a conjunct on a set component only goes into it:
+   *   (bag.filter (lambda ((t V)) (and c q)) (table.product X (bag.setof Z)))
+   *   ---> (bag.filter (lambda ((t V)) q)
+   *                    (table.product X (bag.setof (bag.filter
+   *                                                  (lambda ((v U)) c')
+   *                                                  Z))))
+   */
+  BagsRewriteResponse rewriteFilterIntoSetofComponent(const TNode& n) const;
+  /**
+   * SEMI_TO_INTERSECTION, a projected semi-join as an intersection of sets,
+   * or null:
+   *   (bag.map g (bag.filter (lambda ((x T))
+   *                            (and (>= (bag.count (pi x) M) 1) q r))
+   *                          X))
+   *   ---> (bag.map h (bag.inter_min
+   *                     (bag.setof (bag.filter q' (bag.map pi
+   *                                                 (bag.filter r X))))
+   *                     (bag.setof (bag.filter q' M))))
+   * under duplicate removal (underSetof), or when the projected rows are a
+   * set; g is h applied to the result of pi
+   */
+  Node semiJoinToIntersection(const Node& n, bool underSetof) const;
+  /**
+   * FILTER_EQUI_JOIN_SETS, a join of two sets of one row sort on all their
+   * columns is their intersection, twice:
+   *   (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
+   *                                       ((_ tuple.select 2) t))
+   *                                    (= ((_ tuple.select 1) t)
+   *                                       ((_ tuple.select 3) t))
+   *                                    q))
+   *               (table.product X Y))
+   *   ---> (bag.filter (lambda ((t V)) q)
+   *                    (bag.map (lambda ((w T)) (tuple ((_ tuple.select 0) w)
+   *                                                    ((_ tuple.select 1) w)
+   *                                                    ((_ tuple.select 0) w)
+   *                                                    ((_ tuple.select 1) w)))
+   *                             (bag.inter_min X Y)))
+   */
+  BagsRewriteResponse rewriteEquiJoinOfSets(const TNode& n) const;
   /**
    * Whether no element of X occurs twice, syntactically: a bag.setof, a table
    * with a key, a filter over a set, a product of sets, or a map over one of

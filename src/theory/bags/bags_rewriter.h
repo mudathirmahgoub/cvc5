@@ -70,6 +70,7 @@ class BagsRewriter : public TheoryRewriter
    * - FILTER_MAP, MAP_MAP and PROJECT_TO_MAP
    * - FILTER_FILTER, PRODUCT_MAP_*, PRODUCT_FILTER_* and PRODUCT_SWAP
    * - COUNT_MAP_CONST_PROBE over a table constant
+   * - PRODUCT_BAG_MAKE
    * The rewriter does not know the logic, so the default is false: the owner
    * of the rewriter passes true for a higher-order logic.
    */
@@ -154,7 +155,9 @@ class BagsRewriter : public TheoryRewriter
    * rewrites.h:
    *
    * - COUNT_EMPTY and COUNT_BAG_MAKE
+   * - COUNT_MAP_DUPLICATE_COLUMNS, for X a map with two equal columns
    * - COUNT_MAP_CONST_PROBE, for e with a constant column
+   * - COUNT_MAP_FILTER_KEYS, for X a projection of a filter
    */
   BagsRewriteResponse rewriteBagCount(const TNode& n) const;
 
@@ -164,6 +167,11 @@ class BagsRewriter : public TheoryRewriter
    * (see BagsKeyTermAttribute in the .cpp):
    *
    * - SETOF_BAG_MAKE
+   * - SETOF_UNION_SAME
+   * - AGGREGATE_GROUP_KEYS (keysOfReachedGroups)
+   * - SETOF_SETOF
+   * - SETOF_ABSORB
+   * - SETOF_OF_SET (isSet)
    * - SETOF_MAP_CONSTANT (rewriteSetofOfMap)
    * - SETOF_PROJECTION_SORT (rewriteSetofOfMap)
    */
@@ -278,9 +286,17 @@ class BagsRewriter : public TheoryRewriter
    * - MAP_MAP, for X a map (rewriteMapOfMap)
    * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - AGGREGATE_DEAD_COLUMNS, for X an aggregate (rewriteAggregateDeadColumns)
+   * - AGGREGATE_COLLAPSE (rewriteAggregateCollapse)
+   * - AGGREGATE_ROLLUP (rewriteAggregateRollup)
+   * - AGGREGATE_JOIN_MERGE and AGGREGATE_SETOF_IDEMPOTENT
+   *   (rewriteAggregateJoinMerge)
+   * - PRODUCT_AGGREGATE_DEAD_COLUMN (rewriteProductAggregateColumns)
    * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
+   * - AGGREGATE_UNION_SPLIT (rewriteAggregateUnionSplit)
    * - MAP_EQUAL_COLUMNS, for X a filter
+   * - AGGREGATE_GROUP_KEYS (keysOfReachedGroups)
    * - MAP_FIXED_COLUMNS, for X a filter (fixedColumns, readFixed)
+   * - MAP_IDENTITY_ON_FILTER
    * - SEMI_JOIN (rewriteSemiJoin)
    * - CANONICAL_VARIABLE (canonicalLambda)
    */
@@ -295,6 +311,7 @@ class BagsRewriter : public TheoryRewriter
    * - FILTER_TRUE and FILTER_FALSE
    * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - FILTER_NULLABLE_TRUTH (normalizeTruth)
+   * - FILTER_DE_MORGAN
    * - FILTER_CONFLICTING_CONSTANTS
    * - FILTER_KNOWN_MEMBERSHIP (dropKnownMemberships)
    * - FILTER_SORT_CONJUNCTS
@@ -306,6 +323,7 @@ class BagsRewriter : public TheoryRewriter
    * - AGGREGATE_KEYED, for X an aggregate or a product of them
    *   (keyedAggregateRows)
    * - FILTER_SETOF, for X a bag.setof
+   * - FILTER_IMPLIED_COUNTER (dropImpliedCounters)
    * - FILTER_JOIN_TRANSITIVE (rewriteJoinTransitiveConditions)
    */
   BagsRewriteResponse postRewriteFilter(const TNode& n) const;
@@ -354,7 +372,10 @@ class BagsRewriter : public TheoryRewriter
    * The rules for ((_ table.aggr K) f i X), each a Rewrite id with an example
    * in rewrites.h:
    *
+   * - AGGREGATE_INTEGER_SUM (rewriteAggregateIntegerSum)
+   * - AGGREGATE_DUPLICATE_COLUMN (rewriteAggregateDuplicateColumn)
    * - NOT_NULL_COLUMNS (assumeNonNull)
+   * - AGGREGATE_UNION_OF_MAPS
    * - AGGREGATE_NO_KEYS
    * - AGGREGATE_SORT_OUTPUT (rewriteAggregateSortOutput)
    * - CANONICAL_VARIABLE (canonicalLambda)
@@ -367,6 +388,7 @@ class BagsRewriter : public TheoryRewriter
    * rewrites.h:
    *
    * - PRODUCT_EMPTY
+   * - PRODUCT_BAG_MAKE (rewriteProductOfBagMake)
    * - PRODUCT_MAP_LEFT and PRODUCT_MAP_RIGHT (rewriteProductOfMap)
    * - PRODUCT_FILTER_LEFT and PRODUCT_FILTER_RIGHT (rewriteProductOfFilter)
    * - PRODUCT_UNION_DISJOINT
@@ -421,6 +443,14 @@ class BagsRewriter : public TheoryRewriter
    * flag, see the constructor.
    */
   BagsRewriteResponse rewriteProductSwap(const TNode& n) const;
+  /**
+   * PRODUCT_BAG_MAKE, a product with a bag of one row e, present once or when a
+   * condition b holds, as a map of the other factor that adds the columns of e,
+   * under a filter by b. side is the factor that is the bag of one row. Only
+   * with the higher-order flag, see the constructor.
+   */
+  BagsRewriteResponse rewriteProductOfBagMake(const TNode& n,
+                                              size_t side) const;
 
   // ---------------------------------------------------------------------------
   // Aggregates ((_ table.aggr K) f i X): X grouped by its columns K, each
@@ -452,11 +482,77 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteAggregateDeadColumns(const TNode& n) const;
   /**
+   * AGGREGATE_COLLAPSE, an aggregate over a union of aggregates by the same
+   * group columns, which merges their columns (a sum of counts or of sums, a
+   * minimum of minimums, a maximum of maximums), as one aggregate over the
+   * union of their tables. This is the shape of an aggregate pushed through a
+   * UNION ALL.
+   */
+  BagsRewriteResponse rewriteAggregateCollapse(const TNode& n) const;
+  /**
+   * AGGREGATE_INTEGER_SUM, a column of an aggregate that sums integers read as
+   * reals, SQL's SUM(CAST(c AS REAL)), as the integer sum, read as a real once
+   * by a map above the aggregate.
+   */
+  BagsRewriteResponse rewriteAggregateIntegerSum(const TNode& n) const;
+  /**
+   * AGGREGATE_ROLLUP, an aggregate of an aggregate, Calcite's form of DISTINCT
+   * aggregates, as the join of an aggregate over the table with one over the
+   * distinct values that the inner aggregate groups by. Every outer column must
+   * be a group column, the counter, a merge of an inner aggregate, or an
+   * aggregate over an inner group column (see the .cpp).
+   */
+  BagsRewriteResponse rewriteAggregateRollup(const TNode& n) const;
+  /**
+   * AGGREGATE_SETOF_IDEMPOTENT and AGGREGATE_JOIN_MERGE, for aggregates that
+   * are components of a product under (bag.map h (bag.filter P ..)): an
+   * aggregate over (bag.setof Y) that computes only copies, minimums, maximums
+   * and a counter that nothing reads but (>= c 1) is the aggregate over Y; and
+   * two aggregates over one table by the same group columns, joined on their
+   * copies of them and starting the copies alike, are one aggregate.
+   */
+  BagsRewriteResponse rewriteAggregateJoinMerge(const TNode& n) const;
+  /**
+   * AGGREGATE_UNION_SPLIT, an aggregate over a union of parts each of which
+   * gives the arguments of some columns and null for the others, all with the
+   * same keys, as the join of the aggregates of the parts.
+   */
+  BagsRewriteResponse rewriteAggregateUnionSplit(const TNode& n) const;
+  /**
    * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two of
    * which share a key value, under a filter that keeps the groups some row
    * reached, as the union of the aggregates of the parts.
    */
   BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
+  /**
+   * PRODUCT_AGGREGATE_DEAD_COLUMN, a column of an aggregate among the
+   * components of a product that the map above, and a filter in between, do not
+   * read is not computed.
+   */
+  BagsRewriteResponse rewriteProductAggregateColumns(const TNode& n) const;
+  /**
+   * AGGREGATE_DUPLICATE_COLUMN, two columns of an aggregate that fold alike,
+   * with the same step and initial value, as one column, read twice by a map
+   * above the aggregate.
+   */
+  BagsRewriteResponse rewriteAggregateDuplicateColumn(const TNode& n) const;
+  /**
+   * The group columns that h reads of the groups that some row reached, as a
+   * map over the rows of the table: for F an aggregate over X under the filter
+   * by its counter (see counterColumn), and h reading only copies of group
+   * columns, (bag.map h' X) with h' reading those columns of the rows of X, to
+   * put under a bag.setof; null otherwise. With covering, h must read all the
+   * group columns. For X : (Bag (Tuple Int Int)),
+   *
+   *   F = (bag.filter
+   *         (lambda ((r (Tuple Int Int Int))) (>= ((_ tuple.select 2) r) 1))
+   *         ((_ table.aggr 0) f i X))
+   *   h = (lambda ((r (Tuple Int Int Int))) (tuple ((_ tuple.select 0) r)))
+   *
+   * and f copying column 0 of X to its column 0, h' is
+   * (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 0) s))).
+   */
+  Node keysOfReachedGroups(const Node& h, const Node& F, bool covering) const;
   /**
    * For A = ((_ table.aggr K) f i X) whose group columns K contain a key of X
    * (see rowKeys), the rows of the groups some row of X reached: every group is
@@ -641,6 +737,17 @@ class BagsRewriter : public TheoryRewriter
    */
   int counterColumn(const Node& P, const Node& f, const Node& i) const;
   /**
+   * For the step of a column of an aggregate over acc, its accumulator
+   * column: 0 for SQL's SUM, 1 for MIN, 2 for MAX, which skip nulls and are
+   * null over no value,
+   *   (ite (= (as nullable.null (Nullable Int)) A)
+   *        acc
+   *        (ite (= (as nullable.null (Nullable Int)) acc) A C))
+   * with C the sum, minimum or maximum of A and acc; -1 for anything else.
+   * arg is set to A.
+   */
+  int nullAwareStepKind(const Node& step, const Node& acc, Node& arg) const;
+  /**
    * Whether step counts rows from seed (nullable.some 0): COUNT(*),
    * (nullable.some (+ (nullable.val acc) 1)), or COUNT(x), an ite that keeps
    * acc on the rows where x is null and counts the others.
@@ -659,6 +766,13 @@ class BagsRewriter : public TheoryRewriter
                                      const std::vector<Node>& comps,
                                      const std::vector<size_t>& starts,
                                      std::vector<int>& test) const;
+  /**
+   * FILTER_IMPLIED_COUNTER, a test of the counter of an aggregate among the
+   * components of a product goes when the filter joins it, on all its group
+   * columns, with a reached aggregate over the same key values
+   * (see reachedComponents).
+   */
+  BagsRewriteResponse dropImpliedCounters(const TNode& n) const;
   /**
    * FILTER_JOIN_TRANSITIVE, a condition that the rows of one side of a join
    * satisfy on a column that the join equates with others holds of the first

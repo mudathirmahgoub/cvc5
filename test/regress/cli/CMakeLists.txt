@@ -2956,6 +2956,8 @@ set(regress_1_tests
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
+  regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_rollup_int_key.smt2
   regress1/bags/rewriter/canonical_variable.smt2
   regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
@@ -2963,6 +2965,8 @@ set(regress_1_tests
   regress1/bags/rewriter/map_equal_columns.smt2
   regress1/bags/rewriter/map_identity.smt2
   regress1/bags/rewriter/product_assoc.smt2
+  regress1/bags/rewriter/setof_absorb.smt2
+  regress1/bags/rewriter/setof_of_set.smt2
   regress1/bags/subbag1.smt2
   regress1/bags/subbag2.smt2
   regress1/bags/table_aggregate1.smt2

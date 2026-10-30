@@ -2697,7 +2697,13 @@ std::vector<int> BagsRewriter::reachedComponents(
           joined =
               equated(starts[i] + keyAt[i][Ki[m]], starts[j] + keyAt[j][Kj[m]]);
         }
-        if (joined && keySet(i) == keySet(j))
+        if (!joined)
+        {
+          continue;
+        }
+        Node keysI = keySet(i);
+        Node keysJ = keySet(j);
+        if (keysI == keysJ)
         {
           reached[j] = 2;
           changed = true;

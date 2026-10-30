@@ -317,15 +317,10 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
   Assert(n.getKind() == Kind::BAG_COUNT);
   if (n[1].getKind() == Kind::BAG_MAP)
   {
-    // COUNT_MAP_DUPLICATE_COLUMNS: every row the map makes has equal columns
-    // i < j (the same term u), so a probe occurs only when its columns i and
-    // j are equal too, and column j can be dropped from the probe and the map:
-    //   (bag.count (tuple a b c) (bag.map (lambda ((t T)) (tuple u v u)) X))
-    //   --->
-    //   (ite (= a c)
-    //        (bag.count (tuple a b) (bag.map (lambda ((t T)) (tuple u v)) X))
-    //        0)
-    // A probe e that is not a tuple term has the columns
+    // COUNT_MAP_DUPLICATE_COLUMNS: every row the map makes has its columns i <
+    // j equal, the same term, so a probe occurs only when its columns i and j
+    // are equal too, and column j leaves the probe and the map
+    // (see rewrites.h). A probe e that is not a tuple term has the columns
     // ((_ tuple.select k) e).
     Node g = asLambda(n[1][0]);
     if (g.getKind() == Kind::LAMBDA && g[0].getNumChildren() == 1
@@ -355,13 +350,13 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
             }
           }
           TypeNode t = d_nm->mkTupleType(types);
-          // g2 is (lambda ((t T)) (tuple u v)), e2 is (tuple a b)
+          // g2 and e2, the map and the probe without column j
           Node g2 = mkLambda(g[0][0],
                              datatypes::TupleUtils::constructTupleFromElements(
                                  t, cols, 0, cols.size() - 1));
           Node e2 = datatypes::TupleUtils::constructTupleFromElements(
               t, probe, 0, probe.size() - 1);
-          // (bag.count (tuple a b) (bag.map (lambda ((t T)) (tuple u v)) X))
+          // the count of e2 in the map by g2
           Node count = d_nm->mkNode(
               Kind::BAG_COUNT, e2, d_nm->mkNode(Kind::BAG_MAP, g2, n[1][1]));
           // (= a c)
@@ -384,26 +379,13 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
   if ((n[1].getKind() == Kind::BAG_MAP || rowProbe)
       && n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getNumChildren() > 1)
   {
-    // COUNT_MAP_CONST_PROBE: column k of the probe is a constant c and the
-    // map copies column j of its row there, so only the rows of X whose
-    // column j is c can give the probe; column k leaves the probe and the map:
-    //   (bag.count (tuple 5 b)
-    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t)
-    //                                              ((_ tuple.select 0) t)))
-    //                       X))
-    //   --->
-    //   (bag.count (tuple b)
-    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
-    //                       (bag.filter (lambda ((t T))
-    //                                     (= ((_ tuple.select 1) t) 5))
-    //                                   X)))
-    // A table constant X that the input declares (Kind::VARIABLE) counts as
-    // its own identity map
-    //   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
-    //                                   ((_ tuple.select 1) t)))
-    //            X)
-    // but a skolem the solver introduced by purification does not: rewriting
-    // the counts of those makes the solver introduce more of them.
+    // COUNT_MAP_CONST_PROBE: column k of the probe is a constant c and the map
+    // copies column j of its row there, so only the rows of X whose column j is
+    // c can give the probe: column k leaves the probe and the map, which goes
+    // over those rows (see rewrites.h). A table constant X that the input
+    // declares (Kind::VARIABLE) counts as its own identity map, but a skolem
+    // that the solver introduced by purification does not: rewriting the counts
+    // in those makes the solver introduce more of them.
     Node mapped = n[1];
     if (mapped.getKind() != Kind::BAG_MAP && !d_higherOrder)
     {
@@ -456,14 +438,13 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
           }
         }
         TypeNode t = d_nm->mkTupleType(types);
-        // g2 is (lambda ((t T)) (tuple ((_ tuple.select 0) t))), e2 is
-        // (tuple b)
+        // g2 and e2, the map and the probe without column k
         Node g2 = mkLambda(sv,
                            datatypes::TupleUtils::constructTupleFromElements(
                                t, cols, 0, cols.size() - 1));
         Node e2 = datatypes::TupleUtils::constructTupleFromElements(
             t, probe, 0, probe.size() - 1);
-        // (bag.filter (lambda ((t T)) (= ((_ tuple.select 1) t) 5)) X)
+        // the rows of X whose column j is c
         Node fixed =
             d_nm->mkNode(Kind::BAG_FILTER, mkLambda(sv, col.eqNode(c)), n1[1]);
         Node ret = d_nm->mkNode(
@@ -475,25 +456,10 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
   if (n[1].getKind() == Kind::BAG_MAP && n[1][1].getKind() == Kind::BAG_FILTER)
   {
     // COUNT_MAP_FILTER_KEYS: g projects the rows of X onto columns J, and a
-    // conjunct of the filter reads only those columns (or no row at all):
-    // every row g maps to the probe agrees with the probe on them, so the
-    // conjunct holds of all those rows or of none, and is decided on the
-    // probe instead, with ((_ tuple.select J[k]) t) read as column k of it:
-    //   (bag.count (tuple a)
-    //              (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)))
-    //                       (bag.filter (lambda ((t T))
-    //                                     (and (> ((_ tuple.select 0) t) 3)
-    //                                          (< ((_ tuple.select 1) t) 7)))
-    //                                   X)))
-    //   --->
-    //   (ite (> a 3)
-    //        (bag.count (tuple a)
-    //                   (bag.map (lambda ((t T))
-    //                              (tuple ((_ tuple.select 0) t)))
-    //                            (bag.filter (lambda ((t T))
-    //                                          (< ((_ tuple.select 1) t) 7))
-    //                                        X)))
-    //        0)
+    // conjunct of the filter reads only those columns, or none: every row that
+    // g maps to the probe agrees with the probe on them, so the conjunct holds
+    // of all those rows or of none, and is decided on the probe instead, with
+    // ((_ tuple.select J[k]) t) read as column k of the probe (see rewrites.h)
     Node g = asLambda(n[1][0]);
     Node p = asLambda(n[1][1][0]);
     Node X = n[1][1][1];
@@ -595,17 +561,9 @@ BagsRewriteResponse BagsRewriter::rewriteSetof(const TNode& n) const
   }
   if (n[0].getKind() == Kind::BAG_MAP)
   {
-    // AGGREGATE_GROUP_KEYS: the group columns of the groups a row reached,
-    // as a set, are those of the rows, see keysOfReachedGroups; with f
-    // copying the group column 0 of X to its column 0 and counting rows in
-    // its column 2,
-    //   (bag.setof (bag.map (lambda ((r V)) (tuple ((_ tuple.select 0) r)))
-    //                       (bag.filter (lambda ((r V))
-    //                                     (>= ((_ tuple.select 2) r) 1))
-    //                                   ((_ table.aggr 0) f i X))))
-    //   --->
-    //   (bag.setof (bag.map (lambda ((s T)) (tuple ((_ tuple.select 0) s)))
-    //                       X))
+    // AGGREGATE_GROUP_KEYS: the set of the group columns of the groups that a
+    // row reached is the set of those columns of the rows of X, see
+    // keysOfReachedGroups and rewrites.h
     Node m = keysOfReachedGroups(asLambda(n[0][0]), n[0][1], false);
     if (!m.isNull())
     {
@@ -1022,9 +980,12 @@ void BagsRewriter::recordKey(const TNode& n) const
 void BagsRewriter::recordNotNull(const TNode& n) const
 {
   // n is the assertion that column k of the table constant X has no null,
-  // (= (bag.filter (lambda ((t (Tuple Int (Nullable Int)))) (= ((_ tuple.select
-  // k) t) (as nullable.null (Nullable Int)))) X) (as bag.empty ..)), either way
-  // round, see recordNotNull in the header
+  // either way round (see recordNotNull in the header):
+  //   (= (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
+  //                    (= ((_ tuple.select k) t)
+  //                       (as nullable.null (Nullable Int))))
+  //                  X)
+  //      (as bag.empty (Bag (Tuple Int (Nullable Int)))))
   for (size_t i = 0; i < 2; i++)
   {
     if (n[i].getKind() != Kind::BAG_EMPTY
@@ -2039,12 +2000,9 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       Node ret = d_nm->mkNode(Kind::BAG_MAP, mkLambda(var, body), n[1]);
       return BagsRewriteResponse(ret, Rewrite::MAP_FIXED_COLUMNS);
     }
-    // MAP_IDENTITY_ON_FILTER: the identity on the rows that pass, every
-    // column is the row's own or the constant the filter fixes it to:
-    //   (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t) 5))
-    //            (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5)) X))
-    //   --->
-    //   (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 5)) X)
+    // MAP_IDENTITY_ON_FILTER: a map over a filter that keeps every column of
+    // the rows that pass, each the row's own or the constant the filter fixes
+    // it to, is the filter (see rewrites.h)
     TypeNode rowType = n[1].getType().getBagElementType();
     if (body.getKind() == Kind::APPLY_CONSTRUCTOR && body.getType() == rowType
         && rowType.isTuple())
@@ -2203,10 +2161,8 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
                                  Rewrite::FILTER_FALSE);
     }
     {
-      // FILTER_DE_MORGAN: (not (or a b)) among the conjuncts is (not a) and
-      // (not b), conjuncts the rules below read one at a time:
-      //   (bag.filter (lambda ((t T)) (and p (not (or a b)))) X)
-      //   ---> (bag.filter (lambda ((t T)) (and p (not a) (not b))) X)
+      // FILTER_DE_MORGAN: a conjunct (not (or a b)) is the conjuncts (not a)
+      // and (not b), which the rules below read one at a time (see rewrites.h)
       std::vector<Node> cs;
       if (body.getKind() == Kind::AND)
       {
@@ -2383,15 +2339,12 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
                                      Rewrite::FILTER_FALSE);
         }
       }
-      // FILTER_SORT_CONJUNCTS: the conjuncts in one order, without
-      // duplicates, so that two filters by the same conjunction, merged in
-      // different orders, are one lambda,
-      //   (bag.filter (lambda ((t T)) (and q p q)) X)
-      //   ---> (bag.filter (lambda ((t T)) (and p q)) X)
-      // when the alpha key of p is smaller than that of q. The order is by
-      // alphaKey, which does not depend on the name of the row variable: the
-      // name is chosen after the order (canonicalLambda), so an order by
-      // node id would change with it
+      // FILTER_SORT_CONJUNCTS: the conjuncts in one order, without duplicates,
+      // so that two filters by the same conjunction, merged in different
+      // orders, are one lambda (see rewrites.h). The order is by alphaKey,
+      // which does not depend on the name of the row variable: the name is
+      // chosen after the order (canonicalLambda), so an order by node id would
+      // change with it.
       std::vector<Node> cs(body.begin(), body.end());
       std::vector<Node> sorted = cs;
       sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
@@ -2437,13 +2390,9 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
     if (body.getKind() == Kind::OR)
     {
       // FILTER_SPLIT_CLOSED: a disjunct c that does not read the row, such as
-      // EXISTS (subquery), splits the filter in two:
-      //   (bag.filter (lambda ((t T)) (or c q)) A)
-      //   --->
-      //   (bag.union_disjoint (bag.filter (lambda ((t T)) c) A)
-      //                       (bag.filter (lambda ((t T)) (and (not c) q)) A))
-      // each row passes one of the two exactly when it passes the
-      // disjunction, and never both
+      // EXISTS of a subquery, splits the filter in two, by c and by (not c)
+      // with the other disjuncts: a row passes one of the two exactly when it
+      // passes the disjunction, and never both (see rewrites.h)
       Node var = P[0][0];
       for (size_t k = 0, m = body.getNumChildren(); k < m; k++)
       {
@@ -2630,27 +2579,13 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteJoinTransitiveConditions(
     const TNode& n) const
 {
-  // FILTER_JOIN_TRANSITIVE: (bag.filter P (table.product C0 C1 ..)) where P
-  // equates columns of different components: a condition on one column of
-  // an equated class that the rows of its component satisfy (read off the
-  // component and P's conjuncts on it alone, see elementConditions) holds of
-  // the class's first column too, and joins P when it is not there, so that
-  // a condition written on either side of a join is on both. With X and Y
-  // of two columns,
-  //   (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
-  //                                  ((_ tuple.select 2) t)))
-  //               (table.product X
-  //                              (bag.filter (lambda ((s U))
-  //                                            (> ((_ tuple.select 0) s) 3))
-  //                                          Y)))
-  //   --->
-  //   (bag.filter (lambda ((t V)) (and (= ((_ tuple.select 0) t)
-  //                                       ((_ tuple.select 2) t))
-  //                                    (> ((_ tuple.select 0) t) 3)))
-  //               (table.product X
-  //                              (bag.filter (lambda ((s U))
-  //                                            (> ((_ tuple.select 0) s) 3))
-  //                                          Y)))
+  // FILTER_JOIN_TRANSITIVE, for (bag.filter P (table.product C0 C1 ..)) where P
+  // equates columns of different components: a condition on one column of a
+  // class of equated columns that the rows of its component satisfy, read off
+  // the component and the conjuncts of P on it alone (see elementConditions),
+  // holds of the first column of the class too, and joins P when it is not
+  // there, so that a condition written on either side of a join is on both
+  // (see rewrites.h)
   Node P = asLambda(n[0]);
   if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
       || d_rewriter == nullptr)
@@ -2764,9 +2699,8 @@ BagsRewriteResponse BagsRewriter::rewriteJoinTransitiveConditions(
             c.substitute(fromP.begin(), fromP.end(), toP.begin(), toP.end()));
       }
     }
-    // the component under those conjuncts,
-    // (bag.filter (lambda ((v U)) (> ((_ tuple.select 0) v) 3)) Y), whose
-    // element conditions are read off
+    // the component filtered by those conjuncts, whose element conditions are
+    // read off
     Node C = comps[i];
     if (!local.empty())
     {
@@ -3050,21 +2984,10 @@ std::vector<int> BagsRewriter::reachedComponents(
 BagsRewriteResponse BagsRewriter::dropImpliedCounters(const TNode& n) const
 {
   // FILTER_IMPLIED_COUNTER: a filter over the product of two aggregates that
-  // copy all their group columns, joined on them, over inputs with the same
-  // key values (see reachedComponents): the group of the second that a
-  // reached group of the first meets is reached too, and the test of its
-  // counter goes. With G1 = ((_ table.aggr 0) f i X) and
-  // G2 = ((_ table.aggr 0) g j X), counters in their columns 2,
-  //   (bag.filter (lambda ((t V)) (and (>= ((_ tuple.select 2) t) 1)
-  //                                    (>= ((_ tuple.select 5) t) 1)
-  //                                    (= ((_ tuple.select 0) t)
-  //                                       ((_ tuple.select 3) t))))
-  //               (table.product G1 G2))
-  //   --->
-  //   (bag.filter (lambda ((t V)) (and (>= ((_ tuple.select 2) t) 1)
-  //                                    (= ((_ tuple.select 0) t)
-  //                                       ((_ tuple.select 3) t))))
-  //               (table.product G1 G2))
+  // copy all their group columns, joined on them, over tables with the same key
+  // values (see reachedComponents): the group of the second that a reached
+  // group of the first meets is reached too, and the test of its counter goes
+  // (see rewrites.h)
   Node P = asLambda(n[0]);
   if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1)
   {
@@ -3142,16 +3065,19 @@ void BagsRewriter::elementConditions(const Node& A,
                                      const Node& w,
                                      std::set<Node>& out) const
 {
-  // conditions every element w of A satisfies, read off A's filters, through
-  // projections onto distinct columns, and through the key columns of the
-  // groups an aggregate's rows reached. For
-  //   A = (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
-  //                (bag.filter (lambda ((s T))
-  //                              (and (> ((_ tuple.select 1) s) 3)
-  //                                   (< ((_ tuple.select 0) s) 7)))
-  //                            X))
-  // out gets (> ((_ tuple.select 0) w) 3): the map keeps column 1 of the
-  // rows, as column 0 of w, and drops column 0, of which nothing is said
+  // conditions that every element w of A satisfies, read off the filters of A,
+  // through projections onto distinct columns, and through the key columns of
+  // the groups that the rows of an aggregate reached. For X : (Bag (Tuple Int
+  // Int)) and
+  //   A = (bag.map
+  //         (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
+  //         (bag.filter
+  //           (lambda ((s (Tuple Int Int)))
+  //             (and (> ((_ tuple.select 1) s) 3)
+  //                  (< ((_ tuple.select 0) s) 7)))
+  //           X))
+  // out gets (> ((_ tuple.select 0) w) 3): the map keeps column 1 of the rows,
+  // as column 0 of w, and drops column 0, of which nothing is said
   switch (A.getKind())
   {
     case Kind::BAG_SETOF: elementConditions(A[0], w, out); return;
@@ -3405,12 +3331,10 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
       if (!g.isNull() && g.getKind() == Kind::LAMBDA
           && g[0].getNumChildren() == 1 && !bindsVariable(l[1], l[0][0]))
       {
-        // FOLD_MAP: the fold visits (g y) once per occurrence of y in Y,
-        //   (bag.fold (lambda ((t U) (acc S)) b) i
-        //             (bag.map (lambda ((s T)) e) Y))
-        //   --->
-        //   (bag.fold (lambda ((s T) (acc S)) b[t := e]) i Y)
-        // when e does not read acc
+        // FOLD_MAP: a fold over a map visits the image of y once per occurrence
+        // of y in Y, so it is the fold over Y whose step reads the image for
+        // its row, when the image does not read the accumulator variable
+        // (see rewrites.h)
         Node y = g[0][0];
         Node body = l[1].substitute(TNode(l[0][0]), TNode(g[1]));
         if (!occursFree(g[1], l[0][1]))
@@ -3679,38 +3603,19 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateIntegerSum(
 BagsRewriteResponse BagsRewriter::rewriteAggregateUnionSplit(
     const TNode& top) const
 {
-  // AGGREGATE_UNION_SPLIT:
-  //   (bag.map h (bag.filter Q ((_ table.aggr K) f i
-  //                               (bag.union_disjoint U1 .. Um))))
-  // where every column of f other than the copies of the group columns and
-  // the counter folds an argument column, skipping its nulls, that is null
-  // on every row of all parts but one, and every part has the same group
-  // keys: each group folds each column over one part's rows, so the rows
-  // are those of the aggregates of the parts, one per part, joined on the
-  // keys. Q reads the counter only through (>= c 1) and h not at all: with
-  // the same keys in every part, the first part's counter is positive
-  // exactly when theirs are, and stands for it. This is SQL's
+  // AGGREGATE_UNION_SPLIT, for
+  // (bag.map h (bag.filter Q ((_ table.aggr K) f i (bag.union_disjoint U1 ..
+  // Um)))) where every column of f other than the copies of the group columns
+  // and the counter folds an argument column, skipping its nulls, that is null
+  // on every row of all parts but one, and every part has the same group keys:
+  // each group folds each column over the rows of one part, so the rows are
+  // those of the aggregates of the parts, one per part, joined on the keys
+  // (see rewrites.h). Q reads the counter only through (>= c 1) and h not at
+  // all: with the same keys in every part, the counter of the first part is
+  // positive exactly when theirs are, and stands for it. This is SQL's
   //   SELECT k, SUM(a), SUM(b) FROM (SELECT k, a, NULL AS b FROM X
   //     UNION ALL SELECT k, NULL, b FROM Y) GROUP BY k
-  // with the rows of f (tuple k sum-of-a sum-of-b counter), and
-  //   U1 = (bag.map (lambda ((s T)) (tuple ((_ tuple.select 0) s)
-  //                                        ((_ tuple.select 1) s)
-  //                                        (as nullable.null (Nullable Int))))
-  //                 X)
-  // and U2 the same with the null in column 1:
-  //   --->
-  //   (bag.map h
-  //     (bag.filter Q
-  //       (bag.map (lambda ((p W)) (tuple ((_ tuple.select 0) p)
-  //                                       ((_ tuple.select 1) p)
-  //                                       ((_ tuple.select 4) p)
-  //                                       ((_ tuple.select 2) p)))
-  //                (bag.filter (lambda ((p W)) (= ((_ tuple.select 0) p)
-  //                                               ((_ tuple.select 3) p)))
-  //                            (table.product ((_ table.aggr 0) f1 i1 U1)
-  //                                           ((_ table.aggr 0) f2 i2 U2))))))
-  // where the rows of f1 are (tuple k sum-of-a counter), and those of f2
-  // (tuple k sum-of-b counter)
+  // with two parts, each giving the argument of one sum and null for the other.
   Node h = asLambda(top[0]);
   if (top[1].getKind() != Kind::BAG_FILTER || h.getKind() != Kind::LAMBDA
       || h[0].getNumChildren() != 1
@@ -3915,9 +3820,9 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionSplit(
                : owners[q].size() == 1 ? static_cast<int>(owners[q][0])
                                        : -4;
   }
-  // the parts own columns, and have the same keys: the sets
-  //   (bag.setof (bag.map (lambda ((u T)) (tuple ((_ tuple.select 0) u))) Um))
-  // of the parts are one term after rewriting
+  // the parts own columns, and have the same keys: the sets of their key
+  // columns, the bag.setof of their projections onto them, are one term after
+  // rewriting
   {
     std::set<size_t> used;
     for (size_t q = 0; q < w; q++)
@@ -4137,18 +4042,18 @@ Node BagsRewriter::keysOfReachedGroups(const Node& h,
                                        const Node& F,
                                        bool covering) const
 {
-  // F = (bag.filter (lambda ((r V)) (>= ((_ tuple.select c) r) 1))
-  //                 ((_ table.aggr K) f i X))
-  // with c the counter (see counterColumn), and h reading only columns where
-  // f copies a group column ((_ tuple.select k) t): the rows h makes of the
-  // groups are those it makes of the rows of X, without repeats,
-  //   (bag.map h' X)
-  // to put under a bag.setof, null otherwise; h' is h with column p of r read
-  // as ((_ tuple.select k) s) of the rows s of X. With covering, h must read
-  // all of K, so that distinct groups give distinct rows. With f copying
-  // column 0 of X to its column 0,
-  //   h = (lambda ((r V)) (tuple ((_ tuple.select 0) r)))
-  //   h' = (lambda ((s T)) (tuple ((_ tuple.select 0) s)))
+  // F =
+  // (bag.filter (lambda ((r ..)) (>= ((_ tuple.select c) r) 1)) ((_ table.aggr
+  // K) f i X)) with c the counter (see counterColumn), and h reading only
+  // columns where f copies a group column ((_ tuple.select k) t): the rows that
+  // h makes of the groups are those it makes of the rows of X, without repeats,
+  // (bag.map h' X), to put under a bag.setof; null otherwise. h' is h with
+  // column p of r read as column k of the rows s of X. With covering, h must
+  // read all of K, so that distinct groups give distinct rows. With f copying
+  // column 0 of X : (Bag (Tuple Int Int)) to its column 0 and counting the rows
+  // in its column 2,
+  //   h = (lambda ((r (Tuple Int Int Int))) (tuple ((_ tuple.select 0) r)))
+  //   h' = (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 0) s)))
   if (h.getKind() != Kind::LAMBDA || h[0].getNumChildren() != 1
       || F.getKind() != Kind::BAG_FILTER
       || F[1].getKind() != Kind::TABLE_AGGREGATE)
@@ -4212,24 +4117,20 @@ Node BagsRewriter::keysOfReachedGroups(const Node& h,
 BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
     const TNode& top) const
 {
-  // AGGREGATE_UNION_DISJOINT_KEYS: an aggregate over a union of parts no two
-  // of which share a key value, with Q keeping only groups some row reached
-  // (see counterColumn): every reached group is one part's, so the groups
-  // are the union of the parts' groups,
-  //   (bag.map h (bag.filter Q ((_ table.aggr 0) f i
-  //                               (bag.union_disjoint U1 U2))))
-  //   --->
-  //   (bag.map h (bag.filter Q (bag.union_disjoint ((_ table.aggr 0) f i U1)
-  //                                                ((_ table.aggr 0) f i U2))))
-  // e.g. for
-  //   U1 = (bag.filter (lambda ((s T)) (= ((_ tuple.select 0) s) 1)) X)
-  //   U2 = (bag.filter (lambda ((s T)) (= ((_ tuple.select 0) s) 2)) Y)
-  // Two parts are disjoint when a key column one part's rows have equal to a
-  // constant makes a condition of the other's rows false (as 1 does to
-  // (= ((_ tuple.select 0) w) 2)), or when one part's key columns are
-  // constants or ites of constants and each of their combinations makes
-  // such a condition false, or is null in a column the other part never has
-  // null in
+  // AGGREGATE_UNION_DISJOINT_KEYS: an aggregate over a union of parts no two of
+  // which share a key value, under a filter Q that keeps only the groups some
+  // row reached (see counterColumn): every reached group is that of one part,
+  // so the groups are the union of the groups of the parts (see rewrites.h).
+  // Two parts are disjoint when a key column that the rows of one part have
+  // equal to a constant makes a condition on the rows of the other false, as
+  // for the parts
+  //   (bag.filter (lambda ((s (Tuple Int Int))) (= ((_ tuple.select 0) s) 1))
+  //               X)
+  //   (bag.filter (lambda ((s (Tuple Int Int))) (= ((_ tuple.select 0) s) 2))
+  //               Y)
+  // by column 0; or when the key columns of one part are constants or ites of
+  // constants and each of their combinations makes such a condition false, or
+  // is null in a column the other part never has null in.
   if (top[1].getKind() != Kind::BAG_FILTER
       || top[1][1].getKind() != Kind::TABLE_AGGREGATE || d_rewriter == nullptr)
   {
@@ -4446,24 +4347,14 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
 BagsRewriteResponse BagsRewriter::rewriteProductAggregateColumns(
     const TNode& n) const
 {
-  // PRODUCT_AGGREGATE_DEAD_COLUMN: in
-  //   (bag.map h (bag.filter P (table.product C0 C1 ..)))
-  // or the same without the filter, a column of a component aggregate that
-  // neither h nor P reads, nor another step of its aggregate, goes (for an
-  // aggregate alone, AGGREGATE_DEAD_COLUMNS does it). With
-  //   G = ((_ table.aggr 0) (lambda ((t T) (acc S)) (tuple a0 a1 a2))
-  //                         (tuple i0 i1 i2) X)
-  // and nothing reading column 1 of G's rows (column 1 of the product),
-  //   (bag.map h (table.product G Y))
-  //   --->
-  //   (bag.map h' (table.product ((_ table.aggr 0)
-  //                                (lambda ((t T) (acc S')) (tuple a0' a2'))
-  //                                (tuple i0 i2)
-  //                                X)
-  //                              Y))
-  // where h' reads column k of the product as column k - 1 for k > 1, and
-  // a0', a2' are a0, a2 over the narrower accumulator; the columns removed
-  // can only merge rows that h maps to one image anyway
+  // PRODUCT_AGGREGATE_DEAD_COLUMN, in
+  // (bag.map h (bag.filter P (table.product C0 C1 ..))) or the same without the
+  // filter: a column of an aggregate among the components that neither h nor P
+  // reads, nor another step of its aggregate, goes; AGGREGATE_DEAD_COLUMNS does
+  // it for an aggregate alone (see rewrites.h). h then reads each column of the
+  // product after it one to the left, and the steps read the narrower
+  // accumulator; the columns removed can only merge rows that h maps to one
+  // image anyway.
   Node h = asLambda(n[0]);
   Node P;
   Node T = n[1];
@@ -4623,19 +4514,11 @@ BagsRewriteResponse BagsRewriter::rewriteProductAggregateColumns(
 BagsRewriteResponse BagsRewriter::rewriteAggregateDuplicateColumn(
     const TNode& n) const
 {
-  // AGGREGATE_DUPLICATE_COLUMN: columns p < q of f fold alike, the same step
-  // of their own accumulator from the same seed, as for SELECT SUM(a),
-  // SUM(a): one fold, read twice,
-  //   ((_ table.aggr 0) (lambda ((t T) (acc S)) (tuple a0 s1 s2))
-  //                     (tuple i0 i1 i1) X)
-  //   --->
-  //   (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r)
-  //                                   ((_ tuple.select 1) r)
-  //                                   ((_ tuple.select 1) r)))
-  //            ((_ table.aggr 0) (lambda ((t T) (acc U)) (tuple a0 s1))
-  //                              (tuple i0 i1) X))
-  // where s2 is s1 with ((_ tuple.select 1) acc) read as
-  // ((_ tuple.select 2) acc), and no other step reads column 2
+  // AGGREGATE_DUPLICATE_COLUMN: columns p < q of f fold alike, the same step of
+  // their own accumulator from the same initial value, as for SELECT SUM(a),
+  // SUM(a): one fold, read twice by a map above the aggregate (see rewrites.h).
+  // The step of q is that of p with ((_ tuple.select q) acc) for
+  // ((_ tuple.select p) acc), and no other step reads column q.
   Node f = asLambda(n[0]);
   Node init = n[1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
@@ -4946,22 +4829,11 @@ BagsRewriteResponse BagsRewriter::rewriteProductOfFilter(const TNode& n,
                                                          bool left) const
 {
   // PRODUCT_FILTER_LEFT and PRODUCT_FILTER_RIGHT: a filter of a factor is a
-  // filter of the product, over the factor's columns of its rows. With A and
-  // B of two columns,
-  //   (table.product (bag.filter (lambda ((s T)) (> ((_ tuple.select 1) s) 3))
-  //                              A)
-  //                  B)
-  //   --->
-  //   (bag.filter (lambda ((t V)) (> ((_ tuple.select 1) t) 3))
-  //               (table.product A B))
-  //   (table.product A (bag.filter (lambda ((s U)) (> ((_ tuple.select 1) s)
-  //                                                  3))
-  //                                B))
-  //   --->
-  //   (bag.filter (lambda ((t V)) (> ((_ tuple.select 3) t) 3))
-  //               (table.product A B))
-  // p is applied to the factor's part of t, (tuple ((_ tuple.select 2) t)
-  // ((_ tuple.select 3) t)) for B, and beta-reduced (see applyFunction)
+  // filter of the product, over the columns of the factor in its rows
+  // (see rewrites.h). The predicate p is applied to the part of the row t of
+  // the product that is the factor's,
+  // (tuple ((_ tuple.select 2) t) ((_ tuple.select 3) t)) for B of two columns
+  // on the right of A of two, and beta-reduced (see applyFunction).
   if (!d_higherOrder)
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
@@ -5004,17 +4876,15 @@ BagsRewriteResponse BagsRewriter::rewriteProductOfFilter(const TNode& n,
 BagsRewriteResponse BagsRewriter::rewriteProductSwap(const TNode& n) const
 {
   // PRODUCT_SWAP: the factors of a product in the order of their node ids,
-  // with B < A,
-  //   (table.product A (table.product B C))
-  //   ---> (bag.map perm (table.product B (table.product A C)))
-  //   (table.product A B) ---> (bag.map perm (table.product B A))
-  // where perm puts the columns back in the order A, B, C; with A, B and C of
-  // one column,
-  //   perm = (lambda ((t V)) (tuple ((_ tuple.select 1) t)
-  //                                 ((_ tuple.select 0) t)
-  //                                 ((_ tuple.select 2) t)))
-  // so that two joins that list their tables in different orders become one
-  // product
+  // under a map perm that puts the columns back in their order, so that two
+  // joins that list their tables in different orders become one product
+  // (see rewrites.h). For A, B and C of one column with B < A,
+  // (table.product A (table.product B C)) becomes
+  // (bag.map perm (table.product B (table.product A C))) with
+  //   perm = (lambda ((t (Tuple Int Int Int)))
+  //            (tuple ((_ tuple.select 1) t)
+  //                   ((_ tuple.select 0) t)
+  //                   ((_ tuple.select 2) t)))
   if (!d_higherOrder)
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
@@ -5239,9 +5109,9 @@ BagsRewriteResponse BagsRewriter::rewriteFilterOfFilter(const TNode& n) const
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
-  // FILTER_FILTER: two filters are one, by the conjunction,
-  //   (bag.filter (lambda ((s T)) p) (bag.filter (lambda ((t T)) q) A))
-  //   ---> (bag.filter (lambda ((t T)) (and p[s := t] q)) A)
+  // FILTER_FILTER: two filters are one, by the conjunction of p[s := t] and q
+  // for the outer filter (lambda ((s ..)) p) and the inner one
+  // (lambda ((t ..)) q) (see rewrites.h)
   Node p = n[0];
   Node q = n[1][0];
   Node A = n[1][1];
@@ -5323,19 +5193,11 @@ BagsRewriteResponse BagsRewriter::rewriteProductOfMap(const TNode& n,
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
   // PRODUCT_MAP_LEFT and PRODUCT_MAP_RIGHT: a map of a factor is a map of the
-  // product, which keeps the other factor's columns. With A and B of two
-  // columns,
-  //   (table.product (bag.map (lambda ((s T)) (tuple ((_ tuple.select 1) s)))
-  //                           A)
-  //                  B)
-  //   --->
-  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)
-  //                                   ((_ tuple.select 2) t)
-  //                                   ((_ tuple.select 3) t)))
-  //            (table.product A B))
-  // and the same on the right, the image after A's columns; f is applied to
-  // the factor's part of t, (tuple ((_ tuple.select 0) t)
-  // ((_ tuple.select 1) t)) for A
+  // product, which keeps the columns of the other factor (see rewrites.h). The
+  // function f is applied to the part of the row t of the product that is the
+  // factor's, (tuple ((_ tuple.select 0) t) ((_ tuple.select 1) t)) for A of
+  // two columns on the left; on the right, the image goes after the columns of
+  // the left factor.
   Node mapped = left ? n[0] : n[1];
   Node other = left ? n[1] : n[0];
   Node f = mapped[0];
@@ -6088,19 +5950,11 @@ BagsRewriteResponse BagsRewriter::rewriteFoldOfTuple(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteProductOfBagMake(const TNode& n,
                                                           size_t side) const
 {
-  // PRODUCT_BAG_MAKE: a product with a single row e, present once or when
-  // b holds, is a map of the other side that appends e, under the filter b
-  // when there is one; b and e do not read the rows of A. With A of two
-  // columns and e = (tuple 7),
-  //   (table.product A (bag (tuple 7) (ite b 1 0)))
-  //   --->
-  //   (bag.filter (lambda ((r V)) b)
-  //               (bag.map (lambda ((t T)) (tuple ((_ tuple.select 0) t)
-  //                                               ((_ tuple.select 1) t)
-  //                                               7))
-  //                        A))
-  // the map is injective, and each row of A meets the one row e, once if b;
-  // with side 0 the bag is the left factor and e comes first
+  // PRODUCT_BAG_MAKE: a product with a single row e, present once or when b
+  // holds, is a map of the other factor that appends e, under a filter by b
+  // when there is one; b and e do not read the rows of A (see rewrites.h). The
+  // map is injective, and each row of A meets the one row e, once if b; with
+  // side 0 the bag is the left factor and e comes first.
   if (!d_higherOrder)
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
@@ -6185,32 +6039,14 @@ BagsRewriteResponse BagsRewriter::rewriteProductOfBagMake(const TNode& n,
 
 BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
 {
-  // SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map:
-  // * f a constant c:
-  //     (bag.setof (bag.map (lambda ((t T)) c) Y))
-  //     ---> (bag c (ite (= Y (as bag.empty (Bag T))) 0 1))
-  // * f a projection onto columns in another order than theirs: the set of
-  //   the projection onto the sorted columns, mapped back by the
-  //   permutation, which is injective and so commutes with duplicate removal,
-  //     (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 2) t)
-  //                                                ((_ tuple.select 0) t)))
-  //                         Y))
-  //     --->
-  //     (bag.map (lambda ((r U)) (tuple ((_ tuple.select 1) r)
-  //                                     ((_ tuple.select 0) r)))
-  //              (bag.setof (bag.map (lambda ((t T))
-  //                                    (tuple ((_ tuple.select 0) t)
-  //                                           ((_ tuple.select 2) t)))
-  //                                  Y)))
-  // * f a tuple some of whose components are constants: the constants are
-  //   put back by an injective map over the set of the other components,
-  //     (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select 1) t) 5))
-  //                         Y))
-  //     --->
-  //     (bag.map (lambda ((r U)) (tuple ((_ tuple.select 0) r) 5))
-  //              (bag.setof (bag.map (lambda ((t T))
-  //                                    (tuple ((_ tuple.select 1) t)))
-  //                                  Y)))
+  // SETOF_MAP_CONSTANT and SETOF_PROJECTION_SORT, the set of a map
+  // (see rewrites.h):
+  // * for f a constant c, the bag of c, once when Y is not empty;
+  // * for f a projection onto columns in another order than theirs, the set of
+  //   the projection onto the sorted columns, under a map that puts them back,
+  //   which is injective and so commutes with removing duplicates;
+  // * for f a tuple some of whose components are constants, the set of the
+  //   other components, under an injective map that puts the constants back.
   Node f = asLambda(n[0][0]);
   Node Y = n[0][1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 1)
@@ -6325,34 +6161,21 @@ BagsRewriteResponse BagsRewriter::rewriteSetofOfMap(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteSemiJoin(const TNode& n,
                                                   size_t side) const
 {
-  // SEMI_JOIN: (bag.map f (bag.filter p (table.product X0 (table.product X1
-  // ..)))) with a component B = Xj that is a set (a bag.setof, or a table
-  // with a key, whose rows are distinct), f reading none of B's columns
-  // (or only columns that p equates to columns of the others), and p having,
-  // for every column of B or for every column of a key of B, a conjunct
-  // (= ((_ tuple.select c) t) e) with e reading no column of B: a row of the
-  // other components meets at most one row of B that passes, so the product
-  // passes each of their rows once when one does. With Y of two columns and
-  // the key {0} of B = Z,
-  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 1) t)))
-  //            (bag.filter (lambda ((t V)) (= ((_ tuple.select 0) t)
-  //                                           ((_ tuple.select 2) t)))
-  //                        (table.product Y Z)))
-  //   --->
-  //   (bag.map (lambda ((a U)) (tuple ((_ tuple.select 1) a)))
-  //            (bag.filter (lambda ((a U))
-  //                          (not (= (bag.filter (lambda ((b W))
-  //                                                (= ((_ tuple.select 0) a)
-  //                                                   ((_ tuple.select 0) b)))
-  //                                              Z)
-  //                                  (as bag.empty (Bag W)))))
-  //                        Y))
-  // the product of the other components A (Y here) filtered by pA, the
-  // conjuncts reading no column of B, and the existence of a row of B that
-  // passes pAB, the others: the shape of SQL's EXISTS and IN, which other
-  // rules decorrelate (see rewriteEmptyFilter). Called with side 0 only;
-  // every component is tried, the one with the smallest node first, so that
-  // one join written in two orders is rewritten alike.
+  // SEMI_JOIN, for
+  // (bag.map f (bag.filter p (table.product X0 (table.product X1 ..)))) with a
+  // component B = Xj that is a set, a bag.setof or a table with a key, whose
+  // rows are distinct; f reading none of its columns, or only columns that p
+  // equates to columns of the others; and p having, for every column of B or
+  // for every column of a key of B, a conjunct (= ((_ tuple.select c) t) e)
+  // with e reading no column of B: a row of the other components meets at most
+  // one row of B that passes, so the product passes each of their rows once
+  // when one does (see rewrites.h). The result is the product A of the other
+  // components, filtered by pA, the conjuncts reading no column of B, and by
+  // the existence of a row of B that passes pAB, the others: the shape of SQL's
+  // EXISTS and IN, which other rules decorrelate (see rewriteEmptyFilter).
+  // Called with side 0 only; every component is tried, the one with the
+  // smallest node first, so that one join written in two orders is rewritten
+  // alike.
   if (side != 0)
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
@@ -6592,7 +6415,7 @@ BagsRewriteResponse BagsRewriter::rewriteSemiJoin(const TNode& n,
     {
       continue;
     }
-    // (not (= (bag.filter (lambda ((b W)) pAB) B) (as bag.empty (Bag W))))
+    // some row of B passes pAB: the filter of B by pAB is not empty
     Node matches = d_nm->mkNode(Kind::BAG_FILTER, mkLambda(b, pAB), B);
     Node empty = d_nm->mkConst(EmptyBag(B.getType()));
     Node exists = matches.eqNode(empty).notNode();
@@ -6606,24 +6429,33 @@ BagsRewriteResponse BagsRewriter::rewriteSemiJoin(const TNode& n,
 
 Node BagsRewriter::rewriteEmptyFilter(const Node& F) const
 {
-  // EQ_EMPTY_FILTER_DECORRELATE, for the emptiness of a filter F in the body
-  // of an enclosing lambda over a row r:
-  //   (= (as bag.empty (Bag T)) (bag.filter (lambda ((s T)) (and c q e)) X))
-  // where c reads no s (only r, or nothing), q reads only s, and each
-  // equation e ties a column of s to a term E that reads no s, such as
-  // (= ((_ tuple.select 1) s) ((_ tuple.select 0) r)): no row of X passes
-  // when c fails, or when the tuple of the E is not among the columns of the
-  // rows that pass q,
-  //   --->
-  //   (or (not c)
+  // EQ_EMPTY_FILTER_DECORRELATE, for the emptiness of a filter F in the body of
+  // an enclosing lambda over a row r: F filters X by c, q and equations, where
+  // c reads no row of X, only r or nothing, q reads only the row s of X, and
+  // each equation ties a column of s to a term E that reads no s, such as
+  // (= ((_ tuple.select 1) s) ((_ tuple.select 0) r)). No row of X passes when
+  // c fails, or when the tuple of the E is not among those columns of the rows
+  // that pass q. For X : (Bag (Tuple Int Int)), r : (Tuple Int Int) and
+  //   F = (bag.filter
+  //         (lambda ((s (Tuple Int Int)))
+  //           (and (> ((_ tuple.select 0) r) 3)
+  //                (< ((_ tuple.select 0) s) 7)
+  //                (= ((_ tuple.select 1) s) ((_ tuple.select 0) r))))
+  //         X)
+  // (= (as bag.empty (Bag (Tuple Int Int))) F) is
+  //   (or (not (> ((_ tuple.select 0) r) 3))
   //       (not (>= (bag.count (tuple ((_ tuple.select 0) r))
-  //                           (bag.map (lambda ((s T))
-  //                                      (tuple ((_ tuple.select 1) s)))
-  //                                    (bag.filter (lambda ((s T)) q) X)))
+  //                           (bag.map
+  //                             (lambda ((s (Tuple Int Int)))
+  //                               (tuple ((_ tuple.select 1) s)))
+  //                             (bag.filter
+  //                               (lambda ((s (Tuple Int Int)))
+  //                                 (< ((_ tuple.select 0) s) 7))
+  //                               X)))
   //                1)))
   // The bag no longer depends on the enclosing row, so a filter over this
-  // predicate is not a new bag per row the solver reads. Returns that
-  // formula, or null when F is not of that shape.
+  // predicate is not a new bag per row the solver reads. Returns that formula,
+  // or null when F is not of that shape.
   Node P = asLambda(F[0]);
   Node X = F[1];
   if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1)
@@ -6654,10 +6486,9 @@ Node BagsRewriter::rewriteEmptyFilter(const Node& F) const
     bool matched = false;
     if (fvs.empty())
     {
-      // an equation between a column and a constant is a key as well:
-      //   (= (as bag.empty (Bag T))
-      //      (bag.filter (lambda ((s T)) (= ((_ tuple.select 1) s) 10)) X))
-      // says 10 is not among the column's values
+      // an equation between a column and a constant is a key as well: the
+      // emptiness of the filter of X by (= ((_ tuple.select 1) s) 10) says that
+      // 10 is not among the values of the column
       if (c.getKind() == Kind::EQUAL)
       {
         for (size_t side = 0; side < 2 && !matched; side++)
@@ -7645,39 +7476,24 @@ bool BagsRewriter::isCountStep(const Node& step,
 
 BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
 {
-  // AGGREGATE_ROLLUP, an aggregate of an aggregate:
+  // AGGREGATE_ROLLUP, for an aggregate of an aggregate,
   //   (bag.map h (bag.filter Q ((_ table.aggr Ko) g j
   //                               (bag.filter P ((_ table.aggr K) f i X)))))
   // the outer aggregate grouping the inner groups by some of their group
-  // columns, Ko. Every outer column is a group column, the outer counter
-  // (read by Q through (>= c 1) only, and not by h), a merge of an inner
-  // aggregate (a sum of sums or counts, a minimum of minimums, a maximum of
-  // maximums), or an aggregate over an inner group column c outside Ko when
-  // K is Ko and c: over the inner groups of a key, c takes each of its values
-  // once, so that is the aggregate over the distinct values of c. So the
-  // outer rows are those of an aggregate over X by Ko of the merged columns,
-  // joined on the keys with an aggregate by Ko over the distinct (Ko, c) of
-  // X of the others. That is how Calcite writes a query with DISTINCT and
-  // plain aggregates; for
+  // columns, Ko. Every outer column is a group column; the outer counter, which
+  // Q reads only through (>= c 1) and h not at all; a merge of an inner
+  // aggregate, a sum of sums or counts, a minimum of minimums or a maximum of
+  // maximums; or an aggregate over an inner group column c outside Ko when K is
+  // Ko and c: over the inner groups of a key, c takes each of its values once,
+  // so that is the aggregate over the distinct values of c. So the outer rows
+  // are those of an aggregate over X by Ko of the merged columns, joined on the
+  // keys with an aggregate by Ko over the distinct (Ko, c) of X of the others
+  // (see rewrites.h). That is how Calcite writes a query with DISTINCT and
+  // plain aggregates:
   //   SELECT k, SUM(a), COUNT(DISTINCT c) FROM X GROUP BY k
-  // as SELECT k, SUM(s), COUNT(c) FROM (SELECT k, c, SUM(a) AS s FROM X
-  // GROUP BY k, c) GROUP BY k,
-  //   --->
-  //   (bag.map h (bag.filter Q (bag.map rows
-  //     (bag.filter (lambda ((p W)) (= ((_ tuple.select 0) p)
-  //                                    ((_ tuple.select 3) p)))
-  //       (table.product
-  //         (bag.filter (lambda ((r U)) (>= ((_ tuple.select 2) r) 1))
-  //                     ((_ table.aggr 0) fA iA X))
-  //         (bag.filter (lambda ((r U')) (>= ((_ tuple.select 2) r) 1))
-  //                     ((_ table.aggr 0) fB iB
-  //                                       (bag.setof (bag.map (lambda ((t T))
-  //                                         (tuple ((_ tuple.select 0) t)
-  //                                                ((_ tuple.select 2) t)))
-  //                                         X)))))))))
-  // where fA sums a over X by k (tuple k sum-of-a counter), fB counts the
-  // distinct c by k (tuple k count-of-c counter), and rows puts the columns
-  // in the outer aggregate's order, with 1 for its counter
+  // as
+  //   SELECT k, SUM(s), COUNT(c)
+  //   FROM (SELECT k, c, SUM(a) AS s FROM X GROUP BY k, c) GROUP BY k
   Node h = asLambda(n[0]);
   if (n[1].getKind() != Kind::BAG_FILTER || h.getKind() != Kind::LAMBDA
       || h[0].getNumChildren() != 1)
@@ -7798,8 +7614,11 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
       aggKind[p] = 3;
     }
   }
-  // the outer keys, as columns of X
+  // the outer keys, as columns of X, and the inner seeds of their columns,
+  // which seed them in the aggregates below: a group's first row replaces
+  // them
   std::vector<uint32_t> Cp;
+  std::vector<Node> keySeeds;
   for (uint32_t p : Ko)
   {
     if (p >= wI || keyCol[p] < 0)
@@ -7807,6 +7626,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
       return BagsRewriteResponse(n, Rewrite::NONE);
     }
     Cp.push_back(static_cast<uint32_t>(keyCol[p]));
+    keySeeds.push_back(i0[p]);
   }
   // the outer columns: a KEY (a copy of an outer group column), the
   // COUNTER, a MERGED inner aggregate, or an aggregate over the DISTINCT
@@ -7914,12 +7734,9 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
   std::vector<TypeNode> xTypes = xType.getTupleTypes();
   size_t nk = Cp.size();
   Node one = d_one;
-  // the first part: the merged columns over X, by Ko, with a counter,
-  //   (bag.filter (lambda ((r U)) (>= ((_ tuple.select c) r) 1))
-  //               ((_ table.aggr Ko) fA iA X))
-  // or, when nothing is merged, the distinct keys,
-  //   (bag.setof (bag.map (lambda ((t T)) (tuple ((_ tuple.select k) t)))
-  //                       X))
+  // the first part: an aggregate over X by Ko of the merged columns and a
+  // counter, under the filter by the counter, or, when nothing is merged, the
+  // set of the keys of the rows of X
   Node first;
   size_t wA;
   std::vector<size_t> mergedAt(wO, 0);
@@ -7944,14 +7761,10 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
     TypeNode accType = d_nm->mkTupleType(types);
     Node a2 = NodeManager::mkBoundVar("acc", accType);
     std::vector<Node> cells, seeds;
-    for (uint32_t c : Cp)
+    for (size_t k = 0; k < nk; k++)
     {
-      cells.push_back(datatypes::TupleUtils::nthElementOfTuple(x, c));
-      seeds.push_back(d_nm->mkNode(
-          Kind::APPLY_CONSTRUCTOR,
-          xTypes[c]
-              .getDType()[xTypes[c].getDType()[0].getNumArgs() == 0 ? 0 : 1]
-              .getConstructor()));
+      cells.push_back(datatypes::TupleUtils::nthElementOfTuple(x, Cp[k]));
+      seeds.push_back(keySeeds[k]);
     }
     for (size_t m = 0; m < mergedSrc.size(); m++)
     {
@@ -7998,11 +7811,9 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
     first = d_nm->mkNode(Kind::BAG_SETOF, d_nm->mkNode(Kind::BAG_MAP, keys, X));
     wA = nk;
   }
-  // the second part: the aggregates over the distinct (Ko, c),
-  //   (bag.filter (lambda ((r U')) (>= ((_ tuple.select c') r) 1))
-  //               ((_ table.aggr 0 .. nk-1) fB iB S))
-  // with S = (bag.setof (bag.map (lambda ((t T)) (tuple k.. c)) X)),
-  // joined with the first on the keys
+  // the second part: the aggregate by Ko over the set S of the (Ko, c) of the
+  // rows of X, under the filter by its counter, joined with the first on the
+  // keys
   Node joined = first;
   std::vector<size_t> distinctAt(wO, 0);
   if (distinctCol >= 0)
@@ -8044,11 +7855,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
     for (size_t k = 0; k < nk; k++)
     {
       cells.push_back(datatypes::TupleUtils::nthElementOfTuple(sv, k));
-      seeds.push_back(d_nm->mkNode(
-          Kind::APPLY_CONSTRUCTOR,
-          stypes[k]
-              .getDType()[stypes[k].getDType()[0].getNumArgs() == 0 ? 0 : 1]
-              .getConstructor()));
+      seeds.push_back(keySeeds[k]);
     }
     for (size_t d = 0; d < qs.size(); d++)
     {
@@ -8140,28 +7947,18 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
     const TNode& n) const
 {
   // (bag.map h (bag.filter P (table.product C0 (table.product C1 ..)))) with
-  // components that are aggregates:
-  // * AGGREGATE_SETOF_IDEMPOTENT: an aggregate over (bag.setof Y) whose
-  //   columns are copies of the row's columns, minimums, maximums and a
-  //   counter that h does not read and P reads only through (>= c 1) is the
-  //   aggregate over Y: duplicate rows change none of those,
-  //     ((_ table.aggr 0) f i (bag.setof Y)) ---> ((_ table.aggr 0) f i Y)
-  //   as a component;
+  // components that are aggregates (see rewrites.h):
+  // * AGGREGATE_SETOF_IDEMPOTENT: an aggregate over (bag.setof Y) whose columns
+  //   are copies of the columns of the row, minimums, maximums and a counter
+  //   that h does not read and P reads only through (>= c 1) is the aggregate
+  //   over Y, as a component: duplicate rows change none of those;
   // * AGGREGATE_JOIN_MERGE: two aggregates over one X by the same columns K,
-  //   both copying every group column, seeding the copies alike, with P
+  //   both copying every group column and seeding the copies alike, with P
   //   equating their copies, pair the rows of each group: they are one
-  //   aggregate computing the columns of both, the second's copies and
-  //   counter read from the first's,
-  //     (bag.map h (bag.filter (lambda ((p W)) (= ((_ tuple.select 0) p)
-  //                                               ((_ tuple.select 3) p)))
-  //                            (table.product ((_ table.aggr 0) fa ia X)
-  //                                           ((_ table.aggr 0) fb ib X))))
-  //     --->
-  //     (bag.map h' ((_ table.aggr 0) fm im X))
-  //   for rows (tuple k a cnt) of fa and (tuple k b cnt) of fb, where fm's
-  //   rows are (tuple k a cnt b) and h' reads B's columns 0, 1, 2 as columns
-  //   0, 3, 2 of those. SQL's self-join of two GROUP BY queries over one
-  //   table, which Calcite merges into one aggregate.
+  //   aggregate that computes the columns of both, the copies and the counter
+  //   of the second read from those of the first. That is SQL's self-join of
+  //   two GROUP BY queries over one table, which Calcite merges into one
+  //   aggregate.
   Node h = asLambda(n[0]);
   if (n[1].getKind() != Kind::BAG_FILTER || h.getKind() != Kind::LAMBDA
       || h[0].getNumChildren() != 1)
@@ -8534,27 +8331,25 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
 
 BagsRewriteResponse BagsRewriter::rewriteAggregateCollapse(const TNode& n) const
 {
-  // AGGREGATE_COLLAPSE: an aggregate over a union of aggregates, the
-  // pattern of an aggregate pushed through a UNION ALL:
+  // AGGREGATE_COLLAPSE, for an aggregate over a union of aggregates, the
+  // pattern of an aggregate pushed through a UNION ALL,
   //   (bag.map h (bag.filter Q ((_ table.aggr Ko) g j
   //                               (bag.union_disjoint P1 P2))))
   // where every Pi is (bag.map pi (bag.filter Qi ((_ table.aggr K) f i0 Xi)))
   // with one pi, Qi, K, f and i0, the inner aggregates grouped by exactly the
-  // outer group columns, and g merging f's columns (a sum of counts or of
-  // sums, a minimum of minimums, a maximum of maximums): a group of the
-  // outer aggregate has one row per part its key reached, each part's fold
-  // over the key's rows of Xi, so their merge is f's fold over the key's
-  // rows of all the Xi:
-  //   --->
-  //   (bag.map (lambda ((r U)) h[(g r j)]) (bag.filter Q'
-  //     ((_ table.aggr K) f i0 (bag.union_disjoint X1 X2))))
-  // with (g r j) the outer row that the outer step from j gives on the
-  // inner row r, through pi, and Q' the test of the inner counter with Q's
-  // other conjuncts on that row. Q and h must read the outer counter only
-  // through (>= c 1): its value, the number of parts, is no column here.
-  // SQL: SELECT k, SUM(c) FROM (SELECT k, COUNT(*) AS c FROM X1 GROUP BY k
-  // UNION ALL SELECT k, COUNT(*) FROM X2 GROUP BY k) GROUP BY k is
-  // SELECT k, COUNT(*) FROM (X1 UNION ALL X2) GROUP BY k.
+  // outer group columns, and g merging the columns of f: a sum of counts or of
+  // sums, a minimum of minimums, a maximum of maximums. A group of the outer
+  // aggregate has one row per part that its key reached, the fold of the part
+  // over the rows of Xi with the key, so their merge is the fold of f over the
+  // rows with the key of all the Xi (see rewrites.h). The result maps each
+  // inner row r to h of (g r j), the outer row that the outer step from j gives
+  // on r, through pi, and filters by the test of the inner counter with the
+  // other conjuncts of Q on that row. Q and h must read the outer counter only
+  // through (>= c 1): its value, the number of parts, is no column here. In
+  // SQL,
+  //   SELECT k, SUM(c) FROM (SELECT k, COUNT(*) AS c FROM X1 GROUP BY k
+  //     UNION ALL SELECT k, COUNT(*) FROM X2 GROUP BY k) GROUP BY k
+  // is SELECT k, COUNT(*) FROM (X1 UNION ALL X2) GROUP BY k.
   Node h = asLambda(n[0]);
   if (n[1].getKind() != Kind::BAG_FILTER || h.getKind() != Kind::LAMBDA
       || h[0].getNumChildren() != 1)
@@ -8814,25 +8609,19 @@ Node BagsRewriter::dropKnownMemberships(const Node& body,
                                         const Node& t,
                                         const Node& A) const
 {
-  // FILTER_KNOWN_MEMBERSHIP: the conjuncts of a filter's body over rows t of
-  // A that say what holds of every such row, or what another conjunct says,
-  // go:
-  // * (>= (bag.count (g c) (bag.map g X)) 1) where c is the part of t a
-  //   component X of A (or a filter over X) gives: c is a row of X;
-  // * the same where the component is an aggregate over X (or a map of X)
-  //   in a group some row of X reached, and g reads only its group columns:
-  //   some row of X has those values;
-  // * (>= (bag.count E' (bag.map g' X)) 1) beside (>= (bag.count E (bag.map
-  //   g X)) 1) where g' and E' select columns of g and E: the second says it.
-  // With A = (table.product X Y),
-  //   (and (>= (bag.count (tuple ((_ tuple.select 0) t))
-  //                       (bag.map (lambda ((s T))
-  //                                  (tuple ((_ tuple.select 0) s)))
-  //                                X))
-  //            1)
-  //        q)
-  //   ---> q
-  // the membership SQL's IN (SELECT a FROM X) leaves after a join with X
+  // FILTER_KNOWN_MEMBERSHIP: the conjuncts of the body of a filter over rows t
+  // of A that say what holds of every such row, or what another conjunct says,
+  // go (see rewrites.h):
+  // * (>= (bag.count (g c) (bag.map g X)) 1), where c is the part of t that a
+  //   component X of A, or a filter over X, gives: c is a row of X;
+  // * the same where the component is an aggregate over X, or a map of X, in a
+  //   group some row of X reached, and g reads only its group columns: some row
+  //   of X has those values;
+  // * (>= (bag.count E' (bag.map g' X)) 1) beside
+  //   (>= (bag.count E (bag.map g X)) 1), where g' and E' select columns of g
+  //   and E: the second says it.
+  // It is the membership that SQL's IN (SELECT a FROM X) leaves after a join
+  // with X.
   if (d_rewriter == nullptr)
   {
     return body;
@@ -9114,11 +8903,12 @@ bool BagsRewriter::isSet(const Node& X) const
 {
   // whether no element of X occurs twice, syntactically: a bag.setof, a table
   // with a key, a filter over a set, a product of sets, or a map over one of
-  // these that keeps, of every component, all its columns or a key; with
-  // the key {0} of X and of Y, true for
-  //   (bag.map (lambda ((t V)) (tuple ((_ tuple.select 0) t)
-  //                                   ((_ tuple.select 2) t)))
-  //            (table.product X Y))
+  // these that keeps, of every component, all its columns or a key. With the
+  // key {0} of X and of Y, both of two columns, true for
+  //   (bag.map
+  //     (lambda ((t (Tuple Int Int Int Int)))
+  //       (tuple ((_ tuple.select 0) t) ((_ tuple.select 2) t)))
+  //     (table.product X Y))
   if (X.getType().getBagElementType().isTuple() && !rowKeys(X).empty())
   {
     return true;

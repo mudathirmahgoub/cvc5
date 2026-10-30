@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; SETOF_ABSORB: an inner bag.setof under a union and a bag.setof goes, so the
 ; aggregates over the two sets are one term
 (set-logic HO_ALL)

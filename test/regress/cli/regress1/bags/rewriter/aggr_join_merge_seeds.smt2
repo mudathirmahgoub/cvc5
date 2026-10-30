@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; DISABLE-TESTER: model
 ; (the debug model check warns that the lambda of the aggregates' reduction,
 ; (lambda ((t (Bag T))) (bag.fold f i t)), has no constant value)

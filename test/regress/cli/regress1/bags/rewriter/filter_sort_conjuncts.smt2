@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; FILTER_SORT_CONJUNCTS: the conjuncts of a filter are in one order, so the
 ; aggregates over two filters that list them in different orders are one term
 (set-logic HO_ALL)

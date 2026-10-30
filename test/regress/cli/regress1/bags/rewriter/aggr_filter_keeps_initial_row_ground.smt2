@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; FILTER_AGGREGATE moves a filter on group columns below the aggregate only when
 ; the conjuncts that stay reject the row of initial values: here no conjunct
 ; stays, and for X = {(1)} the left is empty, the right is {(0, 0)}

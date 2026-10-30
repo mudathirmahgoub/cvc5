@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; FILTER_JOIN_TRANSITIVE carries a condition across a join, and NOT_NULL_COLUMNS
 ; decides the null tests of columns that are never null: the null test of Y's
 ; column 0, carried to X's column 0 by the join, is one the rows of the product

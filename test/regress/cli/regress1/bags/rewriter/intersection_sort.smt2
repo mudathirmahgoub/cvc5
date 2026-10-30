@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; INTERSECTION_SORT: the arguments of bag.inter_min are in one order, so the
 ; aggregates over two orders are one term
 (set-logic HO_ALL)

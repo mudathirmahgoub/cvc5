@@ -1,4 +1,5 @@
 ; REQUIRES: no-normaliz
+; REQUIRES: unrestricted-mode
 ; EXIT: 1
 ; EXPECT: (error "cvc5 can't solve int.star-contains constraints since it was not configured with --normaliz")
 ;

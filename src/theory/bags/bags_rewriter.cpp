@@ -127,6 +127,16 @@ bool isNullConstant(const Node& n)
 }
 
 /**
+ * Whether t is a tuple term, (tuple a b): the rules read columns only of the
+ * rows and the accumulators that are tuples, not of another datatype, as the
+ * (nullable.some a) of an accumulator of sort (Nullable Int).
+ */
+bool isTupleTerm(const Node& t)
+{
+  return t.getKind() == Kind::APPLY_CONSTRUCTOR && t.getType().isTuple();
+}
+
+/**
  * The bound variable of type tn that the rewriter uses for role and key n,
  * one per (role, n, tn): the variable of id BAGS_FIRST_INDEX cached on
  * (SEXPR role n), role a string constant. The reductions of bags, the other
@@ -376,8 +386,8 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
     TypeNode probeType = n[0].getType();
     rowProbe = rowType.isTuple() && rowType == probeType;
   }
-  if ((n[1].getKind() == Kind::BAG_MAP || rowProbe)
-      && n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getNumChildren() > 1)
+  if ((n[1].getKind() == Kind::BAG_MAP || rowProbe) && isTupleTerm(n[0])
+      && n[0].getNumChildren() > 1)
   {
     // COUNT_MAP_CONST_PROBE: column k of the probe is a constant c and the map
     // copies column j of its row there, so only the rows of X whose column j is
@@ -1138,8 +1148,7 @@ std::set<uint32_t> BagsRewriter::aggregateNonNull(const Node& B,
   Node f = asLambda(B[0]);
   Node init = B[1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || init.getKind() != Kind::APPLY_CONSTRUCTOR
+      || !isTupleTerm(f[1]) || !isTupleTerm(init)
       || init.getNumChildren() != f[1].getNumChildren())
   {
     return out;
@@ -1591,8 +1600,7 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
       std::set<Node> seen;
       for (size_t k = 0; k < width; k++)
       {
-        if (!g.isNull() && g.getKind() == Kind::LAMBDA
-            && g[1].getKind() == Kind::APPLY_CONSTRUCTOR
+        if (!g.isNull() && g.getKind() == Kind::LAMBDA && isTupleTerm(g[1])
             && g[1].getNumChildren() == width)
         {
           if (g[1][k].isConst() || !seen.insert(g[1][k]).second)
@@ -1609,8 +1617,7 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
     {
       Node g = asLambda(B[0]);
       if (g.getKind() != Kind::LAMBDA || g[0].getNumChildren() != 1
-          || g[1].getKind() != Kind::APPLY_CONSTRUCTOR
-          || g[1].getNumChildren() != width)
+          || !isTupleTerm(g[1]) || g[1].getNumChildren() != width)
       {
         return keys;
       }
@@ -1668,7 +1675,7 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
     {
       Node f = asLambda(B[0]);
       if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-          || f[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+          || !isTupleTerm(f[1]))
       {
         return keys;
       }
@@ -2821,7 +2828,7 @@ std::vector<int> BagsRewriter::reachedComponents(
     }
     Node f = asLambda(A[0]);
     if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-        || f[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+        || !isTupleTerm(f[1]))
     {
       continue;
     }
@@ -3113,7 +3120,7 @@ void BagsRewriter::elementConditions(const Node& A,
         const std::vector<uint32_t>& K =
             G.getOperator().getConst<ProjectOp>().getIndices();
         if (f.getKind() == Kind::LAMBDA && f[0].getNumChildren() == 2
-            && f[1].getKind() == Kind::APPLY_CONSTRUCTOR)
+            && isTupleTerm(f[1]))
         {
           Node v = rowVariable(G[2].getType().getBagElementType());
           std::set<Node> inner;
@@ -3337,7 +3344,10 @@ BagsRewriteResponse BagsRewriter::postRewriteFold(const TNode& n) const
         // (see rewrites.h)
         Node y = g[0][0];
         Node body = l[1].substitute(TNode(l[0][0]), TNode(g[1]));
-        if (!occursFree(g[1], l[0][1]))
+        // the map and Y are two bags, folded each in an order of its own: one
+        // fold only for a step whose value no order changes
+        if (!occursFree(g[1], l[0][1])
+            && orderIndependentStep(l, {}, nonNullColumns(bag)))
         {
           Node lambda =
               d_nm->mkNode(Kind::LAMBDA,
@@ -3439,8 +3449,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateIntegerSum(
   Node f = asLambda(n[0]);
   Node init = n[1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || init.getKind() != Kind::APPLY_CONSTRUCTOR
+      || !isTupleTerm(f[1]) || !isTupleTerm(init)
       || init.getNumChildren() != f[1].getNumChildren()
       || d_rewriter == nullptr)
   {
@@ -3662,8 +3671,8 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionSplit(
     }
   }
   if (n[2].getKind() != Kind::BAG_UNION_DISJOINT || f.getKind() != Kind::LAMBDA
-      || f[0].getNumChildren() != 2 || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || init.getKind() != Kind::APPLY_CONSTRUCTOR || d_rewriter == nullptr)
+      || f[0].getNumChildren() != 2 || !isTupleTerm(f[1]) || !isTupleTerm(init)
+      || d_rewriter == nullptr)
   {
     return BagsRewriteResponse(top, Rewrite::NONE);
   }
@@ -3698,8 +3707,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionSplit(
   {
     Node g = parts[m].getKind() == Kind::BAG_MAP ? asLambda(parts[m][0])
                                                  : Node::null();
-    if (!g.isNull() && g.getKind() == Kind::LAMBDA
-        && g[1].getKind() == Kind::APPLY_CONSTRUCTOR)
+    if (!g.isNull() && g.getKind() == Kind::LAMBDA && isTupleTerm(g[1]))
     {
       for (size_t c = 0; c < g[1].getNumChildren(); c++)
       {
@@ -4065,8 +4073,7 @@ Node BagsRewriter::keysOfReachedGroups(const Node& h,
   Node f = asLambda(A[0]);
   if (P.getKind() != Kind::LAMBDA || P[1].getKind() == Kind::AND
       || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || counterColumn(F[0], f, A[1]) < 0)
+      || !isTupleTerm(f[1]) || counterColumn(F[0], f, A[1]) < 0)
   {
     return Node::null();
   }
@@ -4174,8 +4181,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
   // null; at most 16 combinations
   auto keyLeaves = [&](const Node& U, std::vector<std::vector<Node>>& out) {
     std::vector<Node> cols;
-    if (U.getKind() == Kind::BAG_MAKE
-        && U[0].getKind() == Kind::APPLY_CONSTRUCTOR)
+    if (U.getKind() == Kind::BAG_MAKE && isTupleTerm(U[0]))
     {
       for (uint32_t k : K)
       {
@@ -4185,8 +4191,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
     else if (U.getKind() == Kind::BAG_MAP)
     {
       Node g = asLambda(U[0]);
-      if (g.getKind() != Kind::LAMBDA
-          || g[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+      if (g.getKind() != Kind::LAMBDA || !isTupleTerm(g[1]))
       {
         return false;
       }
@@ -4408,8 +4413,7 @@ BagsRewriteResponse BagsRewriter::rewriteProductAggregateColumns(
     }
     Node f = asLambda(A[0]);
     if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-        || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-        || A[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+        || !isTupleTerm(f[1]) || !isTupleTerm(A[1]))
     {
       continue;
     }
@@ -4522,8 +4526,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateDuplicateColumn(
   Node f = asLambda(n[0]);
   Node init = n[1];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || init.getKind() != Kind::APPLY_CONSTRUCTOR)
+      || !isTupleTerm(f[1]) || !isTupleTerm(init))
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
@@ -5056,7 +5059,9 @@ bool BagsRewriter::readPositions(const Node& body,
 {
   // the columns body reads of var: {0, 2} for
   // (> ((_ tuple.select 0) t) ((_ tuple.select 2) t)) and var t; false for
-  // (= t (tuple a b)), which reads the whole row
+  // (= t (tuple a b)), which reads the whole row, and for any read of a var
+  // that is no tuple, whose selectors, as (nullable.val t), are no columns
+  bool tuple = var.getType().isTuple();
   std::unordered_set<TNode> visited;
   std::vector<TNode> todo = {body};
   while (!todo.empty())
@@ -5072,7 +5077,7 @@ bool BagsRewriter::readPositions(const Node& body,
       // the row itself, not through a selector: the whole row is read
       return false;
     }
-    if (cur.getKind() == Kind::APPLY_SELECTOR && cur[0] == var)
+    if (tuple && cur.getKind() == Kind::APPLY_SELECTOR && cur[0] == var)
     {
       positions.insert(datatypes::utils::indexOf(cur.getOperator()));
       continue;
@@ -5300,7 +5305,10 @@ std::vector<uint32_t> BagsRewriter::projectionIndices(const Node& f) const
   {
     return body.getOperator().getConst<ProjectOp>().getIndices();
   }
-  if (body.getKind() != Kind::APPLY_CONSTRUCTOR || !body.getType().isTuple())
+  // the selectors of a row that is no tuple, as (field1 x) of a datatype, are
+  // no columns
+  if (body.getKind() != Kind::APPLY_CONSTRUCTOR || !body.getType().isTuple()
+      || !x.getType().isTuple())
   {
     return out;
   }
@@ -5378,6 +5386,14 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateOfMap(const TNode& n) const
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
+  // a group of the map and the group of X it comes from are two bags, folded
+  // each in an order of its own: one aggregate only for a step whose value no
+  // order changes
+  std::set<uint32_t> same(K.begin(), K.end());
+  if (!orderIndependentStep(f, same, nonNullColumns(n[2])))
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
   Node x = rowVariable(rowType);
   Node y = f[0][1];
   Node gx = applyFunction(n[2][0], x);
@@ -5392,6 +5408,201 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateOfMap(const TNode& n) const
   std::vector<Node> children{op, lambda, i, X};
   Node ret = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
   return BagsRewriteResponse(ret, Rewrite::AGGREGATE_MAP);
+}
+
+bool BagsRewriter::orderIndependentStep(const Node& f,
+                                        const std::set<uint32_t>& same,
+                                        const std::set<uint32_t>& nonNull) const
+{
+  // the columns of the result of f, each with its own accumulator, one by
+  // one: when the value of each is the same in any order, so is the result
+  Node l = asLambda(f);
+  if (l.getKind() != Kind::LAMBDA || l[0].getNumChildren() != 2)
+  {
+    return false;
+  }
+  Node x = l[0][0];
+  Node acc = l[0][1];
+  auto free = [&](const Node& e) { return !occursFree(e, acc); };
+  // the value of a nullable term: v of (nullable.some v), else
+  // (nullable.val t)
+  auto valueOf = [&](const Node& t) {
+    if (t.getKind() == Kind::APPLY_CONSTRUCTOR && t.getNumChildren() == 1)
+    {
+      return t[0];
+    }
+    const DType& dt = t.getType().getDType();
+    size_t si = dt[0].getNumArgs() == 1 ? 0 : 1;
+    return d_nm->mkNode(Kind::APPLY_SELECTOR, dt[si][0].getSelector(), t);
+  };
+  // whether c compares the numbers or the strings a and b: (< a b),
+  // (>= b a), (str.<= a b) and the like, as the rewriter writes them
+  auto compares = [&](const Node& c, const Node& a, const Node& b) {
+    bool numbers = a.getType().isRealOrInt() && b.getType().isRealOrInt();
+    bool strings = a.getType().isString() && b.getType().isString();
+    if (d_rewriter == nullptr || !(numbers || strings))
+    {
+      return false;
+    }
+    Node rc = d_rewriter->rewrite(c);
+    std::vector<Kind> kinds =
+        numbers ? std::vector<Kind>{Kind::LT, Kind::LEQ, Kind::GT, Kind::GEQ}
+                : std::vector<Kind>{Kind::STRING_LT, Kind::STRING_LEQ};
+    for (Kind k : kinds)
+    {
+      for (size_t s = 0; s < 2; s++)
+      {
+        Node cmp = s == 0 ? d_nm->mkNode(k, a, b) : d_nm->mkNode(k, b, a);
+        if (rc == d_rewriter->rewrite(cmp))
+        {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  // whether c is the sum, the minimum or the maximum of the nullable a and b,
+  // neither null: (nullable.some (+ (nullable.val a) (nullable.val b))), or
+  // (ite (< (nullable.val a) (nullable.val b)) a b) and the like
+  auto combines = [&](const Node& c, const Node& a, const Node& b) {
+    if (c.getKind() == Kind::APPLY_CONSTRUCTOR && c.getNumChildren() == 1)
+    {
+      Node sum = d_nm->mkNode(Kind::ADD, valueOf(a), valueOf(b));
+      return d_rewriter != nullptr && c[0].getType() == sum.getType()
+             && d_rewriter->rewrite(c[0].eqNode(sum)) == d_nm->mkConst(true);
+    }
+    return c.getKind() == Kind::ITE
+           && ((c[1] == a && c[2] == b) || (c[1] == b && c[2] == a))
+           && compares(c[0], valueOf(a), valueOf(b));
+  };
+  // t of (= (as nullable.null (Nullable Int)) t), either way round
+  auto nullTested = [](const Node& c) {
+    if (c.getKind() == Kind::EQUAL)
+    {
+      for (size_t s = 0; s < 2; s++)
+      {
+        if (isNullConstant(c[s]))
+        {
+          return c[1 - s];
+        }
+      }
+    }
+    return Node::null();
+  };
+  // whether a sum of own and terms that read no accumulator: (+ own e1 ..)
+  auto sumOf = [&](const Node& e, const Node& own) {
+    if (e.getKind() != Kind::ADD)
+    {
+      return false;
+    }
+    size_t owns = 0;
+    for (const Node& c : e)
+    {
+      if (c == own)
+      {
+        owns++;
+      }
+      else if (!free(c))
+      {
+        return false;
+      }
+    }
+    return owns == 1;
+  };
+  std::function<bool(const Node&, const Node&)> column;
+  column = [&](const Node& e, const Node& own) {
+    if (free(e))
+    {
+      // a term of the columns in same, which the rows folded together share,
+      // or of none
+      std::set<uint32_t> read;
+      return !occursFree(e, x)
+             || (readPositions(e, x, read)
+                 && std::includes(
+                     same.begin(), same.end(), read.begin(), read.end()));
+    }
+    if (e == own)
+    {
+      return true;
+    }
+    {
+      // the accumulator read through own only
+      Node mark = NodeManager::mkBoundVar("own", own.getType());
+      if (occursFree(e.substitute(TNode(own), TNode(mark)), acc))
+      {
+        return false;
+      }
+    }
+    // a sum, (+ own 1), or (nullable.some (+ (nullable.val own) 1))
+    bool nullable = own.getType().isNullable();
+    if (sumOf(e, own)
+        || (nullable && e.getKind() == Kind::APPLY_CONSTRUCTOR
+            && e.getNumChildren() == 1 && sumOf(e[0], valueOf(own))))
+    {
+      return true;
+    }
+    if (e.getKind() != Kind::ITE)
+    {
+      return false;
+    }
+    if (free(e[0]))
+    {
+      // SQL's SUM, MIN or MAX, which skip nulls:
+      //   (ite (= (as nullable.null (Nullable Int)) A)
+      //        own
+      //        (ite (= (as nullable.null (Nullable Int)) own) A C))
+      // with C combining A and own
+      Node a = nullTested(e[0]);
+      if (nullable && !a.isNull() && e[1] == own && free(a)
+          && a.getType() == own.getType() && e[2].getKind() == Kind::ITE
+          && nullTested(e[2][0]) == own && e[2][1] == a
+          && combines(e[2][2], a, own))
+      {
+        return true;
+      }
+      // one of these on the rows a condition holds of, as COUNT(x),
+      // (ite c own u)
+      if (e[1] == own)
+      {
+        return column(e[2], own);
+      }
+      if (e[2] == own)
+      {
+        return column(e[1], own);
+      }
+      return false;
+    }
+    // a minimum or a maximum: (ite (> v own) v own) and the like, v reading
+    // no accumulator
+    for (size_t s = 1; s < 3; s++)
+    {
+      if (e[3 - s] == own && free(e[s]) && compares(e[0], e[s], own))
+      {
+        return true;
+      }
+    }
+    // SQL's SUM, MIN or MAX of an argument A that is never null, whose null
+    // test is decided:
+    //   (ite (= (as nullable.null (Nullable Int)) own) A C)
+    return nullable && nullTested(e[0]) == own && free(e[1])
+           && e[1].getType() == own.getType()
+           && nonNullTerm(e[1], x, nonNull, Node::null(), {})
+           && combines(e[2], e[1], own);
+  };
+  Node body = l[1];
+  if (body.getKind() == Kind::APPLY_CONSTRUCTOR && acc.getType().isTuple()
+      && body.getType() == acc.getType())
+  {
+    for (size_t q = 0, w = body.getNumChildren(); q < w; q++)
+    {
+      if (!column(body[q], datatypes::TupleUtils::nthElementOfTuple(acc, q)))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+  return column(body, acc);
 }
 
 bool BagsRewriter::rewritesToFalse(const Node& n) const
@@ -5568,7 +5779,16 @@ Node BagsRewriter::alphaKeyScope(TNode root,
       cache[n] = d_nm->mkNode(n.getKind(), children);
       continue;
     }
+    // the operator of a parameterized node is converted like its arguments:
+    // in (lambda ((f (-> Int Int))) (f 0)), f is the operator of (f 0)
+    bool parameterized = n.getMetaKind() == kind::metakind::PARAMETERIZED;
+    Node op = parameterized ? n.getOperator() : Node::null();
     bool ready = true;
+    if (parameterized && !cache.count(op))
+    {
+      todo.push_back(op);
+      ready = false;
+    }
     for (const Node& c : n)
     {
       if (!cache.count(c))
@@ -5583,11 +5803,12 @@ Node BagsRewriter::alphaKeyScope(TNode root,
     }
     todo.pop_back();
     std::vector<Node> children;
-    if (n.getMetaKind() == kind::metakind::PARAMETERIZED)
-    {
-      children.push_back(n.getOperator());
-    }
     bool changed = false;
+    if (parameterized)
+    {
+      children.push_back(cache[op]);
+      changed = cache[op] != op;
+    }
     size_t first = children.size();
     for (const Node& c : n)
     {
@@ -7125,6 +7346,11 @@ std::map<uint32_t, Node> BagsRewriter::fixedColumns(const Node& p) const
     return fixed;
   }
   Node t = lambda[0][0];
+  if (!t.getType().isTuple())
+  {
+    // (= (nullable.val t) 5) over a (Bag (Nullable Int)) fixes no column
+    return fixed;
+  }
   std::vector<Node> conjuncts;
   if (lambda[1].getKind() == Kind::AND)
   {
@@ -7189,8 +7415,7 @@ std::map<uint32_t, Node> BagsRewriter::reachedGroupConstants(
   Node i = aggr[1];
   if (P.getKind() != Kind::LAMBDA || P[0].getNumChildren() != 1
       || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || i.getKind() != Kind::APPLY_CONSTRUCTOR
+      || !isTupleTerm(f[1]) || !isTupleTerm(i)
       || i.getNumChildren() != f[1].getNumChildren())
   {
     return constants;
@@ -7267,8 +7492,7 @@ int BagsRewriter::counterColumn(const Node& P,
   Node lambda = asLambda(P);
   if (lambda.getKind() != Kind::LAMBDA || lambda[0].getNumChildren() != 1
       || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || i.getKind() != Kind::APPLY_CONSTRUCTOR
+      || !isTupleTerm(f[1]) || !isTupleTerm(i)
       || i.getNumChildren() != f[1].getNumChildren())
   {
     return -1;
@@ -7511,8 +7735,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
   Node j = O[1];
   Node Y = O[2];
   if (g.getKind() != Kind::LAMBDA || g[0].getNumChildren() != 2
-      || g[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || j.getKind() != Kind::APPLY_CONSTRUCTOR
+      || !isTupleTerm(g[1]) || !isTupleTerm(j)
       || Y.getKind() != Kind::BAG_FILTER
       || Y[1].getKind() != Kind::TABLE_AGGREGATE || d_rewriter == nullptr)
   {
@@ -7523,8 +7746,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
   Node i0 = I[1];
   Node X = I[2];
   if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || f[1].getKind() != Kind::APPLY_CONSTRUCTOR
-      || i0.getKind() != Kind::APPLY_CONSTRUCTOR)
+      || !isTupleTerm(f[1]) || !isTupleTerm(i0))
   {
     return BagsRewriteResponse(n, Rewrite::NONE);
   }
@@ -8037,7 +8259,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
   auto counterOf = [&](const Node& A) {
     Node f = asLambda(A[0]);
     if (f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-        || f[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+        || !isTupleTerm(f[1]))
     {
       return -1;
     }
@@ -8119,10 +8341,8 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateJoinMerge(
       Node fa = asLambda(A[0]);
       Node fb = asLambda(B[0]);
       if (fa.getKind() != Kind::LAMBDA || fb.getKind() != Kind::LAMBDA
-          || fa[1].getKind() != Kind::APPLY_CONSTRUCTOR
-          || fb[1].getKind() != Kind::APPLY_CONSTRUCTOR
-          || A[1].getKind() != Kind::APPLY_CONSTRUCTOR
-          || B[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+          || !isTupleTerm(fa[1]) || !isTupleTerm(fb[1]) || !isTupleTerm(A[1])
+          || !isTupleTerm(B[1]))
       {
         continue;
       }
@@ -8709,7 +8929,7 @@ Node BagsRewriter::dropKnownMemberships(const Node& body,
       {
         g2 = asLambda(input[0]);
         if (g2.getKind() != Kind::LAMBDA || g2[0].getNumChildren() != 1
-            || g2[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+            || !isTupleTerm(g2[1]))
         {
           continue;
         }
@@ -8720,7 +8940,7 @@ Node BagsRewriter::dropKnownMemberships(const Node& body,
       }
       Node fa = asLambda(base[0]);
       if (fa.getKind() != Kind::LAMBDA || fa[0].getNumChildren() != 2
-          || fa[1].getKind() != Kind::APPLY_CONSTRUCTOR)
+          || !isTupleTerm(fa[1]))
       {
         continue;
       }
@@ -8850,7 +9070,7 @@ Node BagsRewriter::dropKnownMemberships(const Node& body,
     }
     // implied by another membership in a map of X with more columns
     std::vector<uint32_t> J = projectionIndices(asLambda(g));
-    if (J.empty() || E.getKind() != Kind::APPLY_CONSTRUCTOR)
+    if (J.empty() || !isTupleTerm(E))
     {
       continue;
     }
@@ -8858,7 +9078,7 @@ Node BagsRewriter::dropKnownMemberships(const Node& body,
     {
       Node E2, g2, X2;
       if (o == k || drop[o] || !membership(conjuncts[o], E2, g2, X2) || X2 != X
-          || E2.getKind() != Kind::APPLY_CONSTRUCTOR)
+          || !isTupleTerm(E2))
       {
         continue;
       }

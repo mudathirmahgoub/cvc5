@@ -38,23 +38,45 @@ const char* toString(Rewrite r)
     case Rewrite::FILTER_CONST: return "FILTER_CONST";
     case Rewrite::FILTER_BAG_MAKE: return "FILTER_BAG_MAKE";
     case Rewrite::FILTER_UNION_DISJOINT: return "FILTER_UNION_DISJOINT";
+    case Rewrite::FILTER_FILTER: return "FILTER_FILTER";
     case Rewrite::FILTER_MAP: return "FILTER_MAP";
+    case Rewrite::FILTER_SETOF: return "FILTER_SETOF";
     case Rewrite::MAP_MAP: return "MAP_MAP";
+    case Rewrite::PRODUCT_MAP_LEFT: return "PRODUCT_MAP_LEFT";
+    case Rewrite::PRODUCT_MAP_RIGHT: return "PRODUCT_MAP_RIGHT";
+    case Rewrite::PRODUCT_FILTER_LEFT: return "PRODUCT_FILTER_LEFT";
+    case Rewrite::PRODUCT_FILTER_RIGHT: return "PRODUCT_FILTER_RIGHT";
+    case Rewrite::PRODUCT_UNION_DISJOINT: return "PRODUCT_UNION_DISJOINT";
+    case Rewrite::PRODUCT_ASSOC: return "PRODUCT_ASSOC";
+    case Rewrite::PRODUCT_SWAP: return "PRODUCT_SWAP";
+    case Rewrite::EQ_EMPTY_ARG: return "EQ_EMPTY_ARG";
     case Rewrite::AGGREGATE_MAP: return "AGGREGATE_MAP";
     case Rewrite::FILTER_TRUE: return "FILTER_TRUE";
     case Rewrite::FILTER_FALSE: return "FILTER_FALSE";
+    case Rewrite::FILTER_SORT_CONJUNCTS: return "FILTER_SORT_CONJUNCTS";
     case Rewrite::CANONICAL_VARIABLE: return "CANONICAL_VARIABLE";
     case Rewrite::AGGREGATE_SORT_OUTPUT: return "AGGREGATE_SORT_OUTPUT";
     case Rewrite::AGGREGATE_NO_KEYS: return "AGGREGATE_NO_KEYS";
     case Rewrite::FOLD_TUPLE: return "FOLD_TUPLE";
+    case Rewrite::SETOF_MAP_CONSTANT: return "SETOF_MAP_CONSTANT";
+    case Rewrite::FILTER_SPLIT_CLOSED: return "FILTER_SPLIT_CLOSED";
+    case Rewrite::SEMI_JOIN: return "SEMI_JOIN";
+    case Rewrite::EQ_EMPTY_FILTER_DECORRELATE:
+      return "EQ_EMPTY_FILTER_DECORRELATE";
     case Rewrite::AGGREGATE_DEAD_COLUMNS: return "AGGREGATE_DEAD_COLUMNS";
     case Rewrite::FOLD_CONSTANT_STEP: return "FOLD_CONSTANT_STEP";
     case Rewrite::MAP_FIXED_COLUMNS: return "MAP_FIXED_COLUMNS";
     case Rewrite::SETOF_PROJECTION_SORT: return "SETOF_PROJECTION_SORT";
+    case Rewrite::FILTER_KNOWN_MEMBERSHIP: return "FILTER_KNOWN_MEMBERSHIP";
+    case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
     case Rewrite::FILTER_NULLABLE_TRUTH: return "FILTER_NULLABLE_TRUTH";
     case Rewrite::MAP_EQUAL_COLUMNS: return "MAP_EQUAL_COLUMNS";
+    case Rewrite::FOLD_MAP: return "FOLD_MAP";
+    case Rewrite::AGGREGATE_UNION_DISJOINT_KEYS:
+      return "AGGREGATE_UNION_DISJOINT_KEYS";
+    case Rewrite::FILTER_JOIN_TRANSITIVE: return "FILTER_JOIN_TRANSITIVE";
     case Rewrite::MAP_IDENTITY: return "MAP_IDENTITY";
     case Rewrite::FILTER_CONFLICTING_CONSTANTS:
       return "FILTER_CONFLICTING_CONSTANTS";

@@ -49,6 +49,7 @@ const char* toString(Rewrite r)
     case Rewrite::PRODUCT_UNION_DISJOINT: return "PRODUCT_UNION_DISJOINT";
     case Rewrite::PRODUCT_ASSOC: return "PRODUCT_ASSOC";
     case Rewrite::PRODUCT_SWAP: return "PRODUCT_SWAP";
+    case Rewrite::SETOF_SETOF: return "SETOF_SETOF";
     case Rewrite::EQ_EMPTY_ARG: return "EQ_EMPTY_ARG";
     case Rewrite::AGGREGATE_MAP: return "AGGREGATE_MAP";
     case Rewrite::FILTER_TRUE: return "FILTER_TRUE";
@@ -58,26 +59,49 @@ const char* toString(Rewrite r)
     case Rewrite::AGGREGATE_SORT_OUTPUT: return "AGGREGATE_SORT_OUTPUT";
     case Rewrite::AGGREGATE_NO_KEYS: return "AGGREGATE_NO_KEYS";
     case Rewrite::FOLD_TUPLE: return "FOLD_TUPLE";
+    case Rewrite::PRODUCT_BAG_MAKE: return "PRODUCT_BAG_MAKE";
     case Rewrite::SETOF_MAP_CONSTANT: return "SETOF_MAP_CONSTANT";
     case Rewrite::FILTER_SPLIT_CLOSED: return "FILTER_SPLIT_CLOSED";
     case Rewrite::SEMI_JOIN: return "SEMI_JOIN";
     case Rewrite::EQ_EMPTY_FILTER_DECORRELATE:
       return "EQ_EMPTY_FILTER_DECORRELATE";
+    case Rewrite::COUNT_MAP_FILTER_KEYS: return "COUNT_MAP_FILTER_KEYS";
     case Rewrite::AGGREGATE_DEAD_COLUMNS: return "AGGREGATE_DEAD_COLUMNS";
     case Rewrite::FOLD_CONSTANT_STEP: return "FOLD_CONSTANT_STEP";
     case Rewrite::MAP_FIXED_COLUMNS: return "MAP_FIXED_COLUMNS";
+    case Rewrite::MAP_IDENTITY_ON_FILTER: return "MAP_IDENTITY_ON_FILTER";
     case Rewrite::SETOF_PROJECTION_SORT: return "SETOF_PROJECTION_SORT";
+    case Rewrite::AGGREGATE_UNION_OF_MAPS: return "AGGREGATE_UNION_OF_MAPS";
+    case Rewrite::AGGREGATE_COLLAPSE: return "AGGREGATE_COLLAPSE";
+    case Rewrite::SETOF_ABSORB: return "SETOF_ABSORB";
     case Rewrite::FILTER_KNOWN_MEMBERSHIP: return "FILTER_KNOWN_MEMBERSHIP";
+    case Rewrite::FILTER_DE_MORGAN: return "FILTER_DE_MORGAN";
+    case Rewrite::COUNT_MAP_DUPLICATE_COLUMNS:
+      return "COUNT_MAP_DUPLICATE_COLUMNS";
+    case Rewrite::SETOF_OF_SET: return "SETOF_OF_SET";
     case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
+    case Rewrite::AGGREGATE_INTEGER_SUM: return "AGGREGATE_INTEGER_SUM";
     case Rewrite::FILTER_NULLABLE_TRUTH: return "FILTER_NULLABLE_TRUTH";
+    case Rewrite::AGGREGATE_ROLLUP: return "AGGREGATE_ROLLUP";
+    case Rewrite::AGGREGATE_SETOF_IDEMPOTENT:
+      return "AGGREGATE_SETOF_IDEMPOTENT";
+    case Rewrite::AGGREGATE_JOIN_MERGE: return "AGGREGATE_JOIN_MERGE";
+    case Rewrite::AGGREGATE_UNION_SPLIT: return "AGGREGATE_UNION_SPLIT";
+    case Rewrite::AGGREGATE_GROUP_KEYS: return "AGGREGATE_GROUP_KEYS";
     case Rewrite::MAP_EQUAL_COLUMNS: return "MAP_EQUAL_COLUMNS";
     case Rewrite::FOLD_MAP: return "FOLD_MAP";
+    case Rewrite::SETOF_UNION_SAME: return "SETOF_UNION_SAME";
     case Rewrite::AGGREGATE_UNION_DISJOINT_KEYS:
       return "AGGREGATE_UNION_DISJOINT_KEYS";
     case Rewrite::FILTER_JOIN_TRANSITIVE: return "FILTER_JOIN_TRANSITIVE";
+    case Rewrite::PRODUCT_AGGREGATE_DEAD_COLUMN:
+      return "PRODUCT_AGGREGATE_DEAD_COLUMN";
+    case Rewrite::AGGREGATE_DUPLICATE_COLUMN:
+      return "AGGREGATE_DUPLICATE_COLUMN";
     case Rewrite::MAP_IDENTITY: return "MAP_IDENTITY";
+    case Rewrite::FILTER_IMPLIED_COUNTER: return "FILTER_IMPLIED_COUNTER";
     case Rewrite::FILTER_CONFLICTING_CONSTANTS:
       return "FILTER_CONFLICTING_CONSTANTS";
     case Rewrite::PROJECT_TO_MAP: return "PROJECT_TO_MAP";

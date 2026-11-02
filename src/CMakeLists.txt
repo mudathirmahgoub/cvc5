@@ -59,6 +59,8 @@ libcvc5_add_sources(
   preprocessing/passes/ackermann.h
   preprocessing/passes/apply_substs.cpp
   preprocessing/passes/apply_substs.h
+  preprocessing/passes/bags_facts.cpp
+  preprocessing/passes/bags_facts.h
   preprocessing/passes/bool_to_bv.cpp
   preprocessing/passes/bool_to_bv.h
   preprocessing/passes/bv_eager_atoms.cpp
@@ -111,6 +113,8 @@ libcvc5_add_sources(
   preprocessing/passes/rewrite.h
   preprocessing/passes/sep_skolem_emp.cpp
   preprocessing/passes/sep_skolem_emp.h
+  preprocessing/passes/sets_to_bags.cpp
+  preprocessing/passes/sets_to_bags.h
   preprocessing/passes/sort_infer.cpp
   preprocessing/passes/sort_infer.h
   preprocessing/passes/static_learning.cpp

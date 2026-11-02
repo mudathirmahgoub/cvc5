@@ -23,6 +23,7 @@
 #include "base/output.h"
 #include "preprocessing/passes/ackermann.h"
 #include "preprocessing/passes/apply_substs.h"
+#include "preprocessing/passes/bags_facts.h"
 #include "preprocessing/passes/bool_to_bv.h"
 #include "preprocessing/passes/bv_eager_atoms.h"
 #include "preprocessing/passes/bv_gauss.h"
@@ -50,6 +51,7 @@
 #include "preprocessing/passes/real_to_int.h"
 #include "preprocessing/passes/rewrite.h"
 #include "preprocessing/passes/sep_skolem_emp.h"
+#include "preprocessing/passes/sets_to_bags.h"
 #include "preprocessing/passes/sort_infer.h"
 #include "preprocessing/passes/static_learning.h"
 #include "preprocessing/passes/static_rewrite.h"
@@ -140,6 +142,8 @@ PreprocessingPassRegistry::PreprocessingPassRegistry()
   registerPassInfo("bv-intro-pow2", callCtor<BvIntroPow2>);
   registerPassInfo("sort-inference", callCtor<SortInferencePass>);
   registerPassInfo("sep-skolem-emp", callCtor<SepSkolemEmp>);
+  registerPassInfo("sets-to-bags", callCtor<SetsToBags>);
+  registerPassInfo("bags-facts", callCtor<BagsFacts>);
   registerPassInfo("rewrite", callCtor<Rewrite>);
   registerPassInfo("bv-eager-atoms", callCtor<BvEagerAtoms>);
   registerPassInfo("pseudo-boolean-processor",

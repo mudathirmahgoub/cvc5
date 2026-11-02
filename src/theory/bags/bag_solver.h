@@ -12,6 +12,7 @@
 
 #include "context/cdhashmap.h"
 #include "context/cdhashset.h"
+#include "context/cdlist.h"
 #include "cvc5_private.h"
 #include "smt/env_obj.h"
 
@@ -44,6 +45,27 @@ class BagSolver : protected EnvObj
    */
   void checkBasicOperations();
 
+  /**
+   * The element witness lemmas for the disequalities checkDisequalBagTerms
+   * only case split on, sent once every theory accepts the candidate model.
+   */
+  void checkDisequalBagTermsLastCall();
+  /** A ground bag.fold term appeared in an assertion or a lemma */
+  void registerFold(Node n);
+  /**
+   * Two folds of one type are equal when their functions agree on the
+   * elements of their bag for every accumulator, their initial values are
+   * equal and their bags are equal: one lemma per pair of registered folds,
+   * see InferenceGenerator::foldDecompose; and the count lemma of each fold
+   * that counts, see countLemma. Only with --bags-lazy-fold.
+   */
+  void checkFolds();
+  /**
+   * Unroll the registered folds over the elements of their bags, as the
+   * eager reduction of BagReduction::reduceFoldOperator does, once each:
+   * called when a model is about to be reported, so that it is checked
+   */
+  void reduceFoldsLastCall();
   /**
    * apply inference rules for operators with quantifiers:
    * BAG_MAP
@@ -110,6 +132,27 @@ class BagSolver : protected EnvObj
 
   /** The solver state object */
   SolverState& d_state;
+  /** the registered fold terms, see registerFold */
+  context::CDList<Node> d_folds;
+  /** the pairs of folds checkFolds has related */
+  std::set<std::pair<Node, Node>> d_foldPairs;
+  /** the folds reduceFoldsLastCall has unrolled */
+  std::set<Node> d_reducedFolds;
+  /** the folds checkFolds has sent a counting lemma for, see countLemma */
+  std::set<Node> d_countedFolds;
+  /**
+   * For a fold that counts the elements of its bag,
+   *   F = (bag.fold (lambda ((x T) (a Int)) (+ a 1)) 0 X)
+   * the lemma
+   *   (and (>= F 0) (= (= F 0) (= X (as bag.empty (Bag T)))))
+   * and for its nullable form, from (nullable.some 0) with the step
+   * (nullable.some (+ (nullable.val a) 1)),
+   *   (and (= F (nullable.some (nullable.val F)))
+   *        (>= (nullable.val F) 0)
+   *        (= (= (nullable.val F) 0) (= X (as bag.empty (Bag T)))))
+   * null for any other fold.
+   */
+  Node countLemma(const Node& fold);
   /** The inference generator object*/
   InferenceGenerator d_ig;
   /** Reference to the inference manager for the theory of bags */

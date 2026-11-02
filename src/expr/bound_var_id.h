@@ -40,6 +40,24 @@ enum class BoundVarId
    */
   ARRAYS_EQ_RANGE,
   /**
+   * The row variable of the lambdas the bags rewriter builds, one per tuple
+   * type, named row_N: (lambda ((row_N (Tuple Int Int))) ..), see
+   * BagsRewriter::rowVariable.
+   */
+  BAGS_ROW,
+  /**
+   * The variables of a lambda the bags rewriter names canonically, t_N and
+   * acc_N, cached by the lambda's alpha key and the variable's position, see
+   * BagsRewriter::canonicalLambda.
+   */
+  BAGS_CANONICAL,
+  /**
+   * The placeholders of an alpha key, see BagsRewriter::alphaKey: of the
+   * variable bound at a depth, and of the free variables of a type.
+   */
+  BAGS_ALPHA_BOUND,
+  BAGS_ALPHA_FREE,
+  /**
    * A bound variable corresponding to the universally quantified integer
    * variable used to range over (may be distinct) elements in a bag, used
    * for axiomatizing the behavior of some term.

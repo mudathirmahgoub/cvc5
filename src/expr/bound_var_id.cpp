@@ -24,6 +24,10 @@ const char* toString(BoundVarId id)
       return "REAL_ALGEBRAIC_NUMBER_WITNESS";
     case BoundVarId::ARITH_TR_PURIFY: return "ARITH_TR_PURIFY";
     case BoundVarId::ARRAYS_EQ_RANGE: return "ARRAYS_EQ_RANGE";
+    case BoundVarId::BAGS_ROW: return "BAGS_ROW";
+    case BoundVarId::BAGS_CANONICAL: return "BAGS_CANONICAL";
+    case BoundVarId::BAGS_ALPHA_BOUND: return "BAGS_ALPHA_BOUND";
+    case BoundVarId::BAGS_ALPHA_FREE: return "BAGS_ALPHA_FREE";
     case BoundVarId::BAGS_FIRST_INDEX: return "BAGS_FIRST_INDEX";
     case BoundVarId::BAGS_SECOND_INDEX: return "BAGS_SECOND_INDEX";
     case BoundVarId::SETS_FIRST_INDEX: return "SETS_FIRST_INDEX";

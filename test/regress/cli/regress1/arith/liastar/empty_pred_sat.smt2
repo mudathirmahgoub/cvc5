@@ -1,4 +1,5 @@
 ; REQUIRES: normaliz
+; REQUIRES: unrestricted-mode
 ; DISABLE-TESTER: proof
 ; COMMAND-LINE: --arith-liastar-main-solver
 ; COMMAND-LINE:

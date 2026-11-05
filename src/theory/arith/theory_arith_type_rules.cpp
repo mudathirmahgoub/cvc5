@@ -12,8 +12,6 @@
 
 #include "theory/arith/theory_arith_type_rules.h"
 
-#include "expr/node_algorithm.h"
-#include "expr/skolem_manager.h"
 #include "util/iand.h"
 #include "util/rational.h"
 
@@ -322,11 +320,11 @@ TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
   Assert(n.getKind() == Kind::STAR_CONTAINS);
   if (check)
   {
-    // The first argument should be a lambda. STAR_CONTAINS is not a
-    // closure, so its first child is an ordinary term that lambda
-    // lifting may have purified into a skolem; we check its original
-    // form.
-    Node lambda = SkolemManager::getOriginalForm(n[0]);
+    // The first argument should be a function of type
+    // (-> Int ... Int Bool). STAR_CONTAINS is not a closure, so its first
+    // child may be any such term, e.g. a function array constant;
+    // TheoryArith::ppStaticRewrite checks that it is a lambda.
+    Node lambda = n[0];
     // remaining arguments should be elements of integer type
     std::vector<Node> arguments;
     for (size_t i = 1; i < n.getNumChildren(); i++)
@@ -342,19 +340,6 @@ TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
       if (errOut)
       {
         (*errOut) << "expecting concrete types for STAR_CONTAINS operator";
-      }
-      return TypeNode::null();
-    }
-
-    // the rewriter may normalize a constant lambda to a function array
-    // constant, so both kinds are admissible here
-    if (lambda.getKind() != Kind::LAMBDA
-        && lambda.getKind() != Kind::FUNCTION_ARRAY_CONST)
-    {
-      if (errOut)
-      {
-        (*errOut)
-            << "STAR_CONTAINS operator only allows lambdas as a first argument";
       }
       return TypeNode::null();
     }
@@ -376,7 +361,9 @@ TypeNode StarContainsTypeRule::computeType(NodeManager* nodeManager,
       return x.isInteger();
     });
 
-    if (!(allInt && functionType.getRangeType() == nodeManager->booleanType()))
+    if (!(allInt
+          && CVC5_EQUAL(functionType.getRangeType(),
+                        nodeManager->booleanType())))
     {
       if (errOut)
       {

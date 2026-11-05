@@ -9,7 +9,8 @@
  * All rights reserved.  See the file COPYING in the top-level source
  * directory for licensing information.
  * ****************************************************************************
- * Extension to the theory of arithmetic handling the lia* (LIA star) operator.
+ * Extension to the theory of arithmetic for the LIA* predicate
+ * int.star-contains.
  *
  * --------------------------------------------------------------------------
  * What the lia* operator means
@@ -18,13 +19,14 @@
  *     (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) v_1 ... v_n)
  * asserts that the vector v = (v_1, ..., v_n) belongs to the *star* (additive
  * closure) of the set
- *     S = { x in Z^n : p(x) and x >= 0 }.
+ *     S = { x in Z^n : p(x) }.
  * The star of S is
  *     S* = { the sum of finitely many (>= 0) elements of S },
  * with the empty sum giving the zero vector. So v in S* iff v can be written as
- * a finite sum of vectors each of which satisfies the predicate p (and is
- * non-negative). This is the integer analogue of Kleene star in the monoid
- * (Z^n, +); the sets S* are exactly the (non-negative) semilinear sets.
+ * a finite sum of vectors each of which satisfies the predicate p. This is the
+ * integer analogue of Kleene star in the monoid (Z^n, +); the sets S* are
+ * exactly the semilinear sets. With --arith-liastar-assume-nonnegative the
+ * summands are additionally taken to be nonnegative.
  *
  * --------------------------------------------------------------------------
  * The decision procedure (Levatich, Bjorner, Piskac, Shoham, VMCAI 2020,
@@ -32,8 +34,8 @@
  * --------------------------------------------------------------------------
  * 1. Put p into disjunctive normal form, p <=> D_1 or ... or D_m, where each
  *    D_j is a conjunction of linear (in)equalities, i.e. a convex polyhedron.
- *    Then S = S_1 union ... union S_m, with S_j the integer points of D_j (in
- *    the non-negative orthant). (See liastar_utils.cpp for the normalization.)
+ *    Then S = S_1 union ... union S_m, with S_j the integer points of D_j.
+ *    (See liastar_utils.cpp for the normalization.)
  *
  * 2. The additive closure distributes over the union as a Minkowski sum:
  *        S* = S_1* + ... + S_m*,
@@ -53,21 +55,21 @@
  * 4. Summing these contributions over all cones gives the *star constraints*: a
  *    system of linear constraints over fresh non-negative integers whose
  *    satisfiability is equivalent to `v in S*`. The extension then emits the
- *    reduction lemma `literal = star`.
+ *    reduction lemma `atom = star`.
  *
  * --------------------------------------------------------------------------
  * Two strategies
  * --------------------------------------------------------------------------
  * Eager (`eagerCheckStar`): compute the full DNF, build every cone up front and
- *   emit the exact equivalence `literal = star` in one shot.
+ *   emit the exact equivalence `atom = star` in one shot.
  *
- * Lazy (`lazyCheckStar` / `lazyHilbert`): the DNF can blow up, so instead keep a
- *   persistent incremental QF_LIA subsolver seeded with p (and x >= 0). Each
- *   round it produces a model in a region of p not yet covered by a cone; the
- *   convex cell containing that model is read off (`LiaStarUtils::getDisjunct`),
+ * Lazy (`lazyCheckStar` / `lazyHilbert`): the DNF can blow up, so instead keep
+ * a persistent incremental QF_LIA subsolver seeded with p. Each round it
+ *   produces a model in a region of p not yet covered by a cone; the convex
+ *   cell containing that model is read off (`LiaStarUtils::getDisjunct`),
  *   turned into a cone, and added to the accumulated set. The star built from
  *   the cones found so far is an *under-approximation*, so the equivalence is
- *   asserted only tentatively under a fresh boolean guard `g` (`g => (literal =
+ *   asserted only tentatively under a fresh boolean guard `g` (`g => (atom =
  *   star)`), biased true, until the subsolver becomes unsat -- meaning every
  *   cell of p is covered and the encoding is exact, at which point the
  *   unconditional equivalence is emitted.
@@ -75,13 +77,21 @@
  * --------------------------------------------------------------------------
  * Where lemmas come from
  * --------------------------------------------------------------------------
- * `checkFullEffort` is the entry point. For each STAR_CONTAINS assertion it
- * emits:
- *   - a non-negativity lemma (the vector lives in the non-negative orthant);
+ * `checkFullEffort` is the entry point. For each int.star-contains literal, of
+ * either polarity, it emits:
+ *   - with --arith-liastar-assume-nonnegative, a non-negativity lemma (the
+ *     vector lives in the non-negative orthant where the atom holds);
  *   - a split on the substituted predicate `p[v]` (if v itself satisfies p it
  *     is a single-summand member of S*);
- *   - and then, unless the current model already satisfies the literal, the
- *     star reduction via the eager or lazy strategy.
+ *   - and then, unless the current model already satisfies a positive literal,
+ *     the star reduction via the eager or lazy strategy.
+ * The skolems of the reduction witness v in S* when the atom holds, but when
+ * the atom is false the lemma only says that this one choice of them is not a
+ * witness. Once the reduction is exact, a negative literal is therefore also
+ * reduced by `(or atom (forall x. not star[x]))`, see `recordReduction`, which
+ * the quantifier instantiation for linear arithmetic handles. In the lazy
+ * strategy a negative literal discovers one cell per round, without the
+ * shortcuts of the positive case, until the enumeration is complete.
  */
 
 #ifdef CVC5_USE_NORMALIZ
@@ -91,13 +101,15 @@
 #include <algorithm>
 
 #include "expr/node_algorithm.h"
-#include "expr/skolem_manager.h"
 #include "liastar_utils.h"
 #include "options/arith_options.h"
 #include "options/smt_options.h"
+#include "smt/logic_exception.h"
 #include "theory/arith/inference_manager.h"
-#include "theory/decision_manager.h"
 #include "theory/arith/theory_arith.h"
+#include "theory/decision_manager.h"
+#include "theory/theory_model.h"
+#include "theory/uf/equality_engine.h"
 #include "theory/uf/function_const.h"
 #include "util/rational.h"
 
@@ -112,6 +124,7 @@ using namespace libnormaliz;
 
 using libnormaliz::operator<<;
 
+/** Print the elements of l separated by spaces, for traces. */
 template <typename T>
 std::string toString(const std::vector<T>& l)
 {
@@ -132,7 +145,9 @@ namespace {
  *     vec[i] = sum over all generators of (point[i] + sum over rays of ray[i]).
  * `lambdas` holds one (point, rays) contribution per module generator across
  * all cones (as produced by `LiaStarUtils::getGeneratorBody`); `vec` is the
- * star vector (the v_1 ... v_n). Returns the n equalities.
+ * star vector (the v_1 ... v_n). Returns the n equalities. For a polyhedron
+ * Normaliz appends a homogenizing coordinate to each generator, e.g. the
+ * module generator 2 1 1 for (and (>= x 2) (= y 1)); the sums ignore it.
  */
 std::vector<Node> buildSumConstraints(
     NodeManager* nm,
@@ -164,9 +179,9 @@ std::vector<Node> buildSumConstraints(
 /**
  * Trace the cone's Hilbert basis and return its module generators -- the base
  * lattice points g of the decomposition { g + sum_j l_j h_j } of the cone's
- * integer points. A purely homogeneous cone has no module generators; its
- * single base point is then the origin, so the zero vector is returned
- * instead.
+ * integer points. A purely homogeneous cone, e.g. the one of
+ * (and (>= x y) (>= y 0)), has no module generators; its single base point is
+ * then the origin, so the zero vector is returned instead.
  */
 std::vector<std::vector<Integer>> getConeGenerators(
     libnormaliz::Cone<Integer>& cone, size_t dimension)
@@ -186,13 +201,15 @@ std::vector<std::vector<Integer>> getConeGenerators(
 
 /**
  * Emit the preamble of a self-contained SMT-LIB script on the
- * "liastar-ext-smt" channel: solver options plus a declaration and a
- * non-negativity assertion for every star variable in `variables`. The
- * queries later emitted on the same channel (see
- * `LiaStarUtils::traceDistinctQuery`) then form a replayable soundness check
- * of the reduction: every (check-sat) must answer unsat.
+ * "liastar-ext-smt" channel: solver options plus a declaration for every star
+ * variable in `variables`, and a non-negativity assertion for each of them
+ * when `assumeNonnegative`, since Normaliz only assumes them to be nonnegative
+ * with --arith-liastar-assume-nonnegative. The queries later emitted on the
+ * same channel (see `LiaStarUtils::traceEquivalenceCheck`) then form a
+ * replayable soundness check of the reduction: every (check-sat) must answer
+ * unsat.
  */
-void traceSmtPreamble(Node variables)
+void traceSmtPreamble(Node variables, bool assumeNonnegative)
 {
   // `!TraceIsOn(...)` does not compile in non-tracing builds, so guard
   // positively.
@@ -200,15 +217,20 @@ void traceSmtPreamble(Node variables)
   {
     Trace("liastar-ext-smt") << "(set-logic ALL)" << std::endl;
     Trace("liastar-ext-smt") << "(set-option :incremental true)" << std::endl;
-    Trace("liastar-ext-smt") << "(set-option :produce-models true)" << std::endl;
+    Trace("liastar-ext-smt")
+        << "(set-option :produce-models true)" << std::endl;
     for (Node var : variables)
     {
-      Trace("liastar-ext-smt") << "(declare-const " << var << " Int)"
-                               << std::endl;
+      Trace("liastar-ext-smt")
+          << "(declare-const " << var << " Int)" << std::endl;
     }
-    for (Node var : variables)
+    if (assumeNonnegative)
     {
-      Trace("liastar-ext-smt") << "(assert (>= " << var << " 0))" << std::endl;
+      for (Node var : variables)
+      {
+        Trace("liastar-ext-smt")
+            << "(assert (>= " << var << " 0))" << std::endl;
+      }
     }
   }
 }
@@ -226,8 +248,8 @@ void traceMembershipValidation(NodeManager* nm,
 {
   for (size_t i = 0; i < lia.size(); i++)
   {
-    LiaStarUtils::traceDistinctQuery(
-        std::to_string(i), lia[i].first, lia[i].second);
+    LiaStarUtils::traceEquivalenceCheck(
+        std::to_string(i).c_str(), lia[i].first, lia[i].second);
   }
   std::vector<Node> disjunctions;
   std::transform(
@@ -247,7 +269,7 @@ void traceMembershipValidation(NodeManager* nm,
   {
     liaFormula = nm->mkNode(Kind::OR, disjunctions);
   }
-  LiaStarUtils::traceDistinctQuery("lia formula: ", lambda[1], liaFormula);
+  LiaStarUtils::traceEquivalenceCheck("lia formula", lambda[1], liaFormula);
 }
 
 }  // namespace
@@ -258,11 +280,13 @@ LiaStarExtension::LiaStarExtension(Env& env, TheoryArith& containing)
       d_arith(containing),
       d_astate(*containing.getTheoryState()),
       d_im(containing.getInferenceManager()),
-      d_checkCounter(0),
       d_extTheoryCb(),
       d_extTheory(env, d_extTheoryCb, d_im),
-      d_hasLiaStarTerms(context(), false),
-      d_stats(statisticsRegistry())
+      d_hasAssertions(context(), false),
+      d_negatedReductions(userContext()),
+      d_negatedReductionsSent(userContext()),
+      d_stats(statisticsRegistry()),
+      d_lastGuard(userContext())
 {
   d_extTheory.addFunctionKind(Kind::STAR_CONTAINS);
   d_true = nodeManager()->mkConst(true);
@@ -276,58 +300,45 @@ LiaStarExtension::~LiaStarExtension() {}
 void LiaStarExtension::preRegisterTerm(TNode n)
 {
   // register terms with extended theory, to find extended terms that can be
-  // eliminated by context-dependent simplification.
+  // eliminated by context-dependent simplification. n is, e.g.,
+  // (int.star-contains (lambda ((x Int)) (= x 2)) a).
   if (d_extTheory.hasFunctionKind(n.getKind()))
   {
-    d_hasLiaStarTerms = true;
     d_extTheory.registerTerm(n);
   }
 }
 
+bool LiaStarExtension::collectModelValues(TheoryModel* m)
+{
+  std::vector<Node> assertions;
+  getAssertions(assertions);
+  for (const Node& lit : assertions)
+  {
+    bool polarity = lit.getKind() != Kind::NOT;
+    Node atom = polarity ? lit : lit[0];
+    if (!m->assertPredicate(atom, polarity))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
 {
-  // Collect the STAR_CONTAINS atoms among the arithmetic facts. Both polarities
-  // are reduced to the positive atom: a negated `(not (star-contains ...))` is
-  // handled by the same reduction lemma `literal = star` (the surrounding SAT
-  // solver applies the negation).
   Trace("liastar-ext") << "Getting assertions..." << std::endl;
   Trace("liastar-ext") << "---------------------" << std::endl;
+  // of the facts L, (>= b 2) and (not (= b 1)), for L of checkFullEffort,
+  // only the first is collected
   for (auto it = d_arith.facts_begin(); it != d_arith.facts_end(); ++it)
   {
     Node lit = (*it).d_assertion;
     Trace("liastar-ext") << lit << std::endl;
-    Node atom;
-    if (lit.getKind() == Kind::STAR_CONTAINS)
+    Node atom = lit.getKind() == Kind::NOT ? lit[0] : lit;
+    if (atom.getKind() == Kind::STAR_CONTAINS)
     {
-      // positive polarity of star-contains
-      atom = lit;
+      assertions.push_back(lit);
     }
-    else if (lit.getKind() == Kind::NOT
-             && lit[0].getKind() == Kind::STAR_CONTAINS)
-    {
-      // negative polarity of star-contains (the same reduction lemma applies)
-      atom = lit[0];
-    }
-    else
-    {
-      continue;
-    }
-    // The predicate argument is normally a LAMBDA, but two rewrites can hide
-    // it: a *constant* lambda is rewritten into a FUNCTION_ARRAY_CONST (no
-    // children), and since STAR_CONTAINS is not a closure kind, lambda lifting
-    // may purify the argument into a skolem. Rebuild the atom with the lambda
-    // form so every structural access below (lambda[0], lambda[1], ...) is
-    // well-defined. The rebuilt atom rewrites back to the original, so the
-    // reduction lemma still attaches to the asserted literal.
-    if (atom[0].getKind() != Kind::LAMBDA)
-    {
-      std::vector<Node> children;
-      children.push_back(uf::FunctionConst::toLambda(
-          SkolemManager::getOriginalForm(atom[0])));
-      children.insert(children.end(), atom.begin() + 1, atom.end());
-      atom = d_nm->mkNode(Kind::STAR_CONTAINS, children);
-    }
-    assertions.push_back(atom);
   }
   Trace("liastar-ext") << "---------------------" << std::endl;
 }
@@ -335,16 +346,17 @@ void LiaStarExtension::getAssertions(std::vector<Node>& assertions)
 void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
                                        const std::set<Node>& termSet)
 {
-  // Last-call effort check: for each STAR_CONTAINS assertion emit the necessary
+  Assert(hasAssertions());
+  // Full-effort check: for each int.star-contains literal emit the necessary
   // lemmas and, if the current model does not already satisfy the literal,
-  // refine via the eager or lazy star reduction.
+  // refine via the eager or lazy star reduction. The steps 1-5 below are
+  // those documented in liastar_extension.h.
   TimerStat::CodeTimer checkTimer(d_stats.d_checkFullEffortTime);
   ++d_stats.d_checkRuns;
   Trace("liastar-ext") << "interceptModel: do model-based refinement"
                        << std::endl;
   Trace("liastar-ext") << " model is : " << arithModel << std::endl;
   Trace("liastar-ext") << " termSet is: " << termSet << std::endl;
-  d_checkCounter++;
 
   // get the assertions
   std::vector<Node> assertions;
@@ -353,52 +365,69 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
 
   Trace("liastar-ext") << "liastar assertions: " << assertions << std::endl;
   NodeManager* nm = nodeManager();
-  for (const auto& literal : assertions)
+  for (const Node& literal : assertions)
   {
-    Assert(literal.getKind() == Kind::STAR_CONTAINS);
-    // getAssertions above rebuilds the atom in lambda form, but recover it
-    // defensively here too: STAR_CONTAINS is not a closure kind, so the
-    // argument may have been purified by lambda lifting.
-    Node lambda =
-        uf::FunctionConst::toLambda(SkolemManager::getOriginalForm(literal[0]));
-    Assert(!lambda.isNull() && lambda.getKind() == Kind::LAMBDA)
-        << "Expected a lambda as the first child of " << literal << std::endl;
-    // vectorPredicate = p[v] (v satisfies p) and nonnegative = (and (>= v_i 0)).
+    // literal is L, or (not L) for a negative literal, and atom is L
+    bool polarity = literal.getKind() != Kind::NOT;
+    Node atom = polarity ? literal : literal[0];
+    Assert(atom.getKind() == Kind::STAR_CONTAINS);
+    // The first child is the lambda, unless the rewriter normalized a
+    // constant lambda to a function array constant, or --no-uf-lazy-ll lifted
+    // it to a skolem. getDefinition recovers the lambda in all three cases.
+    Node lambda = uf::FunctionConst::getDefinition(atom[0]);
+    Assert(!lambda.isNull())
+        << "Expected a lambda as the first child of " << atom << std::endl;
+    // vectorPredicate = p[v] (v satisfies p) and nonnegative = (and (>= v_i
+    // 0)).
     auto [vectorPredicate, nonnegative] =
-        LiaStarUtils::getVectorPredicate(literal, nm);
+        LiaStarUtils::getVectorPredicate(atom, nm);
 
     // (1) Under arithLiaStarAssumeNonnegative the summands -- and hence v --
     // are taken to lie in the non-negative orthant. That only holds where the
-    // originating literal holds, so guard the lemma with it: an unguarded
-    // lemma would be treated as globally valid by the SAT solver, forcing
-    // v >= 0 in branches where the literal is false and corrupting unsat
-    // cores. Without the option int.star-contains constrains the sign of its
-    // summands only through the lambda, so no such lemma is emitted.
+    // atom holds, so guard the lemma with it: an unguarded lemma would be
+    // treated as globally valid by the SAT solver, forcing v >= 0 in branches
+    // where the atom is false and corrupting unsat cores. Without the option
+    // int.star-contains constrains the sign of its summands only through the
+    // lambda, so no such lemma is emitted. The lemma is an assumption rather
+    // than a valid fact, so like the split and the reduction below it needs
+    // justification (see RelevanceManager): the model must satisfy it.
     if (options().arith.arithLiaStarAssumeNonnegative)
     {
-      Node nonnegativeLemma = literal.impNode(nonnegative);
+      Node nonnegativeLemma = atom.impNode(nonnegative);
       d_im.addPendingLemma(nonnegativeLemma,
                            InferenceId::ARITH_LIA_STAR_NONNEGATIVE,
-                           nullptr);
+                           nullptr,
+                           false,
+                           LemmaProperty::NEEDS_JUSTIFY);
     }
 
     // (2) Split on whether v itself satisfies p: if so, v is a single-summand
-    // member of S* and the literal holds directly.
+    // member of S* and the atom holds directly. The lemma cache holds
+    // rewritten lemmas, and the rewriter keeps (or p(y) (not p(y))) as is, so
+    // the split is sent once per user context. The asserted side of the split
+    // certifies step 3 below, so the split needs justification (see
+    // RelevanceManager): relevance filtering, e.g. --nl-rlv, must keep p(y)
+    // in the nonlinear model check, or the model repair could change a
+    // nonlinear coordinate of y after the literal was skipped.
     Node split = vectorPredicate.orNode(vectorPredicate.notNode());
-    d_im.addPendingLemma(
-        split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+    d_im.addPendingLemma(split,
+                         InferenceId::ARITH_LIA_STAR_SPLIT,
+                         nullptr,
+                         false,
+                         LemmaProperty::NEEDS_JUSTIFY);
     d_im.doPendingLemmas();
     if (d_im.hasSentLemma())
     {
       Trace("liastar-ext") << "Sending lemma: " << split << std::endl;
       continue;
     }
-    if (options().arith.arithLiaStarModelValue)
+    // (3) Model-value shortcut, for a positive literal only: if the current
+    // arithmetic model already satisfies the predicate p[v], or the last star
+    // under-approximation computed for the atom by the lazy strategy, then v
+    // is in S* and no further refinement is needed this round. A negative
+    // literal cannot be certified this way: it needs the exact reduction.
+    if (polarity && options().arith.arithLiaStarModelValue)
     {
-      // Model-value shortcut: if the current arithmetic model already satisfies
-      // the predicate p[v] (or the last computed star under-approximation),
-      // then the literal holds in this model and no further refinement is
-      // needed this round.
       TimerStat::CodeTimer modelValueTimer(d_stats.d_modelValueTime);
       ++d_stats.d_modelValueChecks;
       std::vector<Node> keys;
@@ -410,13 +439,25 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         values.push_back(value);
       }
 
-      // F: the membership predicate. Additionally consider the last computed
-      // starLia under-approximation, if any: if the model already satisfies
-      // F or that under-approximation, the literal already holds and no further
-      // refinement is needed.
-      Node f = vectorPredicate;
-      auto starIt = d_lastStarLia.find(literal);
-      Node check = starIt != d_lastStarLia.end() ? f.orNode(starIt->second) : f;
+      Node check = vectorPredicate;
+      auto starIt = d_lastStarLia.find(atom);
+      if (starIt != d_lastStarLia.end())
+      {
+        // A model satisfying the star constraints is a witness of v in S*
+        // whether or not the lemma that introduced them is still asserted:
+        // the constraints are self-contained. With the partial-sums encoding
+        // the star formula (= v P_k) is a witness only together with the
+        // definitions of its skolems, which a user pop may have retracted, so
+        // they are evaluated too.
+        Node star = starIt->second;
+        if (options().arith.arithLiaStarPartialSums)
+        {
+          std::vector<Node> conjuncts = d_partialSumDefs[atom];
+          conjuncts.push_back(star);
+          star = d_nm->mkAnd(conjuncts);
+        }
+        check = check.orNode(star);
+      }
 
       Node value = check.substitute(
           keys.begin(), keys.end(), values.begin(), values.end());
@@ -430,7 +471,7 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         Trace("liastar-ext-debug")
             << "----------------------------------------" << std::endl;
         Trace("liastar-ext-debug")
-            << literal << " is satisfied in the current model" << std::endl;
+            << atom << " is satisfied in the current model" << std::endl;
         Trace("liastar-ext-debug")
             << "----------------------------------------" << std::endl;
         // `continue`, not `return`: this literal needs no refinement, but the
@@ -441,41 +482,109 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
         continue;
       }
     }
-    // (3) Refine: reduce the star literal to its cone/Hilbert-basis encoding.
+    // (4) An atom is in d_negatedReductions once its exact reduction lemma
+    // (= L ...) was sent in this user context. Its negative literal may still
+    // need the lemma (or L (forall ...)), e.g. if L was asserted positively
+    // before.
+    if (d_negatedReductions.find(atom) != d_negatedReductions.end())
+    {
+      if (!polarity && d_negatedReductionsSent.insert(atom))
+      {
+        sendNegatedReduction(atom);
+        d_im.doPendingLemmas();
+      }
+      continue;
+    }
+    // (5) Refine: reduce the star atom to its cone/Hilbert-basis encoding.
+    // The main-solver enumeration is driven by a positive literal; a negative
+    // literal of the same lambda enumerates the cells with the subsolver,
+    // which shares the discovered cones.
     if (options().arith.arithLiaStarLazy)
     {
-      if (options().arith.arithLiaStarMainSolver)
+      if (polarity && options().arith.arithLiaStarMainSolver)
       {
-        mainSolverCheckStar(literal, lambda, arithModel);
+        mainSolverCheckStar(atom, lambda, arithModel);
       }
       else
       {
-        lazyCheckStar(literal, lambda, arithModel);
+        lazyCheckStar(atom, lambda, polarity, arithModel);
       }
     }
     else
     {
-      eagerCheckStar(literal, lambda);
+      eagerCheckStar(atom, lambda, polarity);
     }
   }
 }
 
-void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
+void LiaStarExtension::recordReduction(Node atom,
+                                       Node star,
+                                       const std::vector<Node>& skolems,
+                                       bool polarity)
 {
-  // Eager reduction: compute every cone of p up front and emit the exact
-  // equivalence `literal = star`. Each literal is reduced at most once.
-  if (std::find(
-          d_processedStarTerms.begin(), d_processedStarTerms.end(), literal)
-      != d_processedStarTerms.end())
+  // The formula for a negated atom, see the class documentation. Without
+  // skolems the reduction lemma is exact and it is not needed, e.g.
+  // (= L (= a 0)) for (lambda ((x Int)) false). For the running example of
+  // the class documentation the negation is star negated, with bound
+  // variables u and v for mu and l:
+  //   (forall ((u Int) (v Int))
+  //     (not (and (>= u 0) (>= v 0) (=> (= u 0) (= v 0))
+  //               (= a (+ (* 2 u) v)) (= b u))))
+  Node negation;
+  if (!skolems.empty())
+  {
+    std::vector<Node> boundVars;
+    for (const Node& skolem : skolems)
+    {
+      boundVars.push_back(NodeManager::mkBoundVar(skolem.getType()));
+    }
+    Node notStar = star.notNode();
+    Node body = notStar.substitute(
+        skolems.begin(), skolems.end(), boundVars.begin(), boundVars.end());
+    Node boundVarList = d_nm->mkNode(Kind::BOUND_VAR_LIST, boundVars);
+    negation = d_nm->mkNode(Kind::FORALL, boundVarList, body);
+  }
+  d_negatedReductions.insert(atom, negation);
+  if (!polarity)
+  {
+    d_negatedReductionsSent.insert(atom);
+    sendNegatedReduction(atom);
+  }
+}
+
+void LiaStarExtension::sendNegatedReduction(Node atom)
+{
+  Node negation = d_negatedReductions.find(atom)->second;
+  if (negation.isNull())
   {
     return;
   }
-  // Normalize p to DNF and render each disjunct as a Normaliz constraint matrix.
+  if (!logicInfo().isQuantified())
+  {
+    std::stringstream ss;
+    ss << "A negated int.star-contains requires quantifiers in the background "
+          "logic, found "
+       << atom.notNode();
+    throw LogicException(ss.str());
+  }
+  // (or L (forall ((u Int) (v Int)) (not (and (>= u 0) ...)))), see
+  // recordReduction
+  Node lemma = atom.orNode(negation);
+  Trace("liastar-ext") << "negated star lemma: " << lemma << std::endl;
+  d_im.addPendingLemma(lemma, InferenceId::ARITH_LIA_STAR_NOT_EXISTS, nullptr);
+}
+
+void LiaStarExtension::eagerCheckStar(Node atom, Node lambda, bool polarity)
+{
+  // Eager reduction: compute every cone of p up front and emit the exact
+  // equivalence `atom = star`. Normalize p to DNF and render each disjunct as
+  // a Normaliz constraint matrix.
   std::vector<std::pair<std::vector<std::string>, Node>> pairs =
       convertQFLIAToMatrices(lambda);
 
   // Build the cones and the star constraints over all of them.
-  auto [cones, starConstraints] = getCones(literal, pairs);
+  std::vector<Node> skolems;
+  auto [cones, starConstraints] = getCones(atom, pairs, skolems);
 
   if (TraceIsOn("liastar-ext-smt"))
   {
@@ -488,16 +597,30 @@ void LiaStarExtension::eagerCheckStar(Node literal, Node lambda)
     Trace("liastar-ext") << "lia constraint: " << std::endl;
     traceMembershipValidation(d_nm, lambda, lia);
   }
-  Node star = d_nm->mkNode(Kind::AND, starConstraints);
+  // starConstraints has a single element if S is empty and n is 1, e.g.
+  // (= a 0) for (lambda ((x Int)) false), whose star S* is {0}.
+  Node star = d_nm->mkAnd(starConstraints);
   Trace("liastar-ext") << "starConstraints: " << std::endl
                        << toString(starConstraints) << std::endl;
   star = rewrite(star);
-  Node lemma = literal.eqNode(star);
+  Node lemma = atom.eqNode(star);
   Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
-  d_im.addPendingLemma(
-      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
-  d_processedStarTerms.push_back(literal);
+  // With skolems the lemma skolemizes (= L (exists ((mu Int) (l Int)) star)),
+  // so like other skolemization lemmas it needs justification (see
+  // RelevanceManager): a model that makes L true must satisfy the
+  // constraints on mu and l. Without skolems the lemma is exact, e.g.
+  // (= L (= a 0)) for (lambda ((x Int)) false), but star is still the only
+  // constraint that keeps y in S*, and L itself is not an arithmetic
+  // constraint. So the lemma needs justification in both cases: otherwise
+  // relevance filtering, e.g. --nl-rlv, could drop star and let the
+  // nonlinear model repair move y out of S*.
+  d_im.addPendingLemma(lemma,
+                       InferenceId::ARITH_LIA_STAR_EXISTS,
+                       nullptr,
+                       false,
+                       LemmaProperty::NEEDS_JUSTIFY);
   ++d_stats.d_starTermsReduced;
+  recordReduction(atom, star, skolems, polarity);
   d_im.doPendingLemmas();
 }
 
@@ -529,7 +652,7 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
   // constrains its summands only through the lambda. Restricting the
   // enumeration unconditionally would under-approximate the star set by every
   // cell with a negative coordinate.
-  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env, &d_stats);
+  Node base = LiaStarUtils::removeItesAndNots(lambda[1], d_env, &d_stats);
   std::vector<Node> conjuncts{base};
   if (options().arith.arithLiaStarAssumeNonnegative)
   {
@@ -538,8 +661,7 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
       conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
     }
   }
-  base =
-      conjuncts.size() == 1 ? conjuncts[0] : d_nm->mkNode(Kind::AND, conjuncts);
+  base = d_nm->mkAnd(conjuncts);
 
   // The lambda's bound variables appear free in `base`. A formula with free
   // (bound) variables cannot be asserted to a subsolver, so we replace them
@@ -563,7 +685,7 @@ LiaStarExtension::Subsolver& LiaStarExtension::getSubsolver(Node lambda)
   return sub;
 }
 
-void LiaStarExtension::synthesizeCuts(Node literal,
+void LiaStarExtension::synthesizeCuts(Node atom,
                                       Node lambda,
                                       const std::vector<Node>& facts)
 {
@@ -582,7 +704,7 @@ void LiaStarExtension::synthesizeCuts(Node literal,
     return;
   }
   Subsolver& sub = getSubsolver(lambda);
-  size_t dimension = literal.getNumChildren() - 1;
+  size_t dimension = atom.getNumChildren() - 1;
   if (sub.to.size() != dimension)
   {
     // coordinate mapping would be ambiguous; bail out
@@ -595,7 +717,7 @@ void LiaStarExtension::synthesizeCuts(Node literal,
   std::vector<bool> zeroCoordinate(dimension, false);
   for (size_t i = 0; i < dimension; i++)
   {
-    zeroCoordinate[i] = literal[i + 1] == d_zero;
+    zeroCoordinate[i] = atom[i + 1] == d_zero;
   }
 
   // Refresh the sample points and recession directions from the cones
@@ -679,7 +801,7 @@ void LiaStarExtension::synthesizeCuts(Node literal,
     bool known = true;
     for (size_t i = 0; i < dimension; i++)
     {
-      Node value = target.getValue(literal[i + 1]);
+      Node value = target.getValue(atom[i + 1]);
       if (value.isNull() || !value.isConst())
       {
         known = false;
@@ -700,8 +822,8 @@ void LiaStarExtension::synthesizeCuts(Node literal,
     Node cut;
     for (uint64_t budget : {4, 9, 16, 30})
     {
-      cut = synthesizeOneCut(
-          literal, sub, cs, targetValues, zeroCoordinate, budget);
+      cut =
+          synthesizeOneCut(atom, sub, cs, targetValues, zeroCoordinate, budget);
       if (!cut.isNull())
       {
         break;
@@ -717,7 +839,14 @@ void LiaStarExtension::synthesizeCuts(Node literal,
     Trace("liastar-cuts") << "cut: " << cut << std::endl;
     if (!rewrite(cut).isConst())
     {
-      d_im.addPendingLemma(cut, InferenceId::ARITH_LIA_STAR_CUT);
+      // The cut holds for every vector of S*, i.e. wherever the atom holds.
+      // It is not valid on its own: in a branch where the atom is false, or
+      // after a user pop retracts the atom, the vector is unconstrained.
+      d_im.addPendingLemma(atom.impNode(cut),
+                           InferenceId::ARITH_LIA_STAR_CUT,
+                           nullptr,
+                           false,
+                           LemmaProperty::NEEDS_JUSTIFY);
       emitted = true;
     }
   }
@@ -727,7 +856,7 @@ void LiaStarExtension::synthesizeCuts(Node literal,
   }
 }
 
-Node LiaStarExtension::synthesizeOneCut(Node literal,
+Node LiaStarExtension::synthesizeOneCut(Node atom,
                                         Subsolver& sub,
                                         CutState& cs,
                                         const std::vector<Node>& target,
@@ -739,8 +868,7 @@ Node LiaStarExtension::synthesizeOneCut(Node literal,
     for (size_t i = 0; i < vec.size(); i++)
     {
       if (zeroCoordinate[i] && vec[i] != d_zero
-          && !(vec[i].isConst()
-               && vec[i].getConst<Rational>().sgn() == 0))
+          && !(vec[i].isConst() && vec[i].getConst<Rational>().sgn() == 0))
       {
         return false;
       }
@@ -830,12 +958,9 @@ Node LiaStarExtension::synthesizeOneCut(Node literal,
     for (size_t i = 0; i < dimension; i++)
     {
       candidate = d_nm->mkNode(
-          Kind::ADD,
-          candidate,
-          d_nm->mkNode(Kind::MULT, values[i], sub.to[i]));
+          Kind::ADD, candidate, d_nm->mkNode(Kind::MULT, values[i], sub.to[i]));
     }
-    std::vector<Node> assumptions{
-        d_nm->mkNode(Kind::LEQ, candidate, minusOne)};
+    std::vector<Node> assumptions{d_nm->mkNode(Kind::LEQ, candidate, minusOne)};
     for (size_t i = 0; i < dimension; i++)
     {
       if (zeroCoordinate[i])
@@ -851,9 +976,7 @@ Node LiaStarExtension::synthesizeOneCut(Node literal,
       for (size_t i = 0; i < dimension; i++)
       {
         lhs = d_nm->mkNode(
-            Kind::ADD,
-            lhs,
-            d_nm->mkNode(Kind::MULT, values[i], literal[i + 1]));
+            Kind::ADD, lhs, d_nm->mkNode(Kind::MULT, values[i], atom[i + 1]));
       }
       return d_nm->mkNode(Kind::GEQ, lhs, zero);
     }
@@ -878,7 +1001,7 @@ Node LiaStarExtension::synthesizeOneCut(Node literal,
   return Node();
 }
 
-bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
+bool LiaStarExtension::tryEndgame(Node atom, Node lambda)
 {
   uint64_t period = options().arith.arithLiaStarEndgame;
   if (period == 0)
@@ -886,7 +1009,7 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
     return false;
   }
   size_t cones = d_lazyCones[lambda].size();
-  size_t& last = d_lastEndgameCones[literal];
+  size_t& last = d_lastEndgameCones[atom];
   if (cones < last + period)
   {
     return false;
@@ -902,8 +1025,8 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   for (auto it = d_arith.facts_begin(); it != d_arith.facts_end(); ++it)
   {
     Node fact = (*it).d_assertion;
-    Node atom = fact.getKind() == Kind::NOT ? fact[0] : fact;
-    if (atom.getKind() == Kind::STAR_CONTAINS)
+    Node factAtom = fact.getKind() == Kind::NOT ? fact[0] : fact;
+    if (factAtom.getKind() == Kind::STAR_CONTAINS)
     {
       continue;
     }
@@ -912,7 +1035,7 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
       continue;
     }
     std::unordered_set<Node> symbols;
-    expr::getSymbols(atom, symbols);
+    expr::getSymbols(factAtom, symbols);
     bool overStarSkolems = false;
     for (const Node& symbol : symbols)
     {
@@ -928,7 +1051,7 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
     }
   }
 
-  std::vector<Node> star = getStarConstraints(literal);
+  std::vector<Node> star = getStarConstraints(atom, lambda);
 
   // A fresh subsolver: a clean search for the integer multipliers,
   // unencumbered by the main search's stale guards and frozen phases.
@@ -946,14 +1069,14 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   // the facts go in as assumptions, so an unsat answer exposes which of them
   // conflict with the star via the unsat-assumptions core
   Result result = endgame.checkSat(facts);
-  Trace("liastar-ext") << "endgame at " << cones
-                       << " cones: " << result << std::endl;
+  Trace("liastar-ext") << "endgame at " << cones << " cones: " << result
+                       << std::endl;
   if (TraceIsOn("liastar-endgame"))
   {
-    Trace("liastar-endgame") << "endgame query at " << cones << " cones, "
-                             << facts.size() << " facts, " << star.size()
-                             << " star constraints; result " << result
-                             << std::endl;
+    Trace("liastar-endgame")
+        << "endgame query at " << cones << " cones, " << facts.size()
+        << " facts, " << star.size() << " star constraints; result " << result
+        << std::endl;
     for (const Node& fact : facts)
     {
       Trace("liastar-endgame") << "  fact: " << fact << std::endl;
@@ -981,9 +1104,8 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
     Trace("liastar-endgame-smt") << "(set-logic QF_LIA)" << std::endl;
     for (const Node& symbol : symbols)
     {
-      Trace("liastar-endgame-smt")
-          << "(declare-const |" << symbol << "| " << symbol.getType() << ")"
-          << std::endl;
+      Trace("liastar-endgame-smt") << "(declare-const |" << symbol << "| "
+                                   << symbol.getType() << ")" << std::endl;
     }
     for (const Node& constraint : star)
     {
@@ -1000,10 +1122,10 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   {
     if (result.getStatus() == Result::Status::UNSAT)
     {
-      // The under-approximation cannot justify the literal yet; try the
+      // The under-approximation cannot justify the atom yet; try the
       // over-approximation side: synthesize valid cuts that may refute the
       // input facts outright.
-      synthesizeCuts(literal, lambda, facts);
+      synthesizeCuts(atom, lambda, facts);
     }
     return false;
   }
@@ -1031,13 +1153,12 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   {
     return false;
   }
-  Node hint = equalities.size() == 1 ? equalities[0]
-                                     : d_nm->mkNode(Kind::AND, equalities);
-  // At most one hint is active per literal: witnesses from different endgame
+  Node hint = d_nm->mkAnd(equalities);
+  // At most one hint is active per atom: witnesses from different endgame
   // rounds pin the same variables to different values, so competing
   // (phase-preferred) hints would fight each other. Sound because the guards
   // are fresh.
-  auto hintIt = d_lastHint.find(literal);
+  auto hintIt = d_lastHint.find(atom);
   if (hintIt != d_lastHint.end())
   {
     Node deactivate = hintIt->second.notNode();
@@ -1047,10 +1168,9 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   Node d = d_nm->mkDummySkolem("liastarHint", d_nm->booleanType());
   d = d_astate.getValuation().ensureLiteral(d);
   d_im.preferPhase(d, true);
-  d_lastHint[literal] = d;
+  d_lastHint[atom] = d;
   Node split = d.orNode(d.notNode());
-  d_im.addPendingLemma(
-      split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+  d_im.addPendingLemma(split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   d_im.addPendingLemma(d.impNode(hint), InferenceId::ARITH_LIA_STAR_HINT);
   d_im.doPendingLemmas();
   // Hand the witness to the SAT solver as forced decisions (guard first,
@@ -1058,8 +1178,8 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   // of the pinned variables are always already bound differently.
   if (d_hintStrategy == nullptr)
   {
-    d_hintStrategy = std::make_unique<LiaStarHintStrategy>(
-        d_env, d_astate.getValuation());
+    d_hintStrategy =
+        std::make_unique<LiaStarHintStrategy>(d_env, d_astate.getValuation());
     d_im.getDecisionManager()->registerStrategy(
         DecisionManager::STRAT_ARITH_LIA_STAR_HINT,
         d_hintStrategy.get(),
@@ -1080,61 +1200,68 @@ bool LiaStarExtension::tryEndgame(Node literal, Node lambda)
   return true;
 }
 
-void LiaStarExtension::lazyCheckStar(Node literal,
+void LiaStarExtension::lazyCheckStar(Node atom,
                                      Node lambda,
+                                     bool polarity,
                                      const std::map<Node, Node>& arithModel)
 {
-  // Lazy reduction: drive one refinement round for `literal`. Stop refining
-  // once the literal has been fully reduced (its term marked processed).
-  if (std::find(
-          d_processedStarTerms.begin(), d_processedStarTerms.end(), literal)
-      != d_processedStarTerms.end())
+  // Lazy reduction: drive one refinement round for `atom`.
+  if (d_completeLambdas.find(lambda) != d_completeLambdas.end())
   {
+    // Every cell of the predicate has a cone already, found through another
+    // atom over the same lambda or in a user context that was popped since:
+    // the star over the cones is exact, so send the exact reduction.
+    processDisjunct(atom, lambda, d_false, /*complete=*/true, polarity);
     return;
   }
 
-  if (TraceIsOn("liastar-endgame"))
+  if (polarity)
   {
-    auto hintIt = d_lastHint.find(literal);
-    if (hintIt != d_lastHint.end())
+    if (TraceIsOn("liastar-endgame"))
     {
-      bool value = false;
-      bool assigned =
-          d_astate.getValuation().hasSatValue(hintIt->second, value);
-      Trace("liastar-endgame")
-          << "hint guard: "
-          << (assigned ? (value ? "true" : "false") : "unassigned")
-          << std::endl;
-    }
-  }
-
-  // Decoupled endgame: periodically try to finish the search for the star
-  // multipliers in a fresh subsolver and feed the witness back as a hint.
-  if (tryEndgame(literal, lambda))
-  {
-    return;
-  }
-
-  // If the solver is still committed to the current tentative reduction (the
-  // last guard is asserted true in the candidate assignment), optionally skip
-  // refinement: the model failed the shortcut only because the star
-  // multipliers are not yet integral -- integer branching runs after this
-  // check -- and harvesting another cone every round grows the problem under
-  // the solver's feet, starving that search. Sound: if the model were fully
-  // integral with the guard true, the star would have evaluated to true and
-  // the model-value shortcut would have accepted; returning without lemmas
-  // defers to integer branching. Refinement resumes as soon as the solver
-  // gives the guard up (asserts it false).
-  if (options().arith.arithLiaStarPatient)
-  {
-    auto guardIt = d_lastGuard.find(literal);
-    if (guardIt != d_lastGuard.end())
-    {
-      bool guardValue = false;
-      if (d_astate.getValuation().hasSatValue(guardIt->second, guardValue)
-          && guardValue)
+      auto hintIt = d_lastHint.find(atom);
+      if (hintIt != d_lastHint.end())
       {
-        return;
+        bool value = false;
+        bool assigned =
+            d_astate.getValuation().hasSatValue(hintIt->second, value);
+        Trace("liastar-endgame")
+            << "hint guard: "
+            << (assigned ? (value ? "true" : "false") : "unassigned")
+            << std::endl;
+      }
+    }
+
+    // Decoupled endgame: periodically try to finish the search for the star
+    // multipliers in a fresh subsolver and feed the witness back as a hint.
+    if (tryEndgame(atom, lambda))
+    {
+      return;
+    }
+
+    // If the solver is still committed to the current tentative reduction
+    // (the last guard is asserted true in the candidate assignment),
+    // optionally skip refinement: the model failed the shortcut only because
+    // the star multipliers are not yet integral -- integer branching runs
+    // after this check -- and harvesting another cone every round grows the
+    // problem under the solver's feet, starving that search. Sound: if the
+    // model were fully integral with the guard true, the star would have
+    // evaluated to true and the model-value shortcut would have accepted;
+    // returning without lemmas defers to integer branching. Refinement
+    // resumes as soon as the solver gives the guard up (asserts it false).
+    // The guard is looked up in the user context, so after a user pop, which
+    // retracts the tentative reduction, the gate does not fire.
+    if (options().arith.arithLiaStarPatient)
+    {
+      auto guardIt = d_lastGuard.find(atom);
+      if (guardIt != d_lastGuard.end() && !(*guardIt).second.isNull())
+      {
+        bool guardValue = false;
+        if (d_astate.getValuation().hasSatValue((*guardIt).second, guardValue)
+            && guardValue)
+        {
+          return;
+        }
       }
     }
   }
@@ -1197,9 +1324,10 @@ void LiaStarExtension::lazyCheckStar(Node literal,
   // v, so bound each enumeration skolem by the candidate model's value of
   // the corresponding vector element. The bounds are used as assumptions
   // with an unbiased fallback (see `getDisjunct`), so completeness is
-  // unaffected.
+  // unaffected. A negative literal is not certified by a summand of v, so
+  // its enumeration is not biased.
   std::vector<Node> bias;
-  if (options().arith.arithLiaStarGuided)
+  if (polarity && options().arith.arithLiaStarGuided)
   {
     std::vector<Node> keys;
     std::vector<Node> values;
@@ -1217,7 +1345,7 @@ void LiaStarExtension::lazyCheckStar(Node literal,
       {
         continue;
       }
-      Node element = literal[i + 1];
+      Node element = atom[i + 1];
       Node value = rewrite(element.substitute(
           keys.begin(), keys.end(), values.begin(), values.end()));
       if (value.isConst() && value.getConst<Rational>().sgn() >= 0)
@@ -1228,13 +1356,15 @@ void LiaStarExtension::lazyCheckStar(Node literal,
     }
   }
 
-  lazyHilbert(literal, sub, bias);
+  lazyHilbert(atom, lambda, sub, polarity, bias);
 }
 
 std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
           std::vector<Node>>
 LiaStarExtension::getCones(
-    Node n, const std::vector<std::pair<std::vector<std::string>, Node>>& pairs)
+    Node n,
+    const std::vector<std::pair<std::vector<std::string>, Node>>& pairs,
+    std::vector<Node>& skolems)
 {
   TimerStat::CodeTimer conesTimer(d_stats.d_getConesTime);
   // Eager path: build a cone for every DNF disjunct (`pairs`) and accumulate
@@ -1255,14 +1385,14 @@ LiaStarExtension::getCones(
     Trace("liastar-ext") << "Cone for node " << i << std::endl
                          << pair.second << std::endl;
 
-    Cone<Integer> cone = LiaStarUtils::buildCone(
-        dimension,
-        pair.first,
-        options().arith.arithLiaStarAssumeNonnegative,
-        &d_stats);
+    Cone<Integer> cone =
+        LiaStarUtils::buildCone(dimension,
+                                pair.first,
+                                options().arith.arithLiaStarAssumeNonnegative,
+                                &d_stats);
     if (LiaStarUtils::isEmptyCone(cone))
     {
-      // an infeasible disjunct contributes nothing to the star
+      // a disjunct without integer points contributes nothing to the star
       Trace("liastar-ext") << "empty cone" << std::endl;
       ++d_stats.d_conesEmpty;
       continue;
@@ -1288,6 +1418,7 @@ LiaStarExtension::getCones(
                                      constraints,
                                      point,
                                      rays);
+      skolems.insert(skolems.end(), vars.begin(), vars.end());
       starConstraints.insert(
           starConstraints.end(), constraints.begin(), constraints.end());
       lambdas.push_back({point, rays});
@@ -1303,24 +1434,24 @@ LiaStarExtension::getCones(
 }
 
 void LiaStarExtension::addCone(
-    Node n, const std::pair<std::vector<std::string>, Node>& pair)
+    Node lambda, const std::pair<std::vector<std::string>, Node>& pair)
 {
   // Lazy path: build the cone for a single disjunct `pair` and append it to the
-  // cones accumulated so far for this lambda (n[0]). An empty (infeasible) cone
-  // is dropped.
-  size_t dimension = n.getNumChildren() - 1;
+  // cones accumulated so far for this lambda. An empty (infeasible) cone is
+  // dropped.
+  size_t dimension = lambda[0].getNumChildren();
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
-      d_lazyCones[n[0]];
+      d_lazyCones[lambda];
 
   Trace("liastar-ext") << "---------------------------" << std::endl;
   Trace("liastar-ext") << "Cone for node " << std::endl
                        << pair.second << std::endl;
 
-  Cone<Integer> cone = LiaStarUtils::buildCone(
-      dimension,
-      pair.first,
-      options().arith.arithLiaStarAssumeNonnegative,
-      &d_stats);
+  Cone<Integer> cone =
+      LiaStarUtils::buildCone(dimension,
+                              pair.first,
+                              options().arith.arithLiaStarAssumeNonnegative,
+                              &d_stats);
   if (LiaStarUtils::isEmptyCone(cone))
   {
     Trace("liastar-ext") << "empty cone" << std::endl;
@@ -1331,18 +1462,17 @@ void LiaStarExtension::addCone(
   cones.push_back({pair.second, cone});
 }
 
-std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
+std::vector<Node> LiaStarExtension::getStarConstraints(Node atom, Node lambda)
 {
   // Lazy path: return the star constraints over all cones accumulated so far in
-  // `d_lazyCones[n[0]]`. The cone list is shared by every star literal over the
+  // `d_lazyCones[lambda]`. The cone list is shared by every star atom over the
   // same lambda (the cones depend only on the predicate), but the multiplier
-  // skolems and the constraints built over them are per *literal* (`n`, not
-  // `n[0]`): two literals over one lambda constrain different vectors, and
-  // sharing their multipliers would make the sum constraints `v1 = sum` and
-  // `v2 = sum` force `v1 = v2`. The per-cone constraints (and their fresh
-  // skolems) are computed once per cone per literal (so the skolems are stable
-  // across refinement rounds). Two encodings (option
-  // arith-liastar-partial-sums):
+  // skolems and the constraints built over them are per *atom*: two atoms over
+  // one lambda constrain different vectors, and sharing their multipliers
+  // would make the sum constraints `v1 = sum` and `v2 = sum` force `v1 = v2`.
+  // The per-cone constraints (and their fresh skolems) are computed once per
+  // cone per atom (so the skolems are stable across refinement rounds). Two
+  // encodings (option arith-liastar-partial-sums):
   // - default: the per-cone constraints are cached in
   //   `d_starConstraints`/`d_lambdas` and folded into every star formula, and
   //   the sum constraints, which span all cones, are rebuilt on each call --
@@ -1352,19 +1482,21 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   //   `d_partialSumDefs` (emitted as unguarded definitional lemmas by
   //   `processDisjunct`), and the returned star formula is just `v = P_k` --
   //   constant size, however many cones have been found.
-  std::vector<Node> vec(n.begin() + 1, n.end());
+  std::vector<Node> vec(atom.begin() + 1, atom.end());
   size_t dimension = vec.size();
 
-  // the cones accumulated so far for this lambda (n[0])
+  // the cones accumulated so far for this lambda
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones =
-      d_lazyCones[n[0]];
+      d_lazyCones[lambda];
 
   // The per-cone constraints and lambdas computed in previous calls. We only
   // compute new constraints (and fresh skolems) for cones that have not been
   // processed yet, and append them here.
-  std::vector<Node>& starConstraints = d_starConstraints[n];
-  std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas = d_lambdas[n];
-  size_t& processed = d_processedCones[n];
+  std::vector<Node>& starConstraints = d_starConstraints[atom];
+  std::vector<std::pair<Vector, std::vector<Vector>>>& lambdas =
+      d_lambdas[atom];
+  std::vector<Node>& literalSkolems = d_literalSkolems[atom];
+  size_t& processed = d_processedCones[atom];
   bool partialSums = options().arith.arithLiaStarPartialSums;
   bool newCones = processed < cones.size();
   // the contribution of the newly processed cones to each coordinate
@@ -1392,20 +1524,19 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
                                      point,
                                      rays);
       d_starSkolems.insert(vars.begin(), vars.end());
+      literalSkolems.insert(literalSkolems.end(), vars.begin(), vars.end());
       if (partialSums)
       {
         // The per-cone constraints become definitional lemmas, emitted once;
         // the generator's terms are folded into the running contribution.
-        std::vector<Node>& defs = d_partialSumDefs[n];
+        std::vector<Node>& defs = d_partialSumDefs[atom];
         defs.insert(defs.end(), constraints.begin(), constraints.end());
         for (size_t i = 0; i < dimension; i++)
         {
-          contribution[i] =
-              d_nm->mkNode(Kind::ADD, contribution[i], point[i]);
+          contribution[i] = d_nm->mkNode(Kind::ADD, contribution[i], point[i]);
           for (const Vector& ray : rays)
           {
-            contribution[i] =
-                d_nm->mkNode(Kind::ADD, contribution[i], ray[i]);
+            contribution[i] = d_nm->mkNode(Kind::ADD, contribution[i], ray[i]);
           }
         }
       }
@@ -1433,16 +1564,16 @@ std::vector<Node> LiaStarExtension::getStarConstraints(Node n)
   // Advance the partial sums by the new cones' contribution: fresh skolems
   // P_k with the definitions P_k[i] = P_{k-1}[i] + contribution[i] (just
   // contribution[i] for the first cones).
-  std::vector<Node>& sums = d_partialSums[n];
+  std::vector<Node>& sums = d_partialSums[atom];
   if (newCones)
   {
-    std::vector<Node>& defs = d_partialSumDefs[n];
+    std::vector<Node>& defs = d_partialSumDefs[atom];
     std::vector<Node> next;
     for (size_t i = 0; i < dimension; i++)
     {
-      Node p =
-          d_nm->mkDummySkolem("liastarPartialSum", d_nm->integerType());
+      Node p = d_nm->mkDummySkolem("liastarPartialSum", d_nm->integerType());
       d_starSkolems.insert(p);
+      literalSkolems.push_back(p);
       Node rhs = sums.empty()
                      ? contribution[i]
                      : d_nm->mkNode(Kind::ADD, sums[i], contribution[i]);
@@ -1513,7 +1644,7 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getMembershipDisjuncts(
       {
         conjunctions.push_back(vec[i].eqNode(sums[i]));
       }
-      Node conjunction = d_nm->mkNode(Kind::AND, conjunctions);
+      Node conjunction = d_nm->mkAnd(conjunctions);
       if (boundVariables.size() > 0)
       {
         Node variables = d_nm->mkNode(Kind::BOUND_VAR_LIST, boundVariables);
@@ -1541,9 +1672,12 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
 
   Trace("liastar-ext") << "predicate: " << predicate << std::endl;
 
-  traceSmtPreamble(variables);
+  traceSmtPreamble(variables, options().arith.arithLiaStarAssumeNonnegative);
 
-  Node dnf = LiaStarUtils::toDNF(predicate, &d_env, &d_stats);
+  // (and (>= x 2) (= y 1)) is in DNF already, while
+  //   (and (>= x 2) (or (= y 1) (>= y 3)))
+  //   --> (or (and (>= x 2) (= y 1)) (and (>= x 2) (>= y 3)))
+  Node dnf = LiaStarUtils::toDNF(predicate, d_env, &d_stats);
 
   Trace("liastar-ext") << "predicate in dnf: " << dnf << std::endl;
   Trace("liastar-ext") << "lia constraint: " << std::endl;
@@ -1573,7 +1707,7 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   // The base is the membership predicate (with ites and negations eliminated),
   // conjoined with the non-negativity of the lambda's variables only under
   // arithLiaStarAssumeNonnegative (see `getSubsolver`).
-  Node base = LiaStarUtils::removeItesAndNots(lambda[1], &d_env, &d_stats);
+  Node base = LiaStarUtils::removeItesAndNots(lambda[1], d_env, &d_stats);
   std::vector<Node> conjuncts{base};
   if (options().arith.arithLiaStarAssumeNonnegative)
   {
@@ -1582,8 +1716,7 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
       conjuncts.push_back(d_nm->mkNode(Kind::GEQ, var, d_zero));
     }
   }
-  base =
-      conjuncts.size() == 1 ? conjuncts[0] : d_nm->mkNode(Kind::AND, conjuncts);
+  base = d_nm->mkAnd(conjuncts);
 
   // The lambda's bound variables appear free in `base`. A lemma with free
   // (bound) variables cannot be sent to the main solver, so we replace them
@@ -1615,8 +1748,7 @@ LiaStarExtension::MainEnum& LiaStarExtension::getMainEnum(Node lambda)
   en.guard = g;
   en.firstGuard = g;
   en.split = g.orNode(g.notNode());
-  d_im.addPendingLemma(
-      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+  d_im.addPendingLemma(en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   // the guarded predicate: guard => base
   Node seed = g.impNode(base);
   en.lemmas.push_back(seed);
@@ -1655,15 +1787,21 @@ void LiaStarExtension::addEnumLemma(Node lemma)
   // Queue a main-solver enumeration lemma. A lemma that rewrites to a
   // constant carries no information and is rejected downstream
   // (TheoryInferenceManager asserts lemmas are not constant), so skip it.
+  // Like the reduction lemmas, the enumeration lemmas are assumptions the
+  // model must satisfy, so they need justification (see RelevanceManager).
   if (rewrite(lemma).isConst())
   {
     return;
   }
-  d_im.addPendingLemma(lemma, InferenceId::ARITH_LIA_STAR_ENUM);
+  d_im.addPendingLemma(lemma,
+                       InferenceId::ARITH_LIA_STAR_ENUM,
+                       nullptr,
+                       false,
+                       LemmaProperty::NEEDS_JUSTIFY);
 }
 
-Node LiaStarExtension::getModelDisjunct(
-    MainEnum& en, const std::map<Node, Node>& arithModel)
+Node LiaStarExtension::getModelDisjunct(MainEnum& en,
+                                        const std::map<Node, Node>& arithModel)
 {
   // Build one disjunct of the satisfying region by fixing every atom of the
   // base predicate to its truth value in the candidate arithmetic model. This
@@ -1679,17 +1817,42 @@ Node LiaStarExtension::getModelDisjunct(
   // The enumeration skolems may be missing from the arithmetic model map
   // (e.g. when their atoms were not asserted to the theory this round); fall
   // back to the linear solver's candidate model value for them.
+  auto isValue = [](const Node& value, const Node& sk) {
+    // A fallback can produce a non-integral (real-typed) value for an
+    // integer skolem (e.g. a delta-rational assignment); substituting it
+    // would build ill-typed nodes.
+    return !value.isNull() && value.isConst()
+           && value.getType() == sk.getType();
+  };
+  eq::EqualityEngine* ee = d_astate.getEqualityEngine();
   for (const Node& sk : en.to)
   {
     if (arithModel.find(sk) == arithModel.end())
     {
-      // The fallback can produce a non-integral (real-typed) value for an
-      // integer skolem (e.g. a delta-rational assignment); substituting it
-      // would build ill-typed nodes, so bail out for this round instead.
-      Node value = d_arith.getCandidateModelValue(sk);
-      if (value.isNull() || !value.isConst()
-          || value.getType() != sk.getType())
+      // In a linear logic with uninterpreted functions the theory of an
+      // equality between a variable and a constant is UF, see
+      // Theory::theoryOf, so an enumeration lemma (=> h (= sk 2)) never
+      // reaches the linear solver, whose candidate value for sk then
+      // ignores it until theory combination propagates the equality. The
+      // equality engine the theories share knows that sk is 2 already, so
+      // its constant is preferred.
+      Node value;
+      if (ee != nullptr && ee->hasTerm(sk))
       {
+        Node representative = ee->getRepresentative(sk);
+        if (isValue(representative, sk))
+        {
+          value = representative;
+        }
+      }
+      if (!isValue(value, sk))
+      {
+        value = d_arith.getCandidateModelValue(sk);
+      }
+      if (!isValue(value, sk))
+      {
+        // bail out for this round; mainSolverCheckStar falls back to the
+        // subsolver
         return Node();
       }
       keys.push_back(sk);
@@ -1721,6 +1884,16 @@ Node LiaStarExtension::getModelDisjunct(
       // the atom has no determined value under the candidate model
       return Node();
     }
+  }
+  // The cell is a cone of the predicate only if its assignment satisfies
+  // the predicate. The values above are read before theory combination is
+  // complete, so they need not agree with the SAT assignment that made the
+  // stage guard true: in a linear logic with uninterpreted functions the
+  // linear solver may still assign sk = 0 while UF holds (= sk 2). Turning
+  // such a cell into a cone would add points outside S to the star.
+  if (!LiaStarUtils::satisfiesSkeleton(en.base, atoms, atomValues))
+  {
+    return Node();
   }
   // Optionally generalize the cell: drop the atoms the predicate's truth
   // does not depend on, so the cell (and hence its cone) covers more of the
@@ -1755,9 +1928,8 @@ Node LiaStarExtension::getModelDisjunct(
       {
         return Node();
       }
-      Kind k = lhs.getConst<Rational>() > rhs.getConst<Rational>()
-                   ? Kind::GT
-                   : Kind::LT;
+      Kind k = lhs.getConst<Rational>() > rhs.getConst<Rational>() ? Kind::GT
+                                                                   : Kind::LT;
       literal = d_nm->mkNode(k, atom[0], atom[1]);
     }
     else
@@ -1778,8 +1950,7 @@ Node LiaStarExtension::getModelDisjunct(
   {
     return d_true;
   }
-  Node disjunct =
-      literals.size() == 1 ? literals[0] : d_nm->mkNode(Kind::AND, literals);
+  Node disjunct = d_nm->mkAnd(literals);
   if (!en.from.empty())
   {
     // substitute the fresh skolems back to the lambda's bound variables.
@@ -1807,11 +1978,11 @@ void LiaStarExtension::advanceStage(MainEnum& en, Node skolemDisjunct)
   en.guard = g;
 }
 
-void LiaStarExtension::emitDriverLemma(Node literal, MainEnum& en)
+void LiaStarExtension::emitDriverLemma(Node atom, Node lambda, MainEnum& en)
 {
-  // Emit, once per (literal, stage), the driver lemma
-  //     literal => (p[v] or star or guard).
-  // If the literal is asserted but the model certifies it neither via p[v]
+  // Emit, once per (atom, stage), the driver lemma
+  //     atom => (p[v] or star or guard).
+  // If the atom is asserted but the model certifies it neither via p[v]
   // nor via the star under-approximation, the driver forces the stage guard,
   // which places the enumeration skolems in a cell not covered by any cone --
   // the next round then reads that cell off the model. Once every cell is
@@ -1819,46 +1990,56 @@ void LiaStarExtension::emitDriverLemma(Node literal, MainEnum& en)
   // branches remain (with `star` then exact). The lemma is satisfiability
   // preserving: in any model where v is a *non-empty* sum outside the
   // discovered approximation, some cell of the predicate is still uncovered,
-  // and the model extends to one placing the (fresh) skolems in it. The
-  // empty sum (v = 0) is always in the star set but is covered by no cell,
-  // so the star branch must always include it: before any cone is discovered
-  // (`d_lastStarLia` has no entry yet) the branch is `v = 0` itself, and the
-  // star built over any non-empty set of cones admits it by setting every
-  // multiplier to zero.
-  Node star;
-  auto starIt = d_lastStarLia.find(literal);
-  if (starIt != d_lastStarLia.end())
+  // and the model extends to one placing the (fresh) skolems in it. This
+  // argument needs `star` to be the star of *every* cone discovered for the
+  // lambda so far, since the stage guard excludes exactly their cells: the
+  // cones may have been found through another atom over the same lambda, or
+  // in a user context that was popped since, so `star` is rebuilt from the
+  // shared cone list here rather than taken from the last round of this
+  // atom. The empty sum (v = 0) is always in the star set but is covered by
+  // no cell, so the star branch must always include it: before any cone is
+  // discovered the star constraints are `v = 0` itself, and the star built
+  // over any non-empty set of cones admits it by setting every multiplier to
+  // zero.
+  std::vector<Node> starConstraints = getStarConstraints(atom, lambda);
+  if (options().arith.arithLiaStarPartialSums)
   {
-    star = starIt->second;
-  }
-  else
-  {
-    std::vector<Node> zeros;
-    for (size_t i = 1, n = literal.getNumChildren(); i < n; i++)
+    // the star formula (= v P_k) only means v in S* together with the
+    // definitions of its skolems, which a user pop may have retracted:
+    // re-queue them (the lemma cache drops the duplicates)
+    for (const Node& def : d_partialSumDefs[atom])
     {
-      zeros.push_back(literal[i].eqNode(d_zero));
+      if (!rewrite(def).isConst())
+      {
+        d_im.addPendingLemma(def,
+                             InferenceId::ARITH_LIA_STAR_DEFINITION,
+                             nullptr,
+                             false,
+                             LemmaProperty::NEEDS_JUSTIFY);
+      }
     }
-    star = zeros.size() == 1 ? zeros[0] : d_nm->mkNode(Kind::AND, zeros);
   }
-  Node pv = LiaStarUtils::getVectorPredicate(literal, d_nm).first;
-  Node lemma =
-      literal.impNode(d_nm->mkNode(Kind::OR, {pv, star, en.guard}));
+  Node star = rewrite(d_nm->mkAnd(starConstraints));
+  // the model-value shortcut of checkFullEffort accepts a model of this
+  // under-approximation
+  d_lastStarLia[atom] = star;
+  Node pv = LiaStarUtils::getVectorPredicate(atom, d_nm).first;
+  Node lemma = atom.impNode(d_nm->mkNode(Kind::OR, {pv, star, en.guard}));
   // The inference manager caches sent lemmas per user context, so re-queueing
   // the same driver is dropped for free (and re-sent after a user pop).
   addEnumLemma(lemma);
 }
 
 void LiaStarExtension::mainSolverCheckStar(
-    Node literal, Node lambda, const std::map<Node, Node>& arithModel)
+    Node atom, Node lambda, const std::map<Node, Node>& arithModel)
 {
-  // Main-solver lazy reduction: drive one refinement round for `literal`,
-  // enumerating the predicate's cells in the main solver instead of a
-  // dedicated subsolver. Stop refining once the literal has been fully
-  // reduced.
-  if (std::find(
-          d_processedStarTerms.begin(), d_processedStarTerms.end(), literal)
-      != d_processedStarTerms.end())
+  // Main-solver lazy reduction: drive one refinement round for a positive
+  // literal of `atom`, enumerating the predicate's cells in the main solver
+  // instead of a dedicated subsolver.
+  if (d_completeLambdas.find(lambda) != d_completeLambdas.end())
   {
+    // every cell has a cone already, see lazyCheckStar
+    processDisjunct(atom, lambda, d_false, /*complete=*/true, true);
     return;
   }
 
@@ -1866,7 +2047,7 @@ void LiaStarExtension::mainSolverCheckStar(
   MainEnum& en = getMainEnum(lambda);
 
   // Catch up: open one stage per cone-disjunct discovered since the previous
-  // round (e.g. through another literal with the same lambda). The disjuncts
+  // round (e.g. through another atom with the same lambda). The disjuncts
   // are stored in bound-variable space, so map them to skolem space first.
   std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& pairs =
       d_lazyCones[lambda];
@@ -1886,8 +2067,8 @@ void LiaStarExtension::mainSolverCheckStar(
   {
     // First round: the seed lemmas were only queued just now, so there is no
     // assignment of the guard or the skolems to read yet. The driver lemma
-    // makes an unjustified literal activate the enumeration.
-    emitDriverLemma(literal, en);
+    // makes an unjustified atom activate the enumeration.
+    emitDriverLemma(atom, lambda, en);
     d_im.doPendingLemmas();
     return;
   }
@@ -1896,8 +2077,7 @@ void LiaStarExtension::mainSolverCheckStar(
   // within one user context the lemma cache drops the duplicates, and after
   // a pop (which retracts the lemmas but not this non-context state) they
   // are re-sent.
-  d_im.addPendingLemma(
-      en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+  d_im.addPendingLemma(en.split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
   for (const Node& lemma : en.lemmas)
   {
     addEnumLemma(lemma);
@@ -1905,25 +2085,25 @@ void LiaStarExtension::mainSolverCheckStar(
 
   Valuation& val = d_astate.getValuation();
   bool guardValue = false;
-  bool assigned = val.isSatLiteral(en.guard)
-                  && val.hasSatValue(en.guard, guardValue);
+  bool assigned =
+      val.isSatLiteral(en.guard) && val.hasSatValue(en.guard, guardValue);
   if (assigned && !guardValue && val.isFixed(en.guard))
   {
     // The negated stage guard is implied by the input assertions: the
     // predicate conjoined with the negated disjuncts is unsatisfiable, so
     // every cell of the predicate is covered by a cone and the encoding is
     // exact (this is the analogue of the subsolver answering unsat).
-    processDisjunct(literal, d_false, /*complete=*/true);
+    processDisjunct(atom, lambda, d_false, /*complete=*/true, true);
     return;
   }
   if (!assigned || !guardValue)
   {
     // No cell can be read this round. (Re-)emit the driver for the current
-    // stage: a model claiming the literal without certifying it cannot then
+    // stage: a model claiming the atom without certifying it cannot then
     // be accepted, since the driver forces the stage guard in any such
     // model, and the model-value shortcut in checkFullEffort accepts the
     // certified ones.
-    emitDriverLemma(literal, en);
+    emitDriverLemma(atom, lambda, en);
     d_im.doPendingLemmas();
     return;
   }
@@ -1934,22 +2114,27 @@ void LiaStarExtension::mainSolverCheckStar(
   Trace("liastar-ext") << "main-solver disjunct: " << disjunct << std::endl;
   if (disjunct.isNull())
   {
-    // some atom had no model value; try again next round
-    emitDriverLemma(literal, en);
-    d_im.doPendingLemmas();
+    // Some atom has no model value, e.g. because the linear solver does not
+    // know the enumeration skolems, see getModelDisjunct. Waiting for a
+    // later round is not an option: the driver lemma was sent already, so
+    // this round would send no lemma and the solver could accept a model
+    // that does not certify the atom. The subsolver round always makes
+    // progress instead, discovering a cell or completing the enumeration;
+    // the next main-solver round opens a stage for the cell it finds.
+    lazyCheckStar(atom, lambda, true, arithModel);
     return;
   }
   // Normalize the cell like `processDisjunct` stores it in `d_lazyCones`
   // (negations folded into positive comparisons), so the re-harvest check
   // below compares like with like.
-  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env, &d_stats);
+  disjunct = LiaStarUtils::removeItesAndNots(disjunct, d_env, &d_stats);
   // Guard against re-harvesting a known cell (its negation lemma may not
   // have reached the solver before this model was produced).
   for (const auto& pair : pairs)
   {
     if (pair.first == disjunct)
     {
-      emitDriverLemma(literal, en);
+      emitDriverLemma(atom, lambda, en);
       d_im.doPendingLemmas();
       return;
     }
@@ -1967,23 +2152,25 @@ void LiaStarExtension::mainSolverCheckStar(
   // `processDisjunct` appends the cone to `d_lazyCones[lambda]`, which the
   // stage above has already negated, and updates the star
   // under-approximation that the new driver lemma references.
-  processDisjunct(literal, disjunct, /*complete=*/false);
+  processDisjunct(atom, lambda, disjunct, /*complete=*/false, true);
   en.negated = pairs.size();
-  emitDriverLemma(literal, en);
+  emitDriverLemma(atom, lambda, en);
   d_im.doPendingLemmas();
 }
 
-void LiaStarExtension::lazyHilbert(Node literal,
+void LiaStarExtension::lazyHilbert(Node atom,
+                                   Node lambda,
                                    Subsolver& sub,
+                                   bool polarity,
                                    const std::vector<Node>& bias)
 {
-  // One lazy refinement round for `literal`. Ask the subsolver for a model in a
+  // One lazy refinement round for `atom`. Ask the subsolver for a model in a
   // region of p not yet covered by a cone, read off the convex cell containing
   // it, and hand it to `processDisjunct` for the cone and lemma generation.
-  Node variables = literal[0][0];
+  Node variables = lambda[0];
   Trace("liastar-lazy") << "lazyHilbert::variables:" << variables << std::endl;
 
-  traceSmtPreamble(variables);
+  traceSmtPreamble(variables, options().arith.arithLiaStarAssumeNonnegative);
 
   // Check the subsolver and read off the disjunct (the cell of the predicate)
   // containing the model. The subsolver already has the predicate and the
@@ -1992,7 +2179,7 @@ void LiaStarExtension::lazyHilbert(Node literal,
   Node disjunct = LiaStarUtils::getDisjunct(sub.base,
                                             sub.from,
                                             sub.to,
-                                            &d_env,
+                                            d_env,
                                             sub.engine.get(),
                                             getProbe(sub.probe, sub.base),
                                             bias);
@@ -2000,41 +2187,49 @@ void LiaStarExtension::lazyHilbert(Node literal,
   // i.e. every disjunct of the predicate already has a cone. At that point the
   // cone encoding is exact and we can assert the full equivalence.
   bool complete = disjunct == d_false;
-  processDisjunct(literal, disjunct, complete);
+  processDisjunct(atom, lambda, disjunct, complete, polarity);
 }
 
-void LiaStarExtension::processDisjunct(Node literal,
-                                       Node disjunct,
-                                       bool complete)
+void LiaStarExtension::processDisjunct(
+    Node atom, Node lambda, Node disjunct, bool complete, bool polarity)
 {
   // Shared tail of one lazy refinement round: turn the freshly discovered
   // disjunct (a cell of the predicate, in bound-variable space) into a cone,
   // rebuild the star constraints over all cones found so far, and emit a
   // (tentative or final) reduction lemma.
-  Node variables = literal[0][0];
-  // The disjunct is a conjunction of arithmetic facts in the solver's normal
-  // form, which can represent strict inequalities as negations (e.g.
-  // (not (>= a b))). Normalize away the negations before building the matrix.
-  disjunct = LiaStarUtils::removeItesAndNots(disjunct, &d_env, &d_stats);
+  Node variables = lambda[0];
+  if (complete)
+  {
+    // every cell of the predicate has a cone: the star over the cones is
+    // exact, for this and every other atom over the lambda
+    d_completeLambdas.insert(lambda);
+  }
+  else
+  {
+    // The disjunct is a conjunction of arithmetic facts in the solver's
+    // normal form, which can represent strict inequalities as negations (e.g.
+    // (not (>= a b))). Normalize away the negations before building the
+    // matrix.
+    disjunct = LiaStarUtils::removeItesAndNots(disjunct, d_env, &d_stats);
 
-  Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
+    Trace("liastar-ext") << "disjunct: " << disjunct << std::endl;
 
-  std::pair<std::vector<std::string>, Node> pair =
-      LiaStarUtils::getMatrix(variables, disjunct);
+    std::pair<std::vector<std::string>, Node> pair =
+        LiaStarUtils::getMatrix(variables, disjunct);
 
-  // Add the cone for the current disjunct to `d_lazyCones` and get the starLia
-  // constraints over the whole list of cones so far. `getStarConstraints` only
-  // computes the per-cone constraints (and fresh skolems) for cones not yet
-  // processed, reusing the constraints computed in previous calls. When
-  // `complete`, `disjunct` is the (infeasible) false constraint, so `addCone`
-  // adds no new cone and `getStarConstraints` just rebuilds the sum constraints
-  // over the cones found so far.
-  addCone(literal, pair);
-  std::vector<Node> starConstraints = getStarConstraints(literal);
+    // Add the cone for the current disjunct to `d_lazyCones`.
+    addCone(lambda, pair);
+  }
+  // The starLia constraints over the whole list of cones so far.
+  // `getStarConstraints` only computes the per-cone constraints (and fresh
+  // skolems) for cones not yet processed, reusing the constraints computed in
+  // previous calls.
+  std::vector<Node> starConstraints = getStarConstraints(atom, lambda);
   Trace("liastar-ext") << "starConstraints: " << std::endl
                        << toString(starConstraints) << std::endl;
 
-  if (options().arith.arithLiaStarPartialSums)
+  bool partialSums = options().arith.arithLiaStarPartialSums;
+  if (partialSums)
   {
     // Queue the definitional lemmas (per-cone multiplier constraints and
     // partial-sum definitions) accumulated by `getStarConstraints`. They are
@@ -2043,16 +2238,22 @@ void LiaStarExtension::processDisjunct(Node literal,
     // round: within one user context the lemma cache drops the duplicates,
     // and after a user pop they are re-sent, so the star formulas emitted
     // below never reference undefined partial-sum skolems.
-    for (const Node& def : d_partialSumDefs[literal])
+    for (const Node& def : d_partialSumDefs[atom])
     {
       if (!rewrite(def).isConst())
       {
-        d_im.addPendingLemma(def, InferenceId::ARITH_LIA_STAR_DEFINITION);
+        d_im.addPendingLemma(def,
+                             InferenceId::ARITH_LIA_STAR_DEFINITION,
+                             nullptr,
+                             false,
+                             LemmaProperty::NEEDS_JUSTIFY);
       }
     }
   }
 
-  Node star = d_nm->mkNode(Kind::AND, starConstraints);
+  // starConstraints has a single element if the predicate has no cell and n
+  // is 1, e.g. (= a 0) for (lambda ((x Int)) false), whose star S* is {0}.
+  Node star = d_nm->mkAnd(starConstraints);
 
   if (options().arith.arithLiaStarPatient)
   {
@@ -2071,67 +2272,84 @@ void LiaStarExtension::processDisjunct(Node literal,
     }
   }
 
-  Trace("liastar-ext") << d_lazyCones[literal[0]].size()
-                       << " cones for lambda:  " << literal[0] << std::endl;
+  Trace("liastar-ext") << d_lazyCones[lambda].size()
+                       << " cones for lambda:  " << lambda << std::endl;
 
   star = rewrite(star);
-  // Remember the last computed starLia under-approximation for `literal`; the
+  // Remember the last computed starLia under-approximation for `atom`; the
   // model-value check in checkFullEffort uses it to skip refinement when the
   // current model already satisfies it.
-  d_lastStarLia[literal] = star;
+  d_lastStarLia[atom] = star;
 
-  // Deactivate the guard from the previous refinement round for this literal:
-  // its under-approximation is a subset of the current `star`, so the tentative
-  // equivalence it guarded is subsumed. Asserting `(not g_old)` makes that
-  // guarded lemma vacuous, so the solver does not have to satisfy several
-  // (mutually constraining) guarded equivalences at once. Sound because `g_old`
-  // is fresh.
-  auto guardIt = d_lastGuard.find(literal);
-  if (guardIt != d_lastGuard.end())
+  // Deactivate the guard from the previous refinement round for this atom:
+  // its under-approximation is a subset of the current `star`, so the
+  // tentative equivalence it guarded is subsumed. Asserting `(not g_old)`
+  // makes that guarded lemma vacuous, so the solver does not have to satisfy
+  // several (mutually constraining) guarded equivalences at once. Sound
+  // because `g_old` is fresh.
+  auto guardIt = d_lastGuard.find(atom);
+  if (guardIt != d_lastGuard.end() && !(*guardIt).second.isNull())
   {
-    Node deactivate = guardIt->second.notNode();
+    Node deactivate = (*guardIt).second.notNode();
     d_im.addPendingLemma(
         deactivate, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
-    d_lastGuard.erase(guardIt);
   }
 
   Node lemma;
   if (complete)
   {
-    // The encoding is complete, so `star` captures the star set exactly and the
-    // full equivalence holds. This is what allows refuting a (positively
-    // asserted) star-contains.
-    lemma = literal.eqNode(star);
+    // The encoding is complete, so `star` captures the star set exactly and
+    // the full equivalence holds. This is what allows refuting a (positively
+    // asserted) star-contains, and, with the negated reduction lemma, a
+    // negatively asserted one.
+    lemma = atom.eqNode(star);
+    d_lastGuard.insert(atom, Node::null());
   }
   else
   {
     // While cones are still being discovered, `star` is an under-approximation
-    // of the star set, so the equivalence `literal = star` is not yet sound. We
+    // of the star set, so the equivalence `atom = star` is not yet sound. We
     // assert it only tentatively, implied by a fresh boolean guard `g`. The
-    // split makes `g` a genuine decision literal and `preferPhase` biases it to
-    // true, so the SAT solver tries the equivalence first. If assuming it leads
-    // to a conflict (the literal actually holds via a not-yet-discovered cone),
-    // the solver flips `g` to false, retracting the equivalence, and we refine.
+    // split makes `g` a genuine decision literal and `preferPhase` biases it
+    // to true, so the SAT solver tries the equivalence first. If assuming it
+    // leads to a conflict (the atom actually holds via a not-yet-discovered
+    // cone), the solver flips `g` to false, retracting the equivalence, and
+    // we refine. For a negative literal the tentative equivalence is
+    // harmless: the solver falsifies `star` through the fresh skolems.
     Node g = d_nm->mkDummySkolem("liastarGuard", d_nm->booleanType());
     g = d_astate.getValuation().ensureLiteral(g);
     d_im.preferPhase(g, true);
     Node split = g.orNode(g.notNode());
-    d_im.addPendingLemma(
-        split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
-    lemma = g.impNode(literal.eqNode(star));
+    d_im.addPendingLemma(split, InferenceId::ARITH_LIA_STAR_SPLIT, nullptr);
+    lemma = g.impNode(atom.eqNode(star));
     // Remember this guard so it can be deactivated once a later, larger
-    // under-approximation subsumes it.
-    d_lastGuard[literal] = g;
+    // under-approximation subsumes it. The entry is user-context dependent,
+    // like the lemma.
+    d_lastGuard.insert(atom, g);
   }
   Trace("liastar-ext") << "star lemma: " << lemma << std::endl;
-  d_im.addPendingLemma(
-      lemma, InferenceId::ARITH_LIA_STAR_EXISTS, nullptr);
-  // Keep refining (do not mark the term processed) until every disjunct of the
-  // predicate has been covered by a cone.
+  // the reduction needs justification for the same reason as the eager one,
+  // see eagerCheckStar
+  d_im.addPendingLemma(lemma,
+                       InferenceId::ARITH_LIA_STAR_EXISTS,
+                       nullptr,
+                       false,
+                       LemmaProperty::NEEDS_JUSTIFY);
   if (complete)
   {
-    d_processedStarTerms.push_back(literal);
-  ++d_stats.d_starTermsReduced;
+    ++d_stats.d_starTermsReduced;
+    // The formula the negated reduction quantifies over. With the
+    // partial-sums encoding `star` is just (= v P_k), so the definitions of
+    // its skolems are part of it.
+    Node full = star;
+    if (partialSums)
+    {
+      std::vector<Node> conjuncts = d_partialSumDefs[atom];
+      conjuncts.insert(
+          conjuncts.end(), starConstraints.begin(), starConstraints.end());
+      full = rewrite(d_nm->mkAnd(conjuncts));
+    }
+    recordReduction(atom, full, d_literalSkolems[atom], polarity);
   }
   d_im.doPendingLemmas();
 }

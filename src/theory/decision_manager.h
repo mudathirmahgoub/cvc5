@@ -77,6 +77,7 @@ class DecisionManager
     STRAT_QUANT_BOUND_INT_SIZE,
     STRAT_QUANT_CEGIS_UNIF_NUM_ENUMS,
     STRAT_SEP_NEG_GUARD,
+    STRAT_ARITH_LIA_STAR_HINT,
     // placeholder for last finite-model-complete required strategy
     STRAT_LAST_FM_COMPLETE,
 

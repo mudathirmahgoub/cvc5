@@ -12,21 +12,31 @@
 
 #ifdef CVC5_USE_NORMALIZ
 
+#include <iostream>
+#include <memory>
 #include <vector>
 
+#include "cvc5/cvc5.h"
+#include "cvc5/cvc5_parser.h"
 #include "expr/node.h"
 #include "expr/node_algorithm.h"
 #include "expr/node_manager.h"
 #include "expr/skolem_manager.h"
+#include "options/options.h"
+#include "options/smt_options.h"
 #include "smt/env.h"
 #include "smt/logic_exception.h"
+#include "smt/solver_engine.h"
 #include "test_smt.h"
 #include "theory/arith/liastar/liastar_utils.h"
+#include "theory/logic_info.h"
 #include "util/bitvector.h"
 #include "util/rational.h"
 
 namespace cvc5::internal {
 
+using namespace cvc5;
+using namespace cvc5::parser;
 using namespace theory;
 using namespace theory::arith;
 using namespace theory::arith::liastar;
@@ -618,6 +628,439 @@ TEST_F(TestLiaStarUtils, removeItesInConditions)
 
   ASSERT_FALSE(expr::hasSubtermKind(Kind::ITE, noItes)) << noItes;
   ASSERT_TRUE(isEquivalent(geq, noItes)) << noItes;
+}
+
+// The tests below exercise the lazy-strategy helpers. They keep their own
+// fixture: the expected DNF strings are sensitive to the order in which the
+// bound variables are created (AND/OR children are sorted by node id), so the
+// setup is preserved verbatim from the lazy branch rather than folded into the
+// fixture above.
+
+class TestLiaStarLazyUtils : public TestSmt
+{
+ protected:
+  TypeNode intType, boolType;
+  Node trueConst, falseConst;
+  Node negativeOne, zero, one, two, three, nine, twentyOne;
+  Node a, b, c, d, f, g, u, v, x, y, z;
+  NodeManager* nm;
+  Env* e;
+
+  void SetUp() override
+  {
+    TestSmt::SetUp();
+    d_slvEngine->setOption("dag-thresh", "0", true);
+    d_slvEngine->setOption("trace", "liastar-ext-smt", true);
+    d_slvEngine->setOption("arith-liastar-subsolver", "false", true);
+    nm = d_nodeManager.get();
+    e = &d_slvEngine->getEnv();
+    intType = nm->integerType();
+    boolType = nm->booleanType();
+    trueConst = nm->mkConst<bool>(true);
+    falseConst = nm->mkConst<bool>(false);
+    negativeOne = nm->mkConstInt(Rational(-1));
+    zero = nm->mkConstInt(Rational(0));
+    one = nm->mkConstInt(Rational(1));
+    two = nm->mkConstInt(Rational(2));
+    three = nm->mkConstInt(Rational(3));
+    nine = nm->mkConstInt(Rational(9));
+    twentyOne = nm->mkConstInt(Rational(21));
+    a = nm->mkBoundVar("a", boolType);
+    b = nm->mkBoundVar("b", boolType);
+    c = nm->mkBoundVar("c", boolType);
+    d = nm->mkBoundVar("d", boolType);
+    f = nm->mkBoundVar("f", boolType);
+    g = nm->mkBoundVar("g", boolType);
+    u = nm->mkBoundVar("u", boolType);
+    v = nm->mkBoundVar("v", boolType);
+    x = nm->mkBoundVar("x", boolType);
+    y = nm->mkBoundVar("y", boolType);
+    z = nm->mkBoundVar("z", boolType);
+  }
+
+  /**
+   * Create an incremental QF_LIA subsolver seeded with `base` conjoined with
+   * the non-negativity of `variables`, the way
+   * LiaStarExtension::getSubsolver seeds the subsolver that
+   * LiaStarUtils::getDisjunct reads models from. Returns the engine and the
+   * full (nonnegative) assertion it holds.
+   */
+  std::pair<std::unique_ptr<SolverEngine>, Node> mkSeededSubsolver(
+      Node base, const std::vector<Node>& variables)
+  {
+    std::vector<Node> conjuncts{base};
+    for (Node var : variables)
+    {
+      conjuncts.push_back(nm->mkNode(Kind::GEQ, var, zero));
+    }
+    Node assertion =
+        conjuncts.size() == 1 ? conjuncts[0] : nm->mkNode(Kind::AND, conjuncts);
+    Options subOptions;
+    // getDisjunct reads the model to construct the disjunct
+    subOptions.write_smt().produceModels = true;
+    auto engine = std::make_unique<SolverEngine>(nm, &subOptions);
+    engine->setIsInternalSubsolver();
+    LogicInfo info("QF_LIA");
+    engine->setLogic(info);
+    engine->setOption("incremental", "true");
+    engine->assertFormula(assertion);
+    return {std::move(engine), assertion};
+  }
+};
+
+TEST_F(TestLiaStarLazyUtils, toDNF7)
+{
+  TermManager tm;
+  Solver slv(tm);
+  SymbolManager sm(tm);
+  Env env(tm.d_nm.get(), slv.d_originalOptions.get());
+  InputParser parser(&slv, &sm);
+
+  std::stringstream ss;
+  ss << "(set-logic ALL)"
+     << "(declare-const a Int)" << std::endl
+     << "(declare-const b Int)" << std::endl
+     << "(declare-const c Int)" << std::endl
+     << "(declare-const d Int)" << std::endl
+     << "(declare-const e Int)" << std::endl
+     << "(declare-const g Int)" << std::endl
+     << "(declare-const h Int)" << std::endl
+     << "(declare-const i Int)" << std::endl
+     << "(declare-const U Int)" << std::endl
+     << "(declare-const f Int)" << std::endl
+     << "(declare-const A Int)" << std::endl
+     << "(declare-const B Int)" << std::endl
+     << "(declare-const t Int)" << std::endl
+     << "(declare-const n Int)" << std::endl;
+
+  parser.setStreamInput(modes::InputLanguage::SMT_LIB_2_6, ss, "MyStream");
+  Command cmd;
+  while (true)
+  {
+    cmd = parser.nextCommand();
+    if (cmd.isNull())
+    {
+      break;
+    }
+    // invoke the command on the solver and the symbol manager, print the result
+    // to std::cout
+    cmd.invoke(&slv, &sm, std::cout);
+  }
+
+  InputParser parser2(&slv, &sm);
+  std::stringstream ss2;
+  ss2 << "(and (or (and (= a 0) (>= (+ U (* (- 1) f)) 0)) (and (= a 1) (< (+ U "
+         "(* (- 1) f)) 0))) (or (and (= b 1) (>= U 1)) (and (= b 0) (< U 1))) "
+         "(or (and (= c 1) (>= f 1)) (and (= c 0) (< f 1))) (or (and (= d 0) "
+         "(>= (+ U (* (- 1) B)) 0)) (and (= d 1) (< (+ U (* (- 1) B)) 0))) (or "
+         "(and (= e 1) (>= B 1)) (and (= e 0) (< B 1))) (or (and (= g 0) (>= "
+         "(+ U (* (- 1) A)) 0)) (and (= g 1) (< (+ U (* (- 1) A)) 0))) (or "
+         "(and (= h 1) (>= A 1)) (and (= h 0) (< A 1))) (or (and (= i 1) (or "
+         "(and (>= (+ U (* (- 1) f)) 1) (or (and (>= (+ (* (- 1) U) f B) 0) "
+         "(>= (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= B 0) (>= "
+         "(+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) (and (>= (+ (* (- 1) "
+         "U) f A) 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and "
+         "(>= A 0) (< (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)))) (and (>= "
+         "0 1) (< (+ U (* (- 1) f)) 1) (or (and (>= (+ (* (- 1) U) f B) 0) (>= "
+         "(+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= B 0) (>= (+ "
+         "A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) (and (>= (+ (* (- 1) U) f "
+         "A) 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= A "
+         "0) (< (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)))) (and (>= B 1) "
+         "(>= (+ A (* (- 1) B)) 1) (or (< (+ (* (- 1) U) f B) 0) (< (+ A (* (- "
+         "1) B)) 1) (< (+ U (* (- 1) f)) 1)) (or (< B 0) (< (+ A (* (- 1) B)) "
+         "1) (>= (+ U (* (- 1) f)) 1)) (or (< (+ (* (- 1) U) f A) 0) (>= (+ A "
+         "(* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) (or (< A 0) (>= (+ A (* (- "
+         "1) B)) 1) (>= (+ U (* (- 1) f)) 1))) (and (>= A 1) (< (+ A (* (- 1) "
+         "B)) 1) (or (< (+ (* (- 1) U) f B) 0) (< (+ A (* (- 1) B)) 1) (< (+ U "
+         "(* (- 1) f)) 1)) (or (< B 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- "
+         "1) f)) 1)) (or (< (+ (* (- 1) U) f A) 0) (>= (+ A (* (- 1) B)) 1) (< "
+         "(+ U (* (- 1) f)) 1)) (or (< A 0) (>= (+ A (* (- 1) B)) 1) (>= (+ U "
+         "(* (- 1) f)) 1))))) (and (= i 0) (or (< (+ U (* (- 1) f)) 1) (and "
+         "(or (< (+ (* (- 1) U) f B) 0) (< (+ A (* (- 1) B)) 1) (< (+ U (* (- "
+         "1) f)) 1)) (or (< B 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) "
+         "1)) (or (< (+ (* (- 1) U) f A) 0) (>= (+ A (* (- 1) B)) 1) (< (+ U "
+         "(* (- 1) f)) 1)) (or (< A 0) (>= (+ A (* (- 1) B)) 1) (>= (+ U (* (- "
+         "1) f)) 1)))) (or (< 0 1) (>= (+ U (* (- 1) f)) 1) (and (or (< (+ (* "
+         "(- 1) U) f B) 0) (< (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) "
+         "(or (< B 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (or (< "
+         "(+ (* (- 1) U) f A) 0) (>= (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) "
+         "1)) (or (< A 0) (>= (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)))) "
+         "(or (< B 1) (< (+ A (* (- 1) B)) 1) (and (>= (+ (* (- 1) U) f B) 0) "
+         "(>= (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= B 0) (>= "
+         "(+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) (and (>= (+ (* (- 1) "
+         "U) f A) 0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and "
+         "(>= A 0) (< (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1))) (or (< A "
+         "1) (>= (+ A (* (- 1) B)) 1) (and (>= (+ (* (- 1) U) f B) 0) (>= (+ A "
+         "(* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= B 0) (>= (+ A (* "
+         "(- 1) B)) 1) (< (+ U (* (- 1) f)) 1)) (and (>= (+ (* (- 1) U) f A) "
+         "0) (< (+ A (* (- 1) B)) 1) (>= (+ U (* (- 1) f)) 1)) (and (>= A 0) "
+         "(< (+ A (* (- 1) B)) 1) (< (+ U (* (- 1) f)) 1))))) (>= f 0) (>= U "
+         "0) (>= B 0) (>= A 0))"
+      << std::endl;
+  parser2.setStreamInput(modes::InputLanguage::SMT_LIB_2_6, ss2, "MyStream2");
+
+  Term t = parser2.nextTerm();
+  // Node dnf = LiaStarUtils::toDNF(*(t.d_node.get()), env);
+}
+
+TEST_F(TestLiaStarLazyUtils, toDnf8)
+{
+  TermManager tm;
+  Solver slv(tm);
+  SymbolManager sm(tm);
+  Env env(tm.d_nm.get(), slv.d_originalOptions.get());
+  // construct an input parser associated the solver above
+  InputParser parser(&slv, &sm);
+
+  std::stringstream ss;
+  ss << "(set-logic ALL)"
+     << "(declare-const a Int)" << std::endl
+     << "(declare-const b Int)" << std::endl
+     << "(declare-const c Int)" << std::endl
+     << "(declare-const d Int)" << std::endl
+     << "(declare-const e Int)" << std::endl
+     << "(declare-const g Int)" << std::endl
+     << "(declare-const h Int)" << std::endl
+     << "(declare-const i Int)" << std::endl
+     << "(declare-const U Int)" << std::endl
+     << "(declare-const f Int)" << std::endl
+     << "(declare-const A Int)" << std::endl
+     << "(declare-const B Int)" << std::endl
+     << "(declare-const t Int)" << std::endl
+     << "(declare-const n Int)" << std::endl;
+
+  parser.setStreamInput(modes::InputLanguage::SMT_LIB_2_6, ss, "MyStream");
+  Command cmd;
+  while (true)
+  {
+    cmd = parser.nextCommand();
+    if (cmd.isNull())
+    {
+      break;
+    }
+    // invoke the command on the solver and the symbol manager, print the result
+    // to std::cout
+    cmd.invoke(&slv, &sm, std::cout);
+  }
+
+  InputParser parser2(&slv, &sm);
+  std::stringstream ss2;
+  ss2 << "(or"
+      << "(and (= i 1)"
+      << "  (or"
+      << "    (and"
+      << "      (>= (+ U (* (- 1) f)) 1)"
+      << "      (or"
+      << "        (and"
+      << "          (>= (+ (* (- 1) U) f B) 0)"
+      << "          (>= (+ A (* (- 1) B)) 1)"
+      << "          (>= (+ U (* (- 1) f)) 1))"
+      << "        (and (>= B 0)"
+      << "          (>= (+ A (* (- 1) B)) 1)"
+      << "          (< (+ U (* (- 1) f)) 1))"
+      << "        (and"
+      << "          (>= (+ (* (- 1) U) f A) 0)"
+      << "          (< (+ A (* (- 1) B)) 1)"
+      << "          (>= (+ U (* (- 1) f)) 1))"
+      << "        (and (>= A 0)"
+      << "          (< (+ A (* (- 1) B)) 1)"
+      << "          (< (+ U (* (- 1) f)) 1))))"
+      << "    (and (>= 0 1)"
+      << "      (< (+ U (* (- 1) f)) 1)"
+      << "      (or"
+      << "        (and"
+      << "          (>= (+ (* (- 1) U) f B) 0)"
+      << "          (>= (+ A (* (- 1) B)) 1)"
+      << "          (>= (+ U (* (- 1) f)) 1))"
+      << "        (and (>= B 0)"
+      << "          (>= (+ A (* (- 1) B)) 1)"
+      << "          (< (+ U (* (- 1) f)) 1))"
+      << "        (and"
+      << "          (>= (+ (* (- 1) U) f A) 0)"
+      << "          (< (+ A (* (- 1) B)) 1)"
+      << "          (>= (+ U (* (- 1) f)) 1))"
+      << "        (and (>= A 0)"
+      << "          (< (+ A (* (- 1) B)) 1)"
+      << "          (< (+ U (* (- 1) f)) 1))))"
+      << "    (and (>= B 1)"
+      << "      (>= (+ A (* (- 1) B)) 1)"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f B) 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< B 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f A) 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< A 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1)))"
+      << "    (and (>= A 1)"
+      << "      (< (+ A (* (- 1) B)) 1)"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f B) 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< B 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f A) 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< A 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1)))))"
+      << "(and (= i 0)"
+      << "  (or"
+      << "    (< (+ U (* (- 1) f)) 1)"
+      << "    (and"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f B) 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< B 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f A) 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< A 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))))"
+      << "  (or (< 0 1)"
+      << "    (>= (+ U (* (- 1) f)) 1)"
+      << "    (and"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f B) 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< B 0)"
+      << "        (< (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))"
+      << "      (or"
+      << "        (< (+ (* (- 1) U) f A) 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (< (+ U (* (- 1) f)) 1))"
+      << "      (or (< A 0)"
+      << "        (>= (+ A (* (- 1) B)) 1)"
+      << "        (>= (+ U (* (- 1) f)) 1))))"
+      << "  (or (< B 1)"
+      << "    (< (+ A (* (- 1) B)) 1)"
+      << "    (and"
+      << "      (>= (+ (* (- 1) U) f B) 0)"
+      << "      (>= (+ A (* (- 1) B)) 1)"
+      << "      (>= (+ U (* (- 1) f)) 1))"
+      << "    (and (>= B 0)"
+      << "      (>= (+ A (* (- 1) B)) 1)"
+      << "      (< (+ U (* (- 1) f)) 1))"
+      << "    (and"
+      << "      (>= (+ (* (- 1) U) f A) 0)"
+      << "      (< (+ A (* (- 1) B)) 1)"
+      << "      (>= (+ U (* (- 1) f)) 1))"
+      << "    (and (>= A 0)"
+      << "      (< (+ A (* (- 1) B)) 1)"
+      << "      (< (+ U (* (- 1) f)) 1)))"
+      << "  (or (< A 1)"
+      << "    (>= (+ A (* (- 1) B)) 1)"
+      << "    (and"
+      << "      (>= (+ (* (- 1) U) f B) 0)"
+      << "      (>= (+ A (* (- 1) B)) 1)"
+      << "      (>= (+ U (* (- 1) f)) 1))"
+      << "    (and (>= B 0)"
+      << "      (>= (+ A (* (- 1) B)) 1)"
+      << "      (< (+ U (* (- 1) f)) 1))"
+      << "    (and"
+      << "      (>= (+ (* (- 1) U) f A) 0)"
+      << "      (< (+ A (* (- 1) B)) 1)"
+      << "      (>= (+ U (* (- 1) f)) 1))"
+      << "    (and (>= A 0)"
+      << "      (< (+ A (* (- 1) B)) 1)"
+      << "      (< (+ U (* (- 1) f)) 1)))))" << std::endl;
+  parser2.setStreamInput(modes::InputLanguage::SMT_LIB_2_6, ss2, "MyStream2");
+
+  Term t = parser2.nextTerm();
+  // Node dnf = LiaStarUtils::toDNF(*(t.d_node.get()), env);
+}
+
+TEST_F(TestLiaStarLazyUtils, getDisjunctUnsat)
+{
+  // The subsolver is seeded with (< x 0) and the nonnegativity constraint
+  // (>= x 0), which together are unsatisfiable, so the returned disjunct must
+  // be the false constant (the predicate is fully covered).
+  Node xInt = nm->mkVar("x", intType);
+  Node base = nm->mkNode(Kind::LT, xInt, zero);
+  auto [engine, assertion] = mkSeededSubsolver(base, {xInt});
+  Node disjunct =
+      LiaStarUtils::getDisjunct(assertion, {}, {}, *e, engine.get());
+  ASSERT_EQ(falseConst, disjunct);
+}
+
+TEST_F(TestLiaStarLazyUtils, getDisjunctSatEquality)
+{
+  // (= x 5) is satisfiable together with the x >= 0 constraint. The returned
+  // disjunct is a conjunction fixing every atom to its model value; it must
+  // not be false and must itself be satisfiable.
+  Node xInt = nm->mkVar("x", intType);
+  Node five = nm->mkConstInt(Rational(5));
+  Node base = nm->mkNode(Kind::EQUAL, xInt, five);
+  auto [engine, assertion] = mkSeededSubsolver(base, {xInt});
+  Node disjunct =
+      LiaStarUtils::getDisjunct(assertion, {}, {}, *e, engine.get());
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, *e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+}
+
+TEST_F(TestLiaStarLazyUtils, getDisjunctSatInequalities)
+{
+  // (and (>= x 1) (>= y 2)) is satisfiable with the nonnegativity
+  // constraints; the disjunct must be a satisfiable, non-false formula.
+  Node xInt = nm->mkVar("x", intType);
+  Node yInt = nm->mkVar("y", intType);
+  Node geqX = nm->mkNode(Kind::GEQ, xInt, one);
+  Node geqY = nm->mkNode(Kind::GEQ, yInt, two);
+  Node base = nm->mkNode(Kind::AND, geqX, geqY);
+  auto [engine, assertion] = mkSeededSubsolver(base, {xInt, yInt});
+  Node disjunct =
+      LiaStarUtils::getDisjunct(assertion, {}, {}, *e, engine.get());
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, *e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+}
+
+TEST_F(TestLiaStarLazyUtils, getDisjunctDisjunction)
+{
+  // (or (> x (+ y z)) (= x (+ y z))) is satisfiable with the nonnegativity
+  // constraints. getDisjunct fixes every atom to its model value, selecting a
+  // single convex cell of the satisfying region, so the result must be a
+  // satisfiable, non-false formula that entails the original disjunction.
+  Node xInt = nm->mkVar("x", intType);
+  Node yInt = nm->mkVar("y", intType);
+  Node zInt = nm->mkVar("z", intType);
+  Node sum = nm->mkNode(Kind::ADD, yInt, zInt);
+  Node gt = nm->mkNode(Kind::GT, xInt, sum);
+  Node eq = nm->mkNode(Kind::EQUAL, xInt, sum);
+  Node base = nm->mkNode(Kind::OR, gt, eq);
+  auto [engine, assertion] = mkSeededSubsolver(base, {xInt, yInt, zInt});
+  Node disjunct =
+      LiaStarUtils::getDisjunct(assertion, {}, {}, *e, engine.get());
+  ASSERT_FALSE(disjunct.isNull());
+  ASSERT_NE(falseConst, disjunct);
+  Result result = LiaStarUtils::cvc5CheckSat({}, disjunct, *e);
+  ASSERT_EQ(Result::Status::SAT, result.getStatus());
+  // The disjunct must entail the original disjunction: (and disjunct (not
+  // base)) is unsatisfiable.
+  Node entailment = nm->mkNode(Kind::AND, disjunct, base.notNode());
+  Result entailmentResult =
+      LiaStarUtils::cvc5CheckSat({xInt, yInt, zInt}, entailment, *e);
+  ASSERT_EQ(Result::Status::UNSAT, entailmentResult.getStatus());
 }
 
 }  // namespace test

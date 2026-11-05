@@ -646,7 +646,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarLazy"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-lazy"
   type       = "bool"
   default    = "true"
@@ -654,7 +654,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarPushPop"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-push-pop"
   type       = "bool"
   default    = "false"
@@ -662,7 +662,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarMainSolver"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-main-solver"
   type       = "bool"
   default    = "false"
@@ -670,7 +670,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarGeneralize"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-generalize"
   type       = "bool"
   default    = "true"
@@ -678,7 +678,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarGeneralizeSemantic"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-generalize-semantic"
   type       = "bool"
   default    = "false"
@@ -686,7 +686,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarCuts"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-cuts"
   type       = "bool"
   default    = "true"
@@ -694,7 +694,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarEndgame"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-endgame=N"
   type       = "uint64_t"
   default    = "10"
@@ -702,7 +702,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarPatient"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-patient"
   type       = "bool"
   default    = "false"
@@ -710,7 +710,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarGuided"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-guided"
   type       = "bool"
   default    = "true"
@@ -718,7 +718,7 @@ name   = "Arithmetic Theory"
 
 [[option]]
   name       = "arithLiaStarPartialSums"
-  category   = "regular"
+  category   = "expert"
   long       = "arith-liastar-partial-sums"
   type       = "bool"
   default    = "false"

@@ -1,0 +1,53 @@
+# Static Linux x86_64 build of cvc5 main 967404925f with Normaliz (GPL) for
+# the fmcad26 artifact's bin/. The official nightly builds of main do not
+# include Normaliz, which the LIA* solver needs.
+name: fmcad26 static Linux build
+
+on:
+  push:
+    branches: [fmcad26-static-linux]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check out main 967404925f plus the build-only cmake patches
+        run: |
+          cp .github/fmcad26/cross.patch .github/fmcad26/validate.py "$RUNNER_TEMP"/
+          git checkout -B main 967404925f557ace252fb1cc14a37c5894c90ec9
+          git apply "$RUNNER_TEMP/cross.patch"
+          git status --short
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build m4
+
+      - name: Configure
+        run: >-
+          ./configure.sh unrestricted --static --static-binary --auto-download
+          --gpl --normaliz --ninja -DBUILD_GMP=1
+
+      - name: Build
+        run: cd build && ninja
+
+      - name: Smoke test
+        run: |
+          file build/bin/cvc5
+          build/bin/cvc5 --version | head -1
+          build/bin/cvc5 --show-config | grep -E "^(normaliz|gmp|poly)"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mudathirmahgoub/fmcad26
+          path: fmcad26
+
+      - name: Compare answers with the recorded cvc5 results (10 s limit)
+        run: python3 "$RUNNER_TEMP/validate.py" fmcad26 10 4 build/bin/cvc5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cvc5-static-linux-x86_64
+          path: build/bin/cvc5

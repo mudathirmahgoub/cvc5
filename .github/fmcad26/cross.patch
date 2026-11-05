@@ -1,0 +1,53 @@
+diff --git a/cmake/FindCaDiCaL.cmake b/cmake/FindCaDiCaL.cmake
+index 734925265c..0fc985b10d 100644
+--- a/cmake/FindCaDiCaL.cmake
++++ b/cmake/FindCaDiCaL.cmake
+@@ -131,6 +131,11 @@ if(NOT CaDiCaL_FOUND_SYSTEM)
+   set(USE_EMAR "")
+   if(NOT(WASM STREQUAL "OFF"))
+     set(USE_EMAR  "-e s,ar rc,emar rc,")
++  elseif(CMAKE_CROSSCOMPILING)
++    # CaDiCaL's makefile hardcodes the host `ar`, which cannot archive foreign
++    # objects on every platform (e.g. macOS cctools ar with COFF objects
++    # silently yields an empty archive). Use the toolchain's archiver instead.
++    set(USE_EMAR  "-e s,ar rc,${CMAKE_AR} rc,")
+   endif()
+ 
+   set(CaDiCaL_SOURCE_DIR <SOURCE_DIR>)
+diff --git a/cmake/FindNormaliz.cmake b/cmake/FindNormaliz.cmake
+index 2af7fabaf3..d99519dafd 100644
+--- a/cmake/FindNormaliz.cmake
++++ b/cmake/FindNormaliz.cmake
+@@ -124,8 +124,15 @@ if(NOT Normaliz_FOUND_SYSTEM)
+     # no libc++/libgmp DLL dependencies, matching the static cvc5.exe. This only
+     # affects Normaliz's own programs; the libnormaliz.a that cvc5 consumes is an
+     # archive and is unaffected.
+-    set(Normaliz_BUILD_COMMAND BUILD_COMMAND make LDFLAGS=-all-static)
+-    set(Normaliz_INSTALL_COMMAND INSTALL_COMMAND make install LDFLAGS=-all-static)
++    # A command-line LDFLAGS overrides the configure-detected one, which
++    # carries the -L for a locally built GMP -- re-add it in that case.
++    if(GMP_FOUND_SYSTEM)
++      set(Normaliz_EXE_LDFLAGS "LDFLAGS=-all-static")
++    else()
++      set(Normaliz_EXE_LDFLAGS "LDFLAGS=-all-static -L<INSTALL_DIR>/lib")
++    endif()
++    set(Normaliz_BUILD_COMMAND BUILD_COMMAND make ${Normaliz_EXE_LDFLAGS})
++    set(Normaliz_INSTALL_COMMAND INSTALL_COMMAND make install ${Normaliz_EXE_LDFLAGS})
+   endif()
+ 
+   ExternalProject_Add(
+diff --git a/cmake/deps-utils/Poly-windows-patch.sh b/cmake/deps-utils/Poly-windows-patch.sh
+index e4b6d0280d..6490edf937 100755
+--- a/cmake/deps-utils/Poly-windows-patch.sh
++++ b/cmake/deps-utils/Poly-windows-patch.sh
+@@ -8,6 +8,10 @@
+ # directory for licensing information.
+ # #############################################################################
+ 
++# BSD sed (macOS) errors with "illegal byte sequence" on non-UTF-8 bytes
++# under a UTF-8 locale; force the C locale so all bytes are valid.
++export LC_ALL=C
++
+ # Roughly following https://stackoverflow.com/a/44383330/2375725
+ # Avoid %z and %llu format specifiers
+ find $1/ -type f ! -name "*.orig" -exec \

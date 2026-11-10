@@ -106,6 +106,14 @@ class FullModelChecker : public QModelBuilder
    * a predicate of type (Int x U) -> Bool.
    */
   std::map<Node, Node> d_quant_cond;
+  /**
+   * The definitions of membership in a ground set, keyed by the model value
+   * of the set (--fmf-set-membership): (set.member (tuple c1 .. ck) S) is
+   * true for the tuples of the value of S, false otherwise.
+   */
+  std::map<Node, Def> d_setMemberDefs;
+  /** The function symbols heading the conditions of these definitions */
+  std::map<TypeNode, Node> d_setMemberOps;
   /** A set of quantified formulas that cannot be handled by model-based
    * quantifier instantiation */
   std::unordered_set<Node> d_unhandledQuant;
@@ -142,6 +150,17 @@ class FullModelChecker : public QModelBuilder
   void doCheck(FirstOrderModelFmc* fm, Node f, Def& d, Node n);
 
   void doNegate(Def& dc);
+  /**
+   * If n is (set.member t S) with S ground and t a bound variable or a tuple
+   * of terms with bound variables (of non-function types), sets
+   * d to its definition, composed like an uninterpreted predicate applied to
+   * the components of t, and returns true. Otherwise returns false.
+   */
+  bool doSetMembership(FirstOrderModelFmc* fm, Node f, Def& d, Node n);
+  /** The membership definition of the ground set s, or nullptr. */
+  Def* getSetMemberDef(FirstOrderModelFmc* fm,
+                       Node s,
+                       const std::vector<TypeNode>& types);
   void doVariableEquality(FirstOrderModelFmc* fm, Node f, Def& d, Node eq);
   void doVariableRelation(
       FirstOrderModelFmc* fm, Node f, Def& d, Def& dc, Node v);

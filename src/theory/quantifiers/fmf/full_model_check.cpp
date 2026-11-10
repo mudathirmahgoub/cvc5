@@ -440,6 +440,7 @@ bool FullModelChecker::preProcessBuildModel(TheoryModel* m)
       preInitializeType(m, v.getType());
     }
   }
+  d_setMemberDefs.clear();
   d_initFuncs = false;
   return true;
 }
@@ -1142,6 +1143,12 @@ void FullModelChecker::doCheck(FirstOrderModelFmc* fm, Node f, Def& d, Node n)
   {
     d.addEntry(fm, mkCondDefault(fm, f), Node::null());
   }
+  else if (n.getKind() == Kind::SET_MEMBER
+           && options().quantifiers.fmfSetMembership
+           && doSetMembership(fm, f, d, n))
+  {
+    // membership in a ground set, like an uninterpreted predicate
+  }
   else if (n.getType().isArray())
   {
     // Trace("fmc-warn") << "WARNING : ARRAYS : Can't process base array " << r
@@ -1260,6 +1267,151 @@ void FullModelChecker::doCheck(FirstOrderModelFmc* fm, Node f, Def& d, Node n)
     d.debugPrint("fmc-debug", Node::null(), this);
     Trace("fmc-debug") << std::endl;
   }
+}
+
+bool FullModelChecker::doSetMembership(FirstOrderModelFmc* fm,
+                                       Node f,
+                                       Def& d,
+                                       Node n)
+{
+  // n = (set.member t S): S ground, t with bound variables, components of
+  // any type the model checker handles
+  Node s = n[1];
+  if (expr::hasBoundVar(s) || !expr::hasBoundVar(n[0]))
+  {
+    return false;
+  }
+  // the components of t: t itself, or the children of a tuple t
+  std::vector<Node> comps;
+  if (n[0].getKind() == Kind::APPLY_CONSTRUCTOR && n[0].getType().isTuple())
+  {
+    comps.insert(comps.end(), n[0].begin(), n[0].end());
+  }
+  else if (n[0].getKind() == Kind::BOUND_VARIABLE)
+  {
+    comps.push_back(n[0]);
+  }
+  else
+  {
+    return false;
+  }
+  std::vector<TypeNode> types;
+  for (const Node& c : comps)
+  {
+    // as for the variables of a quantified formula (see
+    // registerQuantifiedFormula), functions are not handled
+    if (c.getType().isFunction())
+    {
+      return false;
+    }
+    types.push_back(c.getType());
+  }
+  Def* df = getSetMemberDef(fm, s, types);
+  if (df == nullptr)
+  {
+    return false;
+  }
+  Trace("fmc-debug") << "Do set membership compose " << n << std::endl;
+  std::vector<Def> dc;
+  for (const Node& c : comps)
+  {
+    Def dcc;
+    doCheck(fm, f, dcc, c);
+    dc.push_back(dcc);
+  }
+  std::vector<Node> cond;
+  mkCondDefaultVec(fm, f, cond);
+  std::vector<Node> val;
+  doUninterpretedCompose(fm, f, d, *df, dc, 0, cond, val);
+  d.simplify(nodeManager(), this, fm);
+  return true;
+}
+
+Def* FullModelChecker::getSetMemberDef(FirstOrderModelFmc* fm,
+                                       Node s,
+                                       const std::vector<TypeNode>& types)
+{
+  NodeManager* nm = nodeManager();
+  Node val = fm->getTheoryModel()->getValue(s);
+  std::map<Node, Def>::iterator it = d_setMemberDefs.find(val);
+  if (it != d_setMemberDefs.end())
+  {
+    return &it->second;
+  }
+  // the elements of the set value, a union of singletons or the empty set
+  std::vector<Node> elems;
+  std::vector<Node> visit{val};
+  while (!visit.empty())
+  {
+    Node cur = visit.back();
+    visit.pop_back();
+    if (cur.getKind() == Kind::SET_UNION)
+    {
+      visit.push_back(cur[0]);
+      visit.push_back(cur[1]);
+    }
+    else if (cur.getKind() == Kind::SET_SINGLETON)
+    {
+      elems.push_back(cur[0]);
+    }
+    else if (cur.getKind() != Kind::SET_EMPTY)
+    {
+      // not a set value we can read
+      return nullptr;
+    }
+  }
+  // the head of the conditions: a function symbol of type types -> Bool
+  TypeNode ft = nm->mkFunctionType(types, nm->booleanType());
+  std::map<TypeNode, Node>::iterator ito = d_setMemberOps.find(ft);
+  Node op;
+  if (ito == d_setMemberOps.end())
+  {
+    op = NodeManager::mkBoundVar("fmc_member", ft);
+    d_setMemberOps[ft] = op;
+  }
+  else
+  {
+    op = ito->second;
+  }
+  Def df;
+  for (const Node& e : elems)
+  {
+    std::vector<Node> cc{op};
+    if (types.size() == 1 && !e.getType().isTuple())
+    {
+      cc.push_back(e);
+    }
+    else if (e.getKind() == Kind::APPLY_CONSTRUCTOR
+             && e.getNumChildren() == types.size())
+    {
+      cc.insert(cc.end(), e.begin(), e.end());
+    }
+    else
+    {
+      return nullptr;
+    }
+    // the components are compared with the model's representatives, which
+    // are values
+    for (size_t i = 1, n = cc.size(); i < n; i++)
+    {
+      if (!cc[i].isConst())
+      {
+        return nullptr;
+      }
+    }
+    df.addEntry(fm, mkCond(cc), d_true);
+  }
+  // every other tuple is not a member
+  std::vector<Node> dflt{op};
+  for (const TypeNode& tn : types)
+  {
+    dflt.push_back(fm->getStar(tn));
+  }
+  df.addEntry(fm, mkCond(dflt), d_false);
+  df.simplify(nm, this, fm);
+  Def& res = d_setMemberDefs[val];
+  res = df;
+  return &res;
 }
 
 void FullModelChecker::doNegate(Def& dc)

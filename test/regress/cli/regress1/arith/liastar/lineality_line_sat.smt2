@@ -3,7 +3,6 @@
 ; Hilbert basis: {}, maximal subspace: {(1, -1)}
 (set-logic HO_ALL)
 (set-info :status sat)
-(set-option :quiet true)
 (declare-const a Int)
 (declare-const b Int)
 (assert (= a 5))

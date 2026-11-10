@@ -70,6 +70,11 @@ class LinearConstraints
    * the variables, or a (possibly nested) conjunction of these. Linear terms
    * are built from integer and rational constants, the variables, +, -, and
    * multiplication by constants.
+   * @throws LogicException if an atom or term is not of this form, e.g. a
+   * Boolean variable p, an equality (= b #x00) of non-arithmetic terms, a
+   * product (* x y), (mod x 2), or a term a that is not in `variables`, as
+   * in (= x (* 2 a)) for a constant a captured by a lambda. Dropping it
+   * would change the set: (= x (* 2 a)) would become x = 0.
    */
   LinearConstraints(Node variables, Node conjunction);
 

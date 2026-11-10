@@ -46,7 +46,8 @@ class SolverTest
   @AfterEach
   void tearDown()
   {
-    Context.deletePointers();
+    d_solver.close();
+    d_tm.close();
   }
 
   @Test
@@ -490,7 +491,7 @@ class SolverTest
     Term truen = d_solver.mkBoolean(true);
     Term start = d_solver.mkVar(bsort);
     Term output2 = new Term();
-    Grammar g = d_solver.mkGrammar(new Term[] {}, new Term[] {start});
+    Grammar g = d_tm.mkGrammar(new Term[] {}, new Term[] {start});
     Term conj2 = d_solver.mkTerm(GT, x, zero);
     assertDoesNotThrow(() -> g.addRule(start, truen));
     // Call the abduction api, while the resulting abduct is the output
@@ -569,7 +570,7 @@ class SolverTest
     Sort bsort = d_solver.getBooleanSort();
     Term truen = d_solver.mkBoolean(true);
     Term start = d_solver.mkVar(bsort);
-    Grammar g = d_solver.mkGrammar(new Term[] {}, new Term[] {start});
+    Grammar g = d_tm.mkGrammar(new Term[] {}, new Term[] {start});
     Term conj2 = d_solver.mkTerm(EQUAL, zero, zero);
     assertDoesNotThrow(() -> g.addRule(start, truen));
     // Call the interpolation api, while the resulting interpolant is the output
@@ -1952,10 +1953,10 @@ class SolverTest
     Term start1 = d_solver.mkVar(bool);
     Term start2 = d_solver.mkVar(integer);
 
-    Grammar g1 = d_solver.mkGrammar(new Term[] {x}, new Term[] {start1});
+    Grammar g1 = d_tm.mkGrammar(new Term[] {x}, new Term[] {start1});
     g1.addRule(start1, d_solver.mkBoolean(false));
 
-    Grammar g2 = d_solver.mkGrammar(new Term[] {x}, new Term[] {start2});
+    Grammar g2 = d_tm.mkGrammar(new Term[] {x}, new Term[] {start2});
     g2.addRule(start2, d_solver.mkInteger(0));
 
     assertDoesNotThrow(() -> d_solver.synthFun("", new Term[] {}, bool));
@@ -2205,7 +2206,7 @@ class SolverTest
     d_solver.setOption("sygus", "true");
     Sort boolSort = d_solver.getBooleanSort();
     Term start = d_solver.mkVar(boolSort);
-    Grammar g = d_solver.mkGrammar(new Term[] {}, new Term[] {start});
+    Grammar g = d_tm.mkGrammar(new Term[] {}, new Term[] {start});
     Term truen = d_solver.mkBoolean(true);
     Term falsen = d_solver.mkBoolean(false);
     g.addRule(start, truen);
@@ -2224,7 +2225,7 @@ class SolverTest
     d_solver.setOption("incremental", "true");
     Sort boolSort = d_solver.getBooleanSort();
     Term start = d_solver.mkVar(boolSort);
-    Grammar g = d_solver.mkGrammar(new Term[] {}, new Term[] {start});
+    Grammar g = d_tm.mkGrammar(new Term[] {}, new Term[] {start});
     Term truen = d_solver.mkBoolean(true);
     Term falsen = d_solver.mkBoolean(false);
     g.addRule(start, truen);

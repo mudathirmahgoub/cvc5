@@ -16,6 +16,7 @@
 #include <sstream>
 
 #include "base/check.h"
+#include "smt/logic_exception.h"
 
 using namespace cvc5::internal::kind;
 
@@ -23,6 +24,26 @@ namespace cvc5::internal {
 namespace theory {
 namespace arith {
 namespace liastar {
+
+namespace {
+
+/**
+ * Throw the LogicException for a predicate that is not a conjunction of
+ * linear integer constraints over the variables of its lambda.
+ *
+ * @param what "atom" or "term"
+ * @param n the offending atom or term, e.g. p or (* x y)
+ */
+[[noreturn]] void throwNotLinear(const char* what, Node n)
+{
+  std::stringstream ss;
+  ss << "int.star-contains expects a predicate of linear integer "
+        "constraints over the variables of its lambda, found the "
+     << what << " " << n;
+  throw LogicException(ss.str());
+}
+
+}  // namespace
 
 LinearConstraints::LinearConstraints(size_t numVariables)
     : d_numVariables(numVariables)
@@ -72,6 +93,15 @@ void LinearConstraints::addFalse()
 void LinearConstraints::addConjunction(Node conjunction)
 {
   Kind k = conjunction.getKind();
+  // an equality of non-arithmetic terms is no constraint, e.g. of the
+  // bit-vectors in (= b #x00), or of the Booleans in (= p (>= x 1)), which
+  // LiaStarUtils::toDNF expands
+  if ((k == Kind::EQUAL || k == Kind::GEQ || k == Kind::LEQ || k == Kind::GT
+       || k == Kind::LT)
+      && !conjunction[0].getType().isRealOrInt())
+  {
+    throwNotLinear("atom", conjunction);
+  }
   switch (k)
   {
     case Kind::CONST_BOOLEAN:
@@ -117,8 +147,10 @@ void LinearConstraints::addConjunction(Node conjunction)
     }
     default: break;
   }
-  InternalError() << "Unexpected kind " << k << " in the linear constraint "
-                  << conjunction << std::endl;
+  // Any other atom, e.g. a Boolean variable p, has no constraint. Dropping it
+  // would change the set: (lambda ((x Int)) p) would give no disjunct, as if
+  // p were false.
+  throwNotLinear("atom", conjunction);
 }
 
 void LinearConstraints::addTerm(Node term,
@@ -175,8 +207,8 @@ void LinearConstraints::addTerm(Node term,
         }
         else
         {
-          InternalError() << "Nonlinear term " << term
-                          << " in a linear constraint" << std::endl;
+          // e.g. (* x y)
+          throwNotLinear("term", term);
         }
       }
       if (other.isNull())
@@ -191,11 +223,12 @@ void LinearConstraints::addTerm(Node term,
     }
     default: break;
   }
+  // Any other term has no coordinate, e.g. a constant a that the lambda
+  // captures, (mod x 2), or a real r in (>= x r).
   auto it = d_indices.find(term);
   if (it == d_indices.end())
   {
-    InternalError() << "Unexpected term " << term << " in a linear constraint"
-                    << std::endl;
+    throwNotLinear("term", term);
   }
   form[it->second] += factor;
 }

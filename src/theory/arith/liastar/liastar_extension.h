@@ -7,7 +7,8 @@
  * directory for licensing information.
  * ****************************************************************************
  *
- * Extension to the theory of arithmetic handling lia star operator.
+ * Extension to the theory of arithmetic for the LIA* predicate
+ * int.star-contains.
  */
 
 #ifndef CVC5__THEORY__ARITH__LIASTAR_EXTENSION_H
@@ -16,6 +17,8 @@
 #include <map>
 #include <vector>
 
+#include "context/cdhashmap.h"
+#include "context/cdhashset.h"
 #include "expr/node.h"
 #include "smt/env_obj.h"
 #include "theory/arith/liastar/integer_polyhedron.h"
@@ -34,116 +37,208 @@ class TheoryArith;
 
 namespace liastar {
 
+/** A vector of integer terms, e.g. (* 2 mu) (* 1 mu) in getCones. */
 typedef std::vector<Node> Vector;
-/** Liastar extension class
+/**
+ * The LIA* extension, for literals of the form
+ *   (int.star-contains (lambda ((x_1 Int) ... (x_n Int)) p) y_1 ... y_n)
+ * which state that y = (y_1, ..., y_n) is a sum of finitely many vectors of
+ * S = {x | p(x)}, i.e. y is in the star S* of S (the empty sum is 0).
  *
- * This class implements model-based refinement schemes
- * for liastar formulas.
+ * Such a literal is reduced to linear integer arithmetic by a lemma:
+ * 1. p is converted to a DNF D_1 or ... or D_m, so S is the union of the
+ *    integer points of the polyhedra P_i = {x | D_i(x)}.
+ * 2. IntegerPolyhedron describes the integer points of each P_i as a finite
+ *    union of linear sets g + H_i*N + M_i*Z, one per module generator g of
+ *    P_i, where H_i is the Hilbert basis of the recession cone of P_i and M_i
+ *    is a basis of its maximal subspace, which is empty unless P_i contains
+ *    a line.
+ * 3. The star of a linear set g + H*N + M*Z is
+ *    {mu*g + H*l + M*m | mu >= 0, l >= 0, mu = 0 => (l = 0 and m = 0)}, and
+ *    the star of a union is the sum of the stars. Fresh integer skolems for
+ *    mu, l and m thus express y in S* in linear arithmetic.
  *
+ * For example, S = {(x, y) | x >= 2 and y = 1} has the module generator
+ * (2, 1) and the Hilbert basis {(1, 0)}, so the literal
+ *   L = (int.star-contains (lambda ((x Int) (y Int)) (and (>= x 2) (= y 1)))
+ *                          a b)
+ * is reduced by the lemma
+ *   (= L (and (>= mu 0) (>= l 0) (=> (= mu 0) (= l 0))
+ *             (= a (+ (* 2 mu) l)) (= b mu)))
+ * Here the implication excludes (1, 0) = 0*(2, 1) + 1*(1, 0), which is not a
+ * sum of vectors of S. The comments in liastar_extension.cpp follow this
+ * example.
+ *
+ * The skolems witness y in S* when L holds, but when L is false the lemma
+ * only says that this one choice of them is not a witness. A negated L is
+ * therefore also reduced by the lemma
+ *   (or L (forall ((mu Int) (l Int))
+ *           (not (and (>= mu 0) (>= l 0) (=> (= mu 0) (= l 0))
+ *                     (= a (+ (* 2 mu) l)) (= b mu)))))
+ * which the quantifier instantiation for linear arithmetic handles. For
+ * example, (not L) with a = 5 and b = 2 is unsat, since (5, 2) is
+ * (2, 1) + (3, 1).
+ *
+ * The reduction requires p to be a Boolean combination of linear integer
+ * constraints over x_1, ..., x_n. It throws a LogicException otherwise, e.g.
+ * for (lambda ((x Int)) (= x (* 2 c))) with a constant c, whose set
+ * depends on c.
+ *
+ * TheoryArith preregisters terms with preRegisterTerm and calls
+ * checkFullEffort at full effort, once the linear solver has a model. See
+ * also
  * - Levatich, M., Bjorner, N., Piskac, R., Shoham, S. (2020).
  *   Solving LIA* Using Approximations.
  *   VMCAI 2020.
  *   https://doi.org/10.1007/978-3-030-39322-9_17
- *
- * It's main functionality is a check(...) method,
- * which is called by TheoryArithPrivate either:
- * (1) at full effort with no conflicts or lemmas emitted, or
- * (2) at last call effort.
- * In this method, this class calls d_im.lemma(...)
- * for valid arithmetic theory lemmas, based on the current set of assertions,
- * where d_im is the inference manager of TheoryArith.
  */
 class LiaStarExtension : EnvObj
 {
-  typedef context::CDHashSet<Node> NodeSet;
-
  public:
+  /**
+   * @param env the environment
+   * @param containing the theory of arithmetic, whose facts are checked and
+   * whose inference manager sends the lemmas
+   */
   LiaStarExtension(Env& env, TheoryArith& containing);
   ~LiaStarExtension();
   /**
-   * Does non-context dependent setup for a node connected to a theory.
+   * Register n with the extended theory if it is an int.star-contains term.
+   *
+   * @param n a term preregistered with the theory of arithmetic
    */
   void preRegisterTerm(TNode n);
 
   /**
-   * Performs the main checks for liastar arithmetic, based on the current
-   * (linear) arithmetic model from `arithModel`. This method may already send
-   * lemmas, but most lemmas are buffered and sent at LAST_CALL effort by
-   * TheoryArith. The motivation for this strategy is to allow other
-   * non-terminating theories (e.g. quantifiers, strings) to run full effort
-   * checks, before sending the lemmas generated by liastar.
+   * Check the int.star-contains literals asserted to arithmetic, of either
+   * polarity, and send lemmas for them. For a literal whose atom L has
+   * lambda (lambda ((x_1 Int) ... (x_n Int)) p) and vector
+   * y = (y_1, ..., y_n), where p(y) is p with x replaced by y, this
+   * 1. with --arith-liastar-assume-nonnegative, sends
+   *    (=> L (and (>= y_1 0) ... (>= y_n 0))),
+   * 2. sends the split lemma (or p(y) (not p(y))), so the SAT solver decides
+   *    p(y). If this call has sent any lemma so far, e.g. this one, the
+   *    literal is left for a later call,
+   * 3. with --arith-liastar-model-value (the default), stops for a positive
+   *    literal if p(y) is true in arithModel, since then y is in S and hence
+   *    in S*,
+   * 4. otherwise sends the reduction lemma (= L (and ...)) of the class
+   *    documentation, built by getCones, once per atom, and for a negative
+   *    literal also the lemma (or L (forall ...)), once per atom.
    *
-   * The argument arithModel is a map of the form { v1 -> c1, ..., vn -> cn }
-   * which represents the linear arithmetic theory solver's contribution to the
-   * current candidate model where v1, ..., vn are arithmetic variables and
-   * c1, ..., cn are constants.
+   * @param arithModel the model of the linear solver, which maps arithmetic
+   * variables to constants, e.g. {a -> 3, b -> 1}
+   * @param termSet the terms of the model, only traced
    */
   void checkFullEffort(std::map<Node, Node>& arithModel,
                        const std::set<Node>& termSet);
 
-  /** Does this class need a call to check(...) at last call effort? */
-  bool hasLiaStarTerms() const { return d_hasLiaStarTerms; }
+  /**
+   * Notify the extension that a literal of the form (int.star-contains ...)
+   * or (not (int.star-contains ...)) was asserted to arithmetic.
+   */
+  void notifyAssertion() { d_hasAssertions = true; }
+
+  /**
+   * Whether a literal of the form (int.star-contains ...) or
+   * (not (int.star-contains ...)) was asserted in this context. Otherwise
+   * TheoryArith calls neither checkFullEffort nor collectModelValues, so a
+   * problem without such literals does not compute the model of the linear
+   * solver for the extension.
+   */
+  bool hasAssertions() const { return d_hasAssertions; }
+
+  /**
+   * Assert each asserted int.star-contains literal to the model. The model
+   * cannot evaluate an atom whose vector is in S* but not in S, e.g.
+   *   (int.star-contains (lambda ((x Int)) (= x 2)) a)
+   * with a = 4, so it takes the value of the literal, which the lemmas of
+   * checkFullEffort guarantee.
+   *
+   * @param m the model
+   * @return false if a literal could not be asserted to m
+   */
+  bool collectModelValues(TheoryModel* m);
 
  private:
-  /** get assertions
+  /**
+   * Collect the facts asserted to arithmetic of the form
+   * (int.star-contains ...) or (not (int.star-contains ...)).
    *
-   * Let M be the set of assertions known by THEORY_ARITH. This function adds a
-   * set of literals M' to assertions such that M' and M are equivalent.
-   *
-   * Examples of how M' differs with M:
-   * (1) M' may not include t < c (in M) if t < c' is in M' for c' < c, where
-   * c and c' are constants,
-   * (2) M' may contain t = c if both t >= c and t <= c are in M.
+   * @param assertions the vector the literals are appended to
    */
   void getAssertions(std::vector<Node>& assertions);
 
-  Node isNotZeroVector(Node v);
-
   /**
-   * Argument n must be a lambda (lambda ((x1 Int) ... (xn Int)) p). This
-   * function converts the predicate p (which is in QFLIA) to DNF and returns
-   * one integer constraint matrix per disjunct, over the coordinates
-   * (x1 ... xn), see LinearConstraints.
+   * Convert the body p of a lambda into one integer constraint matrix per
+   * disjunct of its DNF, see LiaStarUtils::toDNF and LiaStarUtils::getMatrices.
+   * For example, the lambda
+   *   (lambda ((x Int) (y Int)) (or (and (>= x 2) (= y 1)) (>= y 3)))
+   * yields the pairs
+   *   {x - 2 >= 0, y - 1 = 0} with (and (>= x 2) (= y 1))
+   *   {y - 3 >= 0} with (>= y 3)
+   *
+   * @param n a lambda (lambda ((x_1 Int) ... (x_n Int)) p) with p in LIA
+   * @return one pair per disjunct: its constraints over the coordinates
+   * (x_1 ... x_n), together with the disjunct itself
+   * @throws LogicException if p is not a Boolean combination of linear
+   * integer constraints over x_1, ..., x_n, e.g. if it captures a constant,
+   * see LiaStarUtils::getMatrices
    */
   const std::vector<std::pair<LinearConstraints, Node>> convertQFLIAToMatrices(
       Node n);
 
   /**
-   * Compute the integer solutions of every disjunct and the constraints
-   * expressing that the vector of the star-contains literal n is in the star
-   * of the solutions of the predicate.
+   * Compute with IntegerPolyhedron the linear sets of each disjunct, and the
+   * constraints stating that the vector y of n is in the star of their union,
+   * see steps 2 and 3 above. For each module generator g, with Hilbert basis
+   * and maximal subspace h_1, ..., h_k of its disjunct, see
+   * IntegerPolyhedron::getRecessionMonoidGenerators, the constraints are
+   *   (>= mu 0), and (=> (= mu 0) (= l_j 0)) for each j,
+   *   (>= l_j 0) for each h_j of the Hilbert basis,
+   * with fresh skolems mu and l_1, ..., l_k, and finally, for each coordinate
+   *   (= y_i (+ ... (* g_i mu) (* h_1i l_1) ... (* h_ki l_k) ...))
+   * summing over all module generators. A disjunct without constant terms,
+   * e.g. (and (>= x y) (>= y 0)), is a cone: its only module generator is 0,
+   * and its integer points are the single linear set 0 + H*N + M*Z, for
+   * which mu is 1. A disjunct without integer points, e.g.
+   * (and (= x (* 2 z)) (= x (+ (* 2 w) 1))), has no module generators and is
+   * skipped.
    *
-   * The solutions of the i-th disjunct are a union over its module
-   * generators g of the linear sets g + Z>=0 {h_1, ..., h_k} + Z {u_1, ...}
-   * (see IntegerPolyhedron). A sum of such vectors is
-   *   sum over i and g of  mu_{i,g} g + sum_j l_{i,g,j} r_j
-   * where r_j ranges over the Hilbert basis and the maximal subspace of the
-   * disjunct, mu_{i,g} >= 0 counts the summands from the linear set of g, a
-   * Hilbert basis multiplier l_{i,g,j} is nonnegative, and mu_{i,g} = 0
-   * implies l_{i,g,j} = 0. For the module generator g = 0, mu_{i,g} is 1.
-   *
-   * @param n a star-contains literal (int.star-contains f v1 ... vn)
-   * @param pairs the constraint matrices of the disjuncts of the predicate of
-   * f, as returned by convertQFLIAToMatrices
-   * @return the pairs of a disjunct and its integer solutions, for the
-   * disjuncts that have solutions, and the constraints over v1, ..., vn and
-   * fresh variables mu and l, whose conjunction is equivalent to n
+   * @param n the int.star-contains atom
+   * @param pairs the constraint matrices of the disjuncts, see
+   * convertQFLIAToMatrices
+   * @param skolems the vector the fresh skolems mu and l_j are appended to
+   * @return the nonempty polyhedra with their disjuncts, and the constraints
    */
   std::pair<std::vector<std::pair<Node, IntegerPolyhedron>>, std::vector<Node>>
   getCones(Node n,
-           const std::vector<std::pair<LinearConstraints, Node>>& pairs);
+           const std::vector<std::pair<LinearConstraints, Node>>& pairs,
+           std::vector<Node>& skolems);
 
   /**
-   * For tracing: express the integer solutions of each disjunct as a LIA
-   * formula over the variables of the lambda n, i.e. for every disjunct and
-   * module generator g the formula
-   *   (exists ((l1 Int) ...) (and (>= l1 0) ... (= x (+ g (* l1 r1) ...))))
-   * whose disjunction is equivalent to the predicate of n.
+   * Send the reduction lemma (or atom (forall ((mu Int) ...) (not C))) of a
+   * negated atom, stored in d_negatedReductions, see checkFullEffort. Does
+   * nothing if C has no skolems, as the reduction lemma (= atom C) is then
+   * exact.
    *
-   * @param n the lambda (lambda ((x1 Int) ... (xn Int)) p)
-   * @param cones the disjuncts of p and their integer solutions, as returned
-   * by getCones
-   * @return pairs of a disjunct and one of its formulas
+   * @param atom an int.star-contains atom that is asserted false
+   * @throws LogicException if the lemma is needed but the logic has no
+   * quantifiers
+   */
+  void sendNegatedReduction(Node atom);
+
+  /**
+   * Express each linear set g + H*N + M*Z of the polyhedra as a LIA formula
+   * over the variables of the lambda, for the trace liastar-ext-smt only. For
+   * the disjunct (and (>= x 2) (= y 1)), with g = (2, 1) and H = {(1, 0)}, it
+   * is
+   *   (exists ((l1 Int)) (and (>= l1 0) (= x (+ 2 l1)) (= y 1)))
+   *
+   * @param n the lambda
+   * @param cones the nonempty polyhedra with their disjuncts, see getCones
+   * @return one pair per module generator: the disjunct of its polyhedron and
+   * the formula
    */
   std::vector<std::pair<Node, Node>> getLia(
       Node n, const std::vector<std::pair<Node, IntegerPolyhedron>>& cones);
@@ -155,22 +250,26 @@ class LiaStarExtension : EnvObj
   Node d_false;
   Node d_zero;
   Node d_one;
-  // The theory of arithmetic containing this extension.
+  /** The theory of arithmetic, whose asserted facts getAssertions reads */
   TheoryArith& d_arith;
-  /** A reference to the arithmetic state object */
-  TheoryState& d_astate;
+  /** The inference manager of the theory of arithmetic */
   InferenceManager& d_im;
-  /**
-   * The number of times we have the called main check method
-   * (modelBasedRefinement). This counter is used for interleaving strategies.
-   */
-  unsigned d_checkCounter;
+  /** The callback of d_extTheory */
   ExtTheoryCallback d_extTheoryCb;
-  /** Extended theory, responsible for context-dependent simplification. */
+  /** Extended theory, with which the int.star-contains terms are registered */
   ExtTheory d_extTheory;
-  /** Do we have any liaStar terms? */
-  context::CDO<bool> d_hasLiaStarTerms;
-  std::vector<Node> d_processedStarTerms;
+  /** Whether an int.star-contains literal was asserted in this context */
+  context::CDO<bool> d_hasAssertions;
+  /**
+   * Maps each atom whose reduction lemma was sent to the formula
+   * (forall ((mu Int) ...) (not C)) that holds when the atom is false, or to
+   * null if C has no skolems, see checkFullEffort. User-context dependent,
+   * like the lemmas.
+   */
+  context::CDHashMap<Node, Node> d_negatedReductions;
+  /** The atoms whose negated reduction lemma was sent, user-context dependent
+   */
+  context::CDHashSet<Node> d_negatedReductionsSent;
 
   /** Statistics for the liastar extension */
   LiaStarStatistics d_stats;

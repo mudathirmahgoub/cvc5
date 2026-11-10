@@ -1,6 +1,5 @@
 ; REQUIRES: unrestricted-mode
 ; COMMAND-LINE: --no-arith-liastar-subsolver
-; DISABLE-TESTER: proof
 ; The predicate x = 2z and x = 2w + 1 has rational solutions but no integer
 ; one, so the star of its solutions is {0} and (0, 0, 0, 5) is not in it,
 ; although y >= 0 has the recession direction (0, 0, 0, 1). The subsolver,

@@ -1,6 +1,5 @@
 ; REQUIRES: unrestricted-mode
 ; COMMAND-LINE: --arith-liastar-subsolver-hilbert-basis
-; DISABLE-TESTER: proof
 ; The DNF disjuncts are pruned with the Hilbert basis computation instead of
 ; a cvc5 subsolver. Distributing the conjunction gives four disjuncts, and
 ; the two with y <= -1 contradict x >= 0. The others give the vectors

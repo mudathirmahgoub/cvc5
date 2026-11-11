@@ -25,26 +25,6 @@ namespace theory {
 namespace arith {
 namespace liastar {
 
-namespace {
-
-/**
- * Throw the LogicException for a predicate that is not a conjunction of
- * linear integer constraints over the variables of its lambda.
- *
- * @param what "atom" or "term"
- * @param n the offending atom or term, e.g. p or (* x y)
- */
-[[noreturn]] void throwNotLinear(const char* what, Node n)
-{
-  std::stringstream ss;
-  ss << "int.star-contains expects a predicate of linear integer "
-        "constraints over the variables of its lambda, found the "
-     << what << " " << n;
-  throw LogicException(ss.str());
-}
-
-}  // namespace
-
 LinearConstraints::LinearConstraints(size_t numVariables)
     : d_numVariables(numVariables)
 {
@@ -251,6 +231,15 @@ IntegerVector LinearConstraints::getDifference(Node a, Node b) const
     row.push_back(scaled.getNumerator());
   }
   return row;
+}
+
+void LinearConstraints::throwNotLinear(const char* what, Node n)
+{
+  std::stringstream ss;
+  ss << "int.star-contains expects a predicate of linear integer "
+        "constraints over the variables of its lambda, found the "
+     << what << " " << n;
+  throw LogicException(ss.str());
 }
 
 std::string LinearConstraints::rowToString(const IntegerVector& row) const

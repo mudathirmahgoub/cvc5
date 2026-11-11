@@ -124,6 +124,16 @@ class LinearConstraints
   IntegerVector getDifference(Node a, Node b) const;
   /** @return the row as an affine form, e.g. "x - 2*y + 3" */
   std::string rowToString(const IntegerVector& row) const;
+  /**
+   * Throw the LogicException for a predicate that is not a conjunction of
+   * linear integer constraints over the variables of its lambda, e.g.
+   *   int.star-contains expects a predicate of linear integer constraints
+   *   over the variables of its lambda, found the term (* x y)
+   *
+   * @param what "atom" or "term"
+   * @param n the offending atom or term, e.g. p or (* x y)
+   */
+  [[noreturn]] static void throwNotLinear(const char* what, Node n);
 
   /** The number n of variables. */
   size_t d_numVariables;

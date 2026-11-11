@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ;
 ; int.star-contains in a linear logic. The liastar extension is independent

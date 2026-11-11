@@ -1119,7 +1119,6 @@ RewriteResponse ArithRewriter::rewriteIntsDivModTotal(TNode t, bool pre)
 RewriteResponse ArithRewriter::rewriteStarContains(TNode t)
 {
   Assert(t.getKind() == Kind::STAR_CONTAINS);
-#ifdef CVC5_USE_NORMALIZ
   // The examples use the lambda
   //   (lambda ((x Int) (y Int)) (and (>= x 2) (= y 1)))
   // of S = {(x, y) | x >= 2 and y = 1}. If the vector is zero, return true,
@@ -1162,7 +1161,6 @@ RewriteResponse ArithRewriter::rewriteStarContains(TNode t)
       return RewriteResponse(REWRITE_DONE, nm->mkConst(true));
     }
   }
-#endif /* CVC5_USE_NORMALIZ */
   return RewriteResponse(REWRITE_DONE, t);
 }
 

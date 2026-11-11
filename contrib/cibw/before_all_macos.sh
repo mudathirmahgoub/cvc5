@@ -15,7 +15,7 @@ COMMON_CMD="./configure.sh unrestricted --auto-download --python-bindings --pyth
 if [ "$GPL" = "true" ]; then
   # Install build dependencies for GPL libraries
   brew install autoconf automake libtool
-  GPL_FLAGS="--gpl --cln --glpk --cocoa --normaliz"
+  GPL_FLAGS="--gpl --cln --glpk --cocoa"
 else
   GPL_FLAGS=""
 fi

@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; A negated int.star-contains literal together with nonlinear multiplication.
 ; The liastar extension reduces the negated literal through a quantified

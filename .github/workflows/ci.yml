@@ -279,7 +279,7 @@ jobs:
             os: ubuntu-24.04 # Use Doxygen version from this Ubuntu release
             config: >-
               unrestricted --auto-download --assertions --tracing --unit-testing --editline
-              --cocoa --normaliz --gpl --all-bindings --docs --docs-ga --api-coverage
+              --cocoa --gpl --all-bindings --docs --docs-ga --api-coverage
               -DBUILD_GMP=1
             cache-key: dbg
             python-bindings: true
@@ -302,7 +302,7 @@ jobs:
           # GPL versions
           - name: ubuntu:unrestricted-gpl
             os: ubuntu-22.04
-            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa --normaliz -DBUILD_GMP=1 -DBUILD_CLN=1
+            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa -DBUILD_GMP=1 -DBUILD_CLN=1
             cache-key: unrestricted-gpl
             strip-bin: strip
             package-name: cvc5-Linux-x86_64
@@ -310,7 +310,7 @@ jobs:
 
           - name: ubuntu:unrestricted-arm64-gpl
             os: ubuntu-22.04-arm
-            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa --normaliz -DBUILD_GMP=1 -DBUILD_CLN=1
+            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa -DBUILD_GMP=1 -DBUILD_CLN=1
             cache-key: unrestricted-arm64-gpl
             strip-bin: strip
             package-name: cvc5-Linux-arm64
@@ -318,7 +318,7 @@ jobs:
 
           - name: macos:unrestricted-gpl
             os: macos-15-intel
-            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa --normaliz -DBUILD_GMP=1 -DBUILD_CLN=1
+            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa -DBUILD_GMP=1 -DBUILD_CLN=1
             cache-key: unrestricted-gpl
             strip-bin: strip
             package-name: cvc5-macOS-x86_64
@@ -327,7 +327,7 @@ jobs:
 
           - name: macos:unrestricted-arm64-gpl
             os: macos-15
-            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa --normaliz -DBUILD_GMP=1 -DBUILD_CLN=1
+            config: unrestricted --auto-download --editline --gpl --cln --glpk --cocoa -DBUILD_GMP=1 -DBUILD_CLN=1
             cache-key: unrestricted-arm64-gpl
             strip-bin: strip
             package-name: cvc5-macOS-arm64
@@ -339,7 +339,7 @@ jobs:
           # but are not currently uploaded.
           - name: win64:unrestricted-gpl
             os: windows-latest
-            config: unrestricted --auto-download --gpl --cocoa --normaliz
+            config: unrestricted --auto-download --gpl --cocoa
             cache-key: unrestricted-win64-native-gpl
             strip-bin: strip
             windows-build: true
@@ -348,7 +348,7 @@ jobs:
 
           - name: win64:unrestricted-arm64-gpl
             os: windows-11-arm
-            config: unrestricted --auto-download --gpl --cocoa --normaliz
+            config: unrestricted --auto-download --gpl --cocoa
             cache-key: unrestricted-win64-native-arm64-gpl
             strip-bin: strip
             java-version: 21

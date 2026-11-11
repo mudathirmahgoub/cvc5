@@ -9,12 +9,9 @@
  * Extension to the theory of arithmetic handling lia star operator.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include "liastar_extension.h"
 
 #include "liastar_utils.h"
-#include "libnormaliz/input.h"
 #include "options/arith_options.h"
 #include "options/smt_options.h"
 #include "smt/logic_exception.h"
@@ -37,10 +34,6 @@ namespace cvc5::internal {
 namespace theory {
 namespace arith {
 namespace liastar {
-
-using namespace libnormaliz;
-
-using libnormaliz::operator<<;
 
 /** Print the elements of l separated by spaces, for traces. */
 template <typename T>
@@ -260,13 +253,13 @@ void LiaStarExtension::checkFullEffort(std::map<Node, Node>& arithModel,
       continue;
     }
     // one pair per disjunct of p, here the single pair of
-    // {"x[1] >= 2;", "x[2] = 1;"} and (and (>= x 2) (= y 1))
-    std::vector<std::pair<std::vector<std::string>, Node>> pairs =
+    // {x - 2 >= 0, y - 1 = 0} and (and (>= x 2) (= y 1))
+    std::vector<std::pair<LinearConstraints, Node>> pairs =
         convertQFLIAToMatrices(lambda);
 
-    // Normaliz finds the module generator (2 1 1) and the Hilbert basis
-    // {(1 0 0)} for the disjunct, so cones has its one cone, skolems becomes
-    // {mu, l} and starConstraints
+    // IntegerPolyhedron finds the module generator (2 1) and the Hilbert
+    // basis {(1 0)} for the disjunct, so cones has its one cone, skolems
+    // becomes {mu, l} and starConstraints
     //   (>= mu 0) (>= l 0) (=> (= mu 0) (= l 0))
     //   (= a (+ (+ 0 (* 2 mu)) (* 1 l))) (= b (+ (+ 0 (* 1 mu)) (* 0 l)))
     std::vector<Node> skolems;
@@ -387,44 +380,24 @@ void LiaStarExtension::sendNegatedReduction(Node atom)
   d_im.addPendingLemma(lemma, InferenceId::ARITH_LIA_STAR_NOT_EXISTS, nullptr);
 }
 
-std::vector<std::vector<Integer>>
-LiaStarExtension::getHilbertBasisWithLineality(libnormaliz::Cone<Integer>& cone,
-                                               size_t& numPointed)
-{
-  // For (and (>= x 2) (= y 1)) the Hilbert basis is {(1 0 0)} and the
-  // maximal subspace is empty, so the result is {(1 0 0)} with numPointed 1.
-  // For (= (+ x y) 2), whose integer points are (1, 1) + (1, -1)*Z, the
-  // Hilbert basis is empty and the maximal subspace is {(1 -1 0)}, so the
-  // result is {(1 -1 0)} with numPointed 0. The last coordinate of these
-  // vectors is the homogenizing one, see getCones.
-  std::vector<std::vector<Integer>> basis = cone.getHilbertBasis();
-  numPointed = basis.size();
-  for (const std::vector<Integer>& generator : cone.getMaximalSubspace())
-  {
-    basis.push_back(generator);
-  }
-  return basis;
-}
-
-std::pair<std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>,
-          std::vector<Node>>
+std::pair<std::vector<std::pair<Node, IntegerPolyhedron>>, std::vector<Node>>
 LiaStarExtension::getCones(
     Node n,
-    const std::vector<std::pair<std::vector<std::string>, Node>>& pairs,
+    const std::vector<std::pair<LinearConstraints, Node>>& pairs,
     std::vector<Node>& skolems)
 {
   d_stats.d_getConesTime.start();
   // The examples follow n = L of checkFullEffort, for the lambda
   // (lambda ((x Int) (y Int)) (and (>= x 2) (= y 1))).
-  std::vector<std::pair<Node, Cone<Integer>>> cones;
+  std::vector<std::pair<Node, IntegerPolyhedron>> cones;
   // the vector y = (a b), so dimension is 2 and zeroVector is (0 0)
   std::vector<Node> vec(n.begin() + 1, n.end());
   size_t dimension = vec.size();
   d_stats.d_dimensionMax.maxAssign(dimension);
-  std::vector<Integer> zeroVector(dimension, Integer(0));
+  IntegerVector zeroVector = IntegerVectorUtils::zero(dimension);
   // one pair per linear set: its module generator times mu, and each vector
   // of its Hilbert basis times its l, here the single pair of
-  //   ((* 2 mu) (* 1 mu) (* 1 mu)) and {((* 1 l) (* 0 l) (* 0 l))}
+  //   ((* 2 mu) (* 1 mu)) and {((* 1 l) (* 0 l))}
   std::vector<std::pair<Vector, std::vector<Vector>>> lambdas;
   std::vector<Node> starConstraints;
   const bool assumeNonnegative = options().arith.arithLiaStarAssumeNonnegative;
@@ -432,98 +405,30 @@ LiaStarExtension::getCones(
   for (size_t i = 0; i < pairs.size(); i++)
   {
     // the constraints of a disjunct and the disjunct, here
-    // {"x[1] >= 2;", "x[2] = 1;"} and (and (>= x 2) (= y 1))
-    const std::pair<std::vector<std::string>, Node>& pair = pairs[i];
+    // {x - 2 >= 0, y - 1 = 0} and (and (>= x 2) (= y 1))
+    LinearConstraints constraints = pairs[i].first;
+    Node disjunct = pairs[i].second;
+    if (assumeNonnegative)
+    {
+      constraints.addNonnegativity();
+    }
     Trace("liastar-ext") << "---------------------------" << std::endl;
     Trace("liastar-ext") << "Cone for node " << i << std::endl
-                         << pair.second << std::endl;
+                         << disjunct << std::endl;
+    Trace("liastar-ext") << "constraints: " << constraints.toString()
+                         << std::endl;
+    ++d_stats.d_hilbertBasisCalls;
+    d_stats.d_hilbertBasisTime.start();
+    IntegerPolyhedron polyhedron(constraints);
+    d_stats.d_hilbertBasisTime.stop();
+    d_stats.d_hilbertBasisSums += polyhedron.getNumSums();
+    Trace("liastar-ext") << polyhedron.toString() << std::endl;
 
-    libnormaliz::OptionsHandler options;
-
-    std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
-        poly_param_input;
-    std::map<libnormaliz::NumParam::Param, long> num_param_input;
-    std::map<libnormaliz::BoolParam::Param, bool> bool_param_input;
-
-    libnormaliz::renf_class_ptr number_field_ref;
-
-    // the input for the disjunct (and (>= x 2) (= y 1)) is
-    //   amb_space 2
-    //   constraints 2 symbolic
-    //   x[1] >= 2;
-    //   x[2] = 1;
-    //   signs
-    //   0 0
-    //   HilbertBasis
-    //   ModuleGenerators
-    std::stringstream ss;
-    ss << "amb_space " << dimension << std::endl;
-    ss << "constraints " << pair.first.size() << " symbolic" << std::endl;
-    for (auto constraint : pair.first)
-    {
-      ss << constraint << std::endl;
-    }
-    if (assumeNonnegative)
-    {
-      ss << "nonnegative" << std::endl;
-    }
-    else
-    {
-      // nonnegativity is not assumed so declare every coordinate
-      // sign-unrestricted
-      // signs is a vector with entries in {−1, 0, 1}.
-      // The entry 1 at the i-th component means x_i >= 0,
-      // and entry -1 at the i-th component means x_i <= 0
-      // The entry 0 does not impose an inequality.
-      ss << "signs" << std::endl;
-      for (size_t sj = 0; sj < dimension; sj++)
-      {
-        ss << (sj == 0 ? "" : " ") << "0";
-      }
-      ss << std::endl;
-    }
-    ss << "HilbertBasis" << std::endl;
-    ss << "ModuleGenerators" << std::endl;
-    Trace("liastar-ext") << "normaliz input:" << std::endl;
-    Trace("liastar-ext") << ss.str() << std::endl;
-
-    // here we use mpq_class instead of Integer (or mpz_class)
-    // because libnormaliz.so only has implementation for
-    // readNormalizInput<mpq_class>
-    std::map<Type::InputType, libnormaliz::Matrix<mpq_class>> input;
-    d_stats.d_normalizInputTime.start();
-    input = libnormaliz::readNormalizInput<mpq_class>(ss,
-                                                      options,
-                                                      num_param_input,
-                                                      bool_param_input,
-                                                      poly_param_input,
-                                                      number_field_ref);
-    d_stats.d_normalizInputTime.stop();
-    ++d_stats.d_normalizCalls;
-    d_stats.d_normalizComputeTime.start();
-    Cone<Integer> cone(input);
-    if (assumeNonnegative)
-    {
-      cone.setNonnegative(true);
-    }
-    else
-    {
-      cone.setNonnegative(false);
-    }
-    // always use infinite precision for integers
-    cone.deactivateChangeOfPrecision();
-    cone.compute(ConeProperty::HilbertBasis);
-    cone.compute(ConeProperty::ModuleGenerators);
-    // completes the Hilbert basis for a non-pointed cone
-    cone.compute(ConeProperty::MaximalSubspace);
-    d_stats.d_normalizComputeTime.stop();
-
-    // A polyhedron has integer points exactly when it has module generators.
-    // Its affine dimension does not tell: the polyhedron of
-    // (and (= x (* 2 z)) (= x (+ (* 2 w) 1))) has rational points but no
-    // integer points, so its affine dimension is not -1. The disjunct false,
-    // with the constraint "1 = 0;", is skipped here too.
-    if (cone.isInhomogeneous() && cone.getModuleGenerators().empty())
+    // A polyhedron has integer points exactly when it has module generators,
+    // e.g. the polyhedron of (and (= x (* 2 z)) (= x (+ (* 2 w) 1))) has
+    // rational points but no integer points. The disjunct false is skipped
+    // here too.
+    if (polyhedron.isEmpty())
     {
       // the polyhedron has no integer points, skip it
       Trace("liastar-ext") << "empty cone" << std::endl;
@@ -531,37 +436,28 @@ LiaStarExtension::getCones(
       continue;
     }
     ++d_stats.d_conesNonempty;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
+    // the Hilbert basis comes first and takes nonnegative multipliers, the
+    // maximal subspace follows and takes sign-unrestricted ones, see
+    // IntegerPolyhedron::getRecessionMonoidGenerators. For
+    // (and (>= x 2) (= y 1)) this is {(1 0)} with numPointed 1. For
+    // (= (+ x y) 2), whose integer points are (1, 1) + (1, -1)*Z, it is
+    // {(1 -1)} with numPointed 0.
+    size_t numPointed = polyhedron.getHilbertBasis().size();
+    const std::vector<IntegerVector> hilbertBasis =
+        polyhedron.getRecessionMonoidGenerators();
+    // here {(2 1)}. A cone has the single module generator 0, e.g.
+    // (and (>= x y) (>= y 0)), whose Hilbert basis is {(1 0), (1 1)}.
+    const std::vector<IntegerVector>& generators =
+        polyhedron.getModuleGenerators();
     d_stats.d_hilbertBasisTotal += hilbertBasis.size();
     d_stats.d_hilbertBasisMax.maxAssign(hilbertBasis.size());
-    d_stats.d_moduleGeneratorsTotal += cone.getModuleGenerators().size();
-    d_stats.d_moduleGeneratorsMax.maxAssign(cone.getModuleGenerators().size());
+    d_stats.d_moduleGeneratorsTotal += generators.size();
+    d_stats.d_moduleGeneratorsMax.maxAssign(generators.size());
 
-    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
+    for (const IntegerVector& generator : generators)
     {
-      Trace("liastar-ext") << toString(basis) << std::endl;
-    }
-
-    Trace("liastar-ext") << "Module generators:" << std::endl;
-    // A cone has no module generators: its integer points are 0 + H*N + M*Z.
-    // For a polyhedron, Normaliz appends a homogenizing coordinate to each
-    // vector, e.g. the module generator 2 1 1 and the Hilbert basis element
-    // 1 0 0 for (and (>= x 2) (= y 1)); the sums below ignore it. The cone
-    // (and (>= x y) (>= y 0)) has the Hilbert basis {(1 0), (1 1)}, without
-    // a homogenizing coordinate, and generators is {(0 0)}.
-    std::vector<std::vector<Integer>> generators = {zeroVector};
-    if (cone.getModuleGenerators().size() > 0)
-    {
-      generators = cone.getModuleGenerators();
-    }
-    for (const auto& generator : generators)
-    {
-      Trace("liastar-ext") << toString(generator) << std::endl;
       // the star of 0 + H*N + M*Z is itself, so mu is 1 for the zero
-      // generator, and a fresh skolem mu otherwise, e.g. for (2 1 1)
+      // generator, and a fresh skolem mu otherwise, e.g. for (2 1)
       Node mu = d_one;
       if (generator != zeroVector)
       {
@@ -571,26 +467,25 @@ LiaStarExtension::getCones(
 
       // (>= mu 0), which rewrites to true for mu = 1
       starConstraints.push_back(d_nm->mkNode(Kind::GEQ, mu, d_zero));
-      // the generator times mu: ((* 2 mu) (* 1 mu) (* 1 mu)) for (2 1 1)
+      // the generator times mu: ((* 2 mu) (* 1 mu)) for (2 1)
       Vector point;
-      for (const auto& element : generator)
+      for (const Integer& element : generator)
       {
-        Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+        Node constant = d_nm->mkConstInt(Rational(element));
         Node monomial = d_nm->mkNode(Kind::MULT, constant, mu);
         point.push_back(monomial);
       }
       std::vector<Vector> rays;
       for (size_t j = 0; j < hilbertBasis.size(); j++)
       {
-        const std::vector<Integer>& basis = hilbertBasis[j];
-        // the multiplier l of basis, e.g. of (1 0 0)
+        const IntegerVector& basis = hilbertBasis[j];
+        // the multiplier l of basis, e.g. of (1 0)
         Node lambda = d_nm->mkDummySkolem("l", d_nm->integerType());
         skolems.push_back(lambda);
         if (j < numPointed)
         {
           // (>= l 0), except for a direction of the maximal subspace, which
-          // has any sign, e.g. (1 -1 0) for (= (+ x y) 2), see
-          // getHilbertBasisWithLineality
+          // has any sign, e.g. (1 -1) for (= (+ x y) 2)
           starConstraints.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
         }
         // (=> (= mu 0) (= l 0)), the rays of a linear set may only be used
@@ -599,11 +494,11 @@ LiaStarExtension::getCones(
             d_nm->mkNode(Kind::EQUAL, mu, d_zero)
                 .impNode(d_nm->mkNode(Kind::EQUAL, lambda, d_zero)));
 
-        // basis times l: ((* 1 l) (* 0 l) (* 0 l)) for (1 0 0)
+        // basis times l: ((* 1 l) (* 0 l)) for (1 0)
         Vector ray;
-        for (const auto& element : basis)
+        for (const Integer& element : basis)
         {
-          Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+          Node constant = d_nm->mkConstInt(Rational(element));
           Node monomial = d_nm->mkNode(Kind::MULT, constant, lambda);
           ray.push_back(monomial);
         }
@@ -611,12 +506,11 @@ LiaStarExtension::getCones(
       }
       lambdas.push_back({point, rays});
     }
-    cones.push_back({pair.second, cone});
+    cones.push_back({disjunct, polyhedron});
   }
 
   // y_i is the sum of the i-th coordinates of all points and rays, here
   //   (= a (+ (+ 0 (* 2 mu)) (* 1 l))) and (= b (+ (+ 0 (* 1 mu)) (* 0 l)))
-  // The homogenizing coordinate (* 1 mu) of the point is left out.
   Vector sums(dimension, d_zero);
   for (const std::pair<Vector, std::vector<Vector>>& pair : lambdas)
   {
@@ -640,53 +534,38 @@ LiaStarExtension::getCones(
 }
 
 std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
-    Node n, std::vector<std::pair<Node, libnormaliz::Cone<Integer>>>& cones)
+    Node n, const std::vector<std::pair<Node, IntegerPolyhedron>>& cones)
 {
   d_stats.d_getLiaTime.start();
   // The examples follow the lambda n of checkFullEffort, whose variables vec
   // are (x y), and its disjunct (and (>= x 2) (= y 1)) with the module
-  // generator (2 1 1) and the Hilbert basis {(1 0 0)}.
+  // generator (2 1) and the Hilbert basis {(1 0)}.
   Node vec = n[0];
   size_t dimension = vec.getNumChildren();
   std::vector<std::pair<Node, Node>> disjunctions;
-  std::vector<Integer> zeroVector(dimension, Integer(0));
 
-  for (auto& pair : cones)
+  for (const auto& [node, polyhedron] : cones)
   {
-    Node node = pair.first;
-    libnormaliz::Cone<Integer> cone = pair.second;
-    size_t numPointed = 0;
-    const std::vector<std::vector<Integer>> hilbertBasis =
-        getHilbertBasisWithLineality(cone, numPointed);
-    Trace("liastar-ext") << "Hilbert basis:" << std::endl;
-    for (const auto& basis : hilbertBasis)
-    {
-      Trace("liastar-ext") << toString(basis) << std::endl;
-    }
-
-    Trace("liastar-ext") << "Module generators:" << std::endl;
-    std::vector<std::vector<Integer>> generators = {zeroVector};
-    if (cone.getModuleGenerators().size() > 0)
-    {
-      generators = cone.getModuleGenerators();
-    }
-    for (const auto& generator : generators)
+    size_t numPointed = polyhedron.getHilbertBasis().size();
+    const std::vector<IntegerVector> hilbertBasis =
+        polyhedron.getRecessionMonoidGenerators();
+    for (const IntegerVector& generator : polyhedron.getModuleGenerators())
     {
       std::vector<Node> conjunctions;
-      // the generator as constants: (2 1 1)
+      // the generator as constants: (2 1)
       Vector point;
-      for (const auto& element : generator)
+      for (const Integer& element : generator)
       {
-        Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+        Node constant = d_nm->mkConstInt(Rational(element));
         point.push_back(constant);
       }
 
       std::vector<Vector> rays;
-      // the bound variables l1, ..., lk, here l1 for (1 0 0)
+      // the bound variables l1, ..., lk, here l1 for (1 0)
       std::vector<Node> boundVariables;
       for (size_t index = 0; index < hilbertBasis.size(); index++)
       {
-        const std::vector<Integer>& basis = hilbertBasis[index];
+        const IntegerVector& basis = hilbertBasis[index];
         std::string name = "l" + std::to_string(index + 1);
         Node lambda = d_nm->mkBoundVar(name, d_nm->integerType());
         boundVariables.push_back(lambda);
@@ -697,11 +576,11 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
           conjunctions.push_back(d_nm->mkNode(Kind::GEQ, lambda, d_zero));
         }
 
-        // basis times l1, rewritten: (l1 0 0) for (1 0 0)
+        // basis times l1, rewritten: (l1 0) for (1 0)
         Vector ray;
-        for (const auto& element : basis)
+        for (const Integer& element : basis)
         {
-          Node constant = d_nm->mkConstInt(Rational(element.get_str()));
+          Node constant = d_nm->mkConstInt(Rational(element));
           Node monomial = rewrite(d_nm->mkNode(Kind::MULT, constant, lambda));
           ray.push_back(monomial);
         }
@@ -748,7 +627,7 @@ std::vector<std::pair<Node, Node>> LiaStarExtension::getLia(
   return disjunctions;
 }
 
-const std::vector<std::pair<std::vector<std::string>, Node>>
+const std::vector<std::pair<LinearConstraints, Node>>
 LiaStarExtension::convertQFLIAToMatrices(Node n)
 {
   Assert(n.getKind() == Kind::LAMBDA);
@@ -763,7 +642,7 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
   Trace("liastar-ext") << "predicate: " << predicate << std::endl;
 
   // print the preamble of the liastar-ext-smt queries, which declares the
-  // variables of the lambda. Normaliz only assumes them to be nonnegative
+  // variables of the lambda. getCones only assumes them to be nonnegative
   // with --arith-liastar-assume-nonnegative, and so do the queries.
   if (TraceIsOn("liastar-ext-smt"))
   {
@@ -794,10 +673,10 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
   Trace("liastar-ext") << "predicate in dnf: " << dnf << std::endl;
   Trace("liastar-ext") << "lia constraint: " << std::endl;
 
-  // the single pair of {"x[1] >= 2;", "x[2] = 1;"} and the disjunct
+  // the single pair of {x - 2 >= 0, y - 1 = 0} and the disjunct
   // (and (>= x 2) (= y 1))
   d_stats.d_getMatricesTime.start();
-  std::vector<std::pair<std::vector<std::string>, Node>> pairs =
+  std::vector<std::pair<LinearConstraints, Node>> pairs =
       LiaStarUtils::getMatrices(variables, dnf);
   d_stats.d_getMatricesTime.stop();
   ++d_stats.d_dnfCalls;
@@ -810,5 +689,3 @@ LiaStarExtension::convertQFLIAToMatrices(Node n)
 }  // namespace arith
 }  // namespace theory
 }  // namespace cvc5::internal
-
-#endif /* CVC5_USE_NORMALIZ */

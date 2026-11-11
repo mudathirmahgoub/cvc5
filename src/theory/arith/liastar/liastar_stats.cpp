@@ -10,8 +10,6 @@
  * Statistics for the liastar extension.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include "theory/arith/liastar/liastar_stats.h"
 
 namespace cvc5::internal {
@@ -33,18 +31,16 @@ LiaStarStatistics::LiaStarStatistics(StatisticsRegistry& sr)
           sr.registerTimer("theory::arith::liastar::distributeTime")),
       d_getMatricesTime(
           sr.registerTimer("theory::arith::liastar::getMatricesTime")),
-      d_normalizInputTime(
-          sr.registerTimer("theory::arith::liastar::normalizInputTime")),
-      d_normalizComputeTime(
-          sr.registerTimer("theory::arith::liastar::normalizComputeTime")),
+      d_hilbertBasisTime(
+          sr.registerTimer("theory::arith::liastar::hilbertBasisTime")),
       d_getConesTime(sr.registerTimer("theory::arith::liastar::getConesTime")),
       d_getLiaTime(sr.registerTimer("theory::arith::liastar::getLiaTime")),
       d_subSolverTime(
           sr.registerTimer("theory::arith::liastar::subSolverTime")),
       d_cvc5SubSolverTime(
           sr.registerTimer("theory::arith::liastar::cvc5SubSolverTime")),
-      d_normalizSubSolverTime(
-          sr.registerTimer("theory::arith::liastar::normalizSubSolverTime")),
+      d_hilbertBasisSubSolverTime(sr.registerTimer(
+          "theory::arith::liastar::hilbertBasisSubSolverTime")),
       d_checkRuns(sr.registerInt("theory::arith::liastar::checkRuns")),
       d_starContainsLiterals(
           sr.registerInt("theory::arith::liastar::starContainsLiterals")),
@@ -68,7 +64,10 @@ LiaStarStatistics::LiaStarStatistics(StatisticsRegistry& sr)
           sr.registerInt("theory::arith::liastar::subSolverUnsat")),
       d_subSolverUnknown(
           sr.registerInt("theory::arith::liastar::subSolverUnknown")),
-      d_normalizCalls(sr.registerInt("theory::arith::liastar::normalizCalls")),
+      d_hilbertBasisCalls(
+          sr.registerInt("theory::arith::liastar::hilbertBasisCalls")),
+      d_hilbertBasisSums(
+          sr.registerInt("theory::arith::liastar::hilbertBasisSums")),
       d_conesEmpty(sr.registerInt("theory::arith::liastar::conesEmpty")),
       d_conesNonempty(sr.registerInt("theory::arith::liastar::conesNonempty")),
       d_hilbertBasisTotal(
@@ -87,5 +86,3 @@ LiaStarStatistics::LiaStarStatistics(StatisticsRegistry& sr)
 }  // namespace arith
 }  // namespace theory
 }  // namespace cvc5::internal
-
-#endif /* CVC5_USE_NORMALIZ */

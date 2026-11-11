@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; COMMAND-LINE: --nl-rlv=always
 ;

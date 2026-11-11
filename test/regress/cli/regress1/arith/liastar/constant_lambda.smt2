@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; Tests that a constant lambda, which the rewriter normalizes to a function
 ; array constant, is handled by the liastar extension.

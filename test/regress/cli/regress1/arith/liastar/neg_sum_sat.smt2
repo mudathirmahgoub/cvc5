@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; Nonnegativity is not built into int.star-contains: the lambda constrains
 ; its variables (or not) itself. Here the summands are fixed at -1, so the

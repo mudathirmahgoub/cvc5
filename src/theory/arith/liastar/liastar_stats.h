@@ -10,8 +10,6 @@
  * Statistics for the liastar extension.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include "cvc5_private.h"
 
 #ifndef CVC5__THEORY__ARITH__LIASTAR__LIASTAR_STATS_H
@@ -61,21 +59,16 @@ class LiaStarStatistics
    */
   TimerStat d_distributeTime;
   /**
-   * Time spent converting DNF disjuncts to Normaliz symbolic constraints
-   * (LiaStarUtils::getMatrices).
+   * Time spent converting DNF disjuncts to integer constraint matrices
+   * (LiaStarUtils::getMatrices, LinearConstraints).
    */
   TimerStat d_getMatricesTime;
   /**
-   * Time spent parsing symbolic constraints into Normaliz input matrices
-   * (libnormaliz::readNormalizInput).
+   * Time spent computing module generators and Hilbert bases
+   * (IntegerPolyhedron). This is the total across the main reduction and
+   * hilbert-basis-as-subsolver calls.
    */
-  TimerStat d_normalizInputTime;
-  /**
-   * Time spent inside Normaliz constructing cones and computing Hilbert
-   * bases and module generators. This is the total across the main
-   * reduction and normaliz-as-subsolver calls.
-   */
-  TimerStat d_normalizComputeTime;
+  TimerStat d_hilbertBasisTime;
   /** Total time spent in LiaStarExtension::getCones. */
   TimerStat d_getConesTime;
   /** Total time spent in LiaStarExtension::getLia. */
@@ -88,10 +81,10 @@ class LiaStarStatistics
   /** Time spent in cvc5 subsolver calls (LiaStarUtils::cvc5CheckSat). */
   TimerStat d_cvc5SubSolverTime;
   /**
-   * Time spent in Normaliz-as-subsolver calls
-   * (LiaStarUtils::normalizCheckSat).
+   * Time spent in hilbert-basis-as-subsolver calls
+   * (LiaStarUtils::hilbertBasisCheckSat).
    */
-  TimerStat d_normalizSubSolverTime;
+  TimerStat d_hilbertBasisSubSolverTime;
 
   //------------------------- counters
   /** Number of calls to LiaStarExtension::checkFullEffort. */
@@ -120,8 +113,8 @@ class LiaStarStatistics
   /** Number of predicates converted to DNF. */
   IntStat d_dnfCalls;
   /**
-   * Total number of disjuncts over all DNF conversions, as sent to Normaliz
-   * by getMatrices. A predicate that is a constant (e.g. false after all
+   * Total number of disjuncts over all DNF conversions, as converted by
+   * getMatrices. A predicate that is a constant (e.g. false after all
    * disjuncts were pruned) counts as one disjunct.
    */
   IntStat d_dnfDisjuncts;
@@ -140,31 +133,42 @@ class LiaStarStatistics
   IntStat d_subSolverUnsat;
   /** Number of subsolver calls that returned unknown or none. */
   IntStat d_subSolverUnknown;
-  /** Number of Normaliz cone computations (main reduction and subsolver). */
-  IntStat d_normalizCalls;
   /**
-   * Number of disjuncts whose Normaliz cone is empty (unsat disjuncts) in
-   * the main star reduction (getCones). Cones computed by the
-   * Normaliz-as-subsolver are not included; those are counted by
+   * Number of module generator and Hilbert basis computations
+   * (IntegerPolyhedron), in the main reduction and the subsolver.
+   */
+  IntStat d_hilbertBasisCalls;
+  /**
+   * Total number of sums of candidates formed by the dual algorithm
+   * (DualHilbertBasis) over all Hilbert basis computations, a measure of
+   * their work.
+   */
+  IntStat d_hilbertBasisSums;
+  /**
+   * Number of disjuncts without integer solutions (unsat disjuncts) in the
+   * main star reduction (getCones). Disjuncts checked by the
+   * hilbert-basis-as-subsolver are not included; those are counted by
    * d_subSolverUnsat.
    */
   IntStat d_conesEmpty;
   /**
-   * Number of disjuncts with a nonempty Normaliz cone (sat disjuncts) in
-   * the main star reduction (getCones). Cones computed by the
-   * Normaliz-as-subsolver are not included.
+   * Number of disjuncts with integer solutions (sat disjuncts) in the main
+   * star reduction (getCones). Disjuncts checked by the
+   * hilbert-basis-as-subsolver are not included.
    */
   IntStat d_conesNonempty;
   /**
    * Total number of Hilbert basis vectors over all nonempty cones in the
-   * main star reduction (getCones).
+   * main star reduction (getCones), including the basis vectors of the
+   * maximal subspace (IntegerPolyhedron::getRecessionMonoidGenerators).
    */
   IntStat d_hilbertBasisTotal;
   /** Maximum number of Hilbert basis vectors in a single cone. */
   IntStat d_hilbertBasisMax;
   /**
    * Total number of module generators over all nonempty cones in the main
-   * star reduction (getCones).
+   * star reduction (getCones). A cone (a disjunct without constants) has the
+   * single module generator 0.
    */
   IntStat d_moduleGeneratorsTotal;
   /** Maximum number of module generators in a single cone. */
@@ -179,5 +183,3 @@ class LiaStarStatistics
 }  // namespace cvc5::internal
 
 #endif /* CVC5__THEORY__ARITH__LIASTAR__LIASTAR_STATS_H */
-
-#endif /* CVC5_USE_NORMALIZ */

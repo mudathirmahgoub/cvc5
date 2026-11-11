@@ -10,17 +10,12 @@
  * Utility functions for liastar extension.
  */
 
-#ifdef CVC5_USE_NORMALIZ
-
 #include "liastar_utils.h"
 
 #include "expr/algorithm/flatten.h"
 #include "expr/node_algorithm.h"
-#include "libnormaliz/input.h"
-#include "libnormaliz/libnormaliz.h"
 #include "options/arith_options.h"
-#include "smt/logic_exception.h"
-#include "theory/arith/linear/normal_form.h"
+#include "theory/arith/liastar/integer_polyhedron.h"
 #include "theory/booleans/theory_bool_rewriter.h"
 #include "theory/datatypes/tuple_utils.h"
 #include "theory/rewriter.h"
@@ -34,11 +29,6 @@ namespace cvc5::internal {
 namespace theory {
 namespace arith {
 namespace liastar {
-
-using namespace libnormaliz;
-
-// prints a std::vector<std::string>, see normalizCheckSat
-using libnormaliz::operator<<;
 
 void LiaStarUtils::traceEquivalenceCheck(const char* step,
                                          Node before,
@@ -545,19 +535,17 @@ Result LiaStarUtils::areAssertionsUnsat(const std::vector<Node>& assertions,
   expr::getFreeVariables(assertion, fvs);
   std::vector<Node> freeVariables(fvs.begin(), fvs.end());
   Result result;
-  // Normaliz needs at least one coordinate, so ground assertions go to cvc5
-  if (fvs.size() > 0 && e.getOptions().arith.arithLiaStarNormalizAsSubSolver)
+  // ground assertions go to cvc5
+  if (fvs.size() > 0
+      && e.getOptions().arith.arithLiaStarHilbertBasisAsSubSolver)
   {
-    // the coordinates of the Normaliz space: x is x[1]
+    // the coordinates of the integer solutions: x is the first one
     Node variables = nm->mkNode(Kind::BOUND_VAR_LIST, freeVariables);
-    // one atom per conjunct, as getMatrices expects:
-    // (and a (and b c)) --> (and a b c)
-    assertion = expr::algorithm::flatten(nm, assertion);
     result =
-        normalizCheckSat(variables,
-                         assertion,
-                         e.getOptions().arith.arithLiaStarAssumeNonnegative,
-                         stats);
+        hilbertBasisCheckSat(variables,
+                             assertion,
+                             e.getOptions().arith.arithLiaStarAssumeNonnegative,
+                             stats);
   }
   else
   {
@@ -617,291 +605,66 @@ Result LiaStarUtils::cvc5CheckSat(const std::vector<Node>& freeVariables,
   return result;
 }
 
-Result LiaStarUtils::normalizCheckSat(Node variables,
-                                      Node assertion,
-                                      bool assumeNonnegative,
-                                      LiaStarStatistics* stats)
+Result LiaStarUtils::hilbertBasisCheckSat(Node variables,
+                                          Node assertion,
+                                          bool assumeNonnegative,
+                                          LiaStarStatistics* stats)
 {
-  if (stats) stats->d_normalizSubSolverTime.start();
-  Trace("liastar-normalizCheckSat")
-      << "---------------------------" << std::endl;
-  Trace("liastar-normalizCheckSat")
-      << "Cone for node: " << assertion << std::endl;
-
-  // required by readNormalizInput, unused otherwise
-  libnormaliz::OptionsHandler options;
-
-  std::map<libnormaliz::PolyParam::Param, std::vector<std::string>>
-      poly_param_input;
-  std::map<libnormaliz::NumParam::Param, long> num_param_input;
-  std::map<libnormaliz::BoolParam::Param, bool> bool_param_input;
-
-  libnormaliz::renf_class_ptr number_field_ref;
-
-  // Normaliz input for (and (>= x 1) (<= x 0)) over (x):
-  //   amb_space 1
-  //   constraints 2 symbolic
-  //   x[1] >= 1; x[1] <= 0;
-  //   signs
-  //   0
-  //   HilbertBasis
-  //   ModuleGenerators
-  std::stringstream ss;
-  ss << "amb_space " << variables.getNumChildren() << std::endl;
-  // one constraint per conjunct
-  ss << "constraints "
-     << (assertion.getKind() == Kind::AND ? assertion.getNumChildren() : 1)
-     << " symbolic" << std::endl;
+  if (stats) stats->d_hilbertBasisSubSolverTime.start();
   if (stats) stats->d_getMatricesTime.start();
-  const std::vector<std::pair<std::vector<std::string>, Node>> matrices =
-      getMatrices(variables, assertion);
-  if (stats) stats->d_getMatricesTime.stop();
-
-  // assertion is a conjunction, so getMatrices returns a single matrix
-  ss << matrices[0].first << std::endl;
-
+  // (and (>= x 1) (<= x 0)) over (x) --> {x - 1 >= 0, -x >= 0}
+  LinearConstraints constraints(variables, assertion);
   if (assumeNonnegative)
   {
-    ss << "nonnegative" << std::endl;
+    constraints.addNonnegativity();
   }
-  else
-  {
-    // Normaliz restricts constraint-only input to the nonnegative orthant
-    // by default. Sign 0 makes a coordinate unrestricted: "0 0" for (x y).
-    ss << "signs" << std::endl;
-    for (size_t sj = 0; sj < variables.getNumChildren(); sj++)
-    {
-      ss << (sj == 0 ? "" : " ") << "0";
-    }
-    ss << std::endl;
-  }
-  // the integer solutions are the module generators plus nonnegative
-  // integer combinations of the Hilbert basis
-  ss << "HilbertBasis" << std::endl;
-  ss << "ModuleGenerators" << std::endl;
-  Trace("liastar-normalizCheckSat") << "normaliz input:" << std::endl;
-  Trace("liastar-normalizCheckSat") << ss.str() << std::endl;
-
-  // here we use mpq_class instead of Integer (or mpz_class)
-  // because libnormaliz.so only has implementation for
-  // readNormalizInput<mpq_class>
-  std::map<Type::InputType, libnormaliz::Matrix<mpq_class>> input;
-  if (stats) stats->d_normalizInputTime.start();
-  input = libnormaliz::readNormalizInput<mpq_class>(ss,
-                                                    options,
-                                                    num_param_input,
-                                                    bool_param_input,
-                                                    poly_param_input,
-                                                    number_field_ref);
-  if (stats) stats->d_normalizInputTime.stop();
+  if (stats) stats->d_getMatricesTime.stop();
+  Trace("liastar-hilbertBasisCheckSat")
+      << "constraints: " << constraints.toString() << std::endl;
   if (stats)
   {
-    ++stats->d_normalizCalls;
-    stats->d_normalizComputeTime.start();
+    ++stats->d_hilbertBasisCalls;
+    stats->d_hilbertBasisTime.start();
   }
-  // Integer is mpz_class, see liastar_utils.h
-  Cone<Integer> cone(input);
-  if (assumeNonnegative)
+  IntegerPolyhedron polyhedron(constraints);
+  if (stats)
   {
-    cone.setNonnegative(true);
+    stats->d_hilbertBasisTime.stop();
+    stats->d_hilbertBasisSums += polyhedron.getNumSums();
   }
-  // always use infinite precision for integers
-  cone.deactivateChangeOfPrecision();
-  cone.compute(ConeProperty::HilbertBasis);
-  cone.compute(ConeProperty::ModuleGenerators);
-  if (stats) stats->d_normalizComputeTime.stop();
-
-  Result result;
-  // Constants make a system inhomogeneous, e.g. x[1] >= 1. A homogeneous
-  // one, e.g. x[1] >= x[2], has the solution 0, so it is never unsat.
-  if (cone.isInhomogeneous())
-  {
-    // AffineDim is only computed for inhomogeneous cones
-    if (cone.getAffineDim() == -1)
-    {
-      // no integer solution, e.g. x[1] >= 1; x[1] <= 0;
-      Trace("liastar-ext") << "empty cone" << std::endl;
-
-      result = Result(Result::Status::UNSAT);
-    }
-  }
-  Trace("liastar-ext-normalizCheckSat")
-      << "Constraints are " << result << std::endl;
-  if (stats) stats->d_normalizSubSolverTime.stop();
+  // no module generator means no integer solution, e.g. for
+  // (and (= x (* 2 z)) (= x (+ (* 2 w) 1))), which has rational solutions
+  Result result(polyhedron.isEmpty() ? Result::Status::UNSAT
+                                     : Result::Status::SAT);
+  Trace("liastar-hilbertBasisCheckSat")
+      << "constraints are " << result << std::endl;
+  if (stats) stats->d_hilbertBasisSubSolverTime.stop();
   return result;
 }
 
-std::vector<std::pair<std::vector<std::string>, Node>>
-LiaStarUtils::getMatrices(Node variables, Node n)
+std::vector<std::pair<LinearConstraints, Node>> LiaStarUtils::getMatrices(
+    Node variables, Node n)
 {
   Assert(n.getType().isBoolean()) << "n: " << n << std::endl;
   // one matrix per disjunct, e.g. over (x y):
-  //   (>= x 1)               --> {["x[1] >= 1;"]}
-  //   (and (>= x 1) (= y 0)) --> {["x[1] >= 1;", "x[2] = 0;"]}
-  //   (or (>= x 1) (>= y 2)) --> {["x[1] >= 1;"], ["x[2] >= 2;"]}
-  std::vector<std::pair<std::vector<std::string>, Node>> pairs;
-  Kind k = n.getKind();
-  switch (k)
+  //   (>= x 1)               --> {x - 1 >= 0}
+  //   (and (>= x 1) (= y 0)) --> {x - 1 >= 0, y = 0}
+  //   (or (>= x 1) (>= y 2)) --> {x - 1 >= 0}, {y - 2 >= 0}
+  std::vector<std::pair<LinearConstraints, Node>> pairs;
+  if (n.getKind() != Kind::OR)
   {
-    case Kind::CONST_BOOLEAN:
-    {
-      bool value = n.getConst<bool>();
-      std::string constraint;
-      if (value)
-      {
-        // true has no constraints, but Normaliz needs one: a tautology
-        constraint = "x[1] = x[1];";
-      }
-      else
-      {
-        constraint = "1 = 0;";
-      }
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
-      pairs.push_back({constraints, n});
-      return pairs;
-    }
-    case Kind::LT:
-    case Kind::GT:
-    case Kind::LEQ:
-    case Kind::GEQ:
-    case Kind::EQUAL:
-    {
-      // an equality of non-arithmetic terms is no constraint, e.g. of the
-      // bit-vectors in (= b #x00), or of the Booleans in (= p (>= x 1)),
-      // which toDNF expands
-      if (!n[0].getType().isRealOrInt())
-      {
-        break;
-      }
-      // (>= (+ (* 2 x) (* (- 1) z)) (- 5)) over (x y z)
-      // --> "2x[1] - x[3] >=  - 5;"
-      linear::Polynomial l = linear::Polynomial::parsePolynomial(n[0]);
-      linear::Polynomial r = linear::Polynomial::parsePolynomial(n[1]);
-      std::string lTerm = getString(variables, l);
-      std::string rTerm = getString(variables, r);
-      std::string kString = k == Kind::LT    ? " < "
-                            : k == Kind::GT  ? " > "
-                            : k == Kind::LEQ ? " <= "
-                            : k == Kind::GEQ ? " >= "
-                                             : " = ";
-      std::string constraint = lTerm + kString + rTerm + ";";
-      std::vector<std::string> constraints;
-      constraints.push_back(constraint);
-      pairs.push_back({constraints, n});
-      return pairs;
-    }
-    case Kind::AND:
-    {
-      // the children are atoms (n is in DNF), each giving one constraint
-      std::vector<std::string> constraints;
-      for (size_t i = 0; i < n.getNumChildren(); i++)
-      {
-        std::vector<std::pair<std::vector<std::string>, Node>> m =
-            getMatrices(variables, n[i]);
-        constraints.push_back(m[0].first[0]);
-      }
-      pairs.push_back({constraints, n});
-      return pairs;
-    }
-    case Kind::OR:
-    {
-      // each disjunct is a conjunction or an atom, giving one matrix
-      for (size_t i = 0; i < n.getNumChildren(); i++)
-      {
-        std::vector<std::pair<std::vector<std::string>, Node>> m =
-            getMatrices(variables, n[i]);
-        pairs.push_back(m[0]);
-        Trace("liastar-ext")
-            << "Disjunction " << i << ": " << n[i] << std::endl;
-      }
-      return pairs;
-    }
-
-    default: break;
+    pairs.push_back({LinearConstraints(variables, n), n});
+    return pairs;
   }
-  // Any other atom, e.g. a Boolean variable p, has no constraint. Dropping it
-  // would change the set: (lambda ((x Int)) p) would give no disjunct, as if
-  // p were false.
-  std::stringstream ss;
-  ss << "int.star-contains expects a predicate of linear integer "
-        "constraints over the variables of its lambda, found the atom "
-     << n;
-  throw LogicException(ss.str());
-}
-
-std::string LiaStarUtils::getString(Node variables, linear::Polynomial& p)
-{
-  Assert(variables.getKind() == Kind::BOUND_VAR_LIST)
-      << "variables: " << variables << std::endl;
-
-  size_t size = variables.getNumChildren();
-  // (+ (* 2 x) (* (- 1) z)) over (x y z) --> "2x[1] - x[3]"
-  // (- 5)                                --> " - 5"
-  std::stringstream ss;
-  int index = 0;
-  for (const linear::Monomial& monomial : p)
+  for (size_t i = 0; i < n.getNumChildren(); i++)
   {
-    Trace("liastar-ext-debug")
-        << "monomial: " << monomial.getNode() << std::endl;
-    linear::Constant c = monomial.getConstant();
-    Trace("liastar-ext-debug") << "c: " << c.getNode() << std::endl;
-    Rational r = c.getValue().abs();
-
-    // print the sign: " - " for a negative coefficient, " + " between terms
-    if (c.isNegative())
-    {
-      ss << " - ";
-    }
-    else if (index > 0)
-    {
-      ss << " + ";
-    }
-    index++;
-
-    if (monomial.isConstant())
-    {
-      ss << r;
-      continue;
-    }
-    // x[1] rather than 1x[1]
-    if (r != Rational(1))
-    {
-      ss << r;
-    }
-    // the i-th variable of `variables` is x[i + 1]. Any other term has no
-    // coordinate, e.g. a constant a that the lambda captures, or a product
-    // (* x y), whose var list is the product itself. Dropping it would change
-    // the constraint: (= x (* 2 a)) would become x[1] = 2.
-    Node var = monomial.getVarList().getNode();
-    size_t i = 0;
-    while (i < size && variables[i] != var)
-    {
-      i++;
-    }
-    if (i == size)
-    {
-      std::stringstream error;
-      error << "int.star-contains expects a predicate of linear integer "
-               "constraints over the variables of its lambda, found the term "
-            << var;
-      throw LogicException(error.str());
-    }
-    ss << "x[" << i + 1 << "]";
+    Trace("liastar-ext") << "Disjunction " << i << ": " << n[i] << std::endl;
+    pairs.push_back({LinearConstraints(variables, n[i]), n[i]});
   }
-  // checked only now: a term of another type, e.g. a real r, makes p
-  // nonintegral, and it is rejected above. The integer variables left have
-  // integral coefficients in the arithmetic normal form.
-  Assert(p.isIntegral()) << p.getNode() << " is expected to be integral"
-                         << std::endl;
-  Trace("liastar-ext-debug") << "polynomial  : " << p.getNode() << std::endl;
-  Trace("liastar-ext-debug") << "string : " << ss.str() << std::endl;
-  return ss.str();
+  return pairs;
 }
 
 }  // namespace liastar
 }  // namespace arith
 }  // namespace theory
 }  // namespace cvc5::internal
-
-#endif /* CVC5_USE_NORMALIZ */

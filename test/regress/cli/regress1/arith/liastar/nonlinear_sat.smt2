@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; int.star-contains together with nonlinear multiplication. The nonlinear
 ; extension runs after the liastar extension and must ignore the

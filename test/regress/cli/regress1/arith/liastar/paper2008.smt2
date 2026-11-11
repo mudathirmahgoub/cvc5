@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 (set-logic HO_ALL)
 (set-info :source "Decision Procedures for Multisets with Cardinality Constraints

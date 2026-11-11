@@ -47,9 +47,7 @@ TheoryArith::TheoryArith(Env& env, OutputChannel& out, Valuation valuation)
       d_eqSolver(nullptr),
       d_internal(env, d_astate, d_im, d_bab),
       d_nonlinearExtension(nullptr),
-#ifdef CVC5_USE_NORMALIZ
       d_liaStarExtension(nullptr),
-#endif /* CVC5_USE_NORMALIZ */
       d_opElim(d_env),
       d_arithPreproc(env, d_im, d_opElim),
       d_rewriter(nodeManager(), d_opElim, options().arith.arithExp),
@@ -105,14 +103,12 @@ void TheoryArith::finishInit()
   {
     d_nonlinearExtension.reset(new nl::NonlinearExtension(d_env, *this));
   }
-#ifdef CVC5_USE_NORMALIZ
   // int.star-contains is a predicate of linear integer arithmetic, so the
   // liastar extension does not depend on the logic being non-linear.
   if (logic.isTheoryEnabled(THEORY_ARITH))
   {
     d_liaStarExtension.reset(new liastar::LiaStarExtension(d_env, *this));
   }
-#endif /* CVC5_USE_NORMALIZ */
   d_eqSolver->finishInit();
   // finish initialize in the old linear solver
   eq::EqualityEngine* ee = getEqualityEngine();
@@ -194,15 +190,9 @@ void TheoryArith::preRegisterTerm(TNode n)
   }
   if (k == Kind::STAR_CONTAINS)
   {
-#ifdef CVC5_USE_NORMALIZ
     // the extension exists whenever arithmetic is enabled, see finishInit
     Assert(d_liaStarExtension != nullptr);
     d_liaStarExtension->preRegisterTerm(n);
-#else
-    throw LogicException(
-        "cvc5 can't solve int.star-contains constraints since it was not "
-        "configured with --normaliz");
-#endif /* CVC5_USE_NORMALIZ */
   }
   d_internal.preRegisterTerm(n);
 }
@@ -315,7 +305,6 @@ void TheoryArith::postCheck(Effort level)
     d_arithModelCacheSet = false;
     std::set<Node> termSet;
 
-#ifdef CVC5_USE_NORMALIZ
     if (d_liaStarExtension != nullptr && d_liaStarExtension->hasAssertions())
     {
       updateModelCache(termSet);
@@ -328,7 +317,6 @@ void TheoryArith::postCheck(Effort level)
         return;
       }
     }
-#endif /* CVC5_USE_NORMALIZ */
 
     if (d_nonlinearExtension != nullptr)
     {
@@ -374,10 +362,8 @@ bool TheoryArith::preNotifyFact(
     // fact queue at full effort. The atom is neither a constraint for the
     // linear solver nor an equality for the equality engine, so we are
     // finished with it.
-#ifdef CVC5_USE_NORMALIZ
     Assert(d_liaStarExtension != nullptr);
     d_liaStarExtension->notifyAssertion();
-#endif /* CVC5_USE_NORMALIZ */
     return true;
   }
   // We do not assert to the equality engine of arithmetic in the standard way,
@@ -503,14 +489,12 @@ bool TheoryArith::collectModelValues(TheoryModel* m,
     }
     return false;
   }
-#ifdef CVC5_USE_NORMALIZ
   // the values of int.star-contains literals
   if (d_liaStarExtension != nullptr && d_liaStarExtension->hasAssertions()
       && !d_liaStarExtension->collectModelValues(m))
   {
     return false;
   }
-#endif /* CVC5_USE_NORMALIZ */
   return true;
 }
 

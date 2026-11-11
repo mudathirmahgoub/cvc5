@@ -1,4 +1,3 @@
-; REQUIRES: normaliz
 ; REQUIRES: unrestricted-mode
 ; EXPECT: sat
 ; EXPECT: ((a 4) (b 3) ((int.star-contains (lambda ((x Int)) (= x 2)) a) true) ((int.star-contains (lambda ((x Int)) (= x 2)) b) false))

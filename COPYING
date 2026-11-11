@@ -8,7 +8,7 @@ BSD license (reproduced below).  Please note that cvc5 can be configured
 (however, by default it is not) to link against some GPLed libraries, and
 therefore the use of these builds may be restricted in non-GPL-compatible
 projects.  See below for a discussion of the GPLed optional library dependences
-for cvc5 (CLN, glpk-cut-log, CoCoALib, and Normaliz), and how to ensure you have
+for cvc5 (CLN, glpk-cut-log, and CoCoALib), and how to ensure you have
 a build that doesn't link against GPLed libraries.
 
 Redistribution and use in source and binary forms, with or without
@@ -135,10 +135,3 @@ cvc5 can be optionally configured to link against CoCoALib, a C++ library for
 doing Computations in Commutative Algebra, available here:
 
   https://cocoa.altervista.org/cocoalib/index.shtml
-
-
-cvc5 can be optionally configured to link against Normaliz, a C++ library for 
-computing the Hilbert bases and enumerative data of rational cones and
-sets of lattice points in rational polyhedra, available here:
-
-  https://www.normaliz.uni-osnabrueck.de/

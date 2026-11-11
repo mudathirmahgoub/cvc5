@@ -10,9 +10,7 @@ cvc5 1.5.0 prerelease
 
 - **Arithmetic**: Added a new extension of the arithmetic solver for solving
   liastar (LIA*) constraints. The new predicate `int.star-contains` denotes
-  membership in a star set. The extension depends on Normaliz, which is
-  available in builds configured with `--normaliz` (requires `--gpl`); other
-  builds raise a logic exception.
+  membership in a star set.
 
 - **API**
   * New function `TermManager::mkGrammar()` (C++), `TermManager.mkGrammar()`

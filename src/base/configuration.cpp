@@ -138,8 +138,7 @@ std::string Configuration::copyright()
     }
   }
 
-  if (isBuiltWithCln() || isBuiltWithGlpk() || isBuiltWithCoCoA()
-      || isBuiltWithNormaliz())
+  if (isBuiltWithCln() || isBuiltWithGlpk() || isBuiltWithCoCoA())
   {
     ss << "This version of cvc5 is linked against the following third party\n"
        << "libraries covered by the GPLv3 license.\n"
@@ -161,12 +160,6 @@ std::string Configuration::copyright()
       ss << "  CoCoALib - a computer algebra library\n"
          << "  See https://cocoa.dima.unige.it/cocoa/cocoalib/index.shtml for "
             "copyright"
-         << " information\n\n";
-    }
-    if (isBuiltWithNormaliz())
-    {
-      ss << "  Normaliz - a rational cones library\n"
-         << "  See https://github.com/Normaliz/Normaliz for copyright"
          << " information\n\n";
     }
   }
@@ -221,8 +214,6 @@ bool Configuration::isBuiltWithEditline() { return IS_EDITLINE_BUILD; }
 bool Configuration::isBuiltWithPoly() { return IS_POLY_BUILD; }
 
 bool Configuration::isBuiltWithCoCoA() { return IS_COCOA_BUILD; }
-
-bool Configuration::isBuiltWithNormaliz() { return IS_NORMALIZ_BUILD; }
 
 bool Configuration::isBuiltWithPortfolio() { return IS_PORTFOLIO_BUILD; }
 

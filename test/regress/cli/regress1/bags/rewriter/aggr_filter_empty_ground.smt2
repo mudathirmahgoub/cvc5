@@ -1,7 +1,8 @@
 ; REQUIRES: unrestricted-mode
-; FILTER_AGGREGATE moves a filter on group columns below the aggregate only when
-; the conjuncts that stay reject the row of initial values: here no conjunct
-; stays, and for X = {(1)} the left is empty, the right is {(0, 0)}
+; A filter on the group columns of an aggregate is the aggregate of the filtered
+; table, also when the filter keeps no row: an empty table has no group, so for
+; X = {(1)} both sides are empty. The terms are ground: a wrong value makes the
+; problem unsat.
 (set-logic HO_ALL)
 (set-info :status sat)
 (declare-const X (Bag (Tuple Int)))
@@ -12,5 +13,6 @@
 (define-fun F ((r (Tuple Int Int))) Bool (> ((_ tuple.select 0) r) 3))
 (define-fun Gp () (Bag (Tuple Int Int))
   ((_ table.aggr 0) f (tuple 0 0) (bag.filter (lambda ((t (Tuple Int))) (> ((_ tuple.select 0) t) 3)) X)))
-(assert (not (= (bag.filter F G) Gp)))
+(assert (= (bag.filter F G) Gp))
+(assert (= Gp (as bag.empty (Bag (Tuple Int Int)))))
 (check-sat)

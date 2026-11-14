@@ -3026,7 +3026,7 @@ set(regress_1_tests
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
-  regress1/bags/rewriter/aggr_filter_keeps_initial_row_ground.smt2
+  regress1/bags/rewriter/aggr_filter_empty_ground.smt2
   regress1/bags/rewriter/aggr_join_merge_seeds.smt2
   regress1/bags/rewriter/aggr_nullable_accumulator.smt2
   regress1/bags/rewriter/aggr_rollup_int_key.smt2

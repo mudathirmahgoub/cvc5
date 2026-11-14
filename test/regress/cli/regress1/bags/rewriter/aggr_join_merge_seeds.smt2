@@ -4,9 +4,9 @@
 ; (lambda ((t (Bag (Tuple Int Int)))) (bag.fold f i t)), has no constant
 ; value)
 ; AGGREGATE_JOIN_MERGE merges two aggregates joined on their group columns only
-; when they seed their copies of those columns alike: here (tuple 1 0) and
-; (tuple 2 0), and for an empty X the join of their rows of initial values is
-; empty
+; when they seed their copies of those columns alike. Here the seeds differ,
+; (tuple 1 0) and (tuple 2 0), so the two aggregates stay apart. An empty X has
+; no group, so each aggregate is empty, and so is their join
 (set-logic HO_ALL)
 (set-info :status sat)
 (declare-const X (Bag (Tuple Int Int)))
@@ -21,7 +21,7 @@
   (bag.map (lambda ((r (Tuple Int Int Int Int))) (tuple ((_ tuple.select 3) r)))
     (bag.filter (lambda ((r (Tuple Int Int Int Int))) (= ((_ tuple.select 0) r) ((_ tuple.select 2) r)))
       (table.product A B))))
-; X empty: A = {(1, 0)}, B = {(2, 0)}, the join (= 1 2) is false and Q is empty, so this is sat
+; X empty: A and B are empty, so Q is empty, and this is sat
 (assert (= (bag.card X) 0))
 (assert (= Q (as bag.empty (Bag (Tuple Int)))))
 (check-sat)

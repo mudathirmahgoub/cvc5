@@ -22,7 +22,7 @@ name   = "Bags Theory"
   category   = "expert"
   long       = "bags-lazy-fold"
   type       = "bool"
-  default    = "false"
+  default    = "true"
   help       = "keep bag.fold terms as terms, relating two folds by their functions, initial values and bags, and only unroll them over the elements of their bags when a model is about to be reported"
 
 [[option]]

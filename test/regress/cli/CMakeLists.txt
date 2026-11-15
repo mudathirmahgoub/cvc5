@@ -3057,6 +3057,7 @@ set(regress_1_tests
   regress1/bags/rewriter/aggr_rollup_int_key.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
+  regress1/bags/rewriter/count_map_filter_keys_join.smt2
   regress1/bags/rewriter/eager_aggr_int_join_key.smt2
   regress1/bags/rewriter/filter_count_positive.smt2
   regress1/bags/rewriter/filter_sort_conjuncts.smt2

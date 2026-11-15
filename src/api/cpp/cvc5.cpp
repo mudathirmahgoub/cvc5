@@ -5788,6 +5788,8 @@ Sort TermManager::mkDatatypeSort(const DatatypeDecl& dtypedecl)
   const Datatype& dt = res.getDatatype();
   CVC5_API_CHECK(dt.d_dtype->isCodatatype() || dt.d_dtype->isWellFounded())
       << "Datatype sort " << dt.d_dtype->getName() + " is not well-founded";
+  CVC5_API_CHECK(dt.d_dtype->isRegular())
+      << "Datatype sort " << dt.d_dtype->getName() + " is not regular";
   return res;
   ////////
   CVC5_API_TRY_CATCH_END;
@@ -5812,6 +5814,8 @@ std::vector<Sort> TermManager::mkDatatypeSorts(
     const Datatype& dt = res[i].getDatatype();
     CVC5_API_CHECK(dt.d_dtype->isCodatatype() || dt.d_dtype->isWellFounded())
         << "Datatype sort " << dt.d_dtype->getName() + " is not well-founded";
+    CVC5_API_CHECK(dt.d_dtype->isRegular())
+        << "Datatype sort " << dt.d_dtype->getName() + " is not regular";
   }
   return res;
   ////////
@@ -6844,6 +6848,22 @@ DatatypeDecl TermManager::mkDatatypeDecl(const std::string& name,
   CVC5_API_TRY_CATCH_END;
 }
 
+/* SyGuS Grammar ------------------------------------------------------ */
+
+Grammar TermManager::mkGrammar(const std::vector<Term>& boundVars,
+                               const std::vector<Term>& ntSymbols)
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_ARG_SIZE_CHECK_EXPECTED(!ntSymbols.empty(), ntSymbols)
+      << "a non-empty vector";
+  CVC5_API_TM_CHECK_BOUND_VARS(boundVars);
+  CVC5_API_TM_CHECK_BOUND_VARS(ntSymbols);
+  //////// all checks before this line
+  return Grammar(d_nm, boundVars, ntSymbols);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Solver                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -6864,6 +6884,11 @@ void Solver::resetInternal()
       new internal::SolverEngine(d_tm.d_nm.get(), d_originalOptions.get()));
   d_slv->setSolver(this);
   d_rng.reset(new internal::Random(d_slv->getOptions().driver.seed));
+  // connect the terminator to the new engine
+  if (d_terminator != nullptr)
+  {
+    setTerminator(d_terminator);
+  }
 }
 
 Solver::Solver(TermManager& tm)
@@ -8421,6 +8446,23 @@ void Solver::addPlugin(Plugin& p)
   CVC5_API_TRY_CATCH_END;
 }
 
+void Solver::setTerminator(Terminator* terminator)
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  d_terminator = terminator;
+  if (terminator == nullptr)
+  {
+    d_slv->setTerminator(nullptr);
+  }
+  else
+  {
+    d_slv->setTerminator([terminator]() { return terminator->terminate(); });
+  }
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 void Solver::pop(uint32_t nscopes) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
@@ -8745,15 +8787,7 @@ Term Solver::declareSygusVar(const std::string& symbol, const Sort& sort) const
 Grammar Solver::mkGrammar(const std::vector<Term>& boundVars,
                           const std::vector<Term>& ntSymbols) const
 {
-  CVC5_API_TRY_CATCH_BEGIN;
-  CVC5_API_ARG_SIZE_CHECK_EXPECTED(!ntSymbols.empty(), ntSymbols)
-      << "a non-empty vector";
-  CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
-  CVC5_API_SOLVER_CHECK_BOUND_VARS(ntSymbols);
-  //////// all checks before this line
-  return Grammar(d_tm.d_nm, boundVars, ntSymbols);
-  ////////
-  CVC5_API_TRY_CATCH_END;
+  return d_tm.mkGrammar(boundVars, ntSymbols);
 }
 
 Term Solver::synthFun(const std::string& symbol,

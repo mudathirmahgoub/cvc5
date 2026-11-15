@@ -85,6 +85,7 @@ set(regress_0_tests
   regress0/arith/issue9643.smt2
   regress0/arith/ite-lift.smt2
   regress0/arith/leq.01.smtv1.smt2
+  regress0/arith/liastar/no_normaliz.smt2
   regress0/arith/log1.smt2
   regress0/arith/log2.smt2
   regress0/arith/log3.smt2
@@ -126,6 +127,7 @@ set(regress_0_tests
   regress0/arrays/bug3020.smt2
   regress0/arrays/bug4957.smt2
   regress0/arrays/bug637.delta.smt2
+  regress0/arrays/central-ee-bool-select-exp.smt2
   regress0/arrays/constarr.cvc.smt2
   regress0/arrays/constarr.smt2
   regress0/arrays/constarr2.cvc.smt2
@@ -697,6 +699,7 @@ set(regress_0_tests
   regress0/bv/issue12336-xor-simp-s.smt2
   regress0/bv/issue13039.smt2
   regress0/bv/issue13039-2-concat.smt2
+  regress0/bv/issue13122-rw-extend-eq.smt2
   regress0/bv/le-elim-conv.smt2
   regress0/bv/macro-rewrites.smt2
   regress0/bv/mul-neg-unsat.smt2
@@ -735,6 +738,7 @@ set(regress_0_tests
   regress0/bv/sizecheck.cvc.smt2
   regress0/bv/smtcompbug.smtv1.smt2
   regress0/bv/test-bv_intro_pow2.smt2
+  regress0/bv/ubv-to-int-range.smt2
   regress0/bv/unsound1-reduced.smt2
   regress0/chained-equality.smt2
   regress0/check-abduct-sample.smt2
@@ -747,6 +751,7 @@ set(regress_0_tests
   regress0/cores/issue4971-1.smt2
   regress0/cores/issue4971-2.smt2
   regress0/cores/issue4971-3.smt2
+  regress0/cores/issue13116-sat-proof-pop.smt2
   regress0/cores/issue5079.smt2
   regress0/cores/issue5234-uc-ua.smt2
   regress0/cores/issue5238.smt2
@@ -754,6 +759,9 @@ set(regress_0_tests
   regress0/cores/issue5908.smt2
   regress0/cores/issue8705-bool-ppassert.smt2
   regress0/cores/issue8822-arith-static-learn.smt2
+  regress0/cores/sat-proof-cadical-user-levels.smt2
+  regress0/cores/unsat-assumptions-only-no-core.smt2
+  regress0/cores/unsat-assumptions-only.smt2
   regress0/cores/unsat-core-lemmas.smt2
   regress0/cvc-rerror-print.cvc.smt2
   regress0/cvc3-bug15.cvc.smt2
@@ -797,10 +805,13 @@ set(regress_0_tests
   regress0/datatypes/dt-cons-eq-simple.smt2
   regress0/datatypes/dt-different-params.smt2
   regress0/datatypes/dt-match-pat-param-2.6.smt2
+  regress0/datatypes/dt-nonregular-mutual.smt2
+  regress0/datatypes/dt-nonregular.smt2
   regress0/datatypes/dt-param-2.6-print.smt2
   regress0/datatypes/dt-param-2.6.smt2
   regress0/datatypes/dt-param-card4-bool-sat.smt2
   regress0/datatypes/dt-param-simple-unsat.smt2
+  regress0/datatypes/dt-regular-nested-param.smt2
   regress0/datatypes/dt-sel-2.6.smt2
   regress0/datatypes/empty_tuprec.cvc.smt2
   regress0/datatypes/eq-clash-rec-find.smt2
@@ -816,6 +827,8 @@ set(regress_0_tests
   regress0/datatypes/issue12930-as-quoted-cons.smt2
   regress0/datatypes/issue12930-tester-quoted-cons.smt2
   regress0/datatypes/issue12930-update-quoted-sel.smt2
+  regress0/datatypes/issue13118-param-card-arrays.smt2
+  regress0/datatypes/issue13118-param-card-unc-simp.smt2
   regress0/datatypes/issue12572-nullable-lift-no-arguments.smt2
   regress0/datatypes/jsat-2.6.smt2
   regress0/datatypes/list-bool.smt2
@@ -882,6 +895,7 @@ set(regress_0_tests
   regress0/decision/error20.smtv1.smt2
   regress0/decision/error3.delta01.smtv1.smt2
   regress0/decision/issue8296-sk-def-before-assert.smt2
+  regress0/decision/jh-false-assertion.smt2
   regress0/decision/pp-regfile.delta01.smtv1.smt2
   regress0/decision/pp-regfile.delta02.smtv1.smt2
   regress0/decision/quant-ex1.smt2
@@ -1004,11 +1018,19 @@ set(regress_0_tests
   regress0/fp/from_ubv.smt2
   regress0/fp/from_sbv.smt2
   regress0/fp/fp-set-comprehension-basic.smt2
+  regress0/fp/fpexp_exp2_pow2_rti.smt2
+  regress0/fp/fpexp_fp2fp_range.smt2
+  regress0/fp/fpexp_rti_matchwidth.smt2
+  regress0/fp/fpexp_rti_overflow.smt2
+  regress0/fp/fpexp_sig3_add.smt2
+  regress0/fp/fpexp_sig3_to_fp.smt2
   regress0/fp/issue-5524.smt2
   regress0/fp/issue10144.smt2
   regress0/fp/issue10507.smt2
   regress0/fp/issue13012-1.smt2
   regress0/fp/issue13012-2.smt2
+  regress0/fp/issue13072-1.smt2
+  regress0/fp/issue13072-2.smt2
   regress0/fp/issue3536.smt2
   regress0/fp/issue3582.smt2
   regress0/fp/issue3619.smt2
@@ -1135,6 +1157,10 @@ set(regress_0_tests
   regress0/ho/lambda-cycle.smt2
   regress0/ho/lambda-elim-sat.smt2
   regress0/ho/lambda-equality-non-canon.smt2
+  regress0/ho/lambda-lift-argument-equality.smt2
+  regress0/ho/lambda-lift-circular.smt2
+  regress0/ho/lambda-lift-partial.smt2
+  regress0/ho/lambda-model-sets-filter.smt2
   regress0/ho/lambda-test-deps.smt2
   regress0/ho/lambda-test-deps-simple.smt2
   regress0/ho/lazy-lambda-model.smt2
@@ -1178,6 +1204,7 @@ set(regress_0_tests
   regress0/issue12038-model-get-value.smt2
   regress0/issue12320-difficulty-subtype-pf.smt2
   regress0/issue12386-get-assertions.smt2
+  regress0/issue13120-get-assignment.smt2
   regress0/issue2832-qualId.smt2
   regress0/issue4010-sort-inf-var.smt2
   regress0/issue4469-unc-no-reuse-var.smt2
@@ -1449,6 +1476,10 @@ set(regress_0_tests
   regress0/parser/issue13073-overloaded-nullable-lift.smt2
   regress0/parser/issue13073-overloaded-true-as.smt2
   regress0/parser/issue13073-overloaded-true.smt2
+  regress0/parser/issue13119-reset-assertions-names.smt2
+  regress0/parser/issue13121-reset-assertions-force-logic.smt2
+  regress0/parser/issue13121-reset-assertions.smt2
+  regress0/parser/issue13121-reset-global-decls.smt2
   regress0/parser/issue12062-overflow.smt2
   regress0/parser/issue5163.smt2
   regress0/parser/issue6908-get-value-uc.smt2
@@ -1657,6 +1688,7 @@ set(regress_0_tests
   regress0/proofs/dsl-rule-comp-types.smt2
   regress0/proofs/dt-cons-eq-clash-qfdt.smt2
   regress0/proofs/dt-cons-eq-clash-ufdt.smt2
+  regress0/proofs/dt-label-exh-cyclic-eq.smt2
   regress0/proofs/equal-eval-rw_340.smt2
   regress0/proofs/eval-rhs.smt2
   regress0/proofs/exists-shadow-simple.smt2
@@ -1674,6 +1706,7 @@ set(regress_0_tests
   regress0/proofs/issue12255-cyclic-arith-rcons.smt2
   regress0/proofs/issue12574-check-proofs-int-to-bv.smt2
   regress0/proofs/issue12604-dt-tester-merge.smt2
+  regress0/proofs/issue12630-timeout-core-mixed-arith.smt2
   regress0/proofs/issue12631-check-proofs-arith.smt2
   regress0/proofs/issue12670-dt-ite-check-proofs.smt2
   regress0/proofs/issue12683-check-proofs-arith-mixed.smt2
@@ -1682,7 +1715,13 @@ set(regress_0_tests
   regress0/proofs/issue12746-bv-invert-solve-mult.smt2
   regress0/proofs/issue12708-check-proofs-arith-cm.smt2
   regress0/proofs/issue12709-open-sat-proof.smt2
+  regress0/proofs/issue12761-incremental-arith-open-proof.smt2
+  regress0/proofs/issue12884-incremental-lemma-proof.smt2
+  regress0/proofs/issue12884-sat-assuming-open-proof.smt2
   regress0/proofs/issue12942-cpc-alpha-eq.smt2
+  regress0/proofs/issue13126-pop-factoring-assume.smt2
+  regress0/proofs/issue13068-proof-log-lemma-order.smt2
+  regress0/proofs/issue13091-incremental-scoped-assump.smt2
   regress0/proofs/issue8983-trust-subs.smt2
   regress0/proofs/issue9156-doublePropProof.smt2
   regress0/proofs/issue9172-doublePropProof.smt2
@@ -1882,6 +1921,7 @@ set(regress_0_tests
   regress0/quantifiers/floor.smt2
   regress0/quantifiers/global_negate.smt2
   regress0/quantifiers/horn-ground-pre-post.smt2
+  regress0/quantifiers/inst-when-last-call-delay.smt2
   regress0/quantifiers/is-even-pred.smt2
   regress0/quantifiers/is-int.smt2
   regress0/quantifiers/issue1805.smt2
@@ -1936,6 +1976,8 @@ set(regress_0_tests
   regress0/quantifiers/nested-delta.smt2
   regress0/quantifiers/nested-inf.smt2
   regress0/quantifiers/partial-trigger.smt2
+  regress0/quantifiers/pre-skolem-pattern.smt2
+  regress0/quantifiers/prenex-shared-subterms.smt2
   regress0/quantifiers/proj-issue152-2-non-std-nterm-ext-rew.smt2
   regress0/quantifiers/proj-issue283-abs-exists.smt2
   regress0/quantifiers/proj-issue283-abs.smt2
@@ -1975,6 +2017,7 @@ set(regress_0_tests
   regress0/quantifiers/qbv-test-invert-concat-1.smt2
   regress0/quantifiers/qbv-test-invert-sign-extend.smt2
   regress0/quantifiers/qcf-rel-dom-opt.smt2
+  regress0/quantifiers/qcf-shared-subterms.smt2
   regress0/quantifiers/qe-closed-str-re.smt2
   regress0/quantifiers/quant-model-simplification.smt2
   regress0/quantifiers/quant-qid-decl.smt2
@@ -2675,6 +2718,7 @@ set(regress_0_tests
   regress0/uf/simple.02.cvc.smt2
   regress0/uf/simple.03.cvc.smt2
   regress0/uf/simple.04.cvc.smt2
+  regress0/uf/sym-break-bug.smt2
   regress0/ufdt/leon-amortize-queue-goal3.smt2
   regress0/ufdt/leon-bsearch-tree-goal15.smt2
   regress0/ufdt/leon-heap-goal2.smt2
@@ -2842,6 +2886,32 @@ set(regress_1_tests
   regress1/abduction/sygus-abduct-test-user.smt2
   regress1/abduction/uf-abduct.smt2
   regress1/abduction/yoni-true-sol.smt2
+  regress1/arith/liastar/assume_not_nonnegative.smt2
+  regress1/arith/liastar/assume_nonnegative.smt2
+  regress1/arith/liastar/constant_lambda.smt2
+  regress1/arith/liastar/disjoint_union.smt2
+  regress1/arith/liastar/f2_sat.smt2
+  regress1/arith/liastar/f2_unsat.smt2
+  regress1/arith/liastar/function_equalities.smt2
+  regress1/arith/liastar/get_value.smt2
+  regress1/arith/liastar/lineality_line_sat.smt2
+  regress1/arith/liastar/lineality_line_unsat.smt2
+  regress1/arith/liastar/linear_logic.smt2
+  regress1/arith/liastar/neg_line.smt2
+  regress1/arith/liastar/neg_mixed_sat.smt2
+  regress1/arith/liastar/neg_parity_unsat.smt2
+  regress1/arith/liastar/neg_sum_sat.smt2
+  regress1/arith/liastar/neg_sum_unsat.smt2
+  regress1/arith/liastar/nonlinear_negated_sat.smt2
+  regress1/arith/liastar/nonlinear_relevance.smt2
+  regress1/arith/liastar/nonlinear_sat.smt2
+  regress1/arith/liastar/paper2008.smt2
+  regress1/arith/liastar/paper2020.smt2
+  regress1/arith/liastar/query026.smt2
+  regress1/arith/liastar/sat1.smt2
+  regress1/arith/liastar/sat2.smt2
+  regress1/arith/liastar/simple.smt2
+  regress1/arith/liastar/two-star-predicates.smt2
   regress1/arith/arith-brab-test.smt2
   regress1/arith/arith-int-004.cvc.smt2
   regress1/arith/arith-int-011.cvc.smt2
@@ -2963,7 +3033,6 @@ set(regress_1_tests
   regress1/bags/proj-issue497.smt2
   regress1/bags/rewriter/aggr_filter_keeps_initial_row.smt2
   regress1/bags/rewriter/aggr_filter_keeps_initial_row_ground.smt2
-  regress1/bags/rewriter/aggr_join_merge_seeds.smt2
   regress1/bags/rewriter/aggr_keyed_empty_table.smt2
   regress1/bags/rewriter/aggr_keyed_product_tested.smt2
   regress1/bags/rewriter/aggr_keyed_product_untested.smt2
@@ -2978,6 +3047,30 @@ set(regress_1_tests
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
+  regress1/bags/rewriter/aggr_constant_columns.smt2
+  regress1/bags/rewriter/aggr_filter_empty_ground.smt2
+  regress1/bags/rewriter/aggr_group_keys.smt2
+  regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_keyed.smt2
+  regress1/bags/rewriter/aggr_merge_function.smt2
+  regress1/bags/rewriter/aggr_nullable_accumulator.smt2
+  regress1/bags/rewriter/aggr_rollup_int_key.smt2
+  regress1/bags/rewriter/canonical_function_variable.smt2
+  regress1/bags/rewriter/canonical_variable.smt2
+  regress1/bags/rewriter/eager_aggr_int_join_key.smt2
+  regress1/bags/rewriter/filter_count_positive.smt2
+  regress1/bags/rewriter/filter_sort_conjuncts.smt2
+  regress1/bags/rewriter/fold_tuple.smt2
+  regress1/bags/rewriter/intersection_sort.smt2
+  regress1/bags/rewriter/join_transitive_not_null.smt2
+  regress1/bags/rewriter/map_equal_columns.smt2
+  regress1/bags/rewriter/map_filter_nullable.smt2
+  regress1/bags/rewriter/map_identity.smt2
+  regress1/bags/rewriter/product_assoc.smt2
+  regress1/bags/rewriter/setof_absorb.smt2
+  regress1/bags/rewriter/setof_map_datatype.smt2
+  regress1/bags/rewriter/setof_of_set.smt2
+  regress1/bags/rewriter/sorted_keys.smt2
   regress1/bags/subbag1.smt2
   regress1/bags/subbag2.smt2
   regress1/bags/table_aggregate1.smt2
@@ -2985,6 +3078,8 @@ set(regress_1_tests
   regress1/bags/table_group2.smt2
   regress1/bags/table_group3.smt2
   regress1/bags/table_group5.smt2
+  regress1/bags/table_group_empty.smt2
+  regress1/bags/table_group_empty_solver.smt2
   regress1/bags/table_join1.smt2
   regress1/bags/table_join2.smt2
   regress1/bags/table_join3.smt2
@@ -3053,6 +3148,7 @@ set(regress_1_tests
   regress1/datatypes/issue3266-small.smt2
   regress1/datatypes/issue4851-cdt-model.smt2
   regress1/datatypes/issue8124-real-int-cg.smt2
+  regress1/datatypes/issue13155-cycle-pf.smt2
   regress1/datatypes/issue-variant-dt-zero.smt2
   regress1/datatypes/manos-model.smt2
   regress1/datatypes/nested-rec-array-aa.smt2
@@ -3175,7 +3271,6 @@ set(regress_1_tests
   regress1/ho/proj-issue139-2.smt2
   regress1/ho/seu589-wrong.smt2
   regress1/ho/sev428-mbqi.smt2
-  regress1/ho/sev310-tdb.smt2
   regress1/ho/soundness_fmf_SYO362^5-delta.smt2
   regress1/ho/store-ax-min.smt2
   regress1/ho/SYO056^1.smt2
@@ -3839,6 +3934,7 @@ set(regress_1_tests
   regress1/sets/relation_group4.smt2
   regress1/sets/relation_group5.smt2
   regress1/sets/relation_group_congruence.smt2
+  regress1/sets/relation_group_empty.smt2
   regress1/sets/relation_project1.smt2
   regress1/sets/relation_project2.smt2
   regress1/sets/remove_check_free_31_6.smt2
@@ -4615,6 +4711,8 @@ set(regression_disabled_tests
   regress1/ho/hoa0102.smt2
   # assertion failure on some builds
   regress1/ho/ho-choice-partial-mbqi-enum.smt2
+  # timeout on some nightly builds after change to lambda lifting policy (#13017)
+  regress1/ho/sev310-tdb.smt2
   # timeout after fixes to uf-lazy-ll for cyclic lambda construction
   regress1/ho/bug_freevar_PHI004^4-delta.smt2
   # times out after update to circuit propagator
@@ -4815,6 +4913,38 @@ endif()
 # add_test(build_regress_test "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --config "$<CONFIG>" --target build-regress)
 # set_tests_properties(build_regress_test PROPERTIES FIXTURES_SETUP build_regress_fixture)
 
+# The output of `cvc5 --show-config` (the features of the binary) is cached
+# in this file so that it is not computed again for every regression. The
+# cache is keyed on the cvc5 binary; it is also removed whenever CMake
+# reconfigures, since the configuration may change without the binary being
+# relinked (e.g., when only the shared library changes).
+set(cvc5_config_cache ${CMAKE_CURRENT_BINARY_DIR}/cvc5-show-config.json)
+file(REMOVE ${cvc5_config_cache})
+
+# run_regression.py only uses the Python standard library, so we run it with
+# the base Python interpreter instead of the one of the virtual environment (if
+# any): on Windows, the python executable of a virtual environment is a
+# launcher that starts the base interpreter as a separate process, which is
+# expensive since the script is run for every regression. We ask the base
+# interpreter for the path of its executable because Python_BASE_EXECUTABLE
+# may be a wrapper (e.g., a pyenv shim is a shell script that takes ~100 ms
+# to start).
+execute_process(
+  COMMAND "${Python_BASE_EXECUTABLE}" -c "import sys; print(sys.executable)"
+  OUTPUT_VARIABLE regress_python
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE regress_python_res)
+if(regress_python_res OR NOT EXISTS "${regress_python}")
+  set(regress_python "${Python_EXECUTABLE}")
+endif()
+file(TO_CMAKE_PATH "${regress_python}" regress_python)
+message(STATUS "Python interpreter for regressions: ${regress_python}")
+
+set(regress_test_env CVC5_REGRESSION_TIMEOUT_AS_CTEST_TIMEOUT=1)
+if(CVC5_TEST_ENV)
+  list(APPEND regress_test_env "${CVC5_TEST_ENV}")
+endif()
+
 macro(cvc5_add_regression_test level file)
   set(wrapper )
   if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -4824,8 +4954,7 @@ macro(cvc5_add_regression_test level file)
   endif()
 
   add_test(${file}
-    ${ENV_PATH_CMD}
-    ${Python_EXECUTABLE}
+    ${regress_python}
     ${run_regress_script}
     ${RUN_REGRESSION_ARGS}
     --carcara-binary ${PROJECT_SOURCE_DIR}/deps/bin/carcara
@@ -4833,6 +4962,7 @@ macro(cvc5_add_regression_test level file)
     --ethos-binary ${PROJECT_SOURCE_DIR}/deps/bin/ethos
     --logos-binary ${PROJECT_SOURCE_DIR}/deps/bin/logos
     --cpc-sig-dir ${PROJECT_SOURCE_DIR}/proofs/eo
+    --cvc5-config-cache ${cvc5_config_cache}
     ${wrapper}
     ${path_to_cvc5}/cvc5${CMAKE_EXECUTABLE_SUFFIX}
     ${CMAKE_CURRENT_LIST_DIR}/${file})
@@ -4843,7 +4973,7 @@ macro(cvc5_add_regression_test level file)
     LABELS "regress${level}"
     SKIP_RETURN_CODE 77
     TIMEOUT_AFTER_MATCH "1;CVC5_REGRESSION_CTEST_TIMEOUT"
-    ENVIRONMENT "CVC5_REGRESSION_TIMEOUT_AS_CTEST_TIMEOUT=1")
+    ENVIRONMENT "${regress_test_env}")
   # set_tests_properties(${file} PROPERTIES FIXTURES_REQUIRED build_regress_fixture)
 endmacro()
 

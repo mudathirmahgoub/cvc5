@@ -93,6 +93,8 @@ const char* toString(Rewrite r)
     case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
     case Rewrite::COUNT_MAP_CONST_COLUMN: return "COUNT_MAP_CONST_COLUMN";
     case Rewrite::FILTER_INTER_MIN: return "FILTER_INTER_MIN";
+    case Rewrite::AGGREGATE_CONSTANT_COLUMNS:
+      return "AGGREGATE_CONSTANT_COLUMNS";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
     case Rewrite::AGGREGATE_INTEGER_SUM: return "AGGREGATE_INTEGER_SUM";
@@ -110,7 +112,7 @@ const char* toString(Rewrite r)
     case Rewrite::FOLD_UNION_COMBINE: return "FOLD_UNION_COMBINE";
     case Rewrite::AGGREGATE_UNION_DISJOINT_KEYS:
       return "AGGREGATE_UNION_DISJOINT_KEYS";
-    case Rewrite::FILTER_AGGREGATE_ONE_ROW: return "FILTER_AGGREGATE_ONE_ROW";
+    case Rewrite::AGGREGATE_ONE_ROW: return "AGGREGATE_ONE_ROW";
     case Rewrite::FILTER_JOIN_TRANSITIVE: return "FILTER_JOIN_TRANSITIVE";
     case Rewrite::AGGREGATE_OVER_JOIN: return "AGGREGATE_OVER_JOIN";
     case Rewrite::FOLD_OVER_JOIN: return "FOLD_OVER_JOIN";
@@ -120,11 +122,10 @@ const char* toString(Rewrite r)
       return "AGGREGATE_DUPLICATE_COLUMN";
     case Rewrite::FOLD_SUM_FROM_ZERO: return "FOLD_SUM_FROM_ZERO";
     case Rewrite::MAP_IDENTITY: return "MAP_IDENTITY";
-    case Rewrite::FILTER_COUNT_AS_COUNTER: return "FILTER_COUNT_AS_COUNTER";
     case Rewrite::UNION_COMPLEMENTARY_FILTERS:
       return "UNION_COMPLEMENTARY_FILTERS";
     case Rewrite::FILTER_KNOWN_NONEMPTY: return "FILTER_KNOWN_NONEMPTY";
-    case Rewrite::FILTER_IMPLIED_COUNTER: return "FILTER_IMPLIED_COUNTER";
+    case Rewrite::FILTER_COUNT_POSITIVE: return "FILTER_COUNT_POSITIVE";
     case Rewrite::COUNT_NULL_IN_NOT_NULL: return "COUNT_NULL_IN_NOT_NULL";
     case Rewrite::FILTER_EQUI_JOIN_SETS: return "FILTER_EQUI_JOIN_SETS";
     case Rewrite::INTERSECTION_SHARE_CONDITIONS:

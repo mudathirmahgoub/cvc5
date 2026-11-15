@@ -80,6 +80,8 @@ const char* toString(Rewrite r)
       return "COUNT_MAP_DUPLICATE_COLUMNS";
     case Rewrite::SETOF_OF_SET: return "SETOF_OF_SET";
     case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
+    case Rewrite::AGGREGATE_CONSTANT_COLUMNS:
+      return "AGGREGATE_CONSTANT_COLUMNS";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
     case Rewrite::AGGREGATE_INTEGER_SUM: return "AGGREGATE_INTEGER_SUM";
@@ -101,7 +103,7 @@ const char* toString(Rewrite r)
     case Rewrite::AGGREGATE_DUPLICATE_COLUMN:
       return "AGGREGATE_DUPLICATE_COLUMN";
     case Rewrite::MAP_IDENTITY: return "MAP_IDENTITY";
-    case Rewrite::FILTER_IMPLIED_COUNTER: return "FILTER_IMPLIED_COUNTER";
+    case Rewrite::FILTER_COUNT_POSITIVE: return "FILTER_COUNT_POSITIVE";
     case Rewrite::FILTER_CONFLICTING_CONSTANTS:
       return "FILTER_CONFLICTING_CONSTANTS";
     case Rewrite::PROJECT_TO_MAP: return "PROJECT_TO_MAP";

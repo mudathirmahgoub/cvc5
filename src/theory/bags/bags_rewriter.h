@@ -90,8 +90,8 @@ class BagsRewriter : public TheoryRewriter
    */
   RewriteResponse postRewrite(TNode n) override;
   /**
-   * preRewrite nodes with kinds: EQUAL, BAG_SUBBAG, BAG_MEMBER.
-   * See the rewrite rules for these kinds below.
+   * preRewrite nodes with kinds: EQUAL, BAG_SUBBAG, BAG_MEMBER, BAG_FILTER
+   * (FILTER_COUNT_POSITIVE). See the rewrite rules for these kinds below.
    */
   RewriteResponse preRewrite(TNode n) override;
 
@@ -168,7 +168,6 @@ class BagsRewriter : public TheoryRewriter
    *
    * - SETOF_BAG_MAKE
    * - SETOF_UNION_SAME
-   * - AGGREGATE_GROUP_KEYS (keysOfReachedGroups)
    * - SETOF_SETOF
    * - SETOF_ABSORB
    * - SETOF_OF_SET (isSet)
@@ -286,17 +285,10 @@ class BagsRewriter : public TheoryRewriter
    * - MAP_MAP, for X a map (rewriteMapOfMap)
    * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - AGGREGATE_DEAD_COLUMNS, for X an aggregate (rewriteAggregateDeadColumns)
-   * - AGGREGATE_COLLAPSE (rewriteAggregateCollapse)
-   * - AGGREGATE_ROLLUP (rewriteAggregateRollup)
-   * - AGGREGATE_JOIN_MERGE and AGGREGATE_SETOF_IDEMPOTENT
-   *   (rewriteAggregateJoinMerge)
+   * - AGGREGATE_JOIN_MERGE (rewriteAggregateJoinMerge)
    * - PRODUCT_AGGREGATE_DEAD_COLUMN (rewriteProductAggregateColumns)
-   * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
-   * - AGGREGATE_UNION_SPLIT (rewriteAggregateUnionSplit)
    * - MAP_EQUAL_COLUMNS, for X a filter
-   * - AGGREGATE_GROUP_KEYS (keysOfReachedGroups)
-   * - MAP_FIXED_COLUMNS, for X a filter or an aggregate (fixedColumns,
-   *   aggregateConstants, readFixed)
+   * - MAP_FIXED_COLUMNS, for X a filter (fixedColumns, readFixed)
    * - MAP_IDENTITY_ON_FILTER
    * - SEMI_JOIN (rewriteSemiJoin)
    * - CANONICAL_VARIABLE (canonicalLambda)
@@ -321,8 +313,8 @@ class BagsRewriter : public TheoryRewriter
    * - FILTER_CONST, FILTER_BAG_MAKE and FILTER_UNION_DISJOINT
    * - FILTER_FILTER, for X a filter (rewriteFilterOfFilter)
    * - FILTER_MAP, for X a map (rewriteFilterOfMap)
+   * - FILTER_COUNT_POSITIVE, for X an aggregate (rewriteFilterCountPositive)
    * - FILTER_SETOF, for X a bag.setof
-   * - FILTER_IMPLIED_COUNTER (dropImpliedCounters)
    * - FILTER_JOIN_TRANSITIVE (rewriteJoinTransitiveConditions)
    */
   BagsRewriteResponse postRewriteFilter(const TNode& n) const;
@@ -376,11 +368,18 @@ class BagsRewriter : public TheoryRewriter
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - AGGREGATE_UNION_OF_MAPS
    * - AGGREGATE_NO_KEYS
+   * - AGGREGATE_CONSTANT_COLUMNS (rewriteAggregateConstantColumns)
    * - AGGREGATE_SORT_OUTPUT (rewriteAggregateSortOutput)
    * - CANONICAL_VARIABLE (canonicalLambda)
    * - AGGREGATE_MAP, for X a map (rewriteAggregateOfMap)
    * - AGGREGATE_CONST
    * - AGGREGATE_KEYED (keyedAggregateRows)
+   * - AGGREGATE_GROUP_KEYS (rewriteAggregateGroupKeys)
+   * - AGGREGATE_SETOF_IDEMPOTENT
+   * - AGGREGATE_COLLAPSE (rewriteAggregateCollapse)
+   * - AGGREGATE_ROLLUP (rewriteAggregateRollup)
+   * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
+   * - AGGREGATE_UNION_SPLIT (rewriteAggregateUnionSplit)
    */
   BagsRewriteResponse postRewriteAggregate(const TNode& n) const;
   /**
@@ -472,7 +471,7 @@ class BagsRewriter : public TheoryRewriter
    * fold or an aggregate folds, as AGGREGATE_MAP does, keeps its value only
    * for such a step. Each column of the result of f must be a term of the
    * columns of the row in same, which the rows folded together share, or of
-   * none; its own accumulator; a sum, as the counter
+   * none; its own accumulator; a sum, as the count of rows
    * (+ ((_ tuple.select 2) acc) 1) or COUNT(*); a minimum or a maximum; SQL's
    * SUM, MIN or MAX, which skip nulls, of an argument tested not null or never
    * null, nonNull the columns of the row that are never null; or one of these
@@ -514,17 +513,14 @@ class BagsRewriter : public TheoryRewriter
    * AGGREGATE_ROLLUP, an aggregate of an aggregate, Calcite's form of DISTINCT
    * aggregates, as the join of an aggregate over the table with one over the
    * distinct values that the inner aggregate groups by. Every outer column must
-   * be a group column, the counter, a merge of an inner aggregate, or an
-   * aggregate over an inner group column (see the .cpp).
+   * be a group column, a merge of an inner aggregate, or an aggregate over an
+   * inner group column (see the .cpp).
    */
   BagsRewriteResponse rewriteAggregateRollup(const TNode& n) const;
   /**
-   * AGGREGATE_SETOF_IDEMPOTENT and AGGREGATE_JOIN_MERGE, for aggregates that
-   * are components of a product under (bag.map h (bag.filter P ..)): an
-   * aggregate over (bag.setof Y) that computes only copies, minimums, maximums
-   * and a counter that nothing reads but (>= c 1) is the aggregate over Y; and
-   * two aggregates over one table by the same group columns, joined on their
-   * copies of them, are one aggregate.
+   * AGGREGATE_JOIN_MERGE, for aggregates that are components of a product
+   * under (bag.map h (bag.filter P ..)): two aggregates over one table by the
+   * same group columns, joined on their copies of them, are one aggregate.
    */
   BagsRewriteResponse rewriteAggregateJoinMerge(const TNode& n) const;
   /**
@@ -535,8 +531,7 @@ class BagsRewriter : public TheoryRewriter
   BagsRewriteResponse rewriteAggregateUnionSplit(const TNode& n) const;
   /**
    * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two of
-   * which share a key value, under a filter that tests its count of rows
-   * positive (see counterColumn), as the union of the aggregates of the parts.
+   * which share a key value, as the union of the aggregates of the parts.
    */
   BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
   /** Whether n, a formula, rewrites to false */
@@ -554,22 +549,17 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse rewriteAggregateDuplicateColumn(const TNode& n) const;
   /**
-   * The group columns that h reads of the groups of an aggregate, as a map
-   * over the rows of its table: for F an aggregate over X under the filter by
-   * its counter (see counterColumn), and h reading only copies of group
-   * columns, (bag.map h' X) with h' reading those columns of the rows of X, to
-   * put under a bag.setof; null otherwise. With covering, h must read all the
-   * group columns. For X : (Bag (Tuple Int Int)),
-   *
-   *   F = (bag.filter
-   *         (lambda ((r (Tuple Int Int Int))) (>= ((_ tuple.select 2) r) 1))
-   *         ((_ table.aggr 0) f i X))
-   *   h = (lambda ((r (Tuple Int Int Int))) (tuple ((_ tuple.select 0) r)))
-   *
-   * and f copying column 0 of X to its column 0, h' is
-   * (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 0) s))).
+   * AGGREGATE_CONSTANT_COLUMNS, the columns of an aggregate that have one
+   * constant in every row (see aggregateConstants) as columns of a map above
+   * the aggregate of the others.
    */
-  Node keysOfReachedGroups(const Node& h, const Node& F, bool covering) const;
+  BagsRewriteResponse rewriteAggregateConstantColumns(const TNode& n) const;
+  /**
+   * AGGREGATE_GROUP_KEYS, an aggregate whose columns are all copies of group
+   * columns as those columns of the distinct values of the group columns of
+   * its table.
+   */
+  BagsRewriteResponse rewriteAggregateGroupKeys(const TNode& n) const;
   /**
    * AGGREGATE_KEYED: for A = ((_ table.aggr K) f i X) whose group columns K
    * contain a key of X (see rowKeys), every group is one row t of X, folded
@@ -626,8 +616,8 @@ class BagsRewriter : public TheoryRewriter
   /**
    * The conditions that every element w of A satisfies, added to out: those
    * read off the filters of A, through projections onto distinct columns, and
-   * through the copies of group columns of an aggregate whose counter a filter
-   * tests. For X : (Bag (Tuple Int Int)) and
+   * through the copies of group columns of an aggregate. For
+   * X : (Bag (Tuple Int Int)) and
    *
    *   A = (bag.map
    *         (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
@@ -735,13 +725,17 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
-   * The column c of the rows of an aggregate ((_ table.aggr K) f i X) that
-   * counts the rows of each group, with the step (+ ((_ tuple.select c) acc) 1)
-   * from 0, when the filter predicate P has the conjunct
-   * (>= ((_ tuple.select c) r) 1); -1 otherwise. The translators from SQL add
-   * such a column and test to a GROUP BY; the test holds of every group.
+   * Whether column c of the aggregate A counts the rows of each group, with
+   * the step (+ ((_ tuple.select c) acc) 1) from 0, or as SQL's COUNT(*) (see
+   * isCountStep). Such a count is at least 1, as every group has a row.
    */
-  int counterColumn(const Node& P, const Node& f, const Node& i) const;
+  bool countsRows(const Node& A, size_t c) const;
+  /**
+   * For arg the column ((_ tuple.select c) row), or that column read as
+   * (nullable.some (nullable.val ((_ tuple.select c) row))) where it is never
+   * null, c; -1 for any other term, as a function of the column.
+   */
+  int columnOf(const Node& arg, const Node& row) const;
   /**
    * For the step of a column of an aggregate over acc, its accumulator
    * column: 0 for SQL's SUM, 1 for MIN, 2 for MAX, which skip nulls and are
@@ -760,23 +754,12 @@ class BagsRewriter : public TheoryRewriter
    */
   bool isCountStep(const Node& step, const Node& acc, const Node& seed) const;
   /**
-   * For a filter predicate P over the product of comps, whose columns start at
-   * starts: for each component, in test, the conjunct of P that tests its count
-   * of rows positive (-1 when none), and, as the result, 1 when P tests the
-   * count, 2 when P joins it on all its group columns with an aggregate marked
-   * 1 or 2 over the same key values, 0 otherwise.
+   * FILTER_COUNT_POSITIVE, for a filter over an aggregate: a conjunct that
+   * tests a count of the rows of each group (see countsRows) to be at least 1
+   * goes, as it holds of every group, and one that tests it equal to a
+   * constant below 1 leaves no row. Also a pre-rewrite.
    */
-  std::vector<int> reachedComponents(const Node& P,
-                                     const std::vector<Node>& comps,
-                                     const std::vector<size_t>& starts,
-                                     std::vector<int>& test) const;
-  /**
-   * FILTER_IMPLIED_COUNTER, a test of the counter of an aggregate among the
-   * components of a product goes when the filter joins it, on all its group
-   * columns, with an aggregate over the same key values whose counter it tests
-   * too (see reachedComponents).
-   */
-  BagsRewriteResponse dropImpliedCounters(const TNode& n) const;
+  BagsRewriteResponse rewriteFilterCountPositive(const TNode& n) const;
   /**
    * FILTER_JOIN_TRANSITIVE, a condition that the rows of one side of a join
    * satisfy on a column that the join equates with others holds of the first
@@ -820,8 +803,8 @@ class BagsRewriter : public TheoryRewriter
   /**
    * An atom of a lambda body that asks about a bag, as the formula it stands
    * for, or null: a membership in an intersection or a bag.setof, an
-   * emptiness of a filter (see rewriteEmptyFilter), of a counter filter over
-   * an aggregate, of an intersection whose filters fix its element, or of a
+   * emptiness of a filter (see rewriteEmptyFilter), of an aggregate, of an
+   * intersection whose filters fix its element, or of a
    * (bag x c), and the count of a fold that counts rows being 0.
    */
   Node emptinessAtom(const Node& atom) const;

@@ -1,6 +1,4 @@
 ; REQUIRES: unrestricted-mode
-; DISABLE-TESTER: cpc
-; (the cpc proof signature has no table.aggr)
 ; FOLD_OVER_JOIN over a join on Int columns, not Nullable ones: SQL's
 ; COUNT(*) over the join of X and Y on c0 is the sum, over the pairs of
 ; groups of X and of Y by c0 that join, of the products of their counts of

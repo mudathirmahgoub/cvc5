@@ -1,6 +1,4 @@
 ; REQUIRES: unrestricted-mode
-; DISABLE-TESTER: cpc
-; (the cpc proof signature has no table.aggr)
 ; SORTED_KEYS: the group columns of an aggregate are sorted and distinct, so
 ; listing them in another order or twice gives the same term
 (set-logic HO_ALL)

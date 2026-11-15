@@ -69,6 +69,8 @@ const char* toString(Rewrite r)
     case Rewrite::SETOF_PROJECTION_SORT: return "SETOF_PROJECTION_SORT";
     case Rewrite::FILTER_KNOWN_MEMBERSHIP: return "FILTER_KNOWN_MEMBERSHIP";
     case Rewrite::COUNT_MAP_CONST_PROBE: return "COUNT_MAP_CONST_PROBE";
+    case Rewrite::AGGREGATE_CONSTANT_COLUMNS:
+      return "AGGREGATE_CONSTANT_COLUMNS";
     case Rewrite::AGGREGATE_KEYED: return "AGGREGATE_KEYED";
     case Rewrite::NOT_NULL_COLUMNS: return "NOT_NULL_COLUMNS";
     case Rewrite::FILTER_NULLABLE_TRUTH: return "FILTER_NULLABLE_TRUTH";

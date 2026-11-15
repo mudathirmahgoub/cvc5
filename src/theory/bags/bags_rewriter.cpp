@@ -2007,14 +2007,6 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       return r;
     }
   }
-  {
-    // AGGREGATE_UNION_DISJOINT_KEYS, see rewriteAggregateUnionDisjointKeys
-    BagsRewriteResponse r = rewriteAggregateUnionDisjointKeys(n);
-    if (r.d_node != n)
-    {
-      return r;
-    }
-  }
   if (n[1].getKind() == Kind::BAG_FILTER)
   {
     // MAP_EQUAL_COLUMNS, for X = (bag.filter P Y): a row of Y that passes P
@@ -2093,32 +2085,15 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
       }
     }
   }
-  if ((n[1].getKind() == Kind::BAG_FILTER
-       || n[1].getKind() == Kind::TABLE_AGGREGATE)
-      && n[0].getKind() == Kind::LAMBDA && n[0][0].getNumChildren() == 1)
+  if (n[1].getKind() == Kind::BAG_FILTER && n[0].getKind() == Kind::LAMBDA
+      && n[0][0].getNumChildren() == 1)
   {
-    // MAP_FIXED_COLUMNS, for f a lambda node: where every row of X has one
-    // constant c in column k, f's body may read c in place of
-    // ((_ tuple.select k) t). fixed maps each such k to its c, and readFixed
-    // makes the replacements. For X = (bag.filter P Y), a row that passes P
-    // has in column k the constant c of a conjunct
-    // (= ((_ tuple.select k) r) c) of P (see fixedColumns).
-    std::map<uint32_t, Node> fixed;
-    Node Y = n[1];
-    if (Y.getKind() == Kind::BAG_FILTER)
-    {
-      fixed = fixedColumns(Y[0]);
-      Y = Y[1];
-    }
-    if (Y.getKind() == Kind::TABLE_AGGREGATE)
-    {
-      // For X or Y an aggregate, a column that the step sets to a constant,
-      // or keeps at a constant initial value, has that constant in every row
-      // (see aggregateConstants). Where P also fixes the column, insert
-      // keeps P's constant.
-      std::map<uint32_t, Node> constant = aggregateConstants(Y);
-      fixed.insert(constant.begin(), constant.end());
-    }
+    // MAP_FIXED_COLUMNS, for f a lambda node and X = (bag.filter P Y): a row
+    // that passes P has in column k the constant c of a conjunct
+    // (= ((_ tuple.select k) r) c) of P (see fixedColumns), so f's body may
+    // read c in place of ((_ tuple.select k) t). fixed maps each such k to
+    // its c, and readFixed makes the replacements.
+    std::map<uint32_t, Node> fixed = fixedColumns(n[1][0]);
     Node var = n[0][0][0];
     Node body = readFixed(n[0][1], var, fixed);
     if (body != n[0][1])
@@ -3197,13 +3172,11 @@ bool BagsRewriter::rewritesToFalse(const Node& n) const
 }
 
 BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
-    const TNode& top) const
+    const TNode& n) const
 {
-  // AGGREGATE_UNION_DISJOINT_KEYS: an aggregate over a union of parts no two of
-  // which share a key value, under a filter Q that tests its count of rows
-  // positive, the shape the translators from SQL give a GROUP BY (see
-  // counterColumn): every group is that of one part, so the groups are the
-  // union of the groups of the parts (see rewrites.h).
+  // AGGREGATE_UNION_DISJOINT_KEYS: an aggregate n over a union of parts no two
+  // of which share a key value: every group is that of one part, so the groups
+  // are the union of the groups of the parts (see rewrites.h).
   // Two parts are disjoint when a key column that the rows of one part have
   // equal to a constant makes a condition on the rows of the other false, as
   // for the parts
@@ -3214,22 +3187,16 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
   // by column 0; or when the key columns of one part are constants or ites of
   // constants and each of their combinations makes such a condition false, or
   // is null in a column the other part never has null in.
-  if (top[1].getKind() != Kind::BAG_FILTER
-      || top[1][1].getKind() != Kind::TABLE_AGGREGATE || d_rewriter == nullptr)
+  Node A = n;
+  if (A[2].getKind() != Kind::BAG_UNION_DISJOINT || d_rewriter == nullptr)
   {
-    return BagsRewriteResponse(top, Rewrite::NONE);
-  }
-  Node A = top[1][1];
-  if (A[2].getKind() != Kind::BAG_UNION_DISJOINT
-      || counterColumn(top[1][0], asLambda(A[0]), A[1]) < 0)
-  {
-    return BagsRewriteResponse(top, Rewrite::NONE);
+    return BagsRewriteResponse(n, Rewrite::NONE);
   }
   const std::vector<uint32_t>& K =
       A.getOperator().getConst<ProjectOp>().getIndices();
   if (K.empty())
   {
-    return BagsRewriteResponse(top, Rewrite::NONE);
+    return BagsRewriteResponse(n, Rewrite::NONE);
   }
   std::vector<Node> parts;
   {
@@ -3408,7 +3375,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
     {
       if (!disjoint(parts[a], parts[b]) && !disjoint(parts[b], parts[a]))
       {
-        return BagsRewriteResponse(top, Rewrite::NONE);
+        return BagsRewriteResponse(n, Rewrite::NONE);
       }
     }
   }
@@ -3420,9 +3387,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
     Node g = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
     u = u.isNull() ? g : d_nm->mkNode(Kind::BAG_UNION_DISJOINT, u, g);
   }
-  Node ret = d_nm->mkNode(
-      Kind::BAG_MAP, top[0], d_nm->mkNode(Kind::BAG_FILTER, top[1][0], u));
-  return BagsRewriteResponse(ret, Rewrite::AGGREGATE_UNION_DISJOINT_KEYS);
+  return BagsRewriteResponse(u, Rewrite::AGGREGATE_UNION_DISJOINT_KEYS);
 }
 
 // The rules for ((_ table.aggr K) f i X): X split into groups, the rows that
@@ -3432,6 +3397,7 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
 // - NOT_NULL_COLUMNS, for f a lambda of a row and an accumulator, over rows
 //   of tuples (assumeNonNull);
 // - AGGREGATE_NO_KEYS, for K empty: one group, all of X, unless X is empty;
+// - AGGREGATE_CONSTANT_COLUMNS (rewriteAggregateConstantColumns);
 // - AGGREGATE_SORT_OUTPUT (rewriteAggregateSortOutput);
 // - CANONICAL_VARIABLE (canonicalLambda), for f a lambda node;
 // - AGGREGATE_MAP, for X a map (rewriteAggregateOfMap);
@@ -3442,9 +3408,9 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateUnionDisjointKeys(
 //   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int)))
 //         (tuple (+ ((_ tuple.select 0) acc) ((_ tuple.select 1) t)))),
 //   (table.aggr f (tuple 0) X)
-//   ---> (ite (= X (as bag.empty (Bag (Tuple Int Int))))
-//             (as bag.empty (Bag (Tuple Int)))
-//             (bag (bag.fold f (tuple 0) X) 1))           (AGGREGATE_NO_KEYS)
+//   ---> (bag (bag.fold f (tuple 0) X)
+//             (ite (= X (as bag.empty (Bag (Tuple Int Int)))) 0 1))
+//                                                         (AGGREGATE_NO_KEYS)
 BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
 {
   Assert(n.getKind() == Kind::TABLE_AGGREGATE);
@@ -3474,19 +3440,24 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
   {
     // AGGREGATE_NO_KEYS: grouping by no column makes one group, all of X,
     // folded once; an empty X has no group (the parts of table.group are not
-    // empty), so the aggregate is empty:
+    // empty), so the row is there only for an X that is not empty:
     //   (table.aggr f i X)
-    //   ---> (ite (= X (as bag.empty (Bag T)))
-    //             (as bag.empty (Bag S))
-    //             (bag (bag.fold f i X) 1))
+    //   ---> (bag (bag.fold f i X) (ite (= X (as bag.empty (Bag T))) 0 1))
     // The nodes are created one per statement, in this order.
     Node fold = d_nm->mkNode(Kind::BAG_FOLD, n[0], n[1], n[2]);
-    Node group = d_nm->mkNode(Kind::BAG_MAKE, fold, d_one);
     Node emptyTable = d_nm->mkConst(EmptyBag(n[2].getType()));
     Node isEmpty = n[2].eqNode(emptyTable);
-    Node noGroup = d_nm->mkConst(EmptyBag(n.getType()));
-    Node ret = d_nm->mkNode(Kind::ITE, isEmpty, noGroup, group);
+    Node times = d_nm->mkNode(Kind::ITE, isEmpty, d_zero, d_one);
+    Node ret = d_nm->mkNode(Kind::BAG_MAKE, fold, times);
     return BagsRewriteResponse(ret, Rewrite::AGGREGATE_NO_KEYS);
+  }
+  {
+    // AGGREGATE_CONSTANT_COLUMNS, see rewriteAggregateConstantColumns
+    BagsRewriteResponse r = rewriteAggregateConstantColumns(n);
+    if (r.d_node != n)
+    {
+      return r;
+    }
   }
   {
     // AGGREGATE_SORT_OUTPUT: the columns of the aggregate's rows in one
@@ -3544,6 +3515,14 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
     if (!rows.isNull())
     {
       return BagsRewriteResponse(rows, Rewrite::AGGREGATE_KEYED);
+    }
+  }
+  {
+    // AGGREGATE_UNION_DISJOINT_KEYS, see rewriteAggregateUnionDisjointKeys
+    BagsRewriteResponse r = rewriteAggregateUnionDisjointKeys(n);
+    if (r.d_node != n)
+    {
+      return r;
     }
   }
 
@@ -6113,8 +6092,7 @@ Node BagsRewriter::emptinessAtom(const Node& atom) const
   //   ---> (= X (as bag.empty (Bag T))), for f counting the rows of X
   //   (= (as bag.empty (Bag V)) ((_ table.aggr K) f i Y))
   //   ---> (= Y (as bag.empty (Bag T))): no group exactly when there is no
-  //        row; also under a filter by the counter test alone (see
-  //        counterColumn), which holds of every group
+  //        row
   //   (= (as bag.empty (Bag T)) F) for a filter F, decorrelated, see
   //   rewriteEmptyFilter
   //   (= (as bag.empty (Bag T)) (bag.inter_min X Y)), whose filters fix
@@ -6186,21 +6164,10 @@ Node BagsRewriter::emptinessAtom(const Node& atom) const
       continue;
     }
     Node F = atom[1 - i];
-    // G: F when it is an aggregate, or the aggregate under F when F filters
-    // it by the counter test alone, which holds of every group
-    Node G = F;
-    if (F.getKind() == Kind::BAG_FILTER
-        && F[1].getKind() == Kind::TABLE_AGGREGATE
-        && asLambda(F[0]).getKind() == Kind::LAMBDA
-        && asLambda(F[0])[1].getKind() != Kind::AND
-        && counterColumn(F[0], asLambda(F[1][0]), F[1][1]) >= 0)
-    {
-      G = F[1];
-    }
-    if (G.getKind() == Kind::TABLE_AGGREGATE)
+    if (F.getKind() == Kind::TABLE_AGGREGATE)
     {
       // a group holds a row: there is none exactly when there is no row
-      Node Y = G[2];
+      Node Y = F[2];
       if (Y.getKind() == Kind::BAG_FILTER)
       {
         return rewriteEmptyFilter(Y);
@@ -6775,6 +6742,99 @@ Node BagsRewriter::readFixed(const Node& body,
   return body.substitute(from.begin(), from.end(), to.begin(), to.end());
 }
 
+BagsRewriteResponse BagsRewriter::rewriteAggregateConstantColumns(
+    const TNode& n) const
+{
+  // AGGREGATE_CONSTANT_COLUMNS, for n = ((_ table.aggr K) f i X) with K not
+  // empty: a column that has one constant in every row (see
+  // aggregateConstants) leaves the aggregate, and a map above writes it,
+  //   (bag.map m ((_ table.aggr K) f' i' X))
+  // with f' and i' the other columns of f and i (see rewrites.h). When no
+  // column is left, the rows are the constants, once per group:
+  //   (bag.map m (bag.setof ((_ table.project K) X)))
+  std::map<uint32_t, Node> constant = aggregateConstants(n);
+  if (constant.empty())
+  {
+    return BagsRewriteResponse(n, Rewrite::NONE);
+  }
+  Node f = n[0];
+  Node acc = f[0][1];
+  size_t w = f[1].getNumChildren();
+  // the columns that stay, with their column in f', and their types
+  std::map<uint32_t, uint32_t> at;
+  std::vector<TypeNode> types;
+  for (uint32_t q = 0; q < w; q++)
+  {
+    if (constant.count(q))
+    {
+      continue;
+    }
+    // a step that stays reads no column that leaves
+    std::set<uint32_t> read;
+    if (!readPositions(f[1][q], acc, read))
+    {
+      return BagsRewriteResponse(n, Rewrite::NONE);
+    }
+    for (uint32_t c : read)
+    {
+      if (constant.count(c))
+      {
+        return BagsRewriteResponse(n, Rewrite::NONE);
+      }
+    }
+    at[q] = types.size();
+    types.push_back(f[1][q].getType());
+  }
+  Node rows;
+  if (at.empty())
+  {
+    const std::vector<uint32_t>& K =
+        n.getOperator().getConst<ProjectOp>().getIndices();
+    Node op = d_nm->mkConst(Kind::TABLE_PROJECT_OP, ProjectOp(K));
+    std::vector<Node> children{op, n[2]};
+    rows = d_nm->mkNode(Kind::BAG_SETOF,
+                        d_nm->mkNode(Kind::TABLE_PROJECT, children));
+  }
+  else
+  {
+    TypeNode accType = d_nm->mkTupleType(types);
+    Node acc2 = NodeManager::mkBoundVar("acc", accType);
+    std::vector<Node> from, to, cells(at.size()), seeds(at.size());
+    for (const std::pair<const uint32_t, uint32_t>& c : at)
+    {
+      from.push_back(datatypes::TupleUtils::nthElementOfTuple(acc, c.first));
+      to.push_back(datatypes::TupleUtils::nthElementOfTuple(acc2, c.second));
+    }
+    for (const std::pair<const uint32_t, uint32_t>& c : at)
+    {
+      cells[c.second] = f[1][c.first].substitute(
+          from.begin(), from.end(), to.begin(), to.end());
+      seeds[c.second] = n[1][c.first];
+    }
+    Node body = datatypes::TupleUtils::constructTupleFromElements(
+        accType, cells, 0, cells.size() - 1);
+    Node seed = datatypes::TupleUtils::constructTupleFromElements(
+        accType, seeds, 0, seeds.size() - 1);
+    Node f2 = d_nm->mkNode(
+        Kind::LAMBDA, d_nm->mkNode(Kind::BOUND_VAR_LIST, f[0][0], acc2), body);
+    std::vector<Node> children{n.getOperator(), f2, seed, n[2]};
+    rows = d_nm->mkNode(Kind::TABLE_AGGREGATE, children);
+  }
+  Node r = rowVariable(rows.getType().getBagElementType());
+  std::vector<Node> cols;
+  for (uint32_t q = 0; q < w; q++)
+  {
+    cols.push_back(constant.count(q)
+                       ? constant[q]
+                       : datatypes::TupleUtils::nthElementOfTuple(r, at[q]));
+  }
+  Node m = mkLambda(r,
+                    datatypes::TupleUtils::constructTupleFromElements(
+                        n.getType().getBagElementType(), cols, 0, w - 1));
+  return BagsRewriteResponse(d_nm->mkNode(Kind::BAG_MAP, m, rows),
+                             Rewrite::AGGREGATE_CONSTANT_COLUMNS);
+}
+
 // For an aggregate A = ((_ table.aggr K) f i X), returns a map from each
 // column that has one constant in every row of A to that constant. Every row
 // of A is a group folded by f from i, and a group is not empty, so f ran on
@@ -6823,83 +6883,6 @@ std::map<uint32_t, Node> BagsRewriter::aggregateConstants(const Node& A) const
     }
   }
   return constants;
-}
-
-// Returns the counter column of an aggregate ((_ table.aggr K) f i X) that
-// the filter predicate P tests positive, or -1 when there is none. A counter
-// column is a column c whose step adds 1 per row,
-// (+ ((_ tuple.select c) acc) 1) or (+ 1 ((_ tuple.select c) acc)), from the
-// initial value 0, as SQL's COUNT(*). P tests it positive when it has the
-// top-level conjunct (>= ((_ tuple.select c) r) 1), r its variable, the form
-// the arithmetic rewriter gives (> ((_ tuple.select c) r) 0) on integers.
-// The translators from SQL add such a counter and test to every aggregate
-// with group columns. The test holds of every group, since a group holds at
-// least one row; the rules that look for it match the terms the translators
-// write.
-// For X : (Bag (Tuple Int Int)),
-//   P = (lambda ((r (Tuple Int Int Int)))
-//         (and (>= ((_ tuple.select 2) r) 1) (>= ((_ tuple.select 1) r) 10)))
-//   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
-//         (tuple ((_ tuple.select 0) t)
-//                (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
-//                (+ ((_ tuple.select 2) acc) 1)))
-//   i = (tuple 0 0 0)
-//   ---> returns 2
-int BagsRewriter::counterColumn(const Node& P,
-                                const Node& f,
-                                const Node& i) const
-{
-  // P must be a lambda of one variable (or a function constant that stands
-  // for one), f a lambda of the row and the accumulator whose body is a
-  // tuple (tuple e_0 .. e_(m-1)), and i a tuple (tuple i_0 .. i_(m-1)) of as
-  // many components
-  Node lambda = asLambda(P);
-  if (lambda.getKind() != Kind::LAMBDA || lambda[0].getNumChildren() != 1
-      || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2
-      || !isTupleTerm(f[1]) || !isTupleTerm(i)
-      || i.getNumChildren() != f[1].getNumChildren())
-  {
-    return -1;
-  }
-  // r, a row of the aggregate's result; acc, the accumulator of f
-  Node r = lambda[0][0];
-  Node acc = f[0][1];
-  std::vector<Node> conjuncts;
-  if (lambda[1].getKind() == Kind::AND)
-  {
-    conjuncts.insert(conjuncts.end(), lambda[1].begin(), lambda[1].end());
-  }
-  else
-  {
-    conjuncts.push_back(lambda[1]);
-  }
-  for (const Node& c : conjuncts)
-  {
-    // c = (>= ((_ tuple.select col) r) 1), for a column col of the rows
-    if (c.getKind() != Kind::GEQ || !c[1].isConst()
-        || c[1].getConst<Rational>() != Rational(1)
-        || c[0].getKind() != Kind::APPLY_SELECTOR || c[0][0] != r)
-    {
-      continue;
-    }
-    uint32_t col = datatypes::utils::indexOf(c[0].getOperator());
-    if (col >= f[1].getNumChildren())
-    {
-      continue;
-    }
-    // e_col adds the integer 1 to its own column of acc, and i_col is 0
-    Node step = f[1][col];
-    Node own = datatypes::TupleUtils::nthElementOfTuple(acc, col);
-    bool increment = step.getKind() == Kind::ADD && step.getNumChildren() == 2
-                     && ((step[0] == own && step[1] == d_one)
-                         || (step[1] == own && step[0] == d_one));
-    if (increment && i[col].isConst()
-        && i[col].getConst<Rational>() == Rational(0))
-    {
-      return static_cast<int>(col);
-    }
-  }
-  return -1;
 }
 
 bool BagsRewriter::isCountStep(const Node& step,

@@ -278,10 +278,8 @@ class BagsRewriter : public TheoryRewriter
    * - MAP_MAP, for X a map (rewriteMapOfMap)
    * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - AGGREGATE_DEAD_COLUMNS, for X an aggregate (rewriteAggregateDeadColumns)
-   * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
    * - MAP_EQUAL_COLUMNS, for X a filter
-   * - MAP_FIXED_COLUMNS, for X a filter or an aggregate (fixedColumns,
-   *   aggregateConstants, readFixed)
+   * - MAP_FIXED_COLUMNS, for X a filter (fixedColumns, readFixed)
    * - SEMI_JOIN (rewriteSemiJoin)
    * - CANONICAL_VARIABLE (canonicalLambda)
    */
@@ -355,11 +353,13 @@ class BagsRewriter : public TheoryRewriter
    *
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - AGGREGATE_NO_KEYS
+   * - AGGREGATE_CONSTANT_COLUMNS (rewriteAggregateConstantColumns)
    * - AGGREGATE_SORT_OUTPUT (rewriteAggregateSortOutput)
    * - CANONICAL_VARIABLE (canonicalLambda)
    * - AGGREGATE_MAP, for X a map (rewriteAggregateOfMap)
    * - AGGREGATE_CONST
    * - AGGREGATE_KEYED (keyedAggregateRows)
+   * - AGGREGATE_UNION_DISJOINT_KEYS (rewriteAggregateUnionDisjointKeys)
    */
   BagsRewriteResponse postRewriteAggregate(const TNode& n) const;
   /**
@@ -442,7 +442,7 @@ class BagsRewriter : public TheoryRewriter
    * fold or an aggregate folds, as AGGREGATE_MAP does, keeps its value only
    * for such a step. Each column of the result of f must be a term of the
    * columns of the row in same, which the rows folded together share, or of
-   * none; its own accumulator; a sum, as the counter
+   * none; its own accumulator; a sum, as the count of rows
    * (+ ((_ tuple.select 2) acc) 1) or COUNT(*); a minimum or a maximum; SQL's
    * SUM, MIN or MAX, which skip nulls, of an argument tested not null or never
    * null, nonNull the columns of the row that are never null; or one of these
@@ -468,12 +468,17 @@ class BagsRewriter : public TheoryRewriter
   BagsRewriteResponse rewriteAggregateDeadColumns(const TNode& n) const;
   /**
    * AGGREGATE_UNION_DISJOINT_KEYS, an aggregate over a union of parts no two of
-   * which share a key value, under a filter that tests its count of rows
-   * positive (see counterColumn), as the union of the aggregates of the parts.
+   * which share a key value, as the union of the aggregates of the parts.
    */
   BagsRewriteResponse rewriteAggregateUnionDisjointKeys(const TNode& n) const;
   /** Whether n, a formula, rewrites to false */
   bool rewritesToFalse(const Node& n) const;
+  /**
+   * AGGREGATE_CONSTANT_COLUMNS, the columns of an aggregate that have one
+   * constant in every row (see aggregateConstants) as columns of a map above
+   * the aggregate of the others.
+   */
+  BagsRewriteResponse rewriteAggregateConstantColumns(const TNode& n) const;
   /**
    * AGGREGATE_KEYED: for A = ((_ table.aggr K) f i X) whose group columns K
    * contain a key of X (see rowKeys), every group is one row t of X, folded
@@ -530,8 +535,8 @@ class BagsRewriter : public TheoryRewriter
   /**
    * The conditions that every element w of A satisfies, added to out: those
    * read off the filters of A, through projections onto distinct columns, and
-   * through the copies of group columns of an aggregate whose counter a filter
-   * tests. For X : (Bag (Tuple Int Int)) and
+   * through the copies of group columns of an aggregate. For
+   * X : (Bag (Tuple Int Int)) and
    *
    *   A = (bag.map
    *         (lambda ((s (Tuple Int Int))) (tuple ((_ tuple.select 1) s)))
@@ -639,14 +644,6 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
-   * The column c of the rows of an aggregate ((_ table.aggr K) f i X) that
-   * counts the rows of each group, with the step (+ ((_ tuple.select c) acc) 1)
-   * from 0, when the filter predicate P has the conjunct
-   * (>= ((_ tuple.select c) r) 1); -1 otherwise. The translators from SQL add
-   * such a column and test to a GROUP BY; the test holds of every group.
-   */
-  int counterColumn(const Node& P, const Node& f, const Node& i) const;
-  /**
    * Whether step counts rows from seed (nullable.some 0): COUNT(*),
    * (nullable.some (+ (nullable.val acc) 1)), or COUNT(x), an ite that keeps
    * acc on the rows where x is null and counts the others.
@@ -695,8 +692,8 @@ class BagsRewriter : public TheoryRewriter
   /**
    * An atom of a lambda body that asks about a bag, as the formula it stands
    * for, or null: a membership in an intersection or a bag.setof, an
-   * emptiness of a filter (see rewriteEmptyFilter), of a counter filter over
-   * an aggregate, of an intersection whose filters fix its element, or of a
+   * emptiness of a filter (see rewriteEmptyFilter), of an aggregate, of an
+   * intersection whose filters fix its element, or of a
    * (bag x c), and the count of a fold that counts rows being 0.
    */
   Node emptinessAtom(const Node& atom) const;

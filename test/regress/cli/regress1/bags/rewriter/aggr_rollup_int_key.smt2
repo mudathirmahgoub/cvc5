@@ -1,6 +1,4 @@
 ; REQUIRES: unrestricted-mode
-; DISABLE-TESTER: cpc
-; (the cpc proof signature has no table.aggr)
 ; AGGREGATE_ROLLUP over a table whose group column c0 is an Int, not a
 ; Nullable Int: SELECT c0, COUNT(DISTINCT c1), COUNT(*) FROM X GROUP BY c0,
 ; as an aggregate by c0 of an aggregate by (c0, c1), is the join of the

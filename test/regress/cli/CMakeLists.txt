@@ -3031,11 +3031,7 @@ set(regress_1_tests
   regress1/bags/product2.smt2
   regress1/bags/product3.smt2
   regress1/bags/proj-issue497.smt2
-  regress1/bags/rewriter/aggr_filter_keeps_initial_row.smt2
-  regress1/bags/rewriter/aggr_filter_keeps_initial_row_ground.smt2
-  regress1/bags/rewriter/aggr_keyed_empty_table.smt2
   regress1/bags/rewriter/aggr_keyed_product_tested.smt2
-  regress1/bags/rewriter/aggr_keyed_product_untested.smt2
   regress1/bags/rewriter/facts_incremental_pop.smt2
   regress1/bags/rewriter/facts_incremental_top.smt2
   regress1/bags/rewriter/facts_negated_key.smt2

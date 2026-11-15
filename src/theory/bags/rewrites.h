@@ -415,9 +415,8 @@ enum class Rewrite : uint32_t
   AGGREGATE_MAP,
   /**
    * A conjunct of a filter over an aggregate that reads only copies of group
-   * columns filters the rows of the table before grouping, when the conjuncts
-   * that stay reject the row of initial values
-   * (see BagsRewriter::rejectsInitialRow).
+   * columns filters the rows of the table before grouping: every group is kept
+   * or dropped whole.
    *
    * For X : (Bag (Tuple Int Int)) and
    *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
@@ -809,8 +808,8 @@ enum class Rewrite : uint32_t
    *          (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t) 5 0))
    *          (bag.filter P X))
    *
-   * Also, over an aggregate whose count of rows the filter tests positive, for
-   * the columns every group computes as a constant.
+   * Also over an aggregate, with or without a filter in between, for the
+   * columns every group computes as a constant.
    */
   MAP_FIXED_COLUMNS,
   /**
@@ -1254,33 +1253,27 @@ enum class Rewrite : uint32_t
   FILTER_INTER_MIN,
   /**
    * An aggregate grouped by a key of its table folds every group, one row,
-   * once. Under a filter that drops the row the aggregate of an empty table
-   * has, made of the initial values, it is a map of the table.
+   * once: it is a map of the table.
    *
    * For X : (Bag (Tuple Int Int)) and
    *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
    *         (tuple ((_ tuple.select 0) t)
    *                (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
-   *                (+ ((_ tuple.select 2) acc) 1))) and
-   *   Q = (lambda ((r (Tuple Int Int Int))) (>= ((_ tuple.select 2) r) 1)),
+   *                (+ ((_ tuple.select 2) acc) 1))),
    *
    * given the assertion that column 0 is a key of X
    * (see BagsRewriter::recordFacts):
    *
    *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
    *
-   *   (bag.filter Q ((_ table.aggr 0) f (tuple 0 0 0) X))
-   *   ---> (bag.filter Q
-   *                    (bag.map
-   *                      (lambda ((t (Tuple Int Int)))
-   *                        (tuple ((_ tuple.select 0) t)
-   *                               ((_ tuple.select 1) t)
-   *                               1))
-   *                      X))
+   *   ((_ table.aggr 0) f (tuple 0 0 0) X)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int)))
+   *            (tuple ((_ tuple.select 0) t) ((_ tuple.select 1) t) 1))
+   *          X)
    *
-   * Q keeps the groups whose count of rows, column 2, is positive, as SQL's
-   * GROUP BY does. Also for an aggregate among the factors of a product under
-   * such a filter.
+   * Here each group is one row: its sum is the row's column 1, and its count
+   * of rows is 1.
    */
   AGGREGATE_KEYED,
   /**
@@ -1538,9 +1531,8 @@ enum class Rewrite : uint32_t
   AGGREGATE_SETOF_IDEMPOTENT,
   /**
    * Two aggregates over one table by the same group columns, both copying every
-   * group column and starting the copies alike, joined on those copies, are one
-   * aggregate that computes the columns of both: SQL's self-join of two GROUP
-   * BY queries over one table.
+   * group column, joined on those copies, are one aggregate that computes the
+   * columns of both: SQL's self-join of two GROUP BY queries over one table.
    *
    * For X : (Bag (Tuple Int Int)) and
    *   fa = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
@@ -1598,7 +1590,7 @@ enum class Rewrite : uint32_t
   AGGREGATE_JOIN_MERGE,
   /**
    * An aggregate over a union of parts with the same group values, under a
-   * filter that keeps the groups some row reached, is the join of the
+   * filter that tests its count of rows positive, is the join of the
    * aggregates of the parts, their columns combined.
    *
    * For X : (Bag (Tuple Int Int)) and
@@ -1639,8 +1631,9 @@ enum class Rewrite : uint32_t
    */
   AGGREGATE_UNION_SPLIT,
   /**
-   * The set of the group columns of the groups some row reached is the set of
-   * those columns of the rows (see BagsRewriter::keysOfReachedGroups).
+   * The set of the group columns of the groups of an aggregate is the set of
+   * those columns of the rows of its table
+   * (see BagsRewriter::keysOfReachedGroups).
    *
    * For X : (Bag (Tuple Int Int)) and
    *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
@@ -1747,7 +1740,7 @@ enum class Rewrite : uint32_t
   FOLD_UNION_COMBINE,
   /**
    * An aggregate over a union of parts that share no value of the group
-   * columns, under a filter that keeps the groups some row reached, is the
+   * columns, under a filter that tests its count of rows positive, is the
    * union of the aggregates of the parts: every group is one part's.
    *
    * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)) and
@@ -1781,8 +1774,8 @@ enum class Rewrite : uint32_t
    */
   AGGREGATE_UNION_DISJOINT_KEYS,
   /**
-   * An aggregate of a bag of one row, under a filter that keeps the groups some
-   * row reached, is the step applied to the row and the initial value.
+   * An aggregate of a bag of one row, under a filter that tests its count of
+   * rows positive, is the step applied to the row and the initial value.
    *
    * For a : Int and b : Int and
    *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
@@ -2135,9 +2128,9 @@ enum class Rewrite : uint32_t
   FILTER_KNOWN_NONEMPTY,
   /**
    * A test that the count of rows of a factor is positive goes when the filter
-   * joins that factor, on all its group columns, with a factor whose groups
-   * some row reached and whose table is the same: every group of the one meets
-   * a group of the other (see BagsRewriter::reachedComponents).
+   * joins that factor, on all its group columns, with a factor whose count it
+   * tests too and whose table is the same: the tests hold of every group, and
+   * the first is kept (see BagsRewriter::reachedComponents).
    *
    * For X : (Bag (Tuple Int Int)) and
    *   A = ((_ table.aggr 0)
@@ -2169,8 +2162,8 @@ enum class Rewrite : uint32_t
    *                 (= ((_ tuple.select 0) p) ((_ tuple.select 3) p))))
    *          (table.product A B))
    *
-   * Here column 2 counts the rows of A and column 4 those of B: the groups of A
-   * that a row reached are those of B.
+   * Here column 2 counts the rows of A and column 4 those of B, which have
+   * the same groups.
    */
   FILTER_IMPLIED_COUNTER,
   /**

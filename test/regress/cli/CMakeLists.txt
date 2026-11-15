@@ -3028,6 +3028,7 @@ set(regress_1_tests
   regress1/bags/proj-issue603.smt2
   regress1/bags/rewriter/aggr_filter_empty_ground.smt2
   regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_keyed.smt2
   regress1/bags/rewriter/aggr_nullable_accumulator.smt2
   regress1/bags/rewriter/aggr_rollup_int_key.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2

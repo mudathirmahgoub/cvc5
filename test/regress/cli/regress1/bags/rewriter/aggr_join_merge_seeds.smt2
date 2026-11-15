@@ -3,10 +3,10 @@
 ; (the debug model check warns that the lambda of the aggregates' reduction,
 ; (lambda ((t (Bag (Tuple Int Int)))) (bag.fold f i t)), has no constant
 ; value)
-; AGGREGATE_JOIN_MERGE merges two aggregates joined on their group columns only
-; when they seed their copies of those columns alike. Here the seeds differ,
-; (tuple 1 0) and (tuple 2 0), so the two aggregates stay apart. An empty X has
-; no group, so each aggregate is empty, and so is their join
+; AGGREGATE_JOIN_MERGE merges two aggregates joined on their group columns
+; also when they seed their copies of those columns differently, here
+; (tuple 1 0) and (tuple 2 0): the first row of a group replaces the seed. An
+; empty X has no group, so each aggregate is empty, and so is their join
 (set-logic HO_ALL)
 (set-info :status sat)
 (declare-const X (Bag (Tuple Int Int)))

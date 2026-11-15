@@ -1,6 +1,4 @@
 ; REQUIRES: unrestricted-mode
-; DISABLE-TESTER: cpc
-; (the cpc proof signature has no table.aggr)
 ; The rules read the columns of an accumulator only when it is a tuple: the
 ; accumulator below is a (Nullable Int), whose step is (nullable.some ..),
 ; and AGGREGATE_INTEGER_SUM took that for the tuple of its columns. The two

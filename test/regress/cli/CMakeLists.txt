@@ -3027,6 +3027,7 @@ set(regress_1_tests
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
   regress1/bags/rewriter/aggr_constant_columns.smt2
+  regress1/bags/rewriter/aggr_filter_empty_ground.smt2
   regress1/bags/rewriter/aggr_group_keys.smt2
   regress1/bags/rewriter/aggr_join_merge_seeds.smt2
   regress1/bags/rewriter/aggr_keyed.smt2
@@ -3036,9 +3037,11 @@ set(regress_1_tests
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
   regress1/bags/rewriter/count_map_filter_keys_join.smt2
+  regress1/bags/rewriter/eager_aggr_int_join_key.smt2
   regress1/bags/rewriter/filter_count_positive.smt2
   regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
+  regress1/bags/rewriter/intersection_sort.smt2
   regress1/bags/rewriter/join_transitive_not_null.smt2
   regress1/bags/rewriter/map_equal_columns.smt2
   regress1/bags/rewriter/map_filter_nullable.smt2
@@ -3047,6 +3050,7 @@ set(regress_1_tests
   regress1/bags/rewriter/setof_absorb.smt2
   regress1/bags/rewriter/setof_map_datatype.smt2
   regress1/bags/rewriter/setof_of_set.smt2
+  regress1/bags/rewriter/sorted_keys.smt2
   regress1/bags/subbag1.smt2
   regress1/bags/subbag2.smt2
   regress1/bags/table_aggregate1.smt2

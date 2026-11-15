@@ -134,10 +134,18 @@ bool TheoryEngineModelBuilder::isAssignable(TNode n)
 {
   Kind k = n.getKind();
   if (k == Kind::SELECT || k == Kind::APPLY_SELECTOR || k == Kind::SEQ_NTH
-      || k == Kind::SET_CHOOSE)
+      || k == Kind::SET_CHOOSE || k == Kind::BAG_FOLD)
   {
     // selectors (and set.choose) are always assignable (where we guarantee
-    // that they are not evaluatable here)
+    // that they are not evaluatable here). So is bag.fold: with
+    // --bags-lazy-fold, a fold stays a term until last call, where the bags
+    // theory states its value by unrolling it (see
+    // BagSolver::reduceFoldsLastCall). Evaluating it instead would wait for
+    // the value of its bag, whose elements can wait for the fold itself, as
+    // for (bag.fold (lambda ((t T) (acc U)) ((_ tuple.select 0) t)) i B) in
+    // one equivalence class with column 0 of a row of B: a deadlock. Without
+    // that option, folds are eliminated during preprocessing and never reach
+    // the model.
     if (!logicInfo().isHigherOrder())
     {
       Assert(!n.getType().isFunction());

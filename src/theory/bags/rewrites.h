@@ -681,8 +681,8 @@ enum class Rewrite : uint32_t
    *          (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t) 5 0))
    *          (bag.filter P X))
    *
-   * Also, over an aggregate whose count of rows the filter tests positive, for
-   * the columns every group computes as a constant.
+   * Also over an aggregate, with or without a filter in between, for the
+   * columns every group computes as a constant.
    */
   MAP_FIXED_COLUMNS,
   /**
@@ -761,33 +761,27 @@ enum class Rewrite : uint32_t
   COUNT_MAP_CONST_PROBE,
   /**
    * An aggregate grouped by a key of its table folds every group, one row,
-   * once. Under a filter that drops the row the aggregate of an empty table
-   * has, made of the initial values, it is a map of the table.
+   * once: it is a map of the table.
    *
    * For X : (Bag (Tuple Int Int)) and
    *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
    *         (tuple ((_ tuple.select 0) t)
    *                (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
-   *                (+ ((_ tuple.select 2) acc) 1))) and
-   *   Q = (lambda ((r (Tuple Int Int Int))) (>= ((_ tuple.select 2) r) 1)),
+   *                (+ ((_ tuple.select 2) acc) 1))),
    *
    * given the assertion that column 0 is a key of X
    * (see BagsRewriter::recordFacts):
    *
    *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
    *
-   *   (bag.filter Q ((_ table.aggr 0) f (tuple 0 0 0) X))
-   *   ---> (bag.filter Q
-   *                    (bag.map
-   *                      (lambda ((t (Tuple Int Int)))
-   *                        (tuple ((_ tuple.select 0) t)
-   *                               ((_ tuple.select 1) t)
-   *                               1))
-   *                      X))
+   *   ((_ table.aggr 0) f (tuple 0 0 0) X)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int)))
+   *            (tuple ((_ tuple.select 0) t) ((_ tuple.select 1) t) 1))
+   *          X)
    *
-   * Q keeps the groups whose count of rows, column 2, is positive, as SQL's
-   * GROUP BY does. Also for an aggregate among the factors of a product under
-   * such a filter.
+   * Here each group is one row: its sum is the row's column 1, and its count
+   * of rows is 1.
    */
   AGGREGATE_KEYED,
   /**
@@ -883,7 +877,7 @@ enum class Rewrite : uint32_t
   FOLD_MAP,
   /**
    * An aggregate over a union of parts that share no value of the group
-   * columns, under a filter that keeps the groups some row reached, is the
+   * columns, under a filter that tests its count of rows positive, is the
    * union of the aggregates of the parts: every group is one part's.
    *
    * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int Int)) and

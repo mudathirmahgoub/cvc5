@@ -621,14 +621,19 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
                 : (rest.size() == 1 ? rest[0] : d_nm->mkNode(Kind::AND, rest));
         Node filtered =
             d_nm->mkNode(Kind::BAG_FILTER, mkLambda(sv, restBody), X);
-        Node count =
-            d_nm->mkNode(Kind::BAG_COUNT,
-                         n[0],
-                         d_nm->mkNode(Kind::BAG_MAP, n[1][0], filtered));
-        Node cond =
-            moved.size() == 1 ? moved[0] : d_nm->mkNode(Kind::AND, moved);
-        Node ret = d_nm->mkNode(Kind::ITE, cond, count, d_zero);
-        return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_FILTER_KEYS);
+        Node mapped = d_nm->mkNode(Kind::BAG_MAP, n[1][0], filtered);
+        // Not when the filter's own rules bring a moved conjunct back, as a
+        // null test of a projected column that the conjuncts that stay
+        // imply: the count below would be n again, and the two rules would
+        // undo each other forever.
+        if (d_rewriter == nullptr || d_rewriter->rewrite(mapped) != n[1])
+        {
+          Node count = d_nm->mkNode(Kind::BAG_COUNT, n[0], mapped);
+          Node cond =
+              moved.size() == 1 ? moved[0] : d_nm->mkNode(Kind::AND, moved);
+          Node ret = d_nm->mkNode(Kind::ITE, cond, count, d_zero);
+          return BagsRewriteResponse(ret, Rewrite::COUNT_MAP_FILTER_KEYS);
+        }
       }
     }
   }

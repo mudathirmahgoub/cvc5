@@ -281,7 +281,6 @@ class BagsRewriter : public TheoryRewriter
    * The rules for an equality of bags (= A B), each a Rewrite id with an
    * example in rewrites.h:
    *
-   * - EQ_EMPTY_ARG, for a map or a bag.setof equal to the empty bag
    * - EQ_REFL, EQ_CONST_FALSE and EQ_SYM
    */
   BagsRewriteResponse postRewriteEqual(const TNode& n) const;

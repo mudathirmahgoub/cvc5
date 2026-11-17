@@ -1669,22 +1669,14 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
 BagsRewriteResponse BagsRewriter::postRewriteEqual(const TNode& n) const
 {
   Assert(n.getKind() == Kind::EQUAL);
-  for (size_t i = 0; i < 2; i++)
-  {
-    if (n[i].getKind() == Kind::BAG_EMPTY
-        && (n[1 - i].getKind() == Kind::BAG_MAP
-            || n[1 - i].getKind() == Kind::BAG_SETOF))
-    {
-      // EQ_EMPTY_ARG: a map or a bag.setof is empty when its argument is,
-      //   (= (bag.map f X) (as bag.empty (Bag U)))
-      //   ---> (= X (as bag.empty (Bag T)))
-      //   (= (bag.setof X) (as bag.empty (Bag T)))
-      //   ---> (= X (as bag.empty (Bag T)))
-      Node X = n[1 - i][n[1 - i].getNumChildren() - 1];
-      Node empty = d_nm->mkConst(EmptyBag(X.getType()));
-      return BagsRewriteResponse(X.eqNode(empty), Rewrite::EQ_EMPTY_ARG);
-    }
-  }
+  // No rule rewrites (= (bag.map f X) (as bag.empty (Bag U))) to
+  // (= X (as bag.empty (Bag T))), though the two are equivalent. The bag
+  // solver reduces a disequality of two bags to a lemma whose premise is that
+  // disequality, and the rewriter rewrites the lemma: such a rule would turn
+  // the premise into one about X, an atom that nothing relates to the map.
+  // The solver could then assume X empty and the map not empty, find the
+  // lemma's premise false, and answer sat with a model that violates the
+  // disequality. The same holds for a bag.setof.
   if (n[0] == n[1])
   {
     Node ret = d_nm->mkConst(true);

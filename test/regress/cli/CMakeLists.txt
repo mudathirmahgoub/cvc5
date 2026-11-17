@@ -3043,11 +3043,17 @@ set(regress_1_tests
   regress1/bags/rewriter/fold_tuple.smt2
   regress1/bags/rewriter/intersection_sort.smt2
   regress1/bags/rewriter/join_transitive_not_null.smt2
+  regress1/bags/rewriter/learned_fact_is_kept.smt2
+  regress1/bags/rewriter/learned_key_out_of_order.smt2
+  regress1/bags/rewriter/learned_keyed_aggregate.smt2
+  regress1/bags/rewriter/learned_not_null.smt2
+  regress1/bags/rewriter/map_empty_disequality.smt2
   regress1/bags/rewriter/map_equal_columns.smt2
   regress1/bags/rewriter/map_filter_nullable.smt2
   regress1/bags/rewriter/map_identity.smt2
   regress1/bags/rewriter/product_assoc.smt2
   regress1/bags/rewriter/setof_absorb.smt2
+  regress1/bags/rewriter/setof_constant_map_model.smt2
   regress1/bags/rewriter/setof_map_datatype.smt2
   regress1/bags/rewriter/setof_of_set.smt2
   regress1/bags/rewriter/sorted_keys.smt2

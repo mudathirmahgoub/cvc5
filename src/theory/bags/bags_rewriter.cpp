@@ -18,7 +18,6 @@
 #include <iostream>
 #include <unordered_set>
 
-#include "expr/attribute.h"
 #include "expr/bound_var_manager.h"
 #include "expr/dtype.h"
 #include "expr/dtype_cons.h"
@@ -75,63 +74,6 @@ namespace bags {
  * (Nullable Bool): a predicate p holds of a row when p is (nullable.some true),
  * see truthOf.
  */
-
-/**
- * The keys of a table constant X: an SEXPR of SEXPRs of column indices, one per
- * key, recorded by recordKey from the key's assertion. For
- * X : (Bag (Tuple Int Int Int)), the assertion that columns 0 and 2 are a key
- * is
- *   (= (bag.setof ((_ table.project 0 2) X)) ((_ table.project 0 2) X))
- * and X then gets the attribute (SEXPR (SEXPR 0 2)).
- *
- * A key of a table is a set of columns that no two rows of the table agree
- * on, a row that occurs twice counting as two rows; so a table with a key has
- * no row twice. A table constant is a free constant of a table sort, as
- * X above, declared by (declare-const X (Bag (Tuple Int Int Int))); the code
- * tests for one with isVar(). The attribute is stored on the node X, and
- * keysOf reads it back, as {{0, 2}} for the example above.
- */
-struct BagsKeysAttributeId
-{
-};
-typedef expr::Attribute<BagsKeysAttributeId, Node> BagsKeysAttribute;
-/**
- * A term of an assertion that the rewriter reads a fact from: the bag.setof of
- * a key assertion, or the bag.filter of a NOT NULL assertion (see recordFacts).
- * Such a term is never rewritten: the fact it states would justify rewriting it
- * away (the set of the projection onto a key is the projection itself), and the
- * assertion would become true and the fact lost.
- *
- * For instance, once column 1 of X is known never null, NOT_NULL_COLUMNS
- * would rewrite the predicate of the NOT NULL assertion below,
- * (= ((_ tuple.select 1) t) (as nullable.null (Nullable Int))), to false,
- * the filter to the empty bag, and the assertion to true: the solver would
- * no longer be told the fact that the rewrites rely on. The attribute is true
- * on such a term; rewriteSetof and postRewriteFilter return a term that has
- * it unchanged.
- */
-struct BagsKeyTermAttributeId
-{
-};
-typedef expr::Attribute<BagsKeyTermAttributeId, bool> BagsKeyTermAttribute;
-/**
- * The columns of a table constant X that hold no null: an SEXPR of column
- * indices, recorded by recordNotNull. For X : (Bag (Tuple Int (Nullable Int))),
- * the assertion that column 1 is NOT NULL is
- *   (= (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
- *                    (= ((_ tuple.select 1) t)
- *                       (as nullable.null (Nullable Int))))
- *                  X)
- *      (as bag.empty (Bag (Tuple Int (Nullable Int)))))
- * and X then gets the attribute (SEXPR 1).
- *
- * nonNullColumns reads it, for a table constant and for the terms built
- * over one.
- */
-struct BagsNotNullAttributeId
-{
-};
-typedef expr::Attribute<BagsNotNullAttributeId, Node> BagsNotNullAttribute;
 
 namespace {
 /**
@@ -239,11 +181,13 @@ BagsRewriteResponse::BagsRewriteResponse(Node n, Rewrite rewrite)
 BagsRewriter::BagsRewriter(NodeManager* nm,
                            Rewriter* r,
                            HistogramStat<Rewrite>* statistics,
-                           bool higherOrder)
+                           bool higherOrder,
+                           const TableFacts* facts)
     : TheoryRewriter(nm),
       d_rewriter(r),
       d_statistics(statistics),
-      d_higherOrder(higherOrder)
+      d_higherOrder(higherOrder),
+      d_facts(facts)
 {
   d_zero = d_nm->mkConstInt(Rational(0));
   d_one = d_nm->mkConstInt(Rational(1));
@@ -517,8 +461,6 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
 
 // The rules for (bag.setof X), the elements of X each once, tried in this
 // order:
-// - none for the bag.setof of a key assertion, which stays as it is (see
-//   BagsKeyTermAttribute);
 // - SETOF_BAG_MAKE, for X = (bag x c): (bag x 1) when c is a positive
 //   constant, and (bag x (ite (>= c 1) 1 0)) when c is not a constant. A
 //   constant c <= 0 does not reach here, since rewriteMakeBag has already
@@ -530,15 +472,6 @@ BagsRewriteResponse BagsRewriter::rewriteBagCount(const TNode& n) const
 BagsRewriteResponse BagsRewriter::rewriteSetof(const TNode& n) const
 {
   Assert(n.getKind() == Kind::BAG_SETOF);
-  if (n.getAttribute(BagsKeyTermAttribute()))
-  {
-    // The bag.setof of a key assertion, which states that columns of a table
-    // are a key of it, as
-    //   (= (bag.setof ((_ table.project 0 2) X)) ((_ table.project 0 2) X))
-    // recordKey read the key off it and marked it. Rewriting it by the key
-    // would make the assertion true and lose the fact, so it stays as it is.
-    return BagsRewriteResponse(n, Rewrite::NONE);
-  }
   if (n[0].getKind() == Kind::BAG_MAKE && n[0][1].isConst()
       && n[0][1].getConst<Rational>().sgn() == 1)
   {
@@ -817,159 +750,109 @@ BagsRewriteResponse BagsRewriter::rewriteCard(const TNode& n) const
   return BagsRewriteResponse(n, Rewrite::NONE);
 }
 
-// Records the keys and NOT NULL columns of table constants that a top-level
-// assertion states, for the rules that read them (see the header). For
-// X : (Bag (Tuple Int (Nullable Int))), the assertion
-//   (and (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X))
-//        (= (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
-//                         (= ((_ tuple.select 1) t)
-//                            (as nullable.null (Nullable Int))))
-//                       X)
-//           (as bag.empty (Bag (Tuple Int (Nullable Int))))))
-// records the key {0} of X (see recordKey) and that column 1 of X is never
-// null (see recordNotNull). An assertion of any other shape records nothing.
-void BagsRewriter::recordFacts(TNode assertion) const
+bool BagsRewriter::readTableFact(TNode lit, TableFacts& facts) const
 {
-  // Walk down the conjunctions of the assertion: a conjunct of a top-level
-  // assertion holds whenever the assertion does, so it is a top-level fact
-  // too. Only AND is entered, so an equality under a negation or a
-  // disjunction, which need not hold, is never read.
-  std::vector<TNode> todo{assertion};
-  while (!todo.empty())
+  // a negated equality states no fact
+  if (lit.getKind() != Kind::EQUAL || !lit[0].getType().isBag())
   {
-    TNode a = todo.back();
-    todo.pop_back();
-    if (a.getKind() == Kind::AND)
-    {
-      todo.insert(todo.end(), a.begin(), a.end());
-    }
-    else if (a.getKind() == Kind::EQUAL && a[0].getType().isBag())
-    {
-      // An equality of bags may be a key assertion or a NOT NULL assertion.
-      // Each of the two calls checks for its own shape and does nothing on
-      // an equality of another shape.
-      recordKey(a);
-      recordNotNull(a);
-    }
+    return false;
   }
+  bool key = readKey(lit, facts);
+  bool notNull = readNotNull(lit, facts);
+  return key || notNull;
 }
 
-// Records the key that n states, when n is a key assertion; does nothing
-// otherwise. A key is a set of columns that no two rows of a table agree on.
-// For X : (Bag (Tuple Int Int Int)),
-//   (= (bag.setof ((_ table.project 2 0) X)) ((_ table.project 2 0) X))
-// says that the projection of X onto columns 2 and 0 has no row twice, so no
-// two rows of X agree on both columns: {0, 2} is a key of X. X gets the key
-// (SEXPR 0 2) added to its BagsKeysAttribute, and the bag.setof of n gets
-// BagsKeyTermAttribute, so that the rewriter leaves it as it is.
-void BagsRewriter::recordKey(const TNode& n) const
+namespace {
+/**
+ * The table constant T that M projects and the columns K it keeps, or a null T:
+ *   ((_ table.project 2 0) X) ---> X, 2 0
+ *   (bag.map (lambda ((t (Tuple Int Int Int))) ((_ tuple.project 2 0) t)) X)
+ *   ---> X, 2 0
+ */
+std::pair<Node, std::vector<uint32_t>> projectionOf(
+    const Node& M, const std::function<std::vector<uint32_t>(const Node&)>& ix)
 {
-  // n is a key assertion when one side is (bag.setof M) and the other side is
-  // M itself, either way round, where M is the projection of a table constant
-  // X onto columns K. M may be written as the input states a projection,
-  // ((_ table.project 0 2) X), or as the map the rewriter turns a projection
-  // into, (bag.map (lambda ((t (Tuple Int Int Int))) ((_ tuple.project 0 2) t))
-  // X). Then no two rows of X agree on K: K is a key of X. The loop tries
-  // the bag.setof on side i = 0 and on side i = 1.
+  if (M.getKind() == Kind::TABLE_PROJECT && M[0].isVar())
+  {
+    return {M[0], M.getOperator().getConst<ProjectOp>().getIndices()};
+  }
+  if (M.getKind() == Kind::BAG_MAP && M[1].isVar())
+  {
+    std::vector<uint32_t> K = ix(M[0]);
+    if (!K.empty())
+    {
+      return {M[1], K};
+    }
+  }
+  return {Node::null(), {}};
+}
+}  // namespace
+
+bool BagsRewriter::readKey(const TNode& n, TableFacts& facts) const
+{
+  std::function<std::vector<uint32_t>(const Node&)> ix = [this](const Node& f) {
+    return projectionIndices(asLambda(f));
+  };
   for (size_t i = 0; i < 2; i++)
   {
-    if (n[i].getKind() != Kind::BAG_SETOF || n[i][0] != n[1 - i])
+    // M, either side, a projection of the table constant T onto K
+    auto [T, K] = projectionOf(n[1 - i], ix);
+    // no columns would be a key {} of a table of at most one row, which the
+    // rules do not read
+    if (T.isNull() || K.empty())
     {
       continue;
     }
-    Node M = n[1 - i];
-    std::vector<uint32_t> K;
-    Node T;
-    // T is the table constant X; the fact is stored on it, so it must be a
-    // free constant (isVar), not a term.
-    if (M.getKind() == Kind::TABLE_PROJECT && M[0].isVar())
+    Node S = n[i];
+    bool isSet = false;
+    if (S.getKind() == Kind::BAG_SETOF && S[0] == n[1 - i])
     {
-      // M = ((_ table.project 0 2) X): K is the projection's indices.
-      K = M.getOperator().getConst<ProjectOp>().getIndices();
-      T = M[0];
+      // (= (bag.setof M) M)
+      isSet = true;
     }
-    else if (M.getKind() == Kind::BAG_MAP && M[1].isVar())
+    else if (S.getKind() == Kind::BAG_MAP && S[1].getKind() == Kind::BAG_SETOF)
     {
-      // M = (bag.map g X), with g a projection lambda, of body
-      // ((_ tuple.project 0 2) t) or
-      // (tuple ((_ tuple.select 0) t) ((_ tuple.select 2) t)): K is the
-      // columns that g selects (see projectionIndices), empty for another g.
-      K = projectionIndices(asLambda(M[0]));
-      T = M[1];
+      // (= M (bag.map h (bag.setof M'))), M' the projection of T onto the
+      // columns of M in order and h a permutation of its columns, so that the
+      // image of the set (bag.setof M') is a set
+      auto [T2, K2] = projectionOf(S[1][0], ix);
+      std::vector<uint32_t> H = ix(S[0]);
+      std::vector<uint32_t> sorted = K;
+      std::sort(sorted.begin(), sorted.end());
+      std::vector<uint32_t> perm = H;
+      std::sort(perm.begin(), perm.end());
+      bool permutation = perm.size() == K2.size();
+      for (size_t j = 0; permutation && j < perm.size(); j++)
+      {
+        permutation = perm[j] == j;
+      }
+      isSet =
+          T2 == T && K2 == sorted && permutation
+          && std::adjacent_find(sorted.begin(), sorted.end()) == sorted.end();
     }
-    // K is empty when M has neither shape, or projects onto no column:
-    // nothing is recorded then.
-    if (K.empty())
+    if (!isSet)
     {
       continue;
     }
-    // A key is a set of columns: sort K and drop repeats, so that
-    // ((_ table.project 2 0) X) and ((_ table.project 0 2 0) X) give the same
-    // key (SEXPR 0 2).
-    std::sort(K.begin(), K.end());
-    K.erase(std::unique(K.begin(), K.end()), K.end());
-    std::vector<Node> cols;
-    for (uint32_t k : K)
-    {
-      cols.push_back(d_nm->mkConstInt(Rational(k)));
-    }
-    // The key as a node, (SEXPR 0 2) for K = {0, 2}, to be added below to the
-    // keys that X already has, such as (SEXPR (SEXPR 1)).
-    Node key = d_nm->mkNode(Kind::SEXPR, cols);
-    // Mark the bag.setof of n, so that the rewriter does not rewrite it away
-    // with the very fact it states (see BagsKeyTermAttribute). The rewriter
-    // rewrites the argument M before the bag.setof above it (PROJECT_TO_MAP,
-    // for one, turns a projection into a map), and then meets
-    // (bag.setof M'), with M' the rewritten M, a new node: mark that one too.
-    // This needs the rewriter, so it is skipped when d_rewriter is null.
-    Node keyTerm = n[i];
-    keyTerm.setAttribute(BagsKeyTermAttribute(), true);
-    if (d_rewriter != nullptr)
-    {
-      Node normal = d_nm->mkNode(Kind::BAG_SETOF, d_rewriter->rewrite(M));
-      normal.setAttribute(BagsKeyTermAttribute(), true);
-    }
-    // X's keys so far, then the new key unless X has it already; the
-    // attribute is replaced by the SEXPR of them all.
-    std::vector<Node> keys;
-    if (T.hasAttribute(BagsKeysAttribute()))
-    {
-      Node old = T.getAttribute(BagsKeysAttribute());
-      keys.insert(keys.end(), old.begin(), old.end());
-    }
+    // K = 2 0 2 ---> {0, 2}
+    std::set<uint32_t> key(K.begin(), K.end());
+    std::vector<std::set<uint32_t>>& keys = facts.d_keys[T];
     if (std::find(keys.begin(), keys.end(), key) == keys.end())
     {
       keys.push_back(key);
-      Node table = T;
-      table.setAttribute(BagsKeysAttribute(), d_nm->mkNode(Kind::SEXPR, keys));
     }
+    return true;
   }
+  return false;
 }
 
-// Records the never-null column that n states, when n is a NOT NULL
-// assertion; does nothing otherwise. For X : (Bag (Tuple Int (Nullable Int))),
-// with both equalities the other way round from the header's example,
-//   (= (as bag.empty (Bag (Tuple Int (Nullable Int))))
-//      (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
-//                    (= (as nullable.null (Nullable Int))
-//                       ((_ tuple.select 1) t)))
-//                  X))
-// says that no row of X has null in column 1. X gets 1 added to its
-// BagsNotNullAttribute, and the bag.filter of n gets BagsKeyTermAttribute,
-// so that the rewriter leaves it as it is.
-void BagsRewriter::recordNotNull(const TNode& n) const
+bool BagsRewriter::readNotNull(const TNode& n, TableFacts& facts) const
 {
-  // n is a NOT NULL assertion when one side is the empty bag and the other is
-  // the filter of a table constant X by a predicate that holds of the rows
-  // with null in some column k: no row of X has null in column k. Both n and
-  // the equality in the predicate may be either way round (see recordNotNull
-  // in the header):
-  //   (= (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
-  //                    (= ((_ tuple.select k) t)
-  //                       (as nullable.null (Nullable Int))))
-  //                  X)
-  //      (as bag.empty (Bag (Tuple Int (Nullable Int)))))
-  // The loop tries the empty bag on side i = 0 and on side i = 1.
+  // n = (= (bag.filter p X) (as bag.empty (Bag (Tuple Int (Nullable Int))))),
+  // for
+  //   p = (lambda ((t (Tuple Int (Nullable Int))))
+  //         (= ((_ tuple.select 1) t) (as nullable.null (Nullable Int))))
+  // with both equalities either way round.
   for (size_t i = 0; i < 2; i++)
   {
     if (n[i].getKind() != Kind::BAG_EMPTY
@@ -980,19 +863,15 @@ void BagsRewriter::recordNotNull(const TNode& n) const
     Node F = n[1 - i];
     Node T = F[1];
     Node p = asLambda(F[0]);
-    // F = (bag.filter p X): X must be a free constant (isVar), as the fact is
-    // stored on it, and p a lambda of one variable whose body is an equality.
-    // asLambda reads p as a lambda also when it is a function array constant.
-    if (!T.isVar() || p.getKind() != Kind::LAMBDA || p[0].getNumChildren() != 1
+    if (!T.isVar() || !T.getType().getBagElementType().isTuple()
+        || p.getKind() != Kind::LAMBDA || p[0].getNumChildren() != 1
         || p[1].getKind() != Kind::EQUAL)
     {
       continue;
     }
     Node v = p[0][0];
     Node col;
-    // One side of the equality must be the null constant, and the other a
-    // selector applied to the lambda's variable, ((_ tuple.select k) t);
-    // col is that selector term.
+    // col = ((_ tuple.select 1) t)
     for (size_t sd = 0; sd < 2; sd++)
     {
       if (isNullConstant(p[1][sd])
@@ -1006,41 +885,10 @@ void BagsRewriter::recordNotNull(const TNode& n) const
     {
       continue;
     }
-    // Mark the filter of n, so that the rewriter does not rewrite it away
-    // with the very fact it states (see BagsKeyTermAttribute). The rewriter
-    // rewrites the predicate p before the filter above it, and then meets
-    // (bag.filter p' X), with p' the rewritten p, a new node when p changes:
-    // mark that one too. This needs the rewriter, so it is skipped when
-    // d_rewriter is null.
-    F.setAttribute(BagsKeyTermAttribute(), true);
-    if (d_rewriter != nullptr)
-    {
-      Node normal =
-          d_nm->mkNode(Kind::BAG_FILTER, d_rewriter->rewrite(F[0]), T);
-      normal.setAttribute(BagsKeyTermAttribute(), true);
-    }
-    // k, the index of the column that col selects, as an integer constant.
-    // It is added to the never-null columns (SEXPR ..) that X already has,
-    // unless it is among them; the attribute is replaced by the new SEXPR.
-    Node k = d_nm->mkConstInt(
-        Rational(datatypes::utils::indexOf(col.getOperator())));
-    std::vector<Node> cols;
-    if (T.hasAttribute(BagsNotNullAttribute()))
-    {
-      Node old = T.getAttribute(BagsNotNullAttribute());
-      cols.insert(cols.end(), old.begin(), old.end());
-    }
-    if (std::find(cols.begin(), cols.end(), k) == cols.end())
-    {
-      cols.push_back(k);
-      Node table = T;
-      table.setAttribute(BagsNotNullAttribute(),
-                         d_nm->mkNode(Kind::SEXPR, cols));
-      // The results that nonNullColumns cached were computed without this
-      // column and could miss it: drop them all.
-      d_nonNull.clear();
-    }
+    facts.d_notNull[T].insert(datatypes::utils::indexOf(col.getOperator()));
+    return true;
   }
+  return false;
 }
 
 // Whether the term t is never null, in every row x and accumulator acc whose
@@ -1222,11 +1070,11 @@ std::set<uint32_t> BagsRewriter::aggregateNonNull(const Node& B) const
 }
 
 // The columns of the rows of B that are never null, read off B's structure:
-// the NOT NULL columns recorded for a table constant (see recordNotNull),
+// the NOT NULL columns that the facts give a table constant (see TableFacts),
 // the columns that each operator keeps never null from its arguments, and
 // those that a filter makes never null by testing them. For instance, with
-// column 0 of X : (Bag (Tuple (Nullable Int) (Nullable Int))) recorded never
-// null,
+// column 0 of X : (Bag (Tuple (Nullable Int) (Nullable Int))) never null in
+// the facts,
 //   (bag.filter
 //     (lambda ((t (Tuple (Nullable Int) (Nullable Int))))
 //       (nullable.is_some ((_ tuple.select 1) t)))
@@ -1235,7 +1083,7 @@ std::set<uint32_t> BagsRewriter::aggregateNonNull(const Node& B) const
 // missing from it may still be never null, and is cached in d_nonNull.
 std::set<uint32_t> BagsRewriter::nonNullColumns(const Node& B) const
 {
-  // the cached result, which recordNotNull clears when it records a column
+  // the cached result
   auto it = d_nonNull.find(B);
   if (it != d_nonNull.end())
   {
@@ -1374,14 +1222,14 @@ std::set<uint32_t> BagsRewriter::nonNullColumns(const Node& B) const
       // ((_ table.aggr K) f i Y), see aggregateNonNull
       case Kind::TABLE_AGGREGATE: out = aggregateNonNull(B); break;
       default:
-        // A table constant: the NOT NULL columns recorded for it, as the
-        // SEXPR of integer constants that recordNotNull built. Any other
+        // A table constant: its NOT NULL columns in the facts. Any other
         // node, such as (bag (tuple ..) 1) or a projection, gets none.
-        if (B.isVar() && B.hasAttribute(BagsNotNullAttribute()))
+        if (B.isVar() && d_facts != nullptr)
         {
-          for (const Node& c : B.getAttribute(BagsNotNullAttribute()))
+          auto facts = d_facts->d_notNull.find(B);
+          if (facts != d_facts->d_notNull.end())
           {
-            out.insert(c.getConst<Rational>().getNumerator().toUnsignedInt());
+            out = facts->second;
           }
         }
         break;
@@ -1502,13 +1350,13 @@ Node BagsRewriter::assumeNonNull(const Node& body,
   return cache[body];
 }
 
-// The keys recorded for a table constant (see recordKey), each as a set of
-// column indices; a key is a set of columns that no two rows of the table
-// agree on. B is the table constant X or a filter of it, possibly nested,
-// as (bag.filter p (bag.filter q X)): a filter keeps some of the rows of X,
-// so the keys of X still hold. For X with the attribute
-// (SEXPR (SEXPR 0 2) (SEXPR 1)), the result is {{0, 2}, {1}}. It is empty
-// for any other B, and for a table constant with no key recorded.
+// The keys that the facts give a table constant (see TableFacts), each as a
+// set of column indices; a key is a set of columns that no two rows of the
+// table agree on. B is the table constant X or a filter of it, possibly
+// nested, as (bag.filter p (bag.filter q X)): a filter keeps some of the rows
+// of X, so the keys of X still hold. For X with the keys {0, 2} and {1}, the
+// result is {{0, 2}, {1}}. It is empty for any other B, for a table constant
+// with no key, and for a rewriter without facts.
 std::vector<std::set<uint32_t>> BagsRewriter::keysOf(const Node& B) const
 {
   std::vector<std::set<uint32_t>> keys;
@@ -1518,19 +1366,14 @@ std::vector<std::set<uint32_t>> BagsRewriter::keysOf(const Node& B) const
   {
     T = T[1];
   }
-  if (!T.isVar() || !T.hasAttribute(BagsKeysAttribute()))
+  if (!T.isVar() || d_facts == nullptr)
   {
     return keys;
   }
-  // each key (SEXPR 0 2), of integer constants, as the set {0, 2}
-  for (const Node& key : T.getAttribute(BagsKeysAttribute()))
+  auto it = d_facts->d_keys.find(T);
+  if (it != d_facts->d_keys.end())
   {
-    std::set<uint32_t> cols;
-    for (const Node& c : key)
-    {
-      cols.insert(c.getConst<Rational>().getNumerator().toUnsignedInt());
-    }
-    keys.push_back(cols);
+    keys = it->second;
   }
   return keys;
 }
@@ -1801,8 +1644,8 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
     }
     default: break;
   }
-  // a table constant: its recorded keys (see keysOf); any other node, such as
-  // (bag (tuple ..) 1) or a projection, has no key found
+  // a table constant: its keys in the facts (see keysOf); any other node, such
+  // as (bag (tuple ..) 1) or a projection, has no key found
   if (B.isVar())
   {
     return keysOf(B);
@@ -2133,7 +1976,6 @@ BagsRewriteResponse BagsRewriter::postRewriteMap(const TNode& n) const
 
 // The rules for (bag.filter P A), the rows t of A with (P t), tried in this
 // order; the first that changes the term returns it:
-// - none for the filter of a NOT NULL assertion (see BagsKeyTermAttribute);
 // - NOT_NULL_COLUMNS: the null tests in P's body of the columns that are
 //   never null in the rows of A are decided (assumeNonNull);
 // - FILTER_TRUE and FILTER_FALSE, for a body that is a constant;
@@ -2158,19 +2000,6 @@ BagsRewriteResponse BagsRewriter::postRewriteFilter(const TNode& n) const
   Assert(n.getKind() == Kind::BAG_FILTER);
   Node P = n[0];
   Node A = n[1];
-  if (n.getAttribute(BagsKeyTermAttribute()))
-  {
-    // The filter of a NOT NULL assertion, which states that a column of a
-    // table X is never null, as
-    //   (= (bag.filter (lambda ((t (Tuple Int (Nullable Int))))
-    //                    (= ((_ tuple.select 1) t)
-    //                       (as nullable.null (Nullable Int))))
-    //                  X)
-    //      (as bag.empty (Bag (Tuple Int (Nullable Int)))))
-    // recordNotNull read the fact off it and marked it. Rewriting it by the
-    // fact would make the assertion true and lose the fact, so it stays.
-    return BagsRewriteResponse(n, Rewrite::NONE);
-  }
   TypeNode t = A.getType();
   {
     // NOT_NULL_COLUMNS: nonNullColumns reads off the shape of A the columns

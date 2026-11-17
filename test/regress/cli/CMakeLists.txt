@@ -3033,6 +3033,10 @@ set(regress_1_tests
   regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
   regress1/bags/rewriter/join_transitive_not_null.smt2
+  regress1/bags/rewriter/learned_fact_is_kept.smt2
+  regress1/bags/rewriter/learned_key_out_of_order.smt2
+  regress1/bags/rewriter/learned_keyed_aggregate.smt2
+  regress1/bags/rewriter/learned_not_null.smt2
   regress1/bags/rewriter/map_equal_columns.smt2
   regress1/bags/rewriter/map_filter_nullable.smt2
   regress1/bags/rewriter/map_identity.smt2

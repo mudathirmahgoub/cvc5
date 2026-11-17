@@ -372,20 +372,6 @@ enum class Rewrite : uint32_t
    */
   SETOF_SETOF,
   /**
-   * A map, or a bag.setof, is empty when its argument is.
-   *
-   * For X : (Bag (Tuple Int Int)),
-   *
-   *   (= (bag.map (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t)))
-   *               X)
-   *      (as bag.empty (Bag (Tuple Int))))
-   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
-   *
-   *   (= (bag.setof X) (as bag.empty (Bag (Tuple Int Int))))
-   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
-   */
-  EQ_EMPTY_ARG,
-  /**
    * An aggregate of a map groups the rows of the map's argument, by the columns
    * the map copies to the group columns, and folds them through the map. It
    * applies to a step whose value does not depend on the order of the rows, as
@@ -607,7 +593,7 @@ enum class Rewrite : uint32_t
    * For Y : (Bag (Tuple Int Int)) and Z : (Bag (Tuple Int)),
    *
    * given the assertion that column 0 is a key of Z, which makes Z a set
-   * (see BagsRewriter::recordFacts):
+   * (see TableFacts; only the learned-rewrite pass knows it):
    *
    *   (assert (= (bag.setof ((_ table.project 0) Z)) ((_ table.project 0) Z)))
    *
@@ -924,7 +910,7 @@ enum class Rewrite : uint32_t
    * For X : (Bag (Tuple Int Int)),
    *
    * given the assertion that column 0 is a key of X, which makes X a set
-   * (see BagsRewriter::recordFacts):
+   * (see TableFacts; only the learned-rewrite pass knows it):
    *
    *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
    *
@@ -969,7 +955,7 @@ enum class Rewrite : uint32_t
    *                (+ ((_ tuple.select 2) acc) 1))),
    *
    * given the assertion that column 0 is a key of X
-   * (see BagsRewriter::recordFacts):
+   * (see TableFacts; only the learned-rewrite pass knows it):
    *
    *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
    *
@@ -1019,7 +1005,7 @@ enum class Rewrite : uint32_t
    * For Y : (Bag (Tuple Int (Nullable Int))),
    *
    * given the assertion that column 1 of Y is NOT NULL
-   * (see BagsRewriter::recordFacts):
+   * (see TableFacts; only the learned-rewrite pass knows it):
    *
    *   (assert (= (bag.filter
    *                (lambda ((t (Tuple Int (Nullable Int))))

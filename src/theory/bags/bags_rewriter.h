@@ -20,6 +20,7 @@
 
 #include <set>
 #include <utility>
+#include <vector>
 
 #include "theory/bags/rewrites.h"
 #include "theory/theory_rewriter.h"
@@ -42,6 +43,34 @@ struct BagsRewriteResponse
 }; /* struct BagsRewriteResponse */
 
 /**
+ * Keys and NOT NULL columns of table constants that the input asserts. The
+ * rewriter of the theory has none, so what it returns depends only on the
+ * node it rewrites. The learned-rewrite pass reads them off the learned
+ * literals (BagsRewriter::readTableFact) and rewrites the assertions with a
+ * BagsRewriter of its own that has them (see
+ * preprocessing::passes::LearnedRewrite). For
+ * X : (Bag (Tuple Int (Nullable Int) Int)), the learned literals
+ *
+ *   (= (bag.setof ((_ table.project 0 2) X)) ((_ table.project 0 2) X))
+ *   (= (bag.filter
+ *        (lambda ((t (Tuple Int (Nullable Int) Int)))
+ *          (= ((_ tuple.select 1) t) (as nullable.null (Nullable Int))))
+ *        X)
+ *      (as bag.empty (Bag (Tuple Int (Nullable Int) Int))))
+ *
+ * give d_keys = {X: {{0, 2}}} and d_notNull = {X: {1}}.
+ */
+struct TableFacts
+{
+  /** whether no table has a key or a NOT NULL column */
+  bool empty() const { return d_keys.empty() && d_notNull.empty(); }
+  /** the keys of each table constant */
+  std::map<Node, std::vector<std::set<uint32_t>>> d_keys;
+  /** the NOT NULL columns of each table constant */
+  std::map<Node, std::set<uint32_t>> d_notNull;
+};
+
+/**
  * The rewriter of the theory of bags and tables.
  *
  * Besides evaluating constants and simplifying the bag operators, it brings
@@ -58,7 +87,8 @@ struct BagsRewriteResponse
  * functions below that apply several rules list them; a function that
  * implements a rule is documented with its conditions. Some rules read facts
  * about the tables of the problem, their keys and NOT NULL columns, that
- * top-level assertions state (see recordFacts).
+ * top-level assertions state (see TableFacts); only a rewriter that has them,
+ * as the learned-rewrite pass builds, applies them.
  */
 class BagsRewriter : public TheoryRewriter
 {
@@ -72,12 +102,15 @@ class BagsRewriter : public TheoryRewriter
    * - COUNT_MAP_CONST_PROBE over a table constant
    * - PRODUCT_BAG_MAKE
    * The rewriter does not know the logic, so the default is false: the owner
-   * of the rewriter passes true for a higher-order logic.
+   * of the rewriter passes true for a higher-order logic. With facts null, as
+   * for the rewriter of the theory, no table has a key or a NOT NULL column,
+   * and the rules that need one do not apply.
    */
   BagsRewriter(NodeManager* nm,
                Rewriter* r,
                HistogramStat<Rewrite>* statistics = nullptr,
-               bool higherOrder = false);
+               bool higherOrder = false,
+               const TableFacts* facts = nullptr);
 
   /**
    * postRewrite nodes with kinds: EQUAL, BAG_MAKE, BAG_COUNT, BAG_SETOF,
@@ -96,26 +129,12 @@ class BagsRewriter : public TheoryRewriter
   RewriteResponse preRewrite(TNode n) override;
 
   /**
-   * Record the facts that a top-level assertion states about a table constant,
-   * which some rules read: a key of the table (see recordKey) or a NOT NULL
-   * column (see recordNotNull), also in the conjuncts of a conjunction. For
-   * X : (Bag (Tuple Int (Nullable Int))), the assertions
-   *
-   *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
-   *
-   *   (assert (= (bag.filter
-   *                (lambda ((t (Tuple Int (Nullable Int))))
-   *                  (= ((_ tuple.select 1) t)
-   *                     (as nullable.null (Nullable Int))))
-   *                X)
-   *              (as bag.empty (Bag (Tuple Int (Nullable Int))))))
-   *
-   * state that column 0 is a key of X (no two rows agree on it) and that column
-   * 1 is never null. The bags-facts preprocessing pass calls this on every
-   * top-level assertion, before any of them is rewritten. Facts are never read
-   * off an equality the rewriter meets, which may be under a negation.
+   * Adds to facts the key or the NOT NULL column that the literal lit states
+   * of a table constant, and returns whether it states one (see TableFacts,
+   * readKey and readNotNull). The learned-rewrite pass calls it on each
+   * learned literal, which the rewriter of the theory has already rewritten.
    */
-  void recordFacts(TNode assertion) const;
+  bool readTableFact(TNode lit, TableFacts& facts) const;
 
  private:
   // ---------------------------------------------------------------------------
@@ -163,8 +182,7 @@ class BagsRewriter : public TheoryRewriter
 
   /**
    * The rules for (bag.setof X), each a Rewrite id with an example in
-   * rewrites.h, except for the bag.setof of a key assertion
-   * (see BagsKeyTermAttribute in the .cpp):
+   * rewrites.h:
    *
    * - SETOF_BAG_MAKE
    * - SETOF_UNION_SAME
@@ -270,7 +288,6 @@ class BagsRewriter : public TheoryRewriter
    * The rules for an equality of bags (= A B), each a Rewrite id with an
    * example in rewrites.h:
    *
-   * - EQ_EMPTY_ARG, for a map or a bag.setof equal to the empty bag
    * - EQ_REFL, EQ_CONST_FALSE and EQ_SYM
    */
   BagsRewriteResponse postRewriteEqual(const TNode& n) const;
@@ -297,8 +314,7 @@ class BagsRewriter : public TheoryRewriter
 
   /**
    * The rules for (bag.filter p X), each a Rewrite id with an example in
-   * rewrites.h, except for the filter of a NOT NULL assertion
-   * (see BagsKeyTermAttribute in the .cpp):
+   * rewrites.h:
    *
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - FILTER_TRUE and FILTER_FALSE
@@ -599,8 +615,8 @@ class BagsRewriter : public TheoryRewriter
    */
   bool isSet(const Node& X) const;
   /**
-   * The keys of B, read off its structure: the declared keys of a table
-   * constant (see recordKey), kept by filters, intersections and differences
+   * The keys of B, read off its structure: the keys of a table constant in
+   * the facts (see keysOf), kept by filters, intersections and differences
    * and by maps that copy them, combined by products; all the columns of a
    * bag.setof; the group columns of an aggregate. For X and Y of two columns,
    * both with the key {0}, (table.product X Y) has the key {0, 2}. A bag with a
@@ -608,9 +624,8 @@ class BagsRewriter : public TheoryRewriter
    */
   std::vector<std::set<uint32_t>> rowKeys(const Node& B) const;
   /**
-   * The keys declared for the table constant B, or for the table constant a
-   * filter B filters (see BagsKeysAttribute in the .cpp): {{0, 2}, {1}} for
-   * keys {0, 2} and {1}.
+   * The keys that the facts give the table constant B, or the table constant a
+   * filter B filters (see TableFacts): {{0, 2}, {1}} for keys {0, 2} and {1}.
    */
   std::vector<std::set<uint32_t>> keysOf(const Node& B) const;
   /**
@@ -655,20 +670,31 @@ class BagsRewriter : public TheoryRewriter
   // ---------------------------------------------------------------------------
 
   /**
-   * Record the key that a key assertion states. For
-   * X : (Bag (Tuple Int Int Int)) and
+   * Adds to facts the key that the equality n states, and returns whether it
+   * states one. The projection M onto the columns of the key is a set, with n
+   * either way round. For X : (Bag (Tuple Int Int Int)), the key {0, 2} of X
+   * from
    *
    *   n = (= (bag.setof ((_ table.project 0 2) X)) ((_ table.project 0 2) X))
    *
-   * either way round, or with the projection written as a bag.map, {0, 2} is a
-   * key of X (see BagsKeysAttribute in the .cpp), and the bag.setof of n is not
-   * rewritten (BagsKeyTermAttribute). Called for top-level assertions only, see
-   * recordFacts.
+   * and, as the rewriter of the theory leaves a key on columns out of order
+   * (SETOF_PROJECTION_SORT), from
+   *
+   *   n = (= ((_ table.project 2 0) X)
+   *          (bag.map
+   *            (lambda ((r (Tuple Int Int)))
+   *              (tuple ((_ tuple.select 1) r) ((_ tuple.select 0) r)))
+   *            (bag.setof ((_ table.project 0 2) X))))
+   *
+   * where the map only puts the columns back in order, so its image of a set
+   * is a set. A projection may also be a bag.map of a projection lambda
+   * (PROJECT_TO_MAP).
    */
-  void recordKey(const TNode& n) const;
+  bool readKey(const TNode& n, TableFacts& facts) const;
   /**
-   * Record the NOT NULL column that a NOT NULL assertion states. For
-   * X : (Bag (Tuple Int (Nullable Int))) and
+   * Adds to facts the NOT NULL column that the equality n states, and returns
+   * whether it states one. For X : (Bag (Tuple Int (Nullable Int))), column 1
+   * of X from
    *
    *   n = (= (bag.filter
    *            (lambda ((t (Tuple Int (Nullable Int))))
@@ -676,12 +702,9 @@ class BagsRewriter : public TheoryRewriter
    *            X)
    *          (as bag.empty (Bag (Tuple Int (Nullable Int)))))
    *
-   * either way round, column 1 of X is never null
-   * (see BagsNotNullAttribute in the .cpp), and the filter of n is not
-   * rewritten (BagsKeyTermAttribute). Called for top-level assertions only, see
-   * recordFacts.
+   * with both equalities either way round.
    */
-  void recordNotNull(const TNode& n) const;
+  bool readNotNull(const TNode& n, TableFacts& facts) const;
   /**
    * Whether the term t is never null, given the columns nx of the row x and
    * nacc of the accumulator acc that are never null: true for
@@ -703,7 +726,8 @@ class BagsRewriter : public TheoryRewriter
   std::set<uint32_t> aggregateNonNull(const Node& B) const;
   /**
    * The columns of the rows of B that are never null, read off its structure:
-   * the NOT NULL columns of a table constant (see recordNotNull), kept by
+   * the NOT NULL columns of a table constant in the facts (see TableFacts),
+   * kept by
    * filters, maps, unions (of both sides), products and aggregates
    * (see aggregateNonNull), and those a filter tests with
    * (nullable.is_some ((_ tuple.select k) t)). Cached in d_nonNull.
@@ -930,6 +954,8 @@ class BagsRewriter : public TheoryRewriter
   HistogramStat<Rewrite>* d_statistics;
   /** whether the logic has higher-order terms, see the constructor */
   bool d_higherOrder;
+  /** the keys and NOT NULL columns of tables, null for none (TableFacts) */
+  const TableFacts* d_facts;
 
 }; /* class TheoryBagsRewriter */
 

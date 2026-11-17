@@ -1,3 +1,8 @@
+; COMMAND-LINE: --learned-rewrite
+; --learned-rewrite is not supported with proofs or unsat cores because
+; the preprocessing pass does not track its non-local reasoning.
+; DISABLE-TESTER: unsat-core
+; DISABLE-TESTER: proof
 ; A key asserted in the outermost scope is a fact for every later check
 ; EXPECT: sat
 ; EXPECT: unsat

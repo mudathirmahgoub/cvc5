@@ -1,3 +1,8 @@
+; COMMAND-LINE: --learned-rewrite
+; --learned-rewrite is not supported with proofs or unsat cores because
+; the preprocessing pass does not track its non-local reasoning.
+; DISABLE-TESTER: unsat-core
+; DISABLE-TESTER: proof
 ; A NOT NULL column asserted at the top level has no null
 (set-logic HO_ALL)
 (set-info :status unsat)

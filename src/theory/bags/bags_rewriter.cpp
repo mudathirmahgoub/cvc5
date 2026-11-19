@@ -5546,7 +5546,8 @@ Node BagsRewriter::eagerAggregation(const Node& f,
   // extremum (EXT, a minimum or a maximum) of a column of X or of Y that
   // skips nulls (see nullAwareStepKind), a count of the rows where a column
   // of X or of Y is not null (CNT), or COUNT(*) (STAR); src[q] is the column
-  // of J the role reads
+  // of J the role reads, and args[q] the argument of a SUM or an EXT step, an
+  // expression of that column (see nullAwareStepKind)
   Node xr = f[0][0];
   Node acc = f[0][1];
   size_t w = f[1].getNumChildren();
@@ -5564,6 +5565,7 @@ Node BagsRewriter::eagerAggregation(const Node& f,
   };
   std::vector<Role> role(w);
   std::vector<uint32_t> src(w, 0);
+  std::vector<Node> args(w);
   for (size_t q = 0; q < w; q++)
   {
     Node e = f[1][q];
@@ -5600,6 +5602,7 @@ Node BagsRewriter::eagerAggregation(const Node& f,
       uint32_t c = *read.begin();
       role[q] = k == 0 ? (c < wx ? SUM_X : SUM_Y) : (c < wx ? EXT_X : EXT_Y);
       src[q] = c;
+      args[q] = arg;
       continue;
     }
     if (isCountStep(e, own, init[q]))
@@ -5827,9 +5830,12 @@ Node BagsRewriter::eagerAggregation(const Node& f,
       case EXT_X:
       case EXT_Y:
       {
+        // the side's extremum of the argument, in place of the argument: the
+        // inner aggregate has applied it already, so the column itself is not
+        // replaced (for MIN(x + 1) that would add 1 twice, and for a CASE over
+        // a string column it would put a number where the string was)
         Node v = role[q] == EXT_X ? colX(atX[q]) : colY(atY[q]);
-        std::vector<Node> fr{
-            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        std::vector<Node> fr{args[q], own};
         std::vector<Node> tt{v, own3};
         cells.push_back(
             e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));
@@ -5858,8 +5864,8 @@ Node BagsRewriter::eagerAggregation(const Node& f,
                          d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
                                       dt[si].getConstructor(),
                                       d_nm->mkNode(Kind::MULT, val, times)));
-        std::vector<Node> fr{
-            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        // in place of the argument, as for EXT above
+        std::vector<Node> fr{args[q], own};
         std::vector<Node> tt{m, own3};
         cells.push_back(
             e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));
@@ -9821,9 +9827,13 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateRollup(const TNode& n) const
     }
     if (p < wI && aggKind[p] >= 0)
     {
-      bool merges = (kg == 0 && (aggKind[p] == 0 || aggKind[p] == 3))
-                    || (kg == 1 && aggKind[p] == 1)
-                    || (kg == 2 && aggKind[p] == 2);
+      // a merged column is the inner step over X, and the outer step is
+      // dropped, so the outer step must read the inner column as it is: a
+      // MAX(m + 1) of the inner maximums m is no MAX over X
+      bool merges =
+          ((kg == 0 && (aggKind[p] == 0 || aggKind[p] == 3))
+           || (kg == 1 && aggKind[p] == 1) || (kg == 2 && aggKind[p] == 2))
+          && arg == datatypes::TupleUtils::nthElementOfTuple(t, p);
       if (!merges)
       {
         return BagsRewriteResponse(n, Rewrite::NONE);
@@ -10688,7 +10698,10 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateCollapse(const TNode& n) const
       return BagsRewriteResponse(n, Rewrite::NONE);
     }
     uint32_t q = *pos.begin();
-    if (q >= J.size())
+    // the outer step is applied once, to the collapsed row, so its argument
+    // must be the inner column as it is: over two inputs, a MAX(0 - m) of the
+    // inner maximums m is -min(m1, m2), and the collapsed one -max(m1, m2)
+    if (q >= J.size() || arg != datatypes::TupleUtils::nthElementOfTuple(y, q))
     {
       return BagsRewriteResponse(n, Rewrite::NONE);
     }

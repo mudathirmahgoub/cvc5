@@ -49,6 +49,8 @@ class BoundVarManager
   Node mkBoundVar(BoundVarId id, Node n, TypeNode tn);
   /** Same as above, with a name for the bound variable. */
   Node mkBoundVar(BoundVarId id, Node n, const std::string& name, TypeNode tn);
+  /** Whether v was made by mkBoundVar with the given id */
+  bool isBoundVarOf(BoundVarId id, const Node& v) const;
   //---------------------------------- utilities for computing Node hash
   /** get cache value from two nodes, returns SEXPR */
   static Node getCacheValue(TNode cv1, TNode cv2);
@@ -66,6 +68,8 @@ class BoundVarManager
   static void setNameAttr(Node v, const std::string& name);
   /** The set of cache values we have used */
   std::map<std::tuple<BoundVarId, TypeNode, Node>, Node> d_cache;
+  /** the id each variable of d_cache was made with */
+  std::map<Node, BoundVarId> d_ids;
 };
 
 }  // namespace cvc5::internal

@@ -14,7 +14,9 @@
 
 #include "expr/attribute.h"
 #include "expr/bound_var_manager.h"
+#include "expr/node_algorithm.h"
 #include "expr/skolem_manager.h"
+#include "theory/datatypes/theory_datatypes_utils.h"
 #include "theory/smt_engine_subsolver.h"
 #include "theory/uf/equality_engine.h"
 
@@ -173,6 +175,63 @@ void SolverState::checkInjectivity(Node n)
   }
 
   TypeNode domainType = f.getType().getArgTypes()[0];
+  if (f.getKind() == Kind::LAMBDA && f[0].getNumChildren() == 1)
+  {
+    Node var = f[0][0];
+    Node body = f[1];
+    if (body == var)
+    {
+      // the identity (lambda ((t T)) t)
+      d_functions[f] = true;
+      return;
+    }
+    if (body.getKind() == Kind::APPLY_CONSTRUCTOR && body.getType().isTuple()
+        && var.getType().isTuple())
+    {
+      // a tuple of columns of the row that keeps every column, in any order
+      // and with repetitions, is injective; one that drops a column is not:
+      // over (Tuple Int Int),
+      //   (lambda ((t T)) (tuple ((_ tuple.select 1) t) ((_ tuple.select 0) t)
+      //                          ((_ tuple.select 1) t)))
+      // is injective, (lambda ((t T)) (tuple ((_ tuple.select 0) t))) is not
+      std::set<uint32_t> kept;
+      bool columnsOnly = true;
+      for (const Node& c : body)
+      {
+        if (c.getKind() == Kind::APPLY_SELECTOR && c[0] == var)
+        {
+          kept.insert(datatypes::utils::indexOf(c.getOperator()));
+        }
+        else
+        {
+          columnsOnly = false;
+        }
+      }
+      if (columnsOnly)
+      {
+        d_functions[f] = kept.size() == var.getType().getTupleLength();
+        return;
+      }
+    }
+    if (expr::hasSubtermKinds({Kind::BAG_FOLD,
+                               Kind::BAG_MAP,
+                               Kind::BAG_FILTER,
+                               Kind::BAG_SETOF,
+                               Kind::BAG_COUNT,
+                               Kind::BAG_CARD,
+                               Kind::TABLE_GROUP,
+                               Kind::TABLE_AGGREGATE,
+                               Kind::TABLE_PRODUCT,
+                               Kind::TABLE_PROJECT},
+                              body))
+    {
+      // the function of an aggregate reads a whole group through a fold: a
+      // subsolver would unroll two folds to decide this, which costs more than
+      // the general map lemmas do
+      d_functions[f] = false;
+      return;
+    }
+  }
   Node x = NodeManager::mkDummySkolem("x", domainType);
   Node y = NodeManager::mkDummySkolem("y", domainType);
   Node f_x = d_nm->mkNode(Kind::APPLY_UF, f, x);
@@ -184,7 +243,9 @@ void SolverState::checkInjectivity(Node n)
   Options subOptions;
   subOptions.copyValues(d_env.getOptions());
   SubsolverSetupInfo ssi(d_env, subOptions);
-  Result result = checkWithSubsolver(query, ssi);
+  // a bounded query: an answer that does not come quickly is treated as
+  // "not injective", which only selects the general lemmas
+  Result result = checkWithSubsolver(query, ssi, true, 500);
   if (result.getStatus() == Result::Status::UNSAT)
   {
     d_functions[f] = true;

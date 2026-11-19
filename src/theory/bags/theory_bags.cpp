@@ -37,7 +37,10 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
       d_ig(env, &d_state, &d_im),
       d_notify(*this, d_im),
       d_statistics(statisticsRegistry()),
-      d_rewriter(nodeManager(), env.getRewriter(), &d_statistics.d_rewrites),
+      d_rewriter(nodeManager(),
+                 env.getRewriter(),
+                 &d_statistics.d_rewrites,
+                 logicInfo().isHigherOrder()),
       d_termReg(env),
       d_solver(env, d_state, d_im),
       d_cpacb(*this),
@@ -93,6 +96,7 @@ void TheoryBags::finishInit()
   // higher-order operators that are not eliminated during rewriting
   d_equalityEngine->addFunctionKind(Kind::BAG_MAP);
   d_equalityEngine->addFunctionKind(Kind::BAG_FILTER);
+  d_equalityEngine->addFunctionKind(Kind::BAG_FOLD);
 }
 
 TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
@@ -117,6 +121,13 @@ TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
     }
     case Kind::BAG_FOLD:
     {
+      if (options().bags.bagsLazyFold)
+      {
+        // the fold stays a term: BagSolver::checkFolds relates two folds
+        // through their arguments, and BagSolver::reduceFoldsLastCall unrolls
+        // them only when a model is about to be reported
+        return TrustNode::null();
+      }
       std::vector<Node> asserts;
       Node ret = BagReduction::reduceFoldOperator(atom, asserts);
       Node andNode = nm->mkNode(Kind::AND, asserts);
@@ -237,9 +248,22 @@ void TheoryBags::collectBagsAndCountTerms()
 
 void TheoryBags::postCheck(Effort effort)
 {
+  if (effort == EFFORT_LAST_CALL)
+  {
+    // the model has just been built, see TheoryEngine::check
+    d_solver.reduceFoldsLastCall();
+    d_solver.checkDisequalBagTermsLastCall();
+    d_im.doPendingLemmas();
+    return;
+  }
   // run the standard strategy check loop, which repeatedly runs the bags
   // strategy and sends the resulting facts and lemmas
   d_strat.postCheck(effort);
+}
+
+bool TheoryBags::needsCheckLastEffort()
+{
+  return options().bags.bagsDeqDecompose || options().bags.bagsLazyFold;
 }
 
 void TheoryBags::notifyFact(CVC5_UNUSED TNode atom,
@@ -346,6 +370,12 @@ void TheoryBags::preRegisterTerm(TNode n)
     case Kind::BAG_MAP:
     {
       d_state.checkInjectivity(n[0]);
+      d_equalityEngine->addTerm(n);
+      break;
+    }
+    case Kind::BAG_FOLD:
+    {
+      d_solver.registerFold(n);
       d_equalityEngine->addTerm(n);
       break;
     }

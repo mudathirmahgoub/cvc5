@@ -13,12 +13,15 @@
 #include "theory/bags/bag_solver.h"
 
 #include "expr/emptybag.h"
+#include "options/bags_options.h"
+#include "theory/bags/bag_reduction.h"
 #include "theory/bags/bags_utils.h"
 #include "theory/bags/inference_generator.h"
 #include "theory/bags/inference_manager.h"
 #include "theory/bags/solver_state.h"
 #include "theory/bags/term_registry.h"
 #include "theory/uf/equality_engine_iterator.h"
+#include "theory/uf/function_const.h"
 #include "util/rational.h"
 
 using namespace std;
@@ -32,6 +35,7 @@ namespace bags {
 BagSolver::BagSolver(Env& env, SolverState& s, InferenceManager& im)
     : EnvObj(env),
       d_state(s),
+      d_folds(context()),
       d_ig(env, &s, &im),
       d_im(im),
       d_mapCache(userContext())
@@ -47,6 +51,7 @@ BagSolver::~BagSolver() {}
 void BagSolver::checkBasicOperations()
 {
   checkDisequalBagTerms();
+  checkFolds();
 
   // At this point, all bag and count representatives should be in the solver
   // state.
@@ -272,6 +277,169 @@ void BagSolver::checkDisequalBagTerms()
 {
   for (const auto& [equality, witness] : d_state.getDisequalBagTerms())
   {
+    if (options().bags.bagsDeqDecompose)
+    {
+      InferInfo pointwise = d_ig.bagDisequalityPointwise(equality);
+      if (!pointwise.d_conclusion.isNull())
+      {
+        d_im.lemmaTheoryInference(&pointwise);
+      }
+      InferInfo decompose = d_ig.bagDisequalityDecompose(equality);
+      if (!decompose.d_conclusion.isNull())
+      {
+        // two applications of one operator differ only where some arguments
+        // differ: case split on those first. The element witness lemma, which
+        // reduces both sides to multiplicities, waits until a model is about
+        // to be reported (checkDisequalBagTermsLastCall), since for an
+        // equivalence proof the case split alone closes every branch
+        d_im.lemmaTheoryInference(&decompose);
+        continue;
+      }
+    }
+    InferInfo info = d_ig.bagDisequality(equality, witness);
+    d_im.lemmaTheoryInference(&info);
+  }
+}
+
+void BagSolver::registerFold(Node n)
+{
+  Assert(n.getKind() == Kind::BAG_FOLD);
+  d_folds.push_back(n);
+}
+
+Node BagSolver::countLemma(const Node& fold)
+{
+  Node f = uf::FunctionConst::getDefinition(fold[0]);
+  if (f.isNull() || f.getKind() != Kind::LAMBDA || f[0].getNumChildren() != 2)
+  {
+    return Node::null();
+  }
+  NodeManager* nm = nodeManager();
+  Node a = f[0][1];
+  Node body = f[1];
+  Node seed = fold[1];
+  Node zero = nm->mkConstInt(Rational(0));
+  Node one = nm->mkConstInt(Rational(1));
+  Node empty = nm->mkConst(EmptyBag(fold[2].getType()));
+  auto isIncrement = [&](const Node& t, const Node& acc) {
+    return t.getKind() == Kind::ADD && t.getNumChildren() == 2
+           && ((t[0] == acc && t[1] == one) || (t[1] == acc && t[0] == one));
+  };
+  if (isIncrement(body, a) && seed == zero)
+  {
+    // (and (>= F 0) (= (= F 0) (= X (as bag.empty (Bag T)))))
+    return nm->mkNode(Kind::AND,
+                      nm->mkNode(Kind::GEQ, fold, zero),
+                      fold.eqNode(zero).eqNode(fold[2].eqNode(empty)));
+  }
+  // (nullable.some (+ (nullable.val a) 1)) from (nullable.some 0), where
+  // (nullable.val a) is the selector of a's constructor, sel below
+  if (body.getKind() == Kind::APPLY_CONSTRUCTOR && body.getNumChildren() == 1
+      && seed.getKind() == Kind::APPLY_CONSTRUCTOR
+      && seed.getOperator() == body.getOperator() && seed.getNumChildren() == 1
+      && seed[0] == zero && body[0].getKind() == Kind::ADD
+      && body[0].getNumChildren() == 2)
+  {
+    Node inc = body[0];
+    for (size_t k = 0; k < 2; k++)
+    {
+      Node sel = inc[k];
+      if (inc[1 - k] == one && sel.getKind() == Kind::APPLY_SELECTOR
+          && sel[0] == a)
+      {
+        Node value = nm->mkNode(Kind::APPLY_SELECTOR, sel.getOperator(), fold);
+        Node some =
+            nm->mkNode(Kind::APPLY_CONSTRUCTOR, body.getOperator(), value);
+        return nm->mkNode(Kind::AND,
+                          fold.eqNode(some),
+                          nm->mkNode(Kind::GEQ, value, zero),
+                          value.eqNode(zero).eqNode(fold[2].eqNode(empty)));
+      }
+    }
+  }
+  return Node::null();
+}
+
+void BagSolver::checkFolds()
+{
+  if (!options().bags.bagsLazyFold)
+  {
+    return;
+  }
+  for (size_t i = 0, n = d_folds.size(); i < n; i++)
+  {
+    Node fold = d_folds[i];
+    if (!d_countedFolds.insert(fold).second)
+    {
+      continue;
+    }
+    Node lemma = countLemma(fold);
+    if (!lemma.isNull())
+    {
+      d_im.lemma(lemma, InferenceId::BAGS_FOLD_COUNT);
+    }
+  }
+  for (size_t i = 0, n = d_folds.size(); i < n; i++)
+  {
+    for (size_t j = i + 1; j < n; j++)
+    {
+      Node a = d_folds[i];
+      Node b = d_folds[j];
+      if (a.getType() != b.getType() || a[2].getType() != b[2].getType()
+          || (a[0] == b[0] && a[1] == b[1]))
+      {
+        // folds of different types never meet, and folds over bags of
+        // different element types have no argument-wise relation; folds with
+        // one function and one initial value over equal bags are equal by
+        // congruence
+        continue;
+      }
+      std::pair<Node, Node> key =
+          a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+      if (!d_foldPairs.insert(key).second)
+      {
+        continue;
+      }
+      InferInfo info = d_ig.foldDecompose(key.first, key.second);
+      d_im.lemmaTheoryInference(&info);
+    }
+  }
+}
+
+void BagSolver::reduceFoldsLastCall()
+{
+  if (!options().bags.bagsLazyFold)
+  {
+    return;
+  }
+  for (size_t i = 0, n = d_folds.size(); i < n; i++)
+  {
+    Node fold = d_folds[i];
+    if (!d_reducedFolds.insert(fold).second)
+    {
+      continue;
+    }
+    std::vector<Node> asserts;
+    Node ret = BagReduction::reduceFoldOperator(fold, asserts);
+    asserts.push_back(fold.eqNode(ret));
+    Node lemma = nodeManager()->mkNode(Kind::AND, asserts);
+    d_im.lemma(lemma, InferenceId::BAGS_FOLD);
+  }
+}
+
+void BagSolver::checkDisequalBagTermsLastCall()
+{
+  if (!options().bags.bagsDeqDecompose)
+  {
+    return;
+  }
+  for (const auto& [equality, witness] : d_state.getDisequalBagTerms())
+  {
+    InferInfo decompose = d_ig.bagDisequalityDecompose(equality);
+    if (decompose.d_conclusion.isNull())
+    {
+      continue;
+    }
     InferInfo info = d_ig.bagDisequality(equality, witness);
     d_im.lemmaTheoryInference(&info);
   }
@@ -303,6 +471,20 @@ void BagSolver::checkMap(Node n)
       d_im.lemmaTheoryInference(&upInference);
     }
 
+    for (const Node& z : downwards)
+    {
+      if (!options().bags.bagsMapWitness)
+      {
+        break;
+      }
+      // first the cheap ground witness, which refutes most of what the
+      // quantified preimage sum below would
+      InferInfo witness = d_ig.mapDownWitness(n, z);
+      if (witness.d_conclusion != d_true)
+      {
+        d_im.lemmaTheoryInference(&witness);
+      }
+    }
     for (const Node& z : downwards)
     {
       Node y = d_state.getRepresentative(z);

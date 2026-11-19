@@ -3032,7 +3032,11 @@ set(regress_1_tests
   regress1/bags/product2.smt2
   regress1/bags/product3.smt2
   regress1/bags/proj-issue497.smt2
+  regress1/bags/rewriter/aggr_collapse_max_of_expression.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_case.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_expression.smt2
   regress1/bags/rewriter/aggr_keyed_product_tested.smt2
+  regress1/bags/rewriter/aggr_rollup_max_of_expression.smt2
   regress1/bags/rewriter/facts_incremental_pop.smt2
   regress1/bags/rewriter/facts_incremental_top.smt2
   regress1/bags/rewriter/facts_negated_key.smt2

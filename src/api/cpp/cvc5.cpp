@@ -92,6 +92,23 @@
 namespace cvc5 {
 
 /* -------------------------------------------------------------------------- */
+/* Exceptions                                                                 */
+/* -------------------------------------------------------------------------- */
+
+// The destructors are defined here (and not in the header) so that they are
+// the key functions of the exception classes. The type info of the exceptions
+// is then emitted only in libcvc5, and programs that catch them refer to it
+// there. Otherwise, each program has its own copy, and with link-time
+// optimization, the copy in a program can be made local to it, so that
+// catching an exception thrown by libcvc5 fails on platforms that compare type
+// info by address (e.g., x86-64 macOS).
+
+CVC5ApiException::~CVC5ApiException() = default;
+CVC5ApiRecoverableException::~CVC5ApiRecoverableException() = default;
+CVC5ApiUnsupportedException::~CVC5ApiUnsupportedException() = default;
+CVC5ApiOptionException::~CVC5ApiOptionException() = default;
+
+/* -------------------------------------------------------------------------- */
 /* APIStatistics                                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -5788,6 +5805,8 @@ Sort TermManager::mkDatatypeSort(const DatatypeDecl& dtypedecl)
   const Datatype& dt = res.getDatatype();
   CVC5_API_CHECK(dt.d_dtype->isCodatatype() || dt.d_dtype->isWellFounded())
       << "Datatype sort " << dt.d_dtype->getName() + " is not well-founded";
+  CVC5_API_CHECK(dt.d_dtype->isRegular())
+      << "Datatype sort " << dt.d_dtype->getName() + " is not regular";
   return res;
   ////////
   CVC5_API_TRY_CATCH_END;
@@ -5812,6 +5831,8 @@ std::vector<Sort> TermManager::mkDatatypeSorts(
     const Datatype& dt = res[i].getDatatype();
     CVC5_API_CHECK(dt.d_dtype->isCodatatype() || dt.d_dtype->isWellFounded())
         << "Datatype sort " << dt.d_dtype->getName() + " is not well-founded";
+    CVC5_API_CHECK(dt.d_dtype->isRegular())
+        << "Datatype sort " << dt.d_dtype->getName() + " is not regular";
   }
   return res;
   ////////
@@ -6175,11 +6196,6 @@ Op TermManager::mkOp(Kind kind, const std::string& arg)
   CVC5_API_KIND_CHECK_EXPECTED((kind == Kind::DIVISIBLE), kind) << "DIVISIBLE";
   //////// all checks before this line
   Op res;
-  /* CLN and GMP handle this case differently, CLN interprets it as 0, GMP
-   * throws an std::invalid_argument exception. For consistency, we treat it
-   * as invalid. */
-  CVC5_API_ARG_CHECK_EXPECTED(arg != ".", arg)
-      << "a string representing an integer, real or rational value.";
   res = mkOpHelper(kind, internal::Divisible(internal::Integer(arg)));
   return res;
   ////////
@@ -6255,11 +6271,6 @@ Term TermManager::mkInteger(int64_t val)
 Term TermManager::mkReal(const std::string& s)
 {
   CVC5_API_TRY_CATCH_BEGIN;
-  /* CLN and GMP handle this case differently, CLN interprets it as 0, GMP
-   * throws an std::invalid_argument exception. For consistency, we treat it
-   * as invalid. */
-  CVC5_API_ARG_CHECK_EXPECTED(s != ".", s)
-      << "a string representing a real or rational value.";
   //////// all checks before this line
   return mkRealOrIntegerFromStrHelper(s, false);
   ////////
@@ -6844,6 +6855,22 @@ DatatypeDecl TermManager::mkDatatypeDecl(const std::string& name,
   CVC5_API_TRY_CATCH_END;
 }
 
+/* SyGuS Grammar ------------------------------------------------------ */
+
+Grammar TermManager::mkGrammar(const std::vector<Term>& boundVars,
+                               const std::vector<Term>& ntSymbols)
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  CVC5_API_ARG_SIZE_CHECK_EXPECTED(!ntSymbols.empty(), ntSymbols)
+      << "a non-empty vector";
+  CVC5_API_TM_CHECK_BOUND_VARS(boundVars);
+  CVC5_API_TM_CHECK_BOUND_VARS(ntSymbols);
+  //////// all checks before this line
+  return Grammar(d_nm, boundVars, ntSymbols);
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Solver                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -6864,6 +6891,11 @@ void Solver::resetInternal()
       new internal::SolverEngine(d_tm.d_nm.get(), d_originalOptions.get()));
   d_slv->setSolver(this);
   d_rng.reset(new internal::Random(d_slv->getOptions().driver.seed));
+  // connect the terminator to the new engine
+  if (d_terminator != nullptr)
+  {
+    setTerminator(d_terminator);
+  }
 }
 
 Solver::Solver(TermManager& tm)
@@ -8421,6 +8453,23 @@ void Solver::addPlugin(Plugin& p)
   CVC5_API_TRY_CATCH_END;
 }
 
+void Solver::setTerminator(Terminator* terminator)
+{
+  CVC5_API_TRY_CATCH_BEGIN;
+  //////// all checks before this line
+  d_terminator = terminator;
+  if (terminator == nullptr)
+  {
+    d_slv->setTerminator(nullptr);
+  }
+  else
+  {
+    d_slv->setTerminator([terminator]() { return terminator->terminate(); });
+  }
+  ////////
+  CVC5_API_TRY_CATCH_END;
+}
+
 void Solver::pop(uint32_t nscopes) const
 {
   CVC5_API_TRY_CATCH_BEGIN;
@@ -8745,15 +8794,7 @@ Term Solver::declareSygusVar(const std::string& symbol, const Sort& sort) const
 Grammar Solver::mkGrammar(const std::vector<Term>& boundVars,
                           const std::vector<Term>& ntSymbols) const
 {
-  CVC5_API_TRY_CATCH_BEGIN;
-  CVC5_API_ARG_SIZE_CHECK_EXPECTED(!ntSymbols.empty(), ntSymbols)
-      << "a non-empty vector";
-  CVC5_API_SOLVER_CHECK_BOUND_VARS(boundVars);
-  CVC5_API_SOLVER_CHECK_BOUND_VARS(ntSymbols);
-  //////// all checks before this line
-  return Grammar(d_tm.d_nm, boundVars, ntSymbols);
-  ////////
-  CVC5_API_TRY_CATCH_END;
+  return d_tm.mkGrammar(boundVars, ntSymbols);
 }
 
 Term Solver::synthFun(const std::string& symbol,

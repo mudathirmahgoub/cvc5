@@ -23,6 +23,7 @@
 #include "base/output.h"
 #include "preprocessing/passes/ackermann.h"
 #include "preprocessing/passes/apply_substs.h"
+#include "preprocessing/passes/bags_facts.h"
 #include "preprocessing/passes/bool_to_bv.h"
 #include "preprocessing/passes/bv_eager_atoms.h"
 #include "preprocessing/passes/bv_gauss.h"
@@ -122,6 +123,7 @@ PreprocessingPass* callCtor(PreprocessingPassContext* ppCtx)
 
 PreprocessingPassRegistry::PreprocessingPassRegistry()
 {
+  registerPassInfo("bags-facts", callCtor<BagsFacts>);
   registerPassInfo("apply-substs", callCtor<ApplySubsts>);
   registerPassInfo("bv-gauss", callCtor<BVGauss>);
   registerPassInfo("static-learning", callCtor<StaticLearning>);

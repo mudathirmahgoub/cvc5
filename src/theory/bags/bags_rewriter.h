@@ -136,6 +136,14 @@ class BagsRewriter : public TheoryRewriter
    */
   bool readTableFact(TNode lit, TableFacts& facts) const;
 
+  /**
+   * --bags-facts=attr: records the key or NOT NULL column that the rewritten
+   * literal lit states, which this rewriter then reads, and returns whether it
+   * states one. The result of the rewriter then depends on the assertions,
+   * not only on the node it rewrites.
+   */
+  bool recordFact(TNode lit);
+
  private:
   // ---------------------------------------------------------------------------
   // The rules of each kind. A function returns its argument with
@@ -1052,6 +1060,8 @@ class BagsRewriter : public TheoryRewriter
   /** whether the logic has higher-order terms, see the constructor */
   bool d_higherOrder;
   /** the keys and NOT NULL columns of tables, null for none (TableFacts) */
+  /** The facts recordFact recorded, which d_facts then points to */
+  TableFacts d_recorded;
   const TableFacts* d_facts;
 
 }; /* class TheoryBagsRewriter */

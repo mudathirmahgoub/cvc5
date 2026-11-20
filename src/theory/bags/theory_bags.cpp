@@ -43,12 +43,45 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
                  logicInfo().isHigherOrder()),
       d_termReg(env),
       d_solver(env, d_state, d_im),
+      d_factsSolver(env, d_state, d_im),
       d_cpacb(*this),
       d_strat(this, &d_solver, &d_state, &d_im)
 {
   // use the official theory state and inference manager objects
   d_theoryState = &d_state;
   d_inferManager = &d_im;
+  if (options().bags.bagsFacts == options::BagsFactsMode::CONTEXT)
+  {
+    d_solver.setTableFacts(&d_factsSolver);
+  }
+}
+
+bool TheoryBags::checksTableFacts() const
+{
+  return options().bags.bagsFacts == options::BagsFactsMode::LEMMA
+         || options().bags.bagsFacts == options::BagsFactsMode::CONTEXT;
+}
+
+void TheoryBags::checkTableFacts()
+{
+  std::vector<Node> lits;
+  for (assertions_iterator it = facts_begin(); it != facts_end(); ++it)
+  {
+    Node lit = (*it).d_assertion;
+    if (lit.getKind() == Kind::EQUAL && lit[0].getType().isBag())
+    {
+      lits.push_back(lit);
+    }
+  }
+  d_factsSolver.check(lits);
+}
+
+void TheoryBags::ppStaticLearn(TNode in, std::vector<TrustNode>& learned)
+{
+  if (options().bags.bagsFacts == options::BagsFactsMode::STATIC)
+  {
+    d_factsSolver.ppStaticLearn(in, learned);
+  }
 }
 
 TheoryBags::~TheoryBags() {}
@@ -102,6 +135,12 @@ void TheoryBags::finishInit()
 TrustNode TheoryBags::ppRewrite(TNode atom, std::vector<SkolemLemma>& lems)
 {
   Trace("bags-ppr") << "TheoryBags::ppRewrite " << atom << std::endl;
+  if (checksTableFacts())
+  {
+    // the facts registered atoms state, and the lemmas of a term before it is
+    // reduced below (as table.aggr and table.project are)
+    d_factsSolver.ppRewrite(atom);
+  }
 
   NodeManager* nm = nodeManager();
 
@@ -359,12 +398,18 @@ void TheoryBags::preRegisterTerm(TNode n)
     throw LogicException(ss.str());
   }
   Trace("bags") << "TheoryBags::preRegisterTerm(" << n << ")" << std::endl;
+  d_factsSolver.registerTerm(n);
   switch (n.getKind())
   {
     case Kind::EQUAL:
     {
       // add trigger predicate for equality and membership
       d_state.addEqualityEngineTriggerPredicate(n);
+      if (checksTableFacts())
+      {
+        // a fact, or an equality of bags that a fact may rewrite
+        d_factsSolver.ppRewrite(n);
+      }
     }
     break;
     case Kind::BAG_MAP:

@@ -19,6 +19,7 @@
 #include "theory/bags/inference_generator.h"
 #include "theory/bags/inference_manager.h"
 #include "theory/bags/solver_state.h"
+#include "theory/bags/table_facts_solver.h"
 #include "theory/bags/term_registry.h"
 #include "theory/uf/equality_engine_iterator.h"
 #include "theory/uf/function_const.h"
@@ -48,6 +49,11 @@ BagSolver::BagSolver(Env& env, SolverState& s, InferenceManager& im)
 
 BagSolver::~BagSolver() {}
 
+bool BagSolver::isReduced(const Node& n) const
+{
+  return d_tableFacts != nullptr && d_tableFacts->isReduced(n);
+}
+
 void BagSolver::checkBasicOperations()
 {
   checkDisequalBagTerms();
@@ -64,6 +70,11 @@ void BagSolver::checkBasicOperations()
     {
       Node n = (*it);
       Kind k = n.getKind();
+      if (isReduced(n))
+      {
+        it++;
+        continue;
+      }
       switch (k)
       {
         case Kind::BAG_EMPTY: checkEmpty(n); break;
@@ -105,6 +116,11 @@ void BagSolver::checkQuantifiedOperations()
     {
       Node n = (*it);
       Kind k = n.getKind();
+      if (isReduced(n))
+      {
+        it++;
+        continue;
+      }
       switch (k)
       {
         case Kind::BAG_MAP: checkMap(n); break;

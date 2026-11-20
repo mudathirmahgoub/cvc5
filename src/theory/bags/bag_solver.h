@@ -25,6 +25,8 @@ namespace cvc5::internal {
 namespace theory {
 namespace bags {
 
+class TableFactsSolver;
+
 class InferenceManager;
 class SolverState;
 class TermRegistry;
@@ -37,6 +39,12 @@ class BagSolver : protected EnvObj
  public:
   BagSolver(Env& env, SolverState& s, InferenceManager& im);
   ~BagSolver();
+
+  /**
+   * With --bags-facts=context, the terms that tfs reduced are skipped: the
+   * solver works on the terms they were rewritten to.
+   */
+  void setTableFacts(const TableFactsSolver* tfs) { d_tableFacts = tfs; }
 
   /**
    * apply inference rules for basic bag operators without quantifiers:
@@ -85,6 +93,10 @@ class BagSolver : protected EnvObj
   bool checkBagMake();
 
  private:
+  /** whether n is reduced by the table facts (--bags-facts=context) */
+  bool isReduced(const Node& n) const;
+  /** the table facts that reduce terms, or null */
+  const TableFactsSolver* d_tableFacts = nullptr;
   /** apply inference rules for empty bags */
   void checkEmpty(const Node& n);
 

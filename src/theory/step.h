@@ -35,6 +35,8 @@ enum class Step : uint32_t
   BREAK,
   // collect the bag and count terms of the current equality engine
   BAGS_CHECK_INIT,
+  // the lemmas of the table facts (--bags-facts=lemma, context)
+  BAGS_CHECK_TABLE_FACTS,
   // check the bag.bag operator
   BAGS_CHECK_BAG_MAKE,
   // check basic bag operations without quantifiers

@@ -23,6 +23,7 @@
 #include "theory/bags/inference_manager.h"
 #include "theory/bags/solver_state.h"
 #include "theory/bags/strategy.h"
+#include "theory/bags/table_facts_solver.h"
 #include "theory/bags/term_registry.h"
 #include "theory/care_pair_argument_callback.h"
 #include "theory/theory.h"
@@ -65,6 +66,12 @@ class TheoryBags : public Theory
    * collect bags' representatives and all count terms.
    */
   void collectBagsAndCountTerms();
+  /** Whether the strategy sends the lemmas of the table facts (C and E) */
+  bool checksTableFacts() const;
+  /** The lemmas of the table facts, a step of the strategy (C and E) */
+  void checkTableFacts();
+  /** The lemmas of the table facts of the input (--bags-facts=static, D) */
+  void ppStaticLearn(TNode in, std::vector<TrustNode>& learned) override;
 
   //--------------------------------- standard check
   /** Post-check, called after the fact queue of the theory is processed. */
@@ -129,6 +136,8 @@ class TheoryBags : public Theory
   TermRegistry d_termReg;
   /** the main solver for bags */
   BagSolver d_solver;
+  /** the lemmas of the keys and NOT NULL columns of tables (--bags-facts) */
+  TableFactsSolver d_factsSolver;
 
   /** The care pair argument callback, used for theory combination */
   CarePairArgumentCallback d_cpacb;

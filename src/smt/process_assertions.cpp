@@ -16,6 +16,7 @@
 
 #include "expr/beta_reduce_converter.h"
 #include "options/arith_options.h"
+#include "options/bags_options.h"
 #include "options/base_options.h"
 #include "options/bv_options.h"
 #include "options/ff_options.h"
@@ -158,6 +159,14 @@ bool ProcessAssertions::apply(AssertionPipeline& ap)
   if (options().sets.setsToBags != options::SetsToBagsMode::NONE)
   {
     applyPass("sets-to-bags", ap);
+  }
+
+  // Record the keys and NOT NULL columns of tables that the assertions state,
+  // for the rewriter of the theory to read (--bags-facts=attr).
+  if (logicInfo().isTheoryEnabled(theory::THEORY_BAGS)
+      && options().bags.bagsFacts == options::BagsFactsMode::ATTR)
+  {
+    applyPass("bags-facts", ap);
   }
 
   // Apply substitutions first. If we are non-incremental, this has only the

@@ -44,6 +44,10 @@ void Strategy::initializeStrategy()
   markStartEffort(Theory::EFFORT_FULL);
   // add the inference steps
   addStrategyStep(Step::BAGS_CHECK_INIT);
+  if (d_theory->checksTableFacts())
+  {
+    addStrategyStep(Step::BAGS_CHECK_TABLE_FACTS);
+  }
   addStrategyStep(Step::BAGS_CHECK_BAG_MAKE);
   addStrategyStep(Step::BAGS_CHECK_BASIC_OPERATIONS);
   addStrategyStep(Step::BAGS_CHECK_QUANTIFIED_OPERATIONS);
@@ -60,6 +64,7 @@ void Strategy::runStep(Step s, Theory::Effort, Theory::Effort effort)
   switch (s)
   {
     case Step::BAGS_CHECK_INIT: d_theory->initialize(); break;
+    case Step::BAGS_CHECK_TABLE_FACTS: d_theory->checkTableFacts(); break;
     case Step::BAGS_CHECK_BAG_MAKE: d_bagSolver->checkBagMake(); break;
     case Step::BAGS_CHECK_BASIC_OPERATIONS:
       d_bagSolver->checkBasicOperations();

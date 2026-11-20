@@ -1291,6 +1291,16 @@ BagsRewriteResponse BagsRewriter::rewriteCard(const TNode& n) const
   return BagsRewriteResponse(n, Rewrite::NONE);
 }
 
+bool BagsRewriter::recordFact(TNode lit)
+{
+  if (!readTableFact(lit, d_recorded))
+  {
+    return false;
+  }
+  d_facts = &d_recorded;
+  return true;
+}
+
 bool BagsRewriter::readTableFact(TNode lit, TableFacts& facts) const
 {
   // a negated equality states no fact

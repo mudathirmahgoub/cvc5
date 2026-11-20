@@ -266,6 +266,8 @@ enum class InferenceId
   BAGS_FOLD,
   BAGS_CARD,
   BAGS_CARD_EMPTY,
+  // F => (= t t'), t' t rewritten by the key or NOT NULL column F of a table
+  BAGS_TABLE_FACT,
   TABLES_PRODUCT_UP,
   TABLES_PRODUCT_DOWN,
   TABLES_JOIN_DOWN,

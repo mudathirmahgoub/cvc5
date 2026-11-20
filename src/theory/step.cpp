@@ -24,6 +24,7 @@ std::ostream& operator<<(std::ostream& out, Step s)
     case Step::NONE: out << "NONE"; break;
     case Step::BREAK: out << "BREAK"; break;
     case Step::BAGS_CHECK_INIT: out << "BAGS_CHECK_INIT"; break;
+    case Step::BAGS_CHECK_TABLE_FACTS: out << "BAGS_CHECK_TABLE_FACTS"; break;
     case Step::BAGS_CHECK_BAG_MAKE: out << "BAGS_CHECK_BAG_MAKE"; break;
     case Step::BAGS_CHECK_BASIC_OPERATIONS:
       out << "BAGS_CHECK_BASIC_OPERATIONS";

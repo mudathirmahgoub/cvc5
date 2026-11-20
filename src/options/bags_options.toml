@@ -32,3 +32,27 @@ name   = "Bags Theory"
   type       = "bool"
   default    = "true"
   help       = "when two bag terms of the same kind are disequal, infer that some pair of their arguments is: the converse of congruence, which localizes the difference between two relational-algebra terms of one shape"
+
+[[option]]
+  name       = "bagsFacts"
+  category   = "expert"
+  long       = "bags-facts=MODE"
+  type       = "BagsFactsMode"
+  default    = "NONE"
+  help       = "where the bags rules that read a key or a NOT NULL column of a table, which an assertion states, get it (see --bags-facts=help); --learned-rewrite reads them too"
+  help_mode  = "Where the bags rewrite rules that read a table fact get it."
+[[option.mode.NONE]]
+  name = "none"
+  help = "nowhere but --learned-rewrite"
+[[option.mode.ATTR]]
+  name = "attr"
+  help = "the rewriter of the theory reads the facts of the top-level assertions"
+[[option.mode.LEMMA]]
+  name = "lemma"
+  help = "the bag solver sends F => t = t' for each registered term t, t' rewritten with the fact F"
+[[option.mode.STATIC]]
+  name = "static"
+  help = "static learning sends F => t = t' for each term t of the input"
+[[option.mode.CONTEXT]]
+  name = "context"
+  help = "context-dependent simplification: each active term is substituted, rewritten with the facts of the current context, and reduced"

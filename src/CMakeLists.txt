@@ -59,6 +59,8 @@ libcvc5_add_sources(
   preprocessing/passes/ackermann.h
   preprocessing/passes/apply_substs.cpp
   preprocessing/passes/apply_substs.h
+  preprocessing/passes/bags_facts.cpp
+  preprocessing/passes/bags_facts.h
   preprocessing/passes/bool_to_bv.cpp
   preprocessing/passes/bool_to_bv.h
   preprocessing/passes/bv_eager_atoms.cpp
@@ -622,6 +624,8 @@ libcvc5_add_sources(
   theory/bags/solver_state.h
   theory/bags/strategy.cpp
   theory/bags/strategy.h
+  theory/bags/table_facts_solver.cpp
+  theory/bags/table_facts_solver.h
   theory/bags/term_registry.cpp
   theory/bags/term_registry.h
   theory/bags/theory_bags.cpp

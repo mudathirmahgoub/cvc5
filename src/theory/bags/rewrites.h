@@ -33,6 +33,27 @@ enum class Rewrite : uint32_t
   /** no rewrite happened */
   NONE,
   /**
+   * An aggregate of a table of known elements, a union of bag.empty, ite and
+   * (bag x c) with c a positive constant, is written out: one element per
+   * group, at the first element of the group, folded over the elements of
+   * the group in their order in the table.
+   *
+   * For x : (Tuple Int Int), y : (Tuple Int Int),
+   * f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
+   *       (tuple ((_ tuple.select 0) t)
+   *              (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t)))),
+   * i = (tuple 0 0), kx = ((_ tuple.project 0) x) and
+   * ky = ((_ tuple.project 0) y),
+   *
+   *   ((_ table.aggr 0) f i (bag.union_disjoint (bag x 1) (bag y 1)))
+   *   ---> (bag.union_disjoint
+   *          (bag (ite (= kx ky) (f y (f x i)) (f x i)) 1)
+   *          (ite (= kx ky)
+   *               (as bag.empty (Table Int Int))
+   *               (bag (f y i) 1)))
+   */
+  AGGREGATE_BAG_MAKE,
+  /**
    * An aggregate of a constant table is evaluated.
    *
    * For f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))

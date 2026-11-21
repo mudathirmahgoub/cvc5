@@ -407,6 +407,7 @@ class BagsRewriter : public TheoryRewriter
    * The rules for ((_ table.aggr K) f i X), each a Rewrite id with an example
    * in rewrites.h:
    *
+   * - AGGREGATE_BAG_MAKE, for X a union of known elements (collectElements)
    * - AGGREGATE_INTEGER_SUM (rewriteAggregateIntegerSum)
    * - AGGREGATE_OVER_JOIN (rewriteAggregateOverJoin)
    * - AGGREGATE_DUPLICATE_COLUMN (rewriteAggregateDuplicateColumn)

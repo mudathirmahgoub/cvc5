@@ -46,6 +46,7 @@ enum class Rewrite : uint32_t
    *                       (bag (tuple 1 3) 1)))
    *   ---> (bag (tuple 1 5) 1)
    */
+  AGGREGATE_BAG_MAKE,
   AGGREGATE_CONST,
   /**
    * A bag with an element a non-positive constant number of times is empty.

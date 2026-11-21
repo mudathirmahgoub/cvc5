@@ -5779,28 +5779,9 @@ BagsRewriteResponse BagsRewriter::rewriteAggregateDuplicateColumn(
 //   ---> (bag (bag.fold f (tuple 0) X)
 //             (ite (= X (as bag.empty (Bag (Tuple Int Int)))) 0 1))
 //                                                         (AGGREGATE_NO_KEYS)
-namespace {
-
-/** An element of a bag: the bag has d_count copies of d_element if d_cond. */
-struct GuardedElement
-{
-  Node d_cond;
-  Node d_element;
-  uint32_t d_count;
-};
-
-/**
- * Collects the elements of A, if A is built from bag.empty, ite,
- * bag.union_disjoint and (bag x c) with c a constant. Each element comes with
- * the condition under which A has it: cond and the conditions of the ite terms
- * above it. For example,
- *   (bag.union_disjoint (bag x 1) (ite c (bag y 2) (as bag.empty (Bag T))))
- * has one x under true and two y under c. Returns false if A has another form.
- */
-bool collectElements(NodeManager* nm,
-                     TNode A,
-                     Node cond,
-                     std::vector<GuardedElement>& elements)
+bool BagsRewriter::collectElements(TNode A,
+                                   Node cond,
+                                   std::vector<GuardedElement>& elements) const
 {
   switch (A.getKind())
   {
@@ -5825,20 +5806,16 @@ bool collectElements(NodeManager* nm,
       return true;
     }
     case Kind::BAG_UNION_DISJOINT:
-      return collectElements(nm, A[0], cond, elements)
-             && collectElements(nm, A[1], cond, elements);
+      return collectElements(A[0], cond, elements)
+             && collectElements(A[1], cond, elements);
     case Kind::ITE:
       return collectElements(
-                 nm, A[1], nm->mkNode(Kind::AND, cond, A[0]), elements)
-             && collectElements(nm,
-                                A[2],
-                                nm->mkNode(Kind::AND, cond, A[0].notNode()),
-                                elements);
+                 A[1], d_nm->mkNode(Kind::AND, cond, A[0]), elements)
+             && collectElements(
+                 A[2], d_nm->mkNode(Kind::AND, cond, A[0].notNode()), elements);
     default: return false;
   }
 }
-
-}  // namespace
 
 BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
 {
@@ -5859,8 +5836,7 @@ BagsRewriteResponse BagsRewriter::postRewriteAggregate(const TNode& n) const
   // folded c times.
   // A constant table is left to AGGREGATE_CONST.
   std::vector<GuardedElement> elements;
-  if (!n[2].isConst()
-      && collectElements(d_nm, n[2], d_nm->mkConst(true), elements))
+  if (!n[2].isConst() && collectElements(n[2], d_nm->mkConst(true), elements))
   {
     Node f = n[0];
     Node empty = d_nm->mkConst(EmptyBag(n.getType()));

@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; AGGREGATE_OVER_JOIN over a sum of a CASE on a string column of one side,
 ;   SELECT x.k, SUM(CASE WHEN y.s = 'S8' THEN 1 ELSE 0 END)
 ;   FROM x JOIN y ON x.a = y.a GROUP BY x.k

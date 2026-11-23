@@ -565,7 +565,7 @@ enum class Rewrite : uint32_t
    * For Y : (Bag (Tuple Int Int)) and Z : (Bag (Tuple Int)),
    *
    * given the assertion that column 0 is a key of Z, which makes Z a set
-   * (see TableFacts; only the learned-rewrite pass knows it):
+   * (see TableFacts; only TableFactsLearner knows it):
    *
    *   (assert (= (bag.setof ((_ table.project 0) Z)) ((_ table.project 0) Z)))
    *
@@ -754,7 +754,7 @@ enum class Rewrite : uint32_t
    *                (+ ((_ tuple.select 2) acc) 1))),
    *
    * given the assertion that column 0 is a key of X
-   * (see TableFacts; only the learned-rewrite pass knows it):
+   * (see TableFacts; only TableFactsLearner knows it):
    *
    *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
    *
@@ -804,7 +804,7 @@ enum class Rewrite : uint32_t
    * For Y : (Bag (Tuple Int (Nullable Int))),
    *
    * given the assertion that column 1 of Y is NOT NULL
-   * (see TableFacts; only the learned-rewrite pass knows it):
+   * (see TableFacts; only TableFactsLearner knows it):
    *
    *   (assert (= (bag.filter
    *                (lambda ((t (Tuple Int (Nullable Int))))

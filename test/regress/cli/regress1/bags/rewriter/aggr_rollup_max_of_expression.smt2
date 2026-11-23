@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; AGGREGATE_ROLLUP merges an outer maximum of the inner maximums into one
 ; maximum over X only when it reads the inner column as it is: for
 ;   SELECT k, MAX(m + 1) FROM (SELECT k, j, MAX(b) AS m FROM X GROUP BY k, j)

@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; AGGREGATE_COLLAPSE applies the outer step once, to the inner row of the
 ; union of the inputs, so it collapses only an outer step that reads the
 ; inner column as it is: for

@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; AGGREGATE_OVER_JOIN over a sum of an expression of one side's column,
 ;   SELECT x.k, SUM(y.b * 2) FROM x JOIN y ON x.a = y.a GROUP BY x.k
 ; The outer step takes the inner sum in place of the summed expression: in

@@ -5088,7 +5088,8 @@ Node BagsRewriter::eagerAggregation(const Node& f,
   // extremum (EXT, a minimum or a maximum) of a column of X or of Y that
   // skips nulls (see nullAwareStepKind), a count of the rows where a column
   // of X or of Y is not null (CNT), or COUNT(*) (STAR); src[q] is the column
-  // of J the role reads
+  // of J the role reads, and args[q] the argument of a SUM or an EXT step, an
+  // expression of that column (see nullAwareStepKind)
   Node xr = f[0][0];
   Node acc = f[0][1];
   size_t w = f[1].getNumChildren();
@@ -5106,6 +5107,7 @@ Node BagsRewriter::eagerAggregation(const Node& f,
   };
   std::vector<Role> role(w);
   std::vector<uint32_t> src(w, 0);
+  std::vector<Node> args(w);
   for (size_t q = 0; q < w; q++)
   {
     Node e = f[1][q];
@@ -5142,6 +5144,7 @@ Node BagsRewriter::eagerAggregation(const Node& f,
       uint32_t c = *read.begin();
       role[q] = k == 0 ? (c < wx ? SUM_X : SUM_Y) : (c < wx ? EXT_X : EXT_Y);
       src[q] = c;
+      args[q] = arg;
       continue;
     }
     if (isCountStep(e, own, init[q]))
@@ -5352,9 +5355,12 @@ Node BagsRewriter::eagerAggregation(const Node& f,
       case EXT_X:
       case EXT_Y:
       {
+        // the side's extremum of the argument, in place of the argument: the
+        // inner aggregate has applied it already, so the column itself is not
+        // replaced (for MIN(x + 1) that would add 1 twice, and for a CASE over
+        // a string column it would put a number where the string was)
         Node v = role[q] == EXT_X ? colX(atX[q]) : colY(atY[q]);
-        std::vector<Node> fr{
-            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        std::vector<Node> fr{args[q], own};
         std::vector<Node> tt{v, own3};
         cells.push_back(
             e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));
@@ -5383,8 +5389,8 @@ Node BagsRewriter::eagerAggregation(const Node& f,
                           d_nm->mkNode(Kind::APPLY_CONSTRUCTOR,
                                        dt[si].getConstructor(),
                                        d_nm->mkNode(Kind::MULT, val, times))});
-        std::vector<Node> fr{
-            datatypes::TupleUtils::nthElementOfTuple(xr, src[q]), own};
+        // in place of the argument, as for EXT above
+        std::vector<Node> fr{args[q], own};
         std::vector<Node> tt{m, own3};
         cells.push_back(
             e.substitute(fr.begin(), fr.end(), tt.begin(), tt.end()));

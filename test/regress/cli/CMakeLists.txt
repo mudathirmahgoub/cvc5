@@ -3035,14 +3035,18 @@ set(regress_1_tests
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
+  regress1/bags/rewriter/aggr_collapse_max_of_expression.smt2
   regress1/bags/rewriter/aggr_constant_columns.smt2
   regress1/bags/rewriter/aggr_filter_empty_ground.smt2
   regress1/bags/rewriter/aggr_group_keys.smt2
   regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_case.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_expression.smt2
   regress1/bags/rewriter/aggr_keyed.smt2
   regress1/bags/rewriter/aggr_merge_function.smt2
   regress1/bags/rewriter/aggr_nullable_accumulator.smt2
   regress1/bags/rewriter/aggr_rollup_int_key.smt2
+  regress1/bags/rewriter/aggr_rollup_max_of_expression.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
   regress1/bags/rewriter/count_map_filter_keys_join.smt2

@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; A keyed aggregate in a product whose filter tests its counter is the map of
 ; its rows (AGGREGATE_KEYED)
 (set-logic HO_ALL)

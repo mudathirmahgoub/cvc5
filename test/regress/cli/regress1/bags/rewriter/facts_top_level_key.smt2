@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; A key asserted at the top level makes X a set: (bag.setof X) is X
 (set-logic HO_ALL)
 (set-info :status unsat)

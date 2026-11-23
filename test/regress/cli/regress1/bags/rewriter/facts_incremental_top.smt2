@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; A key asserted in the outermost scope is a fact for every later check
 ; EXPECT: sat
 ; EXPECT: unsat

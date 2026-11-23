@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; A not-null equality under a negation is no fact, as in facts_negated_key.smt2
 (set-logic HO_ALL)
 (set-info :status sat)

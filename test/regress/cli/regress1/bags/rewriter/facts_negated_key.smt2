@@ -1,3 +1,4 @@
+; REQUIRES: unrestricted-mode
 ; A key equality under a negation is no fact: static learning reads keys off
 ; top-level assertions only
 (set-logic HO_ALL)

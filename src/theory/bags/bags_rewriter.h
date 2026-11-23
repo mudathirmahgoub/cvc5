@@ -432,7 +432,12 @@ class BagsRewriter : public TheoryRewriter
    * - AGGREGATE_UNION_SPLIT (rewriteAggregateUnionSplit)
    */
   BagsRewriteResponse postRewriteAggregate(const TNode& n) const;
-  /** An element of a bag: the bag has d_count copies of d_element if d_cond. */
+  /**
+   * An element of a bag: the bag has d_count copies of d_element if d_cond.
+   * For example, (ite b (bag y 2) (as bag.empty (Table Int Int))) has the
+   * element
+   *   {d_cond: b, d_element: y, d_count: 2}
+   */
   struct GuardedElement
   {
     Node d_cond;
@@ -443,10 +448,14 @@ class BagsRewriter : public TheoryRewriter
    * Collects the elements of A, if A is built from bag.empty, ite,
    * bag.union_disjoint and (bag x c) with c a constant. Each element comes with
    * the condition under which A has it: cond and the conditions of the ite
-   * terms above it. For example,
-   *   (bag.union_disjoint (bag x 1) (ite c (bag y 2) (as bag.empty (Bag T))))
-   * has one x under true and two y under c. Returns false if A has another
-   * form.
+   * terms above it. For example, with cond = true,
+   *   (bag.union_disjoint
+   *     (bag x 1)
+   *     (ite b (bag y 2) (as bag.empty (Table Int Int))))
+   * gives the elements
+   *   {d_cond: true,         d_element: x, d_count: 1}
+   *   {d_cond: (and true b), d_element: y, d_count: 2}
+   * Returns false if A has another form, for example a variable.
    */
   bool collectElements(TNode A,
                        Node cond,

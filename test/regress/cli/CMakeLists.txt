@@ -3114,6 +3114,7 @@ set(regress_1_tests
   regress1/bags/rewriter/setof_map_datatype.smt2
   regress1/bags/rewriter/setof_of_set.smt2
   regress1/bags/rewriter/sorted_keys.smt2
+  regress1/bags/rewriter/table_fact_incremental.smt2
   regress1/bags/rewriter/table_fact_is_kept.smt2
   regress1/bags/rewriter/table_fact_key_out_of_order.smt2
   regress1/bags/rewriter/table_fact_keyed_aggregate.smt2

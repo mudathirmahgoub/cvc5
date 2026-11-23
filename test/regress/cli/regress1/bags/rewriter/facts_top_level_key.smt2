@@ -1,8 +1,3 @@
-; COMMAND-LINE: --learned-rewrite
-; --learned-rewrite is not supported with proofs or unsat cores because
-; the preprocessing pass does not track its non-local reasoning.
-; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: proof
 ; A key asserted at the top level makes X a set: (bag.setof X) is X
 (set-logic HO_ALL)
 (set-info :status unsat)

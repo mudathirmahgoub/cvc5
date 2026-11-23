@@ -174,6 +174,33 @@ void SolverState::checkInjectivity(Node n)
     return;
   }
 
+  if (f.getKind() == Kind::LAMBDA
+      && expr::hasSubtermKinds({Kind::BAG_FOLD,
+                                Kind::BAG_MAP,
+                                Kind::BAG_FILTER,
+                                Kind::BAG_SETOF,
+                                Kind::BAG_COUNT,
+                                Kind::BAG_CARD,
+                                Kind::TABLE_GROUP,
+                                Kind::TABLE_AGGREGATE,
+                                Kind::TABLE_PRODUCT,
+                                Kind::TABLE_PROJECT},
+                               f[1]))
+  {
+    // The function reads a bag, as the function of a reduced aggregate reads
+    // a whole group through folds:
+    //
+    //   (lambda ((g (Bag (Tuple Int Int))))
+    //     (tuple (bag.fold (lambda ((t (Tuple Int Int)) (a Int)) (+ a 1))
+    //                      0
+    //                      g)))
+    //
+    // A subsolver would unroll the folds to decide this, and may not end. Not
+    // injective is the safe answer: the general map lemmas apply.
+    d_functions[f] = false;
+    return;
+  }
+
   TypeNode domainType = f.getType().getArgTypes()[0];
   if (f.getKind() == Kind::LAMBDA && f[0].getNumChildren() == 1)
   {
@@ -212,24 +239,6 @@ void SolverState::checkInjectivity(Node n)
         d_functions[f] = kept.size() == var.getType().getTupleLength();
         return;
       }
-    }
-    if (expr::hasSubtermKinds({Kind::BAG_FOLD,
-                               Kind::BAG_MAP,
-                               Kind::BAG_FILTER,
-                               Kind::BAG_SETOF,
-                               Kind::BAG_COUNT,
-                               Kind::BAG_CARD,
-                               Kind::TABLE_GROUP,
-                               Kind::TABLE_AGGREGATE,
-                               Kind::TABLE_PRODUCT,
-                               Kind::TABLE_PROJECT},
-                              body))
-    {
-      // the function of an aggregate reads a whole group through a fold: a
-      // subsolver would unroll two folds to decide this, which costs more than
-      // the general map lemmas do
-      d_functions[f] = false;
-      return;
     }
   }
   Node x = NodeManager::mkDummySkolem("x", domainType);

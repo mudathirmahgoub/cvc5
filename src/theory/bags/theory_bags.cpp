@@ -43,6 +43,7 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
                  logicInfo().isHigherOrder()),
       d_termReg(env),
       d_solver(env, d_state, d_im),
+      d_factsLearner(env),
       d_cpacb(*this),
       d_strat(this, &d_solver, &d_state, &d_im)
 {
@@ -52,6 +53,11 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
 }
 
 TheoryBags::~TheoryBags() {}
+
+void TheoryBags::ppStaticLearn(TNode in, std::vector<TrustNode>& learned)
+{
+  d_factsLearner.ppStaticLearn(in, learned);
+}
 
 TheoryRewriter* TheoryBags::getTheoryRewriter()
 {

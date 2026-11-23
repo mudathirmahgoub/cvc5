@@ -1,8 +1,3 @@
-; COMMAND-LINE: --learned-rewrite
-; --learned-rewrite is not supported with proofs or unsat cores because
-; the preprocessing pass does not track its non-local reasoning.
-; DISABLE-TESTER: unsat-core
-; DISABLE-TESTER: proof
 ; A keyed aggregate in a product whose filter tests its counter is the map of
 ; its rows (AGGREGATE_KEYED)
 (set-logic HO_ALL)

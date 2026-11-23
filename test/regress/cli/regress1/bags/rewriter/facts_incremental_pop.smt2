@@ -1,4 +1,3 @@
-; COMMAND-LINE: --learned-rewrite
 ; A key asserted in a popped scope is no fact after the pop
 ; EXPECT: sat
 ; EXPECT: sat

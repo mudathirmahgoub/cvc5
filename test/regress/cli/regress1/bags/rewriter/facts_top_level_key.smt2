@@ -1,4 +1,6 @@
 ; REQUIRES: unrestricted-mode
+; CPC checking fails because the signature does not define table.project.
+; DISABLE-TESTER: cpc
 ; A key asserted at the top level makes X a set: (bag.setof X) is X
 (set-logic HO_ALL)
 (set-info :status unsat)

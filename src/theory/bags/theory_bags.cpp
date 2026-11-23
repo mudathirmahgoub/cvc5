@@ -41,7 +41,8 @@ TheoryBags::TheoryBags(Env& env, OutputChannel& out, Valuation valuation)
       d_termReg(env),
       d_solver(env, d_state, d_im),
       d_cpacb(*this),
-      d_strat(this, &d_solver, &d_state, &d_im)
+      d_strat(this, &d_solver, &d_state, &d_im),
+      d_checker(nodeManager())
 {
   // use the official theory state and inference manager objects
   d_theoryState = &d_state;
@@ -59,7 +60,7 @@ TheoryRewriter* TheoryBags::getTheoryRewriter()
   return &d_rewriter;
 }
 
-ProofRuleChecker* TheoryBags::getProofChecker() { return nullptr; }
+ProofRuleChecker* TheoryBags::getProofChecker() { return &d_checker; }
 
 bool TheoryBags::needsEqualityEngine(EeSetupInfo& esi)
 {
@@ -506,7 +507,7 @@ void TheoryBags::processCarePairArgs(TNode a, TNode b)
               << "Should split on : " << x << "==" << y << std::endl;
           Node equal = x.eqNode(y);
           Node lemma = equal.orNode(equal.notNode());
-          d_im.lemma(lemma, InferenceId::BAGS_CG_SPLIT);
+          d_im.lemmaWithProof(lemma, InferenceId::BAGS_CG_SPLIT);
         }
       }
     }

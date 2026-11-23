@@ -610,10 +610,14 @@ libcvc5_add_sources(
   theory/bags/bags_utils.h
   theory/bags/infer_info.cpp
   theory/bags/infer_info.h
+  theory/bags/infer_proof_cons.cpp
+  theory/bags/infer_proof_cons.h
   theory/bags/inference_generator.cpp
   theory/bags/inference_generator.h
   theory/bags/inference_manager.cpp
   theory/bags/inference_manager.h
+  theory/bags/proof_checker.cpp
+  theory/bags/proof_checker.h
   theory/bags/rewrites.cpp
   theory/bags/rewrites.h
   theory/bags/solver_state.cpp

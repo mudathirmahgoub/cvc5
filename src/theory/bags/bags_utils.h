@@ -152,6 +152,64 @@ class BagsUtils
   static std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
   splitTableJoinIndices(Node n);
 
+  /**
+   * The multiplicity of an element in a bag operator, in terms of the
+   * multiplicities of that element in the arguments of the operator. This is
+   * the right-hand side of the conclusion of ProofRule::BAGS_COUNT_DEF. For
+   * example, for (bag.count e (bag.union_disjoint A B)) it returns
+   * (+ (bag.count e A) (bag.count e B)).
+   *
+   * @param nm The node manager
+   * @param count A term of the form (bag.count e t)
+   * @return the multiplicity of e in t, or null if the kind of t is not one of
+   * bag.empty, bag, bag.union_disjoint, bag.union_max, bag.inter_min,
+   * bag.difference_subtract, bag.difference_remove, bag.setof.
+   */
+  static Node mkCountDef(NodeManager* nm, const Node& count);
+
+  /**
+   * The conclusion of ProofRule::BAGS_MAKE_SPLIT, which is the lemma
+   *   (or (and (not (>= c 1)) (= (bag x c) (as bag.empty (Bag E))))
+   *       (and (>= c 1) (not (= (bag x c) (as bag.empty (Bag E))))))
+   *
+   * @param nm The node manager
+   * @param n A term of the form (bag x c)
+   * @return the lemma above
+   */
+  static Node mkBagMakeSplit(NodeManager* nm, const Node& n);
+
+  /**
+   * The conclusion of ProofRule::BAGS_FILTER_UP, which is
+   *   (or (and (P e) (= count (bag.count e A)))
+   *       (and (not (P e)) (= count 0)))
+   *
+   * @param nm The node manager
+   * @param count A term of the form (bag.count e (bag.filter P A))
+   * @return the formula above, or null if count does not have this form
+   */
+  static Node mkFilterUp(NodeManager* nm, const Node& count);
+
+  /**
+   * The conclusion of ProofRule::BAGS_FILTER_DOWN, which is
+   *   (and (P e) (= count (bag.count e A)))
+   *
+   * @param nm The node manager
+   * @param count A term of the form (bag.count e (bag.filter P A))
+   * @return the formula above, or null if count does not have this form
+   */
+  static Node mkFilterDown(NodeManager* nm, const Node& count);
+
+  /**
+   * The conclusion of ProofRule::BAGS_MAP_UP, which is
+   *   (<= (bag.count x A) (bag.count (f x) (bag.map f A)))
+   *
+   * @param nm The node manager
+   * @param n A term of the form (bag.map f A)
+   * @param x An element of the element type of A
+   * @return the formula above
+   */
+  static Node mkMapUp(NodeManager* nm, const Node& n, const Node& x);
+
  private:
   /**
    * a high order helper function that return a constant bag that is the result

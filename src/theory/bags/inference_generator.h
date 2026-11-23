@@ -412,6 +412,17 @@ class InferenceGenerator : protected EnvObj
   Node getMultiplicityTerm(Node element, Node bag);
 
   /**
+   * @param n a bag term whose kind is supported by BagsUtils::mkCountDef
+   * @param e an element of the element type of n
+   * @param id the identifier of the inference
+   * @return an inference with conclusion (= (bag.count e skolem) def), where
+   * skolem is the purification skolem of n and def is the multiplicity of e in
+   * n given by BagsUtils::mkCountDef. This also asserts the skolem lemma
+   * (= n skolem).
+   */
+  InferInfo countDefinition(Node n, Node e, InferenceId id);
+
+  /**
    * @param n has form ((_ table.group n1 ... nk) A) where A has type T
    * @return an inference that represents:
    * (=>

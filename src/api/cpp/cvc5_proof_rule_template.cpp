@@ -137,6 +137,14 @@ const char* toString(ProofRule rule)
     case ProofRule::SETS_CHOOSE_MEMBER: return "SETS_CHOOSE_MEMBER";
     case ProofRule::SETS_FILTER_DOWN: return "SETS_FILTER_DOWN";
     case ProofRule::SETS_FILTER_UP: return "SETS_FILTER_UP";
+    //================================================= Bags rules
+    case ProofRule::BAGS_COUNT_NON_NEG: return "BAGS_COUNT_NON_NEG";
+    case ProofRule::BAGS_COUNT_DEF: return "BAGS_COUNT_DEF";
+    case ProofRule::BAGS_MAKE_SPLIT: return "BAGS_MAKE_SPLIT";
+    case ProofRule::BAGS_EXT: return "BAGS_EXT";
+    case ProofRule::BAGS_FILTER_UP: return "BAGS_FILTER_UP";
+    case ProofRule::BAGS_FILTER_DOWN: return "BAGS_FILTER_DOWN";
+    case ProofRule::BAGS_MAP_UP: return "BAGS_MAP_UP";
     //================================================= String rules
     case ProofRule::CONCAT_EQ: return "CONCAT_EQ";
     case ProofRule::CONCAT_UNIFY: return "CONCAT_UNIFY";

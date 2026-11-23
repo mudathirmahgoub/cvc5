@@ -13,13 +13,12 @@
 #include "theory/bags/infer_info.h"
 
 #include "theory/bags/inference_manager.h"
-#include "theory/inference_manager_buffered.h"
 
 namespace cvc5::internal {
 namespace theory {
 namespace bags {
 
-InferInfo::InferInfo(InferenceManagerBuffered* im, InferenceId id)
+InferInfo::InferInfo(InferenceManager* im, InferenceId id)
     : TheoryInference(id), d_im(im)
 {
 }
@@ -27,30 +26,26 @@ InferInfo::InferInfo(InferenceManagerBuffered* im, InferenceId id)
 TrustNode InferInfo::processLemma(CVC5_UNUSED LemmaProperty& p)
 {
   Node lemma = getLemma();
-
   Trace("bags::InferInfo::process") << (*this) << std::endl;
-  d_im->addPendingLemma(lemma, getId());
-  return TrustNode::mkTrustLemma(lemma, nullptr);
+  // the inference manager registers the lemma with its proof constructor, if
+  // proofs are enabled
+  ProofGenerator* pg = d_im->notifyLemma(lemma, getId(), getPremise());
+  return TrustNode::mkTrustLemma(lemma, pg);
 }
 
 Node InferInfo::getLemma() const
 {
+  if (d_premises.empty())
+  {
+    return d_conclusion;
+  }
   NodeManager* nm = d_im->getNodeManager();
-  std::vector<Node> nodes;
-  Node premises = nm->mkAnd(d_premises);
-  Node lemma = nm->mkNode(Kind::IMPLIES, premises, d_conclusion);
-  nodes.push_back(lemma);
-  // send lemmas corresponding to the skolems introduced
-  for (const auto& pair : d_skolems)
-  {
-    Node n = pair.first.eqNode(pair.second);
-    nodes.push_back(n);
-  }
-  if (nodes.size() == 1)
-  {
-    return lemma;
-  }
-  return nm->mkNode(Kind::AND, nodes);
+  return nm->mkNode(Kind::IMPLIES, getPremise(), d_conclusion);
+}
+
+Node InferInfo::getPremise() const
+{
+  return d_im->getNodeManager()->mkAnd(d_premises);
 }
 
 bool InferInfo::isTrivial() const
@@ -81,7 +76,6 @@ std::ostream& operator<<(std::ostream& out, const InferInfo& ii)
   {
     out << " ;premise" << std::endl << ii.d_premises << std::endl;
   }
-  out << ";skolems " << ii.d_skolems << std::endl;
   out << ")";
   return out;
 }

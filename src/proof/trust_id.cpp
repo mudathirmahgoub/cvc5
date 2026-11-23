@@ -30,6 +30,7 @@ const char* toString(TrustId id)
     // core
     case TrustId::THEORY_INFERENCE_ARITH: return "THEORY_INFERENCE_ARITH";
     case TrustId::THEORY_INFERENCE_ARRAYS: return "THEORY_INFERENCE_ARRAYS";
+    case TrustId::THEORY_INFERENCE_BAGS: return "THEORY_INFERENCE_BAGS";
     case TrustId::THEORY_INFERENCE_DATATYPES:
       return "THEORY_INFERENCE_DATATYPES";
     case TrustId::THEORY_INFERENCE_SEP: return "THEORY_INFERENCE_SEP";

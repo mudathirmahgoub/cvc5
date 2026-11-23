@@ -25,9 +25,9 @@
 namespace cvc5::internal {
 namespace theory {
 
-class InferenceManagerBuffered;
-
 namespace bags {
+
+class InferenceManager;
 
 /**
  * An inference. This is a class to track an unprocessed call to either
@@ -37,12 +37,12 @@ namespace bags {
 class InferInfo : public TheoryInference
 {
  public:
-  InferInfo(InferenceManagerBuffered* im, InferenceId id);
+  InferInfo(InferenceManager* im, InferenceId id);
   ~InferInfo() {}
   /** Process lemma */
   TrustNode processLemma(LemmaProperty& p) override;
   /** Pointer to the class used for processing this info */
-  InferenceManagerBuffered* d_im;
+  InferenceManager* d_im;
   /** The conclusion */
   Node d_conclusion;
   /**
@@ -51,11 +51,6 @@ class InferInfo : public TheoryInference
    */
   std::vector<Node> d_premises;
 
-  /**
-   * A map of nodes to their skolem variables introduced as a result of this
-   * inference.
-   */
-  std::map<Node, Node> d_skolems;
   /**  Is this infer info trivial? True if d_conc is true. */
   bool isTrivial() const;
   /**
@@ -70,9 +65,14 @@ class InferInfo : public TheoryInference
    */
   bool isFact() const;
   /**
-   * @return the lemma for this InferInfo.
+   * @return the lemma for this InferInfo, which is the conclusion if there are
+   * no premises, and (=> (and premises) conclusion) otherwise.
    */
   Node getLemma() const;
+  /**
+   * @return the conjunction of the premises, or true if there are none.
+   */
+  Node getPremise() const;
 };
 
 /**

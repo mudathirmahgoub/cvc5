@@ -21,6 +21,7 @@
 #include "theory/bags/bags_statistics.h"
 #include "theory/bags/inference_generator.h"
 #include "theory/bags/inference_manager.h"
+#include "theory/bags/proof_checker.h"
 #include "theory/bags/solver_state.h"
 #include "theory/bags/strategy.h"
 #include "theory/bags/term_registry.h"
@@ -131,6 +132,8 @@ class TheoryBags : public Theory
 
   /** The representation of the strategy */
   Strategy d_strat;
+  /** The proof rule checker for the theory of bags */
+  BagsProofRuleChecker d_checker;
 
   void eqNotifyNewClass(TNode n);
   void eqNotifyMerge(TNode n1, TNode n2);

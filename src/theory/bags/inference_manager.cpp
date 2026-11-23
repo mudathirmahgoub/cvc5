@@ -22,7 +22,9 @@ namespace theory {
 namespace bags {
 
 InferenceManager::InferenceManager(Env& env, Theory& t, SolverState& s)
-    : InferenceManagerBuffered(env, t, s, "theory::bags::"), d_state(s)
+    : InferenceManagerBuffered(env, t, s, "theory::bags::"),
+      d_state(s),
+      d_ipc(isProofEnabled() ? new InferProofCons(env) : nullptr)
 {
   d_true = nodeManager()->mkConst(true);
   d_false = nodeManager()->mkConst(false);
@@ -40,6 +42,31 @@ void InferenceManager::doPending()
   }
   doPendingLemmas();
   doPendingPhaseRequirements();
+}
+
+ProofGenerator* InferenceManager::notifyLemma(const Node& lem,
+                                              InferenceId id,
+                                              const Node& exp)
+{
+  if (d_ipc == nullptr)
+  {
+    return nullptr;
+  }
+  d_ipc->notifyLemma(lem, id, exp);
+  return d_ipc.get();
+}
+
+void InferenceManager::addPendingLemmaWithProof(const Node& lem,
+                                                InferenceId id)
+{
+  ProofGenerator* pg = notifyLemma(lem, id, d_true);
+  addPendingLemma(lem, id, LemmaProperty::NONE, pg);
+}
+
+bool InferenceManager::lemmaWithProof(const Node& lem, InferenceId id)
+{
+  ProofGenerator* pg = notifyLemma(lem, id, d_true);
+  return trustedLemma(TrustNode::mkTrustLemma(lem, pg), id);
 }
 
 }  // namespace bags

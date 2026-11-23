@@ -15,6 +15,9 @@
 #ifndef CVC5__THEORY__BAGS__INFERENCE_MANAGER_H
 #define CVC5__THEORY__BAGS__INFERENCE_MANAGER_H
 
+#include <memory>
+
+#include "theory/bags/infer_proof_cons.h"
 #include "theory/inference_manager_buffered.h"
 
 namespace cvc5::internal {
@@ -47,6 +50,29 @@ class InferenceManager : public InferenceManagerBuffered
   // TODO issue #78: refactor this with theory of strings
   void doPending();
 
+  /**
+   * Notify the proof constructor that lem is a lemma for inference id with
+   * premise exp, which is true if the lemma has no premises and the
+   * conjunction of the premises otherwise. In the latter case, lem has the
+   * form (=> exp conc).
+   *
+   * @return the proof generator that can prove lem, which is null if proofs
+   * are disabled.
+   */
+  ProofGenerator* notifyLemma(const Node& lem, InferenceId id, const Node& exp);
+  /**
+   * Add pending lemma lem, which has no premises, for inference id, with a
+   * proof given by the proof constructor of this class.
+   */
+  void addPendingLemmaWithProof(const Node& lem, InferenceId id);
+  /**
+   * Send lemma lem, which has no premises, for inference id, with a proof
+   * given by the proof constructor of this class.
+   *
+   * @return true if the lemma was sent.
+   */
+  bool lemmaWithProof(const Node& lem, InferenceId id);
+
  private:
   /** constants */
   Node d_true;
@@ -57,6 +83,8 @@ class InferenceManager : public InferenceManagerBuffered
    * class.
    */
   SolverState& d_state;
+  /** The inference to proof converter, if proofs are enabled */
+  std::unique_ptr<InferProofCons> d_ipc;
 };
 
 }  // namespace bags

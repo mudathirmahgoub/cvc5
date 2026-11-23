@@ -1040,6 +1040,125 @@ BagsUtils::splitTableJoinIndices(Node n)
   return std::make_pair(indices1, indices2);
 }
 
+Node BagsUtils::mkCountDef(NodeManager* nm, const Node& count)
+{
+  if (count.getKind() != Kind::BAG_COUNT)
+  {
+    return Node::null();
+  }
+  Node e = count[0];
+  Node t = count[1];
+  Node zero = nm->mkConstInt(Rational(0));
+  Node one = nm->mkConstInt(Rational(1));
+  Kind k = t.getKind();
+  switch (k)
+  {
+    // (bag.count e bag.empty) = 0
+    case Kind::BAG_EMPTY: return zero;
+    // (bag.count e (bag x c)) = (ite (and (= e x) (>= c 1)) c 0)
+    case Kind::BAG_MAKE:
+    {
+      Node same = nm->mkNode(Kind::EQUAL, e, t[0]);
+      Node geq = nm->mkNode(Kind::GEQ, t[1], one);
+      return nm->mkNode(Kind::ITE, same.andNode(geq), t[1], zero);
+    }
+    // (bag.count e (bag.setof A)) = (ite (>= (bag.count e A) 1) 1 0)
+    case Kind::BAG_SETOF:
+    {
+      Node countA = nm->mkNode(Kind::BAG_COUNT, e, t[0]);
+      Node geq = nm->mkNode(Kind::GEQ, countA, one);
+      return nm->mkNode(Kind::ITE, geq, one, zero);
+    }
+    case Kind::BAG_UNION_DISJOINT:
+    case Kind::BAG_UNION_MAX:
+    case Kind::BAG_INTER_MIN:
+    case Kind::BAG_DIFFERENCE_SUBTRACT:
+    case Kind::BAG_DIFFERENCE_REMOVE:
+    {
+      Node countA = nm->mkNode(Kind::BAG_COUNT, e, t[0]);
+      Node countB = nm->mkNode(Kind::BAG_COUNT, e, t[1]);
+      switch (k)
+      {
+        // (+ countA countB)
+        case Kind::BAG_UNION_DISJOINT:
+          return nm->mkNode(Kind::ADD, countA, countB);
+        // (ite (> countA countB) countA countB)
+        case Kind::BAG_UNION_MAX:
+          return nm->mkNode(
+              Kind::ITE, nm->mkNode(Kind::GT, countA, countB), countA, countB);
+        // (ite (< countA countB) countA countB)
+        case Kind::BAG_INTER_MIN:
+          return nm->mkNode(
+              Kind::ITE, nm->mkNode(Kind::LT, countA, countB), countA, countB);
+        // (ite (>= countA countB) (- countA countB) 0)
+        case Kind::BAG_DIFFERENCE_SUBTRACT:
+          return nm->mkNode(Kind::ITE,
+                            nm->mkNode(Kind::GEQ, countA, countB),
+                            nm->mkNode(Kind::SUB, countA, countB),
+                            zero);
+        // (ite (<= countB 0) countA 0)
+        default:
+          Assert(k == Kind::BAG_DIFFERENCE_REMOVE);
+          return nm->mkNode(
+              Kind::ITE, nm->mkNode(Kind::LEQ, countB, zero), countA, zero);
+      }
+    }
+    default: break;
+  }
+  return Node::null();
+}
+
+Node BagsUtils::mkBagMakeSplit(NodeManager* nm, const Node& n)
+{
+  Assert(n.getKind() == Kind::BAG_MAKE);
+  Node empty = nm->mkConst(EmptyBag(n.getType()));
+  Node equal = nm->mkNode(Kind::EQUAL, n, empty);
+  Node geq = nm->mkNode(Kind::GEQ, n[1], nm->mkConstInt(Rational(1)));
+  Node isEmpty = geq.notNode().andNode(equal);
+  Node isNotEmpty = geq.andNode(equal.notNode());
+  return isEmpty.orNode(isNotEmpty);
+}
+
+Node BagsUtils::mkFilterUp(NodeManager* nm, const Node& count)
+{
+  if (count.getKind() != Kind::BAG_COUNT
+      || count[1].getKind() != Kind::BAG_FILTER)
+  {
+    return Node::null();
+  }
+  Node e = count[0];
+  Node p = count[1][0];
+  Node countA = nm->mkNode(Kind::BAG_COUNT, e, count[1][1]);
+  Node pOfe = nm->mkNode(Kind::APPLY_UF, p, e);
+  Node included = pOfe.andNode(count.eqNode(countA));
+  Node excluded =
+      pOfe.notNode().andNode(count.eqNode(nm->mkConstInt(Rational(0))));
+  return included.orNode(excluded);
+}
+
+Node BagsUtils::mkFilterDown(NodeManager* nm, const Node& count)
+{
+  if (count.getKind() != Kind::BAG_COUNT
+      || count[1].getKind() != Kind::BAG_FILTER)
+  {
+    return Node::null();
+  }
+  Node e = count[0];
+  Node p = count[1][0];
+  Node countA = nm->mkNode(Kind::BAG_COUNT, e, count[1][1]);
+  Node pOfe = nm->mkNode(Kind::APPLY_UF, p, e);
+  return pOfe.andNode(count.eqNode(countA));
+}
+
+Node BagsUtils::mkMapUp(NodeManager* nm, const Node& n, const Node& x)
+{
+  Assert(n.getKind() == Kind::BAG_MAP);
+  Node countA = nm->mkNode(Kind::BAG_COUNT, x, n[1]);
+  Node fx = nm->mkNode(Kind::APPLY_UF, n[0], x);
+  Node countN = nm->mkNode(Kind::BAG_COUNT, fx, n);
+  return nm->mkNode(Kind::LEQ, countA, countN);
+}
+
 }  // namespace bags
 }  // namespace theory
 }  // namespace cvc5::internal

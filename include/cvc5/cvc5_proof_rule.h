@@ -1632,6 +1632,115 @@ enum ENUM(ProofRule)
   EVALUE(SETS_FILTER_DOWN),
   /**
    * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Non-negative multiplicity**
+   *
+   * .. math::
+   *
+   *   \inferrule{-\mid \mathit{bag.count}(e,a)}
+   *   {\mathit{bag.count}(e,a) \geq 0}
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_COUNT_NON_NEG),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Multiplicity of an element in a bag operator**
+   *
+   * .. math::
+   *
+   *   \inferrule{-\mid \mathit{bag.count}(e,t)}
+   *   {\mathit{bag.count}(e,t) = r}
+   *
+   * where :math:`r` is the multiplicity of :math:`e` in :math:`t`, given in
+   * terms of the multiplicities of :math:`e` in the arguments of :math:`t`.
+   * Writing :math:`a_e` for :math:`\mathit{bag.count}(e,a)`:
+   *
+   * - :math:`t = \mathit{bag.empty}`: :math:`r = 0`,
+   * - :math:`t = \mathit{bag}(x,c)`:
+   *   :math:`r = \mathit{ite}(e = x \wedge c \geq 1, c, 0)`,
+   * - :math:`t = \mathit{bag.union\_disjoint}(a,b)`: :math:`r = a_e + b_e`,
+   * - :math:`t = \mathit{bag.union\_max}(a,b)`:
+   *   :math:`r = \mathit{ite}(a_e > b_e, a_e, b_e)`,
+   * - :math:`t = \mathit{bag.inter\_min}(a,b)`:
+   *   :math:`r = \mathit{ite}(a_e < b_e, a_e, b_e)`,
+   * - :math:`t = \mathit{bag.difference\_subtract}(a,b)`:
+   *   :math:`r = \mathit{ite}(a_e \geq b_e, a_e - b_e, 0)`,
+   * - :math:`t = \mathit{bag.difference\_remove}(a,b)`:
+   *   :math:`r = \mathit{ite}(b_e \leq 0, a_e, 0)`,
+   * - :math:`t = \mathit{bag.setof}(a)`:
+   *   :math:`r = \mathit{ite}(a_e \geq 1, 1, 0)`.
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_COUNT_DEF),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Emptiness of a bag constructor**
+   *
+   * .. math::
+   *
+   *   \inferrule{-\mid \mathit{bag}(x,c)}
+   *   {(\neg c \geq 1 \wedge \mathit{bag}(x,c) = \mathit{bag.empty}) \vee
+   *    (c \geq 1 \wedge \mathit{bag}(x,c) \neq \mathit{bag.empty})}
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_MAKE_SPLIT),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Bags extensionality**
+   *
+   * .. math::
+   *
+   *   \inferrule{a \neq b\mid -}
+   *   {\mathit{bag.count}(k,a)\neq\mathit{bag.count}(k,b)}
+   *
+   * where :math:`k` is the :math:`\texttt{BAGS_DEQ_DIFF}` skolem for `(a, b)`.
+   * \endverbatim
+   */
+  EVALUE(BAGS_EXT),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Bags filter up**
+   *
+   * .. math::
+   *
+   *   \inferrule{-\mid \mathit{bag.count}(e,\mathit{bag.filter}(P, a))}
+   *   {(P(e) \wedge \mathit{bag.count}(e,\mathit{bag.filter}(P, a)) =
+   *     \mathit{bag.count}(e,a)) \vee
+   *    (\neg P(e) \wedge \mathit{bag.count}(e,\mathit{bag.filter}(P, a)) = 0)}
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_FILTER_UP),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Bags filter down**
+   *
+   * .. math::
+   *
+   *   \inferrule{\mathit{bag.count}(e,\mathit{bag.filter}(P, a)) \geq 1\mid -}
+   *   {P(e) \wedge \mathit{bag.count}(e,\mathit{bag.filter}(P, a)) =
+   *    \mathit{bag.count}(e,a)}
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_FILTER_DOWN),
+  /**
+   * \verbatim embed:rst:leading-asterisk
+   * **Bags -- Bags map up**
+   *
+   * .. math::
+   *
+   *   \inferrule{-\mid \mathit{bag.map}(f, a), x}
+   *   {\mathit{bag.count}(x,a) \leq
+   *    \mathit{bag.count}(f(x),\mathit{bag.map}(f, a))}
+   *
+   * \endverbatim
+   */
+  EVALUE(BAGS_MAP_UP),
+  /**
+   * \verbatim embed:rst:leading-asterisk
    * **Strings -- Core rules -- Concatenation equality**
    *
    * .. math::

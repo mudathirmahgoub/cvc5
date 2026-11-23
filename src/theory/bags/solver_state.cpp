@@ -122,8 +122,13 @@ void SolverState::collectDisequalBagTerms()
       Node equal = A <= B ? A.eqNode(B) : B.eqNode(A);
       if (d_deq.find(equal) == d_deq.end())
       {
+        // The witness is indexed by the sides of the ordered equality, which
+        // are the sides of the disequality in the lemma of
+        // InferenceGenerator::bagDisequality. This is required for the lemma
+        // to be an instance of ProofRule::BAGS_EXT.
         SkolemManager* sm = d_nm->getSkolemManager();
-        Node skolem = sm->mkSkolemFunction(SkolemId::BAGS_DEQ_DIFF, {A, B});
+        Node skolem =
+            sm->mkSkolemFunction(SkolemId::BAGS_DEQ_DIFF, {equal[0], equal[1]});
         d_deq[equal] = skolem;
       }
     }

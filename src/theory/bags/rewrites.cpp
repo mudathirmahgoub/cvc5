@@ -39,6 +39,7 @@ const char* toString(Rewrite r)
     case Rewrite::FILTER_CONST: return "FILTER_CONST";
     case Rewrite::FILTER_BAG_MAKE: return "FILTER_BAG_MAKE";
     case Rewrite::FILTER_UNION_DISJOINT: return "FILTER_UNION_DISJOINT";
+    case Rewrite::FILTER_ITE: return "FILTER_ITE";
     case Rewrite::FILTER_FILTER: return "FILTER_FILTER";
     case Rewrite::FILTER_MAP: return "FILTER_MAP";
     case Rewrite::FILTER_SETOF: return "FILTER_SETOF";
@@ -146,6 +147,8 @@ const char* toString(Rewrite r)
     case Rewrite::FOLD_BAG: return "FOLD_BAG";
     case Rewrite::FOLD_CONST: return "FOLD_CONST";
     case Rewrite::FOLD_UNION_DISJOINT: return "FOLD_UNION_DISJOINT";
+    case Rewrite::FOLD_ITE: return "FOLD_ITE";
+    case Rewrite::GROUP_BAG_MAKE: return "GROUP_BAG_MAKE";
     case Rewrite::IDENTICAL_NODES: return "IDENTICAL_NODES";
     case Rewrite::INTERSECTION_EMPTY_LEFT: return "INTERSECTION_EMPTY_LEFT";
     case Rewrite::INTERSECTION_EMPTY_RIGHT: return "INTERSECTION_EMPTY_RIGHT";
@@ -156,6 +159,7 @@ const char* toString(Rewrite r)
     case Rewrite::MAP_CONST: return "MAP_CONST";
     case Rewrite::MAP_BAG_MAKE: return "MAP_BAG_MAKE";
     case Rewrite::MAP_UNION_DISJOINT: return "MAP_UNION_DISJOINT";
+    case Rewrite::MAP_ITE: return "MAP_ITE";
     case Rewrite::MEMBER: return "MEMBER";
     case Rewrite::PARTITION_CONST: return "PARTITION_CONST";
     case Rewrite::PRODUCT_EMPTY: return "PRODUCT_EMPTY";

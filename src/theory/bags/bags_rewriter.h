@@ -316,6 +316,7 @@ class BagsRewriter : public TheoryRewriter
    * - MAP_IDENTITY
    * - NOT_NULL_COLUMNS (assumeNonNull)
    * - MAP_CONST, MAP_BAG_MAKE and MAP_UNION_DISJOINT
+   * - MAP_ITE
    * - MAP_MAP, for X a map (rewriteMapOfMap)
    * - EQ_EMPTY_FILTER_DECORRELATE (normalizeEmptiness)
    * - MAP_SPLIT_CLOSED (rewriteMapSplitClosed)
@@ -348,6 +349,7 @@ class BagsRewriter : public TheoryRewriter
    * - CANONICAL_VARIABLE (canonicalLambda)
    * - FILTER_SPLIT_CLOSED
    * - FILTER_CONST, FILTER_BAG_MAKE and FILTER_UNION_DISJOINT
+   * - FILTER_ITE
    * - FILTER_FILTER, for X a filter (rewriteFilterOfFilter)
    * - FILTER_MAP, for X a map (rewriteFilterOfMap)
    * - FILTER_COUNT_POSITIVE, for X an aggregate (rewriteFilterCountPositive)
@@ -394,6 +396,7 @@ class BagsRewriter : public TheoryRewriter
    * - FOLD_MAP
    * - FOLD_TUPLE (rewriteFoldOfTuple)
    * - FOLD_CONSTANT_STEP
+   * - FOLD_ITE
    * - FOLD_UNION_DISJOINT
    * - CANONICAL_VARIABLE (canonicalLambda)
    */
@@ -407,7 +410,8 @@ class BagsRewriter : public TheoryRewriter
    * The rules for ((_ table.aggr K) f i X), each a Rewrite id with an example
    * in rewrites.h:
    *
-   * - AGGREGATE_BAG_MAKE, for X a union of known elements (collectElements)
+   * - AGGREGATE_BAG_MAKE, for X a union of known elements (collectElements):
+   *   reduced to bag.map, table.group and bag.fold
    * - AGGREGATE_INTEGER_SUM (rewriteAggregateIntegerSum)
    * - AGGREGATE_OVER_JOIN (rewriteAggregateOverJoin)
    * - AGGREGATE_DUPLICATE_COLUMN (rewriteAggregateDuplicateColumn)
@@ -433,16 +437,15 @@ class BagsRewriter : public TheoryRewriter
    */
   BagsRewriteResponse postRewriteAggregate(const TNode& n) const;
   /**
-   * An element of a bag: the bag has d_count copies of d_element if d_cond.
-   * For example, (ite b (bag y 2) (as bag.empty (Table Int Int))) has the
-   * element
-   *   {d_cond: b, d_element: y, d_count: 2}
+   * An element of a bag: the bag has the elements of d_bag if d_cond, where
+   * d_bag is (bag x c) with c > 0 a constant. For example,
+   * (ite b (bag y 2) (as bag.empty (Table Int Int))) has the element
+   *   {d_cond: b, d_bag: (bag y 2)}
    */
   struct GuardedElement
   {
     Node d_cond;
-    Node d_element;
-    uint32_t d_count;
+    Node d_bag;
   };
   /**
    * Collects the elements of A, if A is built from bag.empty, ite,
@@ -453,8 +456,8 @@ class BagsRewriter : public TheoryRewriter
    *     (bag x 1)
    *     (ite b (bag y 2) (as bag.empty (Table Int Int))))
    * gives the elements
-   *   {d_cond: true,         d_element: x, d_count: 1}
-   *   {d_cond: (and true b), d_element: y, d_count: 2}
+   *   {d_cond: true,         d_bag: (bag x 1)}
+   *   {d_cond: (and true b), d_bag: (bag y 2)}
    * Returns false if A has another form, for example a variable.
    */
   bool collectElements(TNode A,
@@ -479,7 +482,13 @@ class BagsRewriter : public TheoryRewriter
    * its Rewrite id in rewrites.h.
    */
   BagsRewriteResponse postRewriteProject(const TNode& n) const;
-  /** SORTED_KEYS for a table.group, see rewriteSortedKeys */
+  /**
+   * The rules for ((_ table.group K) X), each a Rewrite id with an example in
+   * rewrites.h:
+   *
+   * - SORTED_KEYS (rewriteSortedKeys)
+   * - GROUP_BAG_MAKE, for X a union of known elements (collectElements)
+   */
   BagsRewriteResponse postRewriteGroup(const TNode& n) const;
 
   // ---------------------------------------------------------------------------

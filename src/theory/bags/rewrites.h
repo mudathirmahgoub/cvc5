@@ -34,23 +34,19 @@ enum class Rewrite : uint32_t
   NONE,
   /**
    * An aggregate of a table of known elements, a union of bag.empty, ite and
-   * (bag x c) with c a positive constant, is written out: one element per
-   * group, at the first element of the group, folded over the elements of
-   * the group in their order in the table.
+   * (bag x c) with c a constant, is reduced to bag.map, table.group and
+   * bag.fold, as TheoryBags::ppRewrite reduces any aggregate. GROUP_BAG_MAKE,
+   * MAP_ITE and FOLD_ITE then write the groups and their values out.
    *
    * For x : (Tuple Int Int), y : (Tuple Int Int),
    * f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
    *       (tuple ((_ tuple.select 0) t)
    *              (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t)))),
-   * i = (tuple 0 0), kx = ((_ tuple.project 0) x) and
-   * ky = ((_ tuple.project 0) y),
+   * i = (tuple 0 0) and A = (bag.union_disjoint (bag x 1) (bag y 1)),
    *
-   *   ((_ table.aggr 0) f i (bag.union_disjoint (bag x 1) (bag y 1)))
-   *   ---> (bag.union_disjoint
-   *          (bag (ite (= kx ky) (f y (f x i)) (f x i)) 1)
-   *          (ite (= kx ky)
-   *               (as bag.empty (Table Int Int))
-   *               (bag (f y i) 1)))
+   *   ((_ table.aggr 0) f i A)
+   *   ---> (bag.map (lambda ((p (Table Int Int))) (bag.fold f i p))
+   *                 ((_ table.group 0) A))
    */
   AGGREGATE_BAG_MAKE,
   /**
@@ -190,6 +186,16 @@ enum class Rewrite : uint32_t
    *   ---> (bag.union_disjoint (bag.filter p A) (bag.filter p B))
    */
   FILTER_UNION_DISJOINT,
+  /**
+   * A filter of an ite is the ite of the filters.
+   *
+   * For c : Bool, A : (Bag Int) and B : (Bag Int) and
+   *   p = (lambda ((y Int)) (> y 0)),
+   *
+   *   (bag.filter p (ite c A B))
+   *   ---> (ite c (bag.filter p A) (bag.filter p B))
+   */
+  FILTER_ITE,
   /**
    * A filter of a filter is one filter, by the conjunction.
    *
@@ -2276,6 +2282,40 @@ enum class Rewrite : uint32_t
    */
   FOLD_UNION_DISJOINT,
   /**
+   * A fold over an ite is the ite of the folds.
+   *
+   * For c : Bool, A : (Bag Int) and B : (Bag Int) and
+   *   f = (lambda ((y Int) (a Int)) (+ y a)),
+   *
+   *   (bag.fold f 0 (ite c A B))
+   *   ---> (ite c (bag.fold f 0 A) (bag.fold f 0 B))
+   */
+  FOLD_ITE,
+  /**
+   * The groups of a table of known elements, a union of bag.empty, ite and
+   * (bag x c) with c a constant, are written out: one group for each
+   * element, at the first element of the group that is in the table.
+   *
+   * For x : (Tuple Int Int), y : (Tuple Int Int), b : Bool,
+   * kx = ((_ tuple.project 0) x) and ky = ((_ tuple.project 0) y),
+   *
+   *   ((_ table.group 0)
+   *     (bag.union_disjoint
+   *       (bag x 1)
+   *       (ite b (bag y 2) (as bag.empty (Table Int Int)))))
+   *   ---> (bag.union_disjoint
+   *          (bag (bag.union_disjoint
+   *                 (bag x 1)
+   *                 (ite (and b (= ky kx))
+   *                      (bag y 2)
+   *                      (as bag.empty (Table Int Int))))
+   *               1)
+   *          (ite (and b (not (= kx ky)))
+   *               (bag (bag y 2) 1)
+   *               (as bag.empty (Bag (Table Int Int)))))
+   */
+  GROUP_BAG_MAKE,
+  /**
    * A bag equals itself, before its sides are rewritten.
    *
    * For A : (Bag Int),
@@ -2358,6 +2398,16 @@ enum class Rewrite : uint32_t
    *   ---> (bag.union_disjoint (bag.map g A) (bag.map g B))
    */
   MAP_UNION_DISJOINT,
+  /**
+   * A map of an ite is the ite of the maps.
+   *
+   * For c : Bool, A : (Bag Int) and B : (Bag Int) and
+   *   g = (lambda ((y Int)) (+ y 1)),
+   *
+   *   (bag.map g (ite c A B))
+   *   ---> (ite c (bag.map g A) (bag.map g B))
+   */
+  MAP_ITE,
   /**
    * Membership is a positive count.
    *

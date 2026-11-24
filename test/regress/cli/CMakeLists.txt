@@ -3093,6 +3093,7 @@ set(regress_1_tests
   regress1/bags/table_join3.smt2
   regress1/bags/table_join4.smt2
   regress1/bags/table_join5.smt2
+  regress1/bags/table_join6.smt2
   regress1/bags/table_project1.smt2
   regress1/bags/table_project2.smt2
   regress1/bags/table_project3.smt2

@@ -1,0 +1,134 @@
+(include "../theories/Bags.eo")
+
+;;;;; ProofRule::BAGS_COUNT_NON_NEG
+
+; rule: bags_count_non_neg
+; implements: ProofRule::BAGS_COUNT_NON_NEG
+; args:
+; - t Int: The multiplicity of an element in a bag, as a bag.count term.
+; conclusion: The multiplicity is non-negative.
+(declare-rule bags_count_non_neg ((T Type) (e T) (a (Bag T)))
+  :args ((bag.count e a))
+  :conclusion (>= (bag.count e a) 0)
+)
+
+;;;;; ProofRule::BAGS_COUNT_DEF
+
+; program: $bags_count_def
+; args:
+; - e T: The element.
+; - t (Bag T): The bag, whose top symbol is a bag operator.
+; return: >
+;   The multiplicity of e in t, in terms of the multiplicities of e in the
+;   arguments of t.
+(program $bags_count_def ((T Type) (e T) (x T) (c Int) (a (Bag T)) (b (Bag T)))
+  :signature (T (Bag T)) Int
+  (
+  (($bags_count_def e (as bag.empty (Bag T)))
+    0)
+  (($bags_count_def e (bag x c))
+    (ite (and (= e x) (>= c 1)) c 0))
+  (($bags_count_def e (bag.union_disjoint a b))
+    (+ (bag.count e a) (bag.count e b)))
+  (($bags_count_def e (bag.union_max a b))
+    (ite (> (bag.count e a) (bag.count e b)) (bag.count e a) (bag.count e b)))
+  (($bags_count_def e (bag.inter_min a b))
+    (ite (< (bag.count e a) (bag.count e b)) (bag.count e a) (bag.count e b)))
+  (($bags_count_def e (bag.difference_subtract a b))
+    (ite (>= (bag.count e a) (bag.count e b)) (- (bag.count e a) (bag.count e b)) 0))
+  (($bags_count_def e (bag.difference_remove a b))
+    (ite (<= (bag.count e b) 0) (bag.count e a) 0))
+  (($bags_count_def e (bag.setof a))
+    (ite (>= (bag.count e a) 1) 1 0))
+  )
+)
+
+; rule: bags_count_def
+; implements: ProofRule::BAGS_COUNT_DEF
+; args:
+; - t Int: The multiplicity of an element e in a bag operator, as a bag.count term.
+; conclusion: >
+;   The multiplicity of e in the bag operator is the one given by
+;   $bags_count_def. For example,
+;     (= (bag.count e (bag.union_disjoint a b))
+;        (+ (bag.count e a) (bag.count e b)))
+(declare-rule bags_count_def ((T Type) (e T) (t (Bag T)))
+  :args ((bag.count e t))
+  :conclusion (= (bag.count e t) ($bags_count_def e t))
+)
+
+;;;;; ProofRule::BAGS_MAKE_SPLIT
+
+; rule: bags_make_split
+; implements: ProofRule::BAGS_MAKE_SPLIT
+; args:
+; - t (Bag T): A bag constructor (bag x c).
+; conclusion: >
+;   The bag (bag x c) is empty if and only if c is less than one.
+(declare-rule bags_make_split ((T Type) (x T) (c Int))
+  :args ((bag x c))
+  :conclusion
+    (or (and (not (>= c 1)) (= (bag x c) (as bag.empty (eo::typeof (bag x c)))))
+        (and (>= c 1) (not (= (bag x c) (as bag.empty (eo::typeof (bag x c)))))))
+)
+
+;;;;; ProofRule::BAGS_EXT
+
+; rule: bags_ext
+; implements: ProofRule::BAGS_EXT
+; premises:
+; - deq: A disequality between bags.
+; conclusion: >
+;   The bags have different multiplicities for a witness element, given by
+;   the skolem (@bags_deq_diff a b).
+(declare-rule bags_ext ((T Type) (a (Bag T)) (b (Bag T)))
+  :premises ((not (= a b)))
+  :conclusion
+    (not (= (bag.count (@bags_deq_diff a b) a)
+            (bag.count (@bags_deq_diff a b) b)))
+)
+
+;;;;; ProofRule::BAGS_FILTER_UP
+
+; rule: bags_filter_up
+; implements: ProofRule::BAGS_FILTER_UP
+; args:
+; - t Int: The multiplicity of an element e in a bag.filter term.
+; conclusion: >
+;   If P holds for e, the multiplicity of e in (bag.filter P a) is its
+;   multiplicity in a, and otherwise it is zero.
+(declare-rule bags_filter_up ((T Type) (P (-> T Bool)) (e T) (a (Bag T)))
+  :args ((bag.count e (bag.filter P a)))
+  :conclusion
+    (or (and (P e) (= (bag.count e (bag.filter P a)) (bag.count e a)))
+        (and (not (P e)) (= (bag.count e (bag.filter P a)) 0)))
+)
+
+;;;;; ProofRule::BAGS_FILTER_DOWN
+
+; rule: bags_filter_down
+; implements: ProofRule::BAGS_FILTER_DOWN
+; premises:
+; - mem: The element e occurs in a bag.filter term.
+; conclusion: >
+;   P holds for e, and the multiplicity of e in (bag.filter P a) is its
+;   multiplicity in a.
+(declare-rule bags_filter_down ((T Type) (P (-> T Bool)) (e T) (a (Bag T)))
+  :premises ((>= (bag.count e (bag.filter P a)) 1))
+  :conclusion (and (P e) (= (bag.count e (bag.filter P a)) (bag.count e a)))
+)
+
+;;;;; ProofRule::BAGS_MAP_UP
+
+; rule: bags_map_up
+; implements: ProofRule::BAGS_MAP_UP
+; args:
+; - t (Bag U): A bag.map term (bag.map f a).
+; - x T: An element.
+; conclusion: >
+;   The multiplicity of (f x) in (bag.map f a) is at least the multiplicity
+;   of x in a.
+(declare-rule bags_map_up ((T Type) (U Type) (f (-> T U)) (a (Bag T)) (x T))
+  :args ((bag.map f a) x)
+  :conclusion (<= (bag.count x a) (bag.count (f x) (bag.map f a)))
+)

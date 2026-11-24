@@ -1,6 +1,4 @@
 ; REQUIRES: unrestricted-mode
-; CPC checking fails because the signature does not define table.join.
-; DISABLE-TESTER: cpc
 (set-logic HO_ALL)
 (set-info :status unsat)
 (assert (bag.member (tuple 1 2 1 9)

@@ -48,6 +48,14 @@
   (-> (Bag T) (Bag U) (Bag (eo::list_concat Tuple T U))))
 (declare-parameterized-const table.group ((T Type :implicit))
   (-> @List (Bag T) (Bag (Bag T))))
+; note: The indices are given as a list, as for tuple.project.
+(declare-parameterized-const table.project
+  ((T Type :implicit) (is @List :opaque))
+  (-> (Bag T) (Bag ($tuple_project_type is T))))
+; note: The pairs of indices (m1 n1 ... mk nk) are given as a list.
+(declare-parameterized-const table.join
+  ((T Type :implicit) (U Type :implicit) (is @List :opaque))
+  (-> (Bag T) (Bag U) (Bag (eo::list_concat Tuple T U))))
 (declare-parameterized-const table.aggr ((T Type :implicit) (U Type :implicit))
   (-> @List (-> T U U) U (Bag T) (Bag U)))
 

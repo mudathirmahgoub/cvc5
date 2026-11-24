@@ -323,7 +323,8 @@ Node EoNodeConverter::postConvert(Node n)
     std::vector<Node> args =
         GenericOp::getIndicesForOperator(k, n.getOperator());
     if (k == Kind::RELATION_GROUP || k == Kind::TABLE_GROUP
-        || k == Kind::TABLE_AGGREGATE)
+        || k == Kind::TABLE_AGGREGATE || k == Kind::TABLE_PROJECT
+        || k == Kind::TABLE_JOIN)
     {
       Node list = mkList(args);
       std::vector<Node> children;

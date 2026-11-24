@@ -293,8 +293,16 @@ bool EoPrinter::isHandled(const Options& opts, const ProofNode* pfn)
     case ProofRule::ARITH_TRANS_SINE_TANGENT_PI:
     case ProofRule::SETS_FILTER_UP:
     case ProofRule::SETS_FILTER_DOWN:
+    case ProofRule::BAGS_COUNT_NON_NEG:
+    case ProofRule::BAGS_COUNT_DEF:
+    case ProofRule::BAGS_MAKE_SPLIT:
+    case ProofRule::BAGS_EXT:
+    case ProofRule::BAGS_FILTER_UP:
+    case ProofRule::BAGS_FILTER_DOWN:
+    case ProofRule::BAGS_MAP_UP:
     {
       // only supported in unrestricted builds
+      // (bags is an expert theory, see proofs/eo/cpc/expert/rules/Bags.eo)
       if (opts.base.safeMode == options::SafeMode::UNRESTRICTED)
       {
         return true;

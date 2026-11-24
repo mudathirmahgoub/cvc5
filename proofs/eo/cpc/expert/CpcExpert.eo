@@ -21,6 +21,7 @@
 (include "./rules/ArraysExt.eo")
 (include "./rules/Transcendentals.eo")
 (include "./rules/SetsExt.eo")
+(include "./rules/Bags.eo")
 (include "./rules/RewritesExpert.eo")
 (include "./rules/QuantifiersExpert.eo")
 

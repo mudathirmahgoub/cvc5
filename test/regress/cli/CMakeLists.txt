@@ -3030,26 +3030,34 @@ set(regress_1_tests
   regress1/bags/product1.smt2
   regress1/bags/product2.smt2
   regress1/bags/product3.smt2
+  regress1/bags/product4.smt2
   regress1/bags/proj-issue497.smt2
   regress1/bags/proj-issue507.smt2
   regress1/bags/proj-issue547.smt2
   regress1/bags/proj-issue566.smt2
   regress1/bags/proj-issue584.smt2
   regress1/bags/proj-issue603.smt2
+  regress1/bags/rewriter/aggr_collapse_max_of_expression.smt2
   regress1/bags/rewriter/aggr_constant_columns.smt2
+  regress1/bags/rewriter/aggr_filter_empty_ground.smt2
   regress1/bags/rewriter/aggr_group_keys.smt2
   regress1/bags/rewriter/aggr_join_merge_seeds.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_case.smt2
+  regress1/bags/rewriter/aggr_join_sum_of_expression.smt2
   regress1/bags/rewriter/aggr_keyed.smt2
   regress1/bags/rewriter/aggr_merge_function.smt2
   regress1/bags/rewriter/aggr_nullable_accumulator.smt2
   regress1/bags/rewriter/aggr_rollup_int_key.smt2
+  regress1/bags/rewriter/aggr_rollup_max_of_expression.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
   regress1/bags/rewriter/count_map_filter_keys_join.smt2
+  regress1/bags/rewriter/eager_aggr_int_join_key.smt2
   regress1/bags/rewriter/eq_empty_arg_learned.smt2
   regress1/bags/rewriter/filter_count_positive.smt2
   regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
+  regress1/bags/rewriter/intersection_sort.smt2
   regress1/bags/rewriter/join_transitive_not_null.smt2
   regress1/bags/rewriter/map_empty_disequality.smt2
   regress1/bags/rewriter/map_equal_columns.smt2
@@ -3060,6 +3068,7 @@ set(regress_1_tests
   regress1/bags/rewriter/setof_constant_map_model.smt2
   regress1/bags/rewriter/setof_map_datatype.smt2
   regress1/bags/rewriter/setof_of_set.smt2
+  regress1/bags/rewriter/sorted_keys.smt2
   regress1/bags/rewriter/table_fact_incremental.smt2
   regress1/bags/rewriter/table_fact_is_kept.smt2
   regress1/bags/rewriter/table_fact_key_out_of_order.smt2

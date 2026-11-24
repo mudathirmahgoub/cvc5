@@ -379,6 +379,15 @@ enum class Rewrite : uint32_t
    */
   EQ_EMPTY_ARG,
   /**
+   * The set of a set is the set.
+   *
+   * For A : (Bag (Tuple Int Int)),
+   *
+   *   (bag.setof (bag.setof A))
+   *   ---> (bag.setof A)
+   */
+  SETOF_SETOF,
+  /**
    * An aggregate of a map groups the rows of the map's argument, by the columns
    * the map copies to the group columns, and folds them through the map. It
    * applies to a step whose value does not depend on the order of the rows, as
@@ -530,6 +539,25 @@ enum class Rewrite : uint32_t
    */
   FOLD_TUPLE,
   /**
+   * A product with a bag of one row, present once or when a condition holds, is
+   * a map that adds the row's columns, under a filter by the condition.
+   *
+   * For A : (Bag (Tuple Int Int)) and b : Bool,
+   *
+   *   (table.product A (bag (tuple 7) (ite b 1 0)))
+   *   ---> (bag.filter (lambda ((r (Tuple Int Int Int))) b)
+   *                    (bag.map
+   *                      (lambda ((t (Tuple Int Int)))
+   *                        (tuple ((_ tuple.select 0) t)
+   *                               ((_ tuple.select 1) t)
+   *                               7))
+   *                      A))
+   *
+   * It applies only with the higher-order flag, see the constructor of
+   * BagsRewriter.
+   */
+  PRODUCT_BAG_MAKE,
+  /**
    * The set of a map with constant columns: of a map to a constant, that
    * constant once, unless the argument is empty; and otherwise the set of the
    * map without the constant columns, under a map that puts them back.
@@ -634,6 +662,34 @@ enum class Rewrite : uint32_t
    */
   EQ_EMPTY_FILTER_DECORRELATE,
   /**
+   * A count in a projection of a filter: a conjunct of the filter that reads
+   * only the projected columns holds of all the rows that give the probe or of
+   * none, so it is decided on the probe instead.
+   *
+   * For X : (Bag (Tuple Int Int)) and a : Int,
+   *
+   *   (bag.count (tuple a)
+   *              (bag.map
+   *                (lambda ((t (Tuple Int Int)))
+   *                  (tuple ((_ tuple.select 0) t)))
+   *                (bag.filter
+   *                  (lambda ((t (Tuple Int Int)))
+   *                    (and (> ((_ tuple.select 0) t) 3)
+   *                         (< ((_ tuple.select 1) t) 7)))
+   *                  X)))
+   *   ---> (ite (> a 3)
+   *             (bag.count (tuple a)
+   *                        (bag.map
+   *                          (lambda ((t (Tuple Int Int)))
+   *                            (tuple ((_ tuple.select 0) t)))
+   *                          (bag.filter
+   *                            (lambda ((t (Tuple Int Int)))
+   *                              (< ((_ tuple.select 1) t) 7))
+   *                            X)))
+   *             0)
+   */
+  COUNT_MAP_FILTER_KEYS,
+  /**
    * A column of an aggregate that the map above it does not read is not
    * computed. Also with a filter between the map and the aggregate that does
    * not read it.
@@ -686,6 +742,18 @@ enum class Rewrite : uint32_t
    */
   MAP_FIXED_COLUMNS,
   /**
+   * A map over a filter that keeps every column of the rows that pass, each
+   * either the row's own or the constant the filter fixes it to, is the filter.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   P = (lambda ((s (Tuple Int Int))) (= ((_ tuple.select 1) s) 5)),
+   *
+   *   (bag.map (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t) 5))
+   *            (bag.filter P X))
+   *   ---> (bag.filter P X)
+   */
+  MAP_IDENTITY_ON_FILTER,
+  /**
    * The set of a projection onto columns in another order than theirs is the
    * set of the projection onto the sorted columns, with a map above it that
    * puts them back. The map is injective, so it commutes with removing
@@ -708,6 +776,80 @@ enum class Rewrite : uint32_t
    *              X)))
    */
   SETOF_PROJECTION_SORT,
+  /**
+   * An aggregate over a union of maps by one function is an aggregate over the
+   * map of the union, which AGGREGATE_MAP then rewrites; the rule applies only
+   * when that one does.
+   *
+   * For X1 : (Bag (Tuple Int Int Int)) and X2 : (Bag (Tuple Int Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t)))) and
+   *   g = (lambda ((t (Tuple Int Int Int)))
+   *         (tuple ((_ tuple.select 2) t) ((_ tuple.select 0) t))),
+   *
+   *   ((_ table.aggr 0) f
+   *                     (tuple 0 0)
+   *                     (bag.union_disjoint (bag.map g X1) (bag.map g X2)))
+   *   ---> ((_ table.aggr 2)
+   *          (lambda ((t (Tuple Int Int Int)) (acc (Tuple Int Int)))
+   *            (tuple ((_ tuple.select 2) t)
+   *                   (+ ((_ tuple.select 1) acc) ((_ tuple.select 0) t))))
+   *          (tuple 0 0)
+   *          (bag.union_disjoint X1 X2))
+   */
+  AGGREGATE_UNION_OF_MAPS,
+  /**
+   * An aggregate over a union of aggregates by the same group columns, which
+   * merges their columns (a sum of counts or sums, a minimum of minimums, a
+   * maximum of maximums), is one aggregate over the union of their tables.
+   *
+   * For X1 : (Bag (Tuple Int Int)) and X2 : (Bag (Tuple Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (nullable.some
+   *                  (+ 1 (nullable.val ((_ tuple.select 1) acc)))))) and
+   *   g = (lambda ((t (Tuple Int (Nullable Int)))
+   *                (acc (Tuple Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (ite (= (as nullable.null (Nullable Int))
+   *                        ((_ tuple.select 1) acc))
+   *                     ((_ tuple.select 1) t)
+   *                     (nullable.some
+   *                       (+ (nullable.val ((_ tuple.select 1) acc))
+   *                          (nullable.val ((_ tuple.select 1) t))))))),
+   *
+   *   ((_ table.aggr 0)
+   *     g
+   *     (tuple 0 (as nullable.null (Nullable Int)))
+   *     (bag.union_disjoint
+   *       ((_ table.aggr 0) f (tuple 0 (nullable.some 0)) X1)
+   *       ((_ table.aggr 0) f (tuple 0 (nullable.some 0)) X2)))
+   *   ---> (bag.map
+   *          (lambda ((r (Tuple Int (Nullable Int))))
+   *            (tuple ((_ tuple.select 0) r) ((_ tuple.select 1) r)))
+   *          ((_ table.aggr 0)
+   *            f
+   *            (tuple 0 (nullable.some 0))
+   *            (bag.union_disjoint X1 X2)))
+   *
+   * This is SQL's sum by column 0 of the counts by column 0 of X1 and of X2,
+   * which is the count by column 0 of both. The map passes each row of the one
+   * aggregate through g once, from the initial value of g, which changes
+   * nothing here.
+   */
+  AGGREGATE_COLLAPSE,
+  /**
+   * An inner bag.setof under maps, filters and unions goes, under an outer
+   * bag.setof: only whether an element occurs counts there.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   g = (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t))),
+   *
+   *   (bag.setof (bag.map g (bag.setof X)))
+   *   ---> (bag.setof (bag.map g X))
+   */
+  SETOF_ABSORB,
   /**
    * A conjunct that every row satisfies goes: here that column 0 of a row of
    * (table.product X Y), which comes from X, is in the projection of X onto
@@ -733,6 +875,65 @@ enum class Rewrite : uint32_t
    * Also a membership that another conjunct implies.
    */
   FILTER_KNOWN_MEMBERSHIP,
+  /**
+   * A negated disjunction among the conjuncts of a filter is the conjunction of
+   * the negations, conjuncts the other rules read one at a time.
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (bag.filter
+   *     (lambda ((t (Tuple Int Int)))
+   *       (and (> ((_ tuple.select 0) t) 3)
+   *            (not (or (= ((_ tuple.select 1) t) 1)
+   *                     (= ((_ tuple.select 1) t) 2)))))
+   *     X)
+   *   ---> (bag.filter
+   *          (lambda ((t (Tuple Int Int)))
+   *            (and (> ((_ tuple.select 0) t) 3)
+   *                 (not (= ((_ tuple.select 1) t) 1))
+   *                 (not (= ((_ tuple.select 1) t) 2))))
+   *          X)
+   */
+  FILTER_DE_MORGAN,
+  /**
+   * A count in a map that makes two columns equal: the probe occurs only when
+   * its two columns are equal too, and the second goes from the probe and the
+   * map.
+   *
+   * For X : (Bag (Tuple Int Int)) and a : Int and b : Int and c : Int,
+   *
+   *   (bag.count (tuple a b c)
+   *              (bag.map
+   *                (lambda ((t (Tuple Int Int)))
+   *                  (tuple ((_ tuple.select 0) t)
+   *                         ((_ tuple.select 1) t)
+   *                         ((_ tuple.select 0) t)))
+   *                X))
+   *   ---> (ite (= a c)
+   *             (bag.count (tuple a b)
+   *                        (bag.map
+   *                          (lambda ((t (Tuple Int Int)))
+   *                            (tuple ((_ tuple.select 0) t)
+   *                                   ((_ tuple.select 1) t)))
+   *                          X))
+   *             0)
+   */
+  COUNT_MAP_DUPLICATE_COLUMNS,
+  /**
+   * The set of a bag with no element twice is the bag
+   * (see BagsRewriter::isSet).
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   * given the assertion that column 0 is a key of X, which makes X a set
+   * (see TableFacts; only TableFactsLearner knows it):
+   *
+   *   (assert (= (bag.setof ((_ table.project 0) X)) ((_ table.project 0) X)))
+   *
+   *   (bag.setof X)
+   *   ---> X
+   */
+  SETOF_OF_SET,
   /**
    * A count in a map whose probe has a constant where the map copies a column
    * of its argument: only the rows with that constant in that column can match,
@@ -844,6 +1045,52 @@ enum class Rewrite : uint32_t
    */
   NOT_NULL_COLUMNS,
   /**
+   * A sum of integers read as reals is the integer sum, read as a real once.
+   *
+   * For X : (Bag (Tuple Int (Nullable Int))),
+   *
+   *   ((_ table.aggr 0)
+   *     (lambda ((t (Tuple Int (Nullable Int)))
+   *              (acc (Tuple Int (Nullable Real) Int)))
+   *       (tuple ((_ tuple.select 0) t)
+   *              (ite (= (as nullable.null (Nullable Real))
+   *                      ((_ tuple.select 1) acc))
+   *                   (nullable.some
+   *                     (to_real (nullable.val ((_ tuple.select 1) t))))
+   *                   (nullable.some
+   *                     (+ (nullable.val ((_ tuple.select 1) acc))
+   *                        (nullable.val ((_ tuple.select 1) t)))))
+   *              (+ 1 ((_ tuple.select 2) acc))))
+   *     (tuple 0 (as nullable.null (Nullable Real)) 0)
+   *     X)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int (Nullable Int) Int)))
+   *            (tuple ((_ tuple.select 0) t)
+   *                   (ite (= (as nullable.null (Nullable Int))
+   *                           ((_ tuple.select 1) t))
+   *                        (as nullable.null (Nullable Real))
+   *                        (nullable.some
+   *                          (to_real (nullable.val ((_ tuple.select 1) t)))))
+   *                   ((_ tuple.select 2) t)))
+   *          ((_ table.aggr 0)
+   *            (lambda ((t (Tuple Int (Nullable Int)))
+   *                     (acc (Tuple Int (Nullable Int) Int)))
+   *              (tuple ((_ tuple.select 0) t)
+   *                     (ite (= (as nullable.null (Nullable Int))
+   *                             ((_ tuple.select 1) acc))
+   *                          (nullable.some
+   *                            (nullable.val ((_ tuple.select 1) t)))
+   *                          (nullable.some
+   *                            (+ (nullable.val ((_ tuple.select 1) t))
+   *                               (nullable.val ((_ tuple.select 1) acc)))))
+   *                     (+ 1 ((_ tuple.select 2) acc))))
+   *            (tuple 0 (as nullable.null (Nullable Int)) 0)
+   *            X))
+   *
+   * Here SQL's SUM(CAST(c1 AS REAL)).
+   */
+  AGGREGATE_INTEGER_SUM,
+  /**
    * The two conjuncts that say a nullable Boolean b holds, (nullable.is_some b)
    * and (nullable.val b), become the one formula they say
    * (see BagsRewriter::normalizeTruth).
@@ -867,6 +1114,204 @@ enum class Rewrite : uint32_t
    * passes when b is true, not when it is false or null.
    */
   FILTER_NULLABLE_TRUTH,
+  /**
+   * An aggregate of an aggregate, Calcite's form of DISTINCT aggregates, as a
+   * join of an aggregate over the table with one over the distinct values the
+   * inner aggregate groups by.
+   *
+   * For X : (Bag (Tuple Int (Nullable Int))) and
+   *   fi = (lambda ((t (Tuple Int (Nullable Int)))
+   *                 (acc (Tuple Int (Nullable Int) (Nullable Int))))
+   *          (tuple ((_ tuple.select 0) t)
+   *                 ((_ tuple.select 1) t)
+   *                 (nullable.some
+   *                   (+ 1 (nullable.val ((_ tuple.select 2) acc)))))) and
+   *   g = (lambda ((t (Tuple Int (Nullable Int) (Nullable Int)))
+   *                (acc (Tuple Int (Nullable Int) (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (ite (= (as nullable.null (Nullable Int))
+   *                        ((_ tuple.select 1) t))
+   *                     ((_ tuple.select 1) acc)
+   *                     (nullable.some
+   *                       (+ 1 (nullable.val ((_ tuple.select 1) acc)))))
+   *                (ite (= (as nullable.null (Nullable Int))
+   *                        ((_ tuple.select 2) acc))
+   *                     ((_ tuple.select 2) t)
+   *                     (nullable.some
+   *                       (+ (nullable.val ((_ tuple.select 2) acc))
+   *                          (nullable.val ((_ tuple.select 2) t))))))) and
+   *   fA = (lambda ((t (Tuple Int (Nullable Int)))
+   *                 (acc (Tuple Int (Nullable Int))))
+   *          (tuple ((_ tuple.select 0) t)
+   *                 (nullable.some
+   *                   (+ 1 (nullable.val ((_ tuple.select 1) acc)))))) and
+   *   fB = (lambda ((s (Tuple Int (Nullable Int)))
+   *                 (acc (Tuple Int (Nullable Int))))
+   *          (tuple ((_ tuple.select 0) s)
+   *                 (ite (= (as nullable.null (Nullable Int))
+   *                         ((_ tuple.select 1) s))
+   *                      ((_ tuple.select 1) acc)
+   *                      (nullable.some
+   *                        (+ 1
+   *                           (nullable.val ((_ tuple.select 1) acc))))))) and
+   *   J = (lambda ((p (Tuple Int (Nullable Int) Int (Nullable Int))))
+   *         (= ((_ tuple.select 0) p) ((_ tuple.select 2) p))) and
+   *   m = (lambda ((p (Tuple Int (Nullable Int) Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) p)
+   *                ((_ tuple.select 3) p)
+   *                ((_ tuple.select 1) p))),
+   *
+   *   ((_ table.aggr 0)
+   *     g
+   *     (tuple 0 (nullable.some 0) (as nullable.null (Nullable Int)))
+   *     ((_ table.aggr 0 1)
+   *       fi
+   *       (tuple 0 (as nullable.null (Nullable Int)) (nullable.some 0))
+   *       X))
+   *   ---> (bag.map
+   *          m
+   *          (bag.filter
+   *            J
+   *            (table.product
+   *              ((_ table.aggr 0) fA (tuple 0 (nullable.some 0)) X)
+   *              ((_ table.aggr 0)
+   *                fB
+   *                (tuple 0 (nullable.some 0))
+   *                (bag.setof
+   *                  (bag.map
+   *                    (lambda ((t (Tuple Int (Nullable Int))))
+   *                      (tuple ((_ tuple.select 0) t)
+   *                             ((_ tuple.select 1) t)))
+   *                    X))))))
+   *
+   * This is SQL's SELECT c0, COUNT(DISTINCT c1), COUNT(*) FROM X GROUP BY c0:
+   * the inner aggregate groups X by both columns and counts their rows, the
+   * outer one counts the groups of each c0 where c1 is not null, and sums their
+   * counts. In the result, fA counts the rows of X by c0, fB counts the
+   * distinct c1 by c0, J joins them on c0, and m puts their columns in the
+   * order of the outer aggregate.
+   */
+  AGGREGATE_ROLLUP,
+  /**
+   * An aggregate over a set is the aggregate over the bag when it computes only
+   * copies of group columns, minimums and maximums: duplicate rows change none
+   * of those.
+   *
+   * For Y : (Bag (Tuple Int (Nullable Int))) and
+   *   f = (lambda ((t (Tuple Int (Nullable Int)))
+   *                (acc (Tuple Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (ite (= (as nullable.null (Nullable Int))
+   *                        ((_ tuple.select 1) acc))
+   *                     ((_ tuple.select 1) t)
+   *                     (ite (> (nullable.val ((_ tuple.select 1) acc))
+   *                             (nullable.val ((_ tuple.select 1) t)))
+   *                          ((_ tuple.select 1) t)
+   *                          ((_ tuple.select 1) acc))))),
+   *
+   *   ((_ table.aggr 0)
+   *     f
+   *     (tuple 0 (as nullable.null (Nullable Int)))
+   *     (bag.setof Y))
+   *   ---> ((_ table.aggr 0) f (tuple 0 (as nullable.null (Nullable Int))) Y)
+   *
+   * Here SQL's MIN(c1) by c0.
+   */
+  AGGREGATE_SETOF_IDEMPOTENT,
+  /**
+   * Two aggregates over one table by the same group columns, both copying every
+   * group column, joined on those copies, are one aggregate that computes the
+   * columns of both: SQL's self-join of two GROUP BY queries over one table.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   fa = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
+   *          (tuple ((_ tuple.select 0) t)
+   *                 (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t)))) and
+   *   fb = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
+   *          (tuple ((_ tuple.select 0) t)
+   *                 (ite (> ((_ tuple.select 1) t) ((_ tuple.select 1) acc))
+   *                      ((_ tuple.select 1) t)
+   *                      ((_ tuple.select 1) acc)))) and
+   *   P = (lambda ((p (Tuple Int Int Int Int)))
+   *         (= ((_ tuple.select 0) p) ((_ tuple.select 2) p))) and
+   *   h = (lambda ((p (Tuple Int Int Int Int)))
+   *         (tuple ((_ tuple.select 0) p)
+   *                ((_ tuple.select 1) p)
+   *                ((_ tuple.select 3) p))),
+   *
+   *   (bag.map h
+   *            (bag.filter P
+   *                        (table.product
+   *                          ((_ table.aggr 0) fa (tuple 0 0) X)
+   *                          ((_ table.aggr 0) fb (tuple 0 0) X))))
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int Int Int)))
+   *            (tuple ((_ tuple.select 0) t)
+   *                   ((_ tuple.select 1) t)
+   *                   ((_ tuple.select 2) t)))
+   *          ((_ table.aggr 0)
+   *            (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
+   *              (tuple ((_ tuple.select 0) t)
+   *                     (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
+   *                     (ite (> ((_ tuple.select 1) t)
+   *                             ((_ tuple.select 2) acc))
+   *                          ((_ tuple.select 1) t)
+   *                          ((_ tuple.select 2) acc))))
+   *            (tuple 0 0 0)
+   *            X))
+   *
+   * Here the sum and the maximum of column 1 by column 0.
+   */
+  AGGREGATE_JOIN_MERGE,
+  /**
+   * An aggregate over a union of parts with the same group values is the join
+   * of the aggregates of the parts, their columns combined.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (nullable.some
+   *                  (+ 1 (nullable.val ((_ tuple.select 1) acc)))))) and
+   *   A = ((_ table.aggr 0) f (tuple 0 (nullable.some 0)) X) and
+   *   J = (lambda ((p (Tuple Int (Nullable Int) Int (Nullable Int))))
+   *         (= ((_ tuple.select 0) p) ((_ tuple.select 2) p))) and
+   *   m = (lambda ((p (Tuple Int (Nullable Int) Int (Nullable Int))))
+   *         (tuple ((_ tuple.select 0) p)
+   *                (nullable.some
+   *                  (+ (nullable.val ((_ tuple.select 1) p))
+   *                     (nullable.val ((_ tuple.select 3) p)))))),
+   *
+   *   ((_ table.aggr 0) f (tuple 0 (nullable.some 0)) (bag.union_disjoint X X))
+   *   ---> (bag.map m (bag.filter J (table.product A A)))
+   *
+   * Here SQL's COUNT(*) by column 0 over X UNION ALL X: J joins the counts of
+   * the two parts on column 0, and m adds them up. Also for parts that each
+   * give the arguments of some columns and null for the others.
+   */
+  AGGREGATE_UNION_SPLIT,
+  /**
+   * An aggregate that only copies group columns has the distinct values of
+   * those columns as its rows (see BagsRewriter::rewriteAggregateGroupKeys).
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int)))
+   *         (tuple ((_ tuple.select 0) t))),
+   *
+   *   ((_ table.aggr 0) f (tuple 0) X)
+   *   ---> (bag.setof
+   *          (bag.map
+   *            (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t)))
+   *            X))
+   *
+   *   ((_ table.aggr 0 1) f (tuple 0) X)
+   *   ---> (bag.map
+   *          (lambda ((r (Tuple Int Int))) (tuple ((_ tuple.select 0) r)))
+   *          (bag.setof ((_ table.project 0 1) X)))
+   *
+   * The first copies every group column, so its rows are distinct. The second
+   * has one row per pair of values of columns 0 and 1.
+   */
+  AGGREGATE_GROUP_KEYS,
   /**
    * A map over a filter that equates two columns reads the first of them, so
    * that two queries that read either become one term.
@@ -904,6 +1349,15 @@ enum class Rewrite : uint32_t
    * AGGREGATE_MAP.
    */
   FOLD_MAP,
+  /**
+   * The set of the union of a bag with itself is the set of the bag.
+   *
+   * For A : (Bag (Tuple Int Int)),
+   *
+   *   (bag.setof (bag.union_disjoint A A))
+   *   ---> (bag.setof A)
+   */
+  SETOF_UNION_SAME,
   /**
    * An aggregate over a union of parts that share no value of the group
    * columns is the union of the aggregates of the parts: every group is one
@@ -953,6 +1407,77 @@ enum class Rewrite : uint32_t
    */
   FILTER_JOIN_TRANSITIVE,
   /**
+   * A column of an aggregate among the factors of a product that the map above
+   * it does not read is not computed; also with a filter between the map and
+   * the product that does not read it.
+   *
+   * For X : (Bag (Tuple Int Int)) and Y : (Bag (Tuple Int)) and
+   *   h = (lambda ((p (Tuple Int Int Int Int)))
+   *         (tuple ((_ tuple.select 1) p)
+   *                ((_ tuple.select 3) p)
+   *                ((_ tuple.select 0) p))),
+   *
+   *   (bag.map h
+   *            (table.product Y
+   *                           ((_ table.aggr 0)
+   *                             (lambda ((t (Tuple Int Int))
+   *                                      (acc (Tuple Int Int Int)))
+   *                               (tuple ((_ tuple.select 0) t)
+   *                                      (+ ((_ tuple.select 1) acc)
+   *                                         ((_ tuple.select 1) t))
+   *                                      (+ 1 ((_ tuple.select 2) acc))))
+   *                             (tuple 0 0 0)
+   *                             X)))
+   *   ---> (bag.map
+   *          (lambda ((p (Tuple Int Int Int)))
+   *            (tuple ((_ tuple.select 1) p)
+   *                   ((_ tuple.select 2) p)
+   *                   ((_ tuple.select 0) p)))
+   *          (table.product Y
+   *                         ((_ table.aggr 0)
+   *                           (lambda ((t (Tuple Int Int))
+   *                                    (acc (Tuple Int Int)))
+   *                             (tuple ((_ tuple.select 0) t)
+   *                                    (+ 1 ((_ tuple.select 1) acc))))
+   *                           (tuple 0 0)
+   *                           X)))
+   *
+   * Here the map does not read the sum, column 2 of the product.
+   */
+  PRODUCT_AGGREGATE_DEAD_COLUMN,
+  /**
+   * Two columns of an aggregate that fold alike, with the same step and initial
+   * value, are one column read twice.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int (Nullable Int) Int)))
+   *         (tuple ((_ tuple.select 0) t)
+   *                (nullable.some
+   *                  (+ 1 (nullable.val ((_ tuple.select 1) acc))))
+   *                (+ 1 ((_ tuple.select 2) acc)))),
+   *
+   *   ((_ table.aggr 0)
+   *     (lambda ((t (Tuple Int Int))
+   *              (acc (Tuple Int (Nullable Int) Int (Nullable Int))))
+   *       (tuple ((_ tuple.select 0) t)
+   *              (nullable.some (+ 1 (nullable.val ((_ tuple.select 1) acc))))
+   *              (+ 1 ((_ tuple.select 2) acc))
+   *              (nullable.some
+   *                (+ 1 (nullable.val ((_ tuple.select 3) acc))))))
+   *     (tuple 0 (nullable.some 0) 0 (nullable.some 0))
+   *     X)
+   *   ---> (bag.map
+   *          (lambda ((t (Tuple Int (Nullable Int) Int)))
+   *            (tuple ((_ tuple.select 0) t)
+   *                   ((_ tuple.select 1) t)
+   *                   ((_ tuple.select 2) t)
+   *                   ((_ tuple.select 1) t)))
+   *          ((_ table.aggr 0) f (tuple 0 (nullable.some 0) 0) X))
+   *
+   * Here SQL's COUNT(*) twice.
+   */
+  AGGREGATE_DUPLICATE_COLUMN,
+  /**
    * A map that copies every column of its argument, in order, is its argument.
    *
    * For X : (Bag (Tuple Int Int)),
@@ -966,6 +1491,38 @@ enum class Rewrite : uint32_t
    * The map's tuple has all the columns of X, here both of them.
    */
   MAP_IDENTITY,
+  /**
+   * A count of the rows of each group of an aggregate is at least 1, as a
+   * group holds at least one row: a filter over the aggregate drops a test
+   * that it is, and is empty when it tests the count equal to a constant
+   * below 1.
+   *
+   * For X : (Bag (Tuple Int Int)) and
+   *   A = ((_ table.aggr 0)
+   *         (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int Int)))
+   *           (tuple ((_ tuple.select 0) t)
+   *                  (+ ((_ tuple.select 1) acc) ((_ tuple.select 1) t))
+   *                  (+ ((_ tuple.select 2) acc) 1)))
+   *         (tuple 0 0 0)
+   *         X),
+   *
+   *   (bag.filter
+   *     (lambda ((r (Tuple Int Int Int)))
+   *       (and (> ((_ tuple.select 1) r) 3) (>= ((_ tuple.select 2) r) 1)))
+   *     A)
+   *   ---> (bag.filter
+   *          (lambda ((r (Tuple Int Int Int))) (> ((_ tuple.select 1) r) 3))
+   *          A)
+   *
+   *   (bag.filter
+   *     (lambda ((r (Tuple Int Int Int))) (= ((_ tuple.select 2) r) 0))
+   *     A)
+   *   ---> (as bag.empty (Bag (Tuple Int Int Int)))
+   *
+   * Column 2 counts the rows of each group. Also for SQL's COUNT(*), whose
+   * step is (nullable.some (+ (nullable.val c) 1)) from (nullable.some 0).
+   */
+  FILTER_COUNT_POSITIVE,
   /**
    * A filter whose conjuncts fix one term to two distinct constants keeps no
    * row; and a conjunct that another one implies goes.

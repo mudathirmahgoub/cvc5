@@ -2,6 +2,7 @@
 (include "../../theories/Builtin.eo")
 (include "../../theories/Arith.eo")
 (include "../../theories/Datatypes.eo")
+(include "./DatatypesExt.eo")
 
 ; disclaimer: >
 ;   This sort is not in the SMT-LIB standard. All further

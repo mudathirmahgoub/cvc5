@@ -3040,6 +3040,7 @@ set(regress_1_tests
   regress1/bags/rewriter/aggr_keyed.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
+  regress1/bags/rewriter/eq_empty_arg_learned.smt2
   regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
   regress1/bags/rewriter/join_transitive_not_null.smt2

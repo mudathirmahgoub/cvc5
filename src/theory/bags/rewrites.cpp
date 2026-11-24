@@ -49,6 +49,7 @@ const char* toString(Rewrite r)
     case Rewrite::PRODUCT_UNION_DISJOINT: return "PRODUCT_UNION_DISJOINT";
     case Rewrite::PRODUCT_ASSOC: return "PRODUCT_ASSOC";
     case Rewrite::PRODUCT_SWAP: return "PRODUCT_SWAP";
+    case Rewrite::EQ_EMPTY_ARG: return "EQ_EMPTY_ARG";
     case Rewrite::AGGREGATE_MAP: return "AGGREGATE_MAP";
     case Rewrite::FILTER_TRUE: return "FILTER_TRUE";
     case Rewrite::FILTER_FALSE: return "FILTER_FALSE";

@@ -1655,6 +1655,8 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
 
 // The rules for an equality (= A B) of two bags, after A and B are rewritten,
 // tried in this order:
+// - EQ_EMPTY_ARG, only with facts: a map or a bag.setof equal to the empty
+//   bag is its argument equal to the empty bag;
 // - EQ_REFL: sides that rewrote to one term make true;
 // - EQ_CONST_FALSE: two constants make false. Bag constants are in a normal
 //   form, so two constants that are not one node are distinct bags; this is
@@ -1669,14 +1671,28 @@ std::vector<std::set<uint32_t>> BagsRewriter::rowKeys(const Node& B) const
 BagsRewriteResponse BagsRewriter::postRewriteEqual(const TNode& n) const
 {
   Assert(n.getKind() == Kind::EQUAL);
-  // No rule rewrites (= (bag.map f X) (as bag.empty (Bag U))) to
-  // (= X (as bag.empty (Bag T))), though the two are equivalent. The bag
-  // solver reduces a disequality of two bags to a lemma whose premise is that
-  // disequality, and the rewriter rewrites the lemma: such a rule would turn
-  // the premise into one about X, an atom that nothing relates to the map.
-  // The solver could then assume X empty and the map not empty, find the
-  // lemma's premise false, and answer sat with a model that violates the
-  // disequality. The same holds for a bag.setof.
+  // EQ_EMPTY_ARG applies only in the rewriter of TableFactsLearner, which
+  // learns (= t t') for the terms t of the input. The rewriter of the theory
+  // must not apply it: the bag solver reduces a disequality of two bags to a
+  // lemma whose premise is that disequality, and the rewriter rewrites the
+  // lemma. The rule would turn the premise into one about X, an atom that
+  // nothing relates to the map, so the solver could assume X empty and the
+  // map not empty, find the premise false, and answer sat with a model that
+  // violates the disequality.
+  if (d_facts != nullptr)
+  {
+    for (size_t i = 0; i < 2; i++)
+    {
+      if (n[i].getKind() == Kind::BAG_EMPTY
+          && (n[1 - i].getKind() == Kind::BAG_MAP
+              || n[1 - i].getKind() == Kind::BAG_SETOF))
+      {
+        Node X = n[1 - i][n[1 - i].getNumChildren() - 1];
+        Node empty = d_nm->mkConst(EmptyBag(X.getType()));
+        return BagsRewriteResponse(X.eqNode(empty), Rewrite::EQ_EMPTY_ARG);
+      }
+    }
+  }
   if (n[0] == n[1])
   {
     Node ret = d_nm->mkConst(true);

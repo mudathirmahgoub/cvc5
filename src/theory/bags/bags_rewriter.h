@@ -88,7 +88,9 @@ struct TableFacts
  * implements a rule is documented with its conditions. Some rules read facts
  * about the tables of the problem, their keys and NOT NULL columns, that
  * top-level assertions state (see TableFacts); only a rewriter that has them,
- * as TableFactsLearner builds, applies them.
+ * as TableFactsLearner builds, applies them. That rewriter also applies
+ * EQ_EMPTY_ARG, which the rewriter of the theory must not (see
+ * postRewriteEqual).
  */
 class BagsRewriter : public TheoryRewriter
 {
@@ -103,7 +105,8 @@ class BagsRewriter : public TheoryRewriter
    * The rewriter does not know the logic, so the default is false: the owner
    * of the rewriter passes true for a higher-order logic. With facts null, as
    * for the rewriter of the theory, no table has a key or a NOT NULL column,
-   * and the rules that need one do not apply.
+   * and the rules that need one do not apply, nor does EQ_EMPTY_ARG. With
+   * facts that are not null but empty, EQ_EMPTY_ARG is the only rule added.
    */
   BagsRewriter(NodeManager* nm,
                Rewriter* r,
@@ -281,6 +284,8 @@ class BagsRewriter : public TheoryRewriter
    * The rules for an equality of bags (= A B), each a Rewrite id with an
    * example in rewrites.h:
    *
+   * - EQ_EMPTY_ARG, for a map or a bag.setof equal to the empty bag, only with
+   *   facts (see the constructor)
    * - EQ_REFL, EQ_CONST_FALSE and EQ_SYM
    */
   BagsRewriteResponse postRewriteEqual(const TNode& n) const;

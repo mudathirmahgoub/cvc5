@@ -449,15 +449,17 @@ class BagsRewriter : public TheoryRewriter
   };
   /**
    * Collects the elements of A, if A is built from bag.empty, ite,
-   * bag.union_disjoint and (bag x c) with c a constant. Each element comes with
-   * the condition under which A has it: cond and the conditions of the ite
-   * terms above it. For example, with cond = true,
+   * bag.union_disjoint and (bag x c) with c a constant or an ite of
+   * constants, as FILTER_BAG_MAKE writes a row of a filter. Each element comes
+   * with the condition under which A has it: cond and the conditions of the
+   * ite terms above it and in its count. For example, with cond = true,
    *   (bag.union_disjoint
    *     (bag x 1)
    *     (ite b (bag y 2) (as bag.empty (Table Int Int))))
    * gives the elements
    *   {d_cond: true,         d_bag: (bag x 1)}
    *   {d_cond: (and true b), d_bag: (bag y 2)}
+   * and (bag x (ite b 1 0)) gives {d_cond: (and true b), d_bag: (bag x 1)}.
    * Returns false if A has another form, for example a variable.
    */
   bool collectElements(TNode A,

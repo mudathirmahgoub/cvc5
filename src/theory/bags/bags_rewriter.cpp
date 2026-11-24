@@ -5834,6 +5834,21 @@ bool BagsRewriter::collectElements(TNode A,
     case Kind::BAG_EMPTY: return true;
     case Kind::BAG_MAKE:
     {
+      if (A[1].getKind() == Kind::ITE)
+      {
+        // (bag y (ite b m1 m2)) is (ite b (bag y m1) (bag y m2)): the
+        // elements of (bag y m1) under (and cond b), then those of
+        // (bag y m2) under (and cond (not b)). FILTER_BAG_MAKE writes the
+        // rows of a filter in this form. For example, with cond = true,
+        //   (bag y (ite b 2 0))
+        // gives {d_cond: (and true b), d_bag: (bag y 2)}.
+        Node bag1 = d_nm->mkNode(Kind::BAG_MAKE, A[0], A[1][1]);
+        Node bag2 = d_nm->mkNode(Kind::BAG_MAKE, A[0], A[1][2]);
+        Node cond1 = d_nm->mkNode(Kind::AND, cond, A[1][0]);
+        Node cond2 = d_nm->mkNode(Kind::AND, cond, A[1][0].notNode());
+        return collectElements(bag1, cond1, elements)
+               && collectElements(bag2, cond2, elements);
+      }
       if (!A[1].isConst())
       {
         // (bag y n) with n a variable: the number of copies is unknown

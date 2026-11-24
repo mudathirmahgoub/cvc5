@@ -34,9 +34,10 @@ enum class Rewrite : uint32_t
   NONE,
   /**
    * An aggregate of a table of known elements, a union of bag.empty, ite and
-   * (bag x c) with c a constant, is reduced to bag.map, table.group and
-   * bag.fold, as TheoryBags::ppRewrite reduces any aggregate. GROUP_BAG_MAKE,
-   * MAP_ITE and FOLD_ITE then write the groups and their values out.
+   * (bag x c) with c a constant or an ite of constants, is reduced to
+   * bag.map, table.group and bag.fold, as TheoryBags::ppRewrite reduces any
+   * aggregate. GROUP_BAG_MAKE, MAP_ITE and FOLD_ITE then write the groups and
+   * their values out.
    *
    * For x : (Tuple Int Int), y : (Tuple Int Int),
    * f = (lambda ((t (Tuple Int Int)) (acc (Tuple Int Int)))
@@ -2293,8 +2294,9 @@ enum class Rewrite : uint32_t
   FOLD_ITE,
   /**
    * The groups of a table of known elements, a union of bag.empty, ite and
-   * (bag x c) with c a constant, are written out: one group for each
-   * element, at the first element of the group that is in the table.
+   * (bag x c) with c a constant or an ite of constants, are written out: one
+   * group for each element, at the first element of the group that is in the
+   * table.
    *
    * For x : (Tuple Int Int), y : (Tuple Int Int), b : Bool,
    * kx = ((_ tuple.project 0) x) and ky = ((_ tuple.project 0) y),

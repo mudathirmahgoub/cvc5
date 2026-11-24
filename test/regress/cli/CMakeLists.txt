@@ -3040,10 +3040,16 @@ set(regress_1_tests
   regress1/bags/rewriter/aggr_keyed.smt2
   regress1/bags/rewriter/canonical_function_variable.smt2
   regress1/bags/rewriter/canonical_variable.smt2
+  regress1/bags/rewriter/eq_empty_arg_learned.smt2
+  regress1/bags/rewriter/filter_sort_conjuncts.smt2
   regress1/bags/rewriter/fold_tuple.smt2
+  regress1/bags/rewriter/join_transitive_not_null.smt2
+  regress1/bags/rewriter/map_empty_disequality.smt2
   regress1/bags/rewriter/map_equal_columns.smt2
   regress1/bags/rewriter/map_filter_nullable.smt2
   regress1/bags/rewriter/map_identity.smt2
+  regress1/bags/rewriter/product_assoc.smt2
+  regress1/bags/rewriter/setof_constant_map_model.smt2
   regress1/bags/rewriter/setof_map_datatype.smt2
   regress1/bags/rewriter/table_fact_incremental.smt2
   regress1/bags/rewriter/table_fact_is_kept.smt2

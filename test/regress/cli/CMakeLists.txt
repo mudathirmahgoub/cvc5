@@ -3070,6 +3070,7 @@ set(regress_1_tests
   regress1/bags/product1.smt2
   regress1/bags/product2.smt2
   regress1/bags/product3.smt2
+  regress1/bags/product4.smt2
   regress1/bags/proj-issue497.smt2
   regress1/bags/rewriter/aggr_keyed_product_tested.smt2
   regress1/bags/rewriter/facts_incremental_pop.smt2

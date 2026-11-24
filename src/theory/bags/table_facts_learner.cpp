@@ -8,7 +8,7 @@
  * ****************************************************************************
  *
  * Static learning of the lemmas that the keys and NOT NULL columns of tables
- * give.
+ * give, and of EQ_EMPTY_ARG.
  */
 
 #include "theory/bags/table_facts_learner.h"
@@ -29,6 +29,8 @@ TableFactsLearner::TableFactsLearner(Env& env)
       d_termSeen(userContext()),
       d_learned(userContext())
 {
+  // before any fact, for EQ_EMPTY_ARG
+  makeRewriter();
 }
 
 TableFactsLearner::~TableFactsLearner() {}
@@ -111,13 +113,18 @@ bool TableFactsLearner::addFact(TNode lit)
       visit.insert(visit.end(), cur.begin(), cur.end());
     }
   } while (!visit.empty());
+  makeRewriter();
+  return true;
+}
+
+void TableFactsLearner::makeRewriter()
+{
   d_cache.clear();
   d_rewriter = std::make_unique<BagsRewriter>(nodeManager(),
                                               d_env.getRewriter(),
                                               nullptr,
                                               logicInfo().isHigherOrder(),
                                               &d_facts);
-  return true;
 }
 
 bool TableFactsLearner::isCandidate(const Node& t) const
@@ -236,10 +243,6 @@ Node TableFactsLearner::rewriteWithFactsRec(const Node& n, size_t depth)
 void TableFactsLearner::learnFor(const std::vector<Node>& terms,
                                  std::vector<TrustNode>& learned)
 {
-  if (d_rewriter == nullptr)
-  {
-    return;
-  }
   NodeManager* nm = nodeManager();
   for (const Node& t : terms)
   {
@@ -252,13 +255,15 @@ void TableFactsLearner::learnFor(const std::vector<Node>& terms,
     {
       continue;
     }
-    Node prem = premiseOf(t);
-    if (prem.isNull())
-    {
-      continue;
-    }
     Node eq = t.eqNode(tr);
-    Node lem = nm->mkNode(Kind::IMPLIES, prem, eq);
+    // t reads no table with a fact: only EQ_EMPTY_ARG, which reads none,
+    // rewrote it
+    Node lem = eq;
+    Node prem = premiseOf(t);
+    if (!prem.isNull())
+    {
+      lem = nm->mkNode(Kind::IMPLIES, prem, eq);
+    }
     if (d_learned.insert(lem))
     {
       Trace("bags-table-facts") << "learned: " << lem << std::endl;

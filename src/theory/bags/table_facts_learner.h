@@ -8,7 +8,7 @@
  * ****************************************************************************
  *
  * Static learning of the lemmas that the keys and NOT NULL columns of tables
- * give.
+ * give, and of EQ_EMPTY_ARG.
  */
 
 #include "cvc5_private.h"
@@ -50,6 +50,26 @@ namespace bags {
  * the node it rewrites, and the fact is the premise of the lemma, which a
  * proof can name.
  *
+ * The rewriter also applies EQ_EMPTY_ARG, which reads no fact and which the
+ * rewriter of the theory must not apply (see BagsRewriter::postRewriteEqual).
+ * For a term t that reads no table with a fact, the lemma is (= t t'). For
+ * X : (Bag (Tuple Int Int)), Y : (Bag (Tuple Int)) and
+ *
+ *   P = (lambda ((y (Tuple Int)))
+ *         (= ((_ tuple.select 0) y) ((_ tuple.select 1) t)))
+ *   g = (lambda ((y (Tuple Int))) (tuple 1))
+ *
+ * the rows of X with no row in Y, a NOT EXISTS, give
+ *
+ *   (= (bag.filter
+ *        (lambda ((t (Tuple Int Int)))
+ *          (= (bag.map g (bag.filter P Y)) (as bag.empty (Bag (Tuple Int)))))
+ *        X)
+ *      (bag.filter
+ *        (lambda ((t (Tuple Int Int)))
+ *          (= (bag.filter P Y) (as bag.empty (Bag (Tuple Int)))))
+ *        X))
+ *
  * The facts outlive a pop: a lemma has its fact as premise, so it holds in any
  * scope. The terms and the lemmas are those of the current scope, since the
  * lemmas of a popped scope are gone.
@@ -74,14 +94,22 @@ class TableFactsLearner : protected EnvObj
    * anew.
    */
   bool addFact(TNode lit);
-  /** Whether t is a term that a rule reading a fact may rewrite */
+  /** Makes d_rewriter anew for d_facts, and clears d_cache */
+  void makeRewriter();
+  /**
+   * Whether t is a term that a rule reading a fact, or EQ_EMPTY_ARG, may
+   * rewrite
+   */
   bool isCandidate(const Node& t) const;
   /** The conjunction of the fact literals of the tables t reads, or null */
   Node premiseOf(const Node& t) const;
   /** n rewritten bottom-up by the rewriter that has the facts */
   Node rewriteWithFacts(const Node& n);
   Node rewriteWithFactsRec(const Node& n, size_t depth);
-  /** Adds to learned the lemmas F => (= t t') for the terms */
+  /**
+   * Adds to learned the lemmas F => (= t t') for the terms, or (= t t') for a
+   * term that reads no table with a fact
+   */
   void learnFor(const std::vector<Node>& terms,
                 std::vector<TrustNode>& learned);
 
@@ -91,7 +119,7 @@ class TableFactsLearner : protected EnvObj
   TableFacts d_facts;
   /** For each table, the literals that state its facts */
   std::map<Node, std::vector<Node>> d_factLits;
-  /** A rewriter that has d_facts, null while there is none */
+  /** A rewriter that has d_facts, which may be empty */
   std::unique_ptr<BagsRewriter> d_rewriter;
   /** rewriteWithFacts by d_rewriter, cleared when a fact is added */
   std::unordered_map<Node, Node> d_cache;

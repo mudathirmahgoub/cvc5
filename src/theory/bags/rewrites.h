@@ -363,6 +363,22 @@ enum class Rewrite : uint32_t
    */
   PRODUCT_SWAP,
   /**
+   * A map, or a bag.setof, is empty when its argument is. Only
+   * TableFactsLearner applies it, as a lemma (see
+   * BagsRewriter::postRewriteEqual).
+   *
+   * For X : (Bag (Tuple Int Int)),
+   *
+   *   (= (bag.map (lambda ((t (Tuple Int Int))) (tuple ((_ tuple.select 0) t)))
+   *               X)
+   *      (as bag.empty (Bag (Tuple Int))))
+   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
+   *
+   *   (= (bag.setof X) (as bag.empty (Bag (Tuple Int Int))))
+   *   ---> (= X (as bag.empty (Bag (Tuple Int Int))))
+   */
+  EQ_EMPTY_ARG,
+  /**
    * The set of a set is the set.
    *
    * For A : (Bag (Tuple Int Int)),
